@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Refresh
@@ -66,6 +67,7 @@ import com.example.ui.components.DailyForecastCard
 import com.example.ui.components.DistrictSelectorBottomSheet
 import com.example.ui.components.EarlyWarningSection
 import com.example.ui.components.EmergencyDialer
+import com.example.ui.components.GeminiWeatherSection
 import com.example.ui.components.HeroWeatherCard
 import com.example.ui.components.HistoricalWeatherSection
 import com.example.ui.components.HourlyForecastCard
@@ -76,22 +78,32 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import com.example.ui.theme.OrangeSecondary
+import com.example.ui.viewmodel.AiWeatherViewModel
 import com.example.ui.viewmodel.WeatherViewModel
+import com.example.util.configureAppCheck
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Mandatory App Check initialization with launch intent before any UI, ViewModels, or Firebase calls
+        configureAppCheck(this, intent)
+
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
                 val context = LocalContext.current
                 val database = AppDatabase.getInstance(context)
                 val repository = WeatherRepository(database.weatherDao())
-                val viewModel: WeatherViewModel = viewModel {
+                val weatherViewModel: WeatherViewModel = viewModel {
                     WeatherViewModel(repository)
                 }
+                val aiViewModel: AiWeatherViewModel = viewModel()
 
-                WeatherAppScreen(viewModel = viewModel)
+                WeatherAppScreen(
+                    viewModel = weatherViewModel,
+                    aiViewModel = aiViewModel
+                )
             }
         }
     }
@@ -99,12 +111,16 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun WeatherAppScreen(
-    viewModel: WeatherViewModel
+    viewModel: WeatherViewModel,
+    aiViewModel: AiWeatherViewModel
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteDistricts.collectAsStateWithLifecycle()
     val communityReports by viewModel.communityReports.collectAsStateWithLifecycle()
+
+    val aiUiState by aiViewModel.uiState.collectAsStateWithLifecycle()
+    val aiChatMessages by aiViewModel.chatMessages.collectAsStateWithLifecycle()
 
     var isCallCenter117SheetOpen by remember { mutableStateOf(false) }
 
@@ -209,6 +225,13 @@ fun WeatherAppScreen(
                                     HeroWeatherCard(report = report)
                                 }
 
+                                // Quick Gemini AI Prompt Teaser
+                                item {
+                                    QuickGeminiAdvisorBanner(
+                                        onAskAi = { viewModel.selectTab(1) }
+                                    )
+                                }
+
                                 // Quick Call Center 117 Alert Strip
                                 item {
                                     QuickEmergency117Strip(
@@ -222,7 +245,7 @@ fun WeatherAppScreen(
                                     item {
                                         ActiveAlertCard(
                                             alert = report.alert,
-                                            onViewDetail = { viewModel.selectTab(2) }
+                                            onViewDetail = { viewModel.selectTab(3) }
                                         )
                                     }
                                 }
@@ -245,7 +268,26 @@ fun WeatherAppScreen(
                         }
 
                         1 -> {
-                            // Tab 1: 7 Hari
+                            // Tab 1: Tanya AI (Gemini)
+                            item {
+                                GeminiWeatherSection(
+                                    currentDistrict = currentDistrict,
+                                    weatherReport = uiState.report,
+                                    chatMessages = aiChatMessages,
+                                    uiState = aiUiState,
+                                    onSendMessage = { prompt ->
+                                        aiViewModel.askGemini(
+                                            prompt = prompt,
+                                            currentDistrict = currentDistrict,
+                                            weatherReport = uiState.report
+                                        )
+                                    }
+                                )
+                            }
+                        }
+
+                        2 -> {
+                            // Tab 2: 7 Hari
                             val report = uiState.report
                             if (report != null) {
                                 item {
@@ -254,8 +296,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        2 -> {
-                            // Tab 2: Peringatan Dini (BMKG & BPBD Warnings + Call Center 117)
+                        3 -> {
+                            // Tab 3: Peringatan Dini (BMKG & BPBD Warnings + Call Center 117)
                             item {
                                 EarlyWarningSection(
                                     warnings = uiState.earlyWarnings,
@@ -265,8 +307,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        3 -> {
-                            // Tab 3: Laporan Langsung Masyarakat
+                        4 -> {
+                            // Tab 4: Laporan Langsung Masyarakat
                             item {
                                 CommunityReportsSection(
                                     reports = communityReports,
@@ -282,8 +324,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        4 -> {
-                            // Tab 4: Cuaca Historis
+                        5 -> {
+                            // Tab 5: Cuaca Historis
                             item {
                                 HistoricalWeatherSection(
                                     district = currentDistrict,
@@ -297,8 +339,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        5 -> {
-                            // Tab 5: Maritim & Pesisir Pantai
+                        6 -> {
+                            // Tab 6: Maritim & Pesisir Pantai
                             val report = uiState.report
                             if (report != null) {
                                 item {
@@ -310,8 +352,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        6 -> {
-                            // Tab 6: Kualitas Udara & Indeks UV
+                        7 -> {
+                            // Tab 7: Kualitas Udara & Indeks UV
                             val report = uiState.report
                             if (report != null) {
                                 val maxUv = report.daily.firstOrNull()?.uvIndexMax ?: 8.0
@@ -324,8 +366,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        7 -> {
-                            // Tab 7: 15 Kecamatan
+                        8 -> {
+                            // Tab 8: 15 Kecamatan
                             item {
                                 AllDistrictsView(
                                     districtsSummary = uiState.allDistrictsSummary,
@@ -364,6 +406,81 @@ fun WeatherAppScreen(
             onToggleFavorite = { viewModel.toggleFavorite(it) },
             onDismiss = { viewModel.setDistrictSheetOpen(false) }
         )
+    }
+}
+
+@Composable
+private fun QuickGeminiAdvisorBanner(
+    onAskAi: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onAskAi)
+            .testTag("quick_gemini_banner"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFFDF4FF) // Soft Lavender / Violet
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Color(0xFF9333EA), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = "Gemini",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Tanya AI Gemini",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF581C87)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        color = Color(0xFF9333EA).copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = "AI Advisor",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF9333EA),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = "Konsultasi kelayakan melaut nelayan & panen sawit",
+                    fontSize = 10.sp,
+                    color = Color(0xFF7E22CE),
+                    maxLines = 1
+                )
+            }
+
+            Text(
+                text = "Tanya >",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF9333EA)
+            )
+        }
     }
 }
 

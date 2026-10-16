@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.History
@@ -57,6 +58,7 @@ fun WeatherTabs(
 ) {
     val tabs = listOf(
         TabItem("Hari Ini", Icons.Default.WbSunny),
+        TabItem("Tanya AI (Gemini)", Icons.Default.AutoAwesome),
         TabItem("7 Hari", Icons.Default.CalendarMonth),
         TabItem("Peringatan Dini", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
         TabItem("Laporan Warga", Icons.Default.RecordVoiceOver, badgeCount = if (reportCount > 0) reportCount else null),
