@@ -1,0 +1,6 @@
+{
+  "name": "Cuaca Mukomuko",
+  "description": "Aplikasi prakiraan cuaca lengkap dan maritim pesisir untuk seluruh kecamatan di Kabupaten Mukomuko, Bengkulu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
