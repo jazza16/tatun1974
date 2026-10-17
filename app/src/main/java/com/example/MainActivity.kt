@@ -92,8 +92,9 @@ class MainActivity : ComponentActivity() {
         // Mandatory App Check initialization with launch intent before any UI, ViewModels, or Firebase calls
         configureAppCheck(this, intent)
 
-        // Initialize BMKG Earthquake Notification Channel
+        // Initialize BMKG Earthquake and Severe Weather Notification Channels
         com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
+        com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
 
         enableEdgeToEdge()
         setContent {
@@ -241,6 +242,17 @@ fun WeatherAppScreen(
                                     HeroWeatherCard(report = report)
                                 }
 
+                                // Live BMKG Earthquake Banner
+                                val latestEq = uiState.latestEarthquake
+                                if (latestEq != null) {
+                                    item {
+                                        LiveEarthquakeQuickCard(
+                                            earthquake = latestEq,
+                                            onClick = { viewModel.selectTab(3) }
+                                        )
+                                    }
+                                }
+
                                 // Quick Gemini AI Prompt Teaser
                                 item {
                                     QuickGeminiAdvisorBanner(
@@ -280,6 +292,11 @@ fun WeatherAppScreen(
                                         marine = report.marine
                                     )
                                 }
+
+                                // Historical Marine Wave Height Chart (Recharts-inspired Data Visualization)
+                                item {
+                                    MarineWaveHistoryChart(district = currentDistrict)
+                                }
                             }
                         }
 
@@ -313,10 +330,21 @@ fun WeatherAppScreen(
                         }
 
                         3 -> {
-                            // Tab 3: Peringatan Dini (BMKG & BPBD Warnings + Call Center 117)
+                            // Tab 3: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Call Center 117
                             item {
                                 EarlyWarningSection(
                                     warnings = uiState.earlyWarnings,
+                                    currentDistrict = currentDistrict,
+                                    weatherAlertSettings = uiState.weatherAlertSettings,
+                                    onUpdateWeatherAlertSettings = { viewModel.updateWeatherAlertSettings(it) },
+                                    onTestWeatherAlertNotification = { viewModel.triggerTestWeatherAlertNotification(it) },
+                                    latestEarthquake = uiState.latestEarthquake,
+                                    recentEarthquakes = uiState.recentEarthquakes,
+                                    isLoadingEarthquakes = uiState.isLoadingEarthquakes,
+                                    isNotificationEnabled = uiState.isEarthquakeNotificationEnabled,
+                                    onToggleNotification = { viewModel.toggleEarthquakeNotifications(it) },
+                                    onTestNotification = { viewModel.triggerTestEarthquakeNotification(it) },
+                                    onRefreshEarthquake = { viewModel.refreshEarthquakeData(context) },
                                     onCall117 = { EmergencyDialer.dial(context, "117") },
                                     onOpenCallCenterInfo = { isCallCenter117SheetOpen = true }
                                 )
@@ -364,6 +392,10 @@ fun WeatherAppScreen(
                                         district = currentDistrict,
                                         marine = report.marine
                                     )
+                                }
+                                // Historical Marine Wave Height Chart
+                                item {
+                                    MarineWaveHistoryChart(district = currentDistrict)
                                 }
                             }
                         }
@@ -714,3 +746,81 @@ private fun SunAndAtmosphereCard(
         }
     }
 }
+
+@Composable
+private fun LiveEarthquakeQuickCard(
+    earthquake: com.example.model.BmkgEarthquake,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .testTag("live_earthquake_quick_banner"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFFEF2F2)
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCA5A5)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Color(0xFFDC2626), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Vibration,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "GEMPA BMKG M ${earthquake.magnitude}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF991B1B)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        color = Color(0xFFDC2626),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = "LIVE",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = "${earthquake.region} (${earthquake.timeWib})",
+                    fontSize = 11.sp,
+                    color = Color(0xFF7F1D1D),
+                    maxLines = 1
+                )
+            }
+
+            Text(
+                text = "Detail >",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFDC2626)
+            )
+        }
+    }
+}
+

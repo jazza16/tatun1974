@@ -11,6 +11,8 @@ import com.example.model.MukomukoDistricts
 import com.example.model.WeatherFullReport
 import android.content.Context
 import com.example.util.EarthquakeNotificationHelper
+import com.example.util.WeatherAlertSettings
+import com.example.util.WeatherNotificationHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,8 +39,9 @@ data class WeatherUiState(
     val isLoadingHistorical: Boolean = false,
     // Community Reports
     val isReportDialogOpen: Boolean = false,
-    // Early Warnings
+    // Early Warnings & Weather Alerts
     val earlyWarnings: List<DetailedEarlyWarning> = emptyList(),
+    val weatherAlertSettings: WeatherAlertSettings = WeatherAlertSettings(),
     // BMKG Real-time Earthquakes
     val latestEarthquake: com.example.model.BmkgEarthquake? = null,
     val recentEarthquakes: List<com.example.model.BmkgEarthquake> = emptyList(),
@@ -171,9 +174,10 @@ class WeatherViewModel(
         }
     }
 
-    private fun loadEarlyWarnings(district: District) {
+    fun loadEarlyWarnings(district: District, context: Context? = null) {
         val warnings = repository.getDetailedEarlyWarnings(district)
         _uiState.value = _uiState.value.copy(earlyWarnings = warnings)
+        checkAndPostSevereWeatherAlertIfNeeded(context, district, warnings)
     }
 
     fun submitCommunityReport(
@@ -259,6 +263,59 @@ class WeatherViewModel(
     fun triggerTestEarthquakeNotification(context: Context) {
         val currentEq = _uiState.value.latestEarthquake ?: repository.getFallbackMukomukoEarthquake()
         EarthquakeNotificationHelper.postEarthquakeNotification(context, currentEq)
+    }
+
+    private var lastNotifiedWeatherWarningId: String? = null
+
+    fun updateWeatherAlertSettings(settings: WeatherAlertSettings) {
+        _uiState.value = _uiState.value.copy(weatherAlertSettings = settings)
+    }
+
+    fun triggerTestWeatherAlertNotification(context: Context) {
+        val currentDistrict = _uiState.value.selectedDistrict
+        val sampleWarning = _uiState.value.earlyWarnings.firstOrNull() ?: DetailedEarlyWarning(
+            id = "alert_test_cuaca_buruk",
+            severity = "SIAGA",
+            category = "Badai Petir & Angin Kencang",
+            title = "Peringatan Dini Cuaca Ekstrem Mukomuko",
+            description = "Potensi terjadi hujan lebat disertai kilat/petir dan angin kencang berkecepatan hingga 45 km/jam di wilayah ${currentDistrict.name} dan sekitarnya.",
+            affectedDistricts = listOf(currentDistrict.name, "Kota Mukomuko", "Air Dikit", "Teramang Jaya"),
+            validUntil = "Hari ini s/d 22:00 WIB",
+            safetyInstructions = listOf(
+                "Hindari berteduh di bawah pohon rindang atau baliho tinggi saat angin kencang",
+                "Waspadai potensi pohon tumbang dan genangan air di jalan lintas barat",
+                "Nelayan perahu katir dihimbau menunda aktivitas melaut"
+            ),
+            bpbdContact = "Pusdalops BPBD: 0737-71112"
+        )
+        WeatherNotificationHelper.postWeatherAlertNotification(context, sampleWarning, currentDistrict.name)
+    }
+
+    private fun checkAndPostSevereWeatherAlertIfNeeded(context: Context?, district: District, warnings: List<DetailedEarlyWarning>) {
+        if (context == null) return
+        val settings = _uiState.value.weatherAlertSettings
+        if (!settings.isEnabled) return
+
+        val eligibleWarning = warnings.firstOrNull { warning ->
+            val matchesCategory = when {
+                warning.category.contains("Petir", ignoreCase = true) || warning.category.contains("Badai", ignoreCase = true) -> settings.alertThunderstorm
+                warning.category.contains("Angin", ignoreCase = true) -> settings.alertStrongWind
+                warning.category.contains("Banjir", ignoreCase = true) || warning.category.contains("Hujan", ignoreCase = true) -> settings.alertFloodHeavyRain
+                warning.category.contains("Gelombang", ignoreCase = true) || warning.category.contains("Laut", ignoreCase = true) -> settings.alertHighWaves
+                else -> true
+            }
+
+            val matchesDistrict = if (settings.onlySelectedDistrict) {
+                warning.affectedDistricts.any { it.contains(district.name, ignoreCase = true) }
+            } else true
+
+            matchesCategory && matchesDistrict
+        }
+
+        if (eligibleWarning != null && eligibleWarning.id != lastNotifiedWeatherWarningId) {
+            WeatherNotificationHelper.postWeatherAlertNotification(context, eligibleWarning, district.name)
+            lastNotifiedWeatherWarningId = eligibleWarning.id
+        }
     }
 
     private fun startPeriodicEarthquakeMonitoring() {
