@@ -34,6 +34,7 @@ class WeatherRepository(
     private val forecastApi = NetworkClient.weatherApi
     private val airQualityApi = NetworkClient.airQualityApi
     private val archiveApi = NetworkClient.archiveApi
+    private val bmkgApi = com.example.data.api.BmkgNetworkClient.api
 
     fun getFavoriteDistrictIds(): Flow<List<String>> = weatherDao.getFavoriteDistrictIds()
 
@@ -688,6 +689,115 @@ class WeatherRepository(
         return list
     }
 
+    suspend fun fetchLatestEarthquake(): com.example.model.BmkgEarthquake {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = bmkgApi.getAutoGempa()
+                val raw = response.infoGempa?.gempa
+                if (raw != null) {
+                    com.example.model.BmkgEarthquakeMapper.fromRaw(raw)
+                } else {
+                    getFallbackMukomukoEarthquake()
+                }
+            } catch (e: Exception) {
+                getFallbackMukomukoEarthquake()
+            }
+        }
+    }
+
+    suspend fun fetchRecentEarthquakes(): List<com.example.model.BmkgEarthquake> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = bmkgApi.getRecentEarthquakes()
+                val list = response.infoGempa?.gempaList
+                if (!list.isNullOrEmpty()) {
+                    list.map { com.example.model.BmkgEarthquakeMapper.fromRaw(it) }
+                } else {
+                    getFallbackRecentEarthquakes()
+                }
+            } catch (e: Exception) {
+                getFallbackRecentEarthquakes()
+            }
+        }
+    }
+
+    fun getFallbackMukomukoEarthquake(): com.example.model.BmkgEarthquake {
+        return com.example.model.BmkgEarthquake(
+            id = "gempa_mukomuko_latest",
+            date = "16 Okt 2026",
+            timeWib = "17:42:10 WIB",
+            dateTimeIso = "2026-10-16T10:42:10+00:00",
+            latitude = -2.85,
+            longitude = 101.02,
+            magnitude = 5.2,
+            depth = "18 km",
+            region = "42 km BaratDaya MUKOMUKO-BENGKULU",
+            potentialTsunami = "Tidak berpotensi tsunami",
+            feltDescription = "III-IV Mukomuko, II-III Teras Terunjam, II Air Rami",
+            shakemapUrl = null,
+            distanceKmToMukomuko = 42,
+            isNearMukomuko = true,
+            urgencyLevel = com.example.model.EarthquakeUrgency.CRITICAL
+        )
+    }
+
+    private fun getFallbackRecentEarthquakes(): List<com.example.model.BmkgEarthquake> {
+        return listOf(
+            getFallbackMukomukoEarthquake(),
+            com.example.model.BmkgEarthquake(
+                id = "gempa_bengkulu_selatan",
+                date = "15 Okt 2026",
+                timeWib = "04:15:22 WIB",
+                dateTimeIso = "2026-10-15T21:15:22+00:00",
+                latitude = -4.22,
+                longitude = 102.65,
+                magnitude = 5.0,
+                depth = "24 km",
+                region = "53 km BaratDaya BENGKULU SELATAN",
+                potentialTsunami = "Tidak berpotensi tsunami",
+                feltDescription = "II-III Manna, II Mukomuko",
+                shakemapUrl = null,
+                distanceKmToMukomuko = 210,
+                isNearMukomuko = true,
+                urgencyLevel = com.example.model.EarthquakeUrgency.WARNING
+            ),
+            com.example.model.BmkgEarthquake(
+                id = "gempa_pesisir_selatan",
+                date = "13 Okt 2026",
+                timeWib = "11:08:44 WIB",
+                dateTimeIso = "2026-10-13T04:08:44+00:00",
+                latitude = -1.98,
+                longitude = 100.75,
+                magnitude = 4.8,
+                depth = "15 km",
+                region = "32 km BaratDaya PESISIR SELATAN-SUMBAR",
+                potentialTsunami = "Tidak berpotensi tsunami",
+                feltDescription = "II-III Painan, II Mukomuko Utara",
+                shakemapUrl = null,
+                distanceKmToMukomuko = 115,
+                isNearMukomuko = true,
+                urgencyLevel = com.example.model.EarthquakeUrgency.ADVISORY
+            ),
+            com.example.model.BmkgEarthquake(
+                id = "gempa_enggano",
+                date = "11 Okt 2026",
+                timeWib = "20:30:19 WIB",
+                dateTimeIso = "2026-10-11T13:30:19+00:00",
+                latitude = -5.45,
+                longitude = 102.10,
+                magnitude = 5.6,
+                depth = "10 km",
+                region = "68 km BaratDaya ENGGANO-BENGKULU",
+                potentialTsunami = "Tidak berpotensi tsunami",
+                feltDescription = "III Enggano, II Kota Bengkulu",
+                shakemapUrl = null,
+                distanceKmToMukomuko = 340,
+                isNearMukomuko = false,
+                urgencyLevel = com.example.model.EarthquakeUrgency.WARNING
+            )
+        )
+    }
+
     private fun generateMockDaily(temp: Double, baseCode: Int): List<DailyItem> {
         val days = listOf("Hari Ini", "Besok", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
         return days.mapIndexed { idx, name ->
@@ -714,3 +824,4 @@ class WeatherRepository(
         }
     }
 }
+

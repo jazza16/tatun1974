@@ -47,6 +47,13 @@ import com.example.ui.theme.OrangePrimary
 @Composable
 fun EarlyWarningSection(
     warnings: List<DetailedEarlyWarning>,
+    latestEarthquake: com.example.model.BmkgEarthquake? = null,
+    recentEarthquakes: List<com.example.model.BmkgEarthquake> = emptyList(),
+    isLoadingEarthquakes: Boolean = false,
+    isNotificationEnabled: Boolean = true,
+    onToggleNotification: (Boolean) -> Unit = {},
+    onTestNotification: (android.content.Context) -> Unit = {},
+    onRefreshEarthquake: () -> Unit = {},
     onCall117: () -> Unit,
     onOpenCallCenterInfo: () -> Unit,
     modifier: Modifier = Modifier
@@ -57,6 +64,18 @@ fun EarlyWarningSection(
             .testTag("early_warning_section"),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // BMKG Real-time Earthquake Section
+        BmkgEarthquakeSection(
+            latestEarthquake = latestEarthquake,
+            recentEarthquakes = recentEarthquakes,
+            isLoading = isLoadingEarthquakes,
+            isNotificationEnabled = isNotificationEnabled,
+            onToggleNotification = onToggleNotification,
+            onTestNotification = onTestNotification,
+            onRefresh = onRefreshEarthquake,
+            onCall117 = onCall117
+        )
+
         // Prominent Call Center 117 Banner
         CallCenter117HeroBanner(
             onCallClick = onCall117,

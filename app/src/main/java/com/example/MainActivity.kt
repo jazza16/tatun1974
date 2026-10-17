@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.WbTwilight
@@ -41,6 +42,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +74,7 @@ import com.example.ui.components.HeroWeatherCard
 import com.example.ui.components.HistoricalWeatherSection
 import com.example.ui.components.HourlyForecastCard
 import com.example.ui.components.MarinePesisirCard
+import com.example.ui.components.MarineWaveHistoryChart
 import com.example.ui.components.WeatherTabs
 import com.example.ui.components.WeatherTopBar
 import com.example.ui.theme.MyApplicationTheme
@@ -88,6 +91,9 @@ class MainActivity : ComponentActivity() {
 
         // Mandatory App Check initialization with launch intent before any UI, ViewModels, or Firebase calls
         configureAppCheck(this, intent)
+
+        // Initialize BMKG Earthquake Notification Channel
+        com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
 
         enableEdgeToEdge()
         setContent {
@@ -126,6 +132,16 @@ fun WeatherAppScreen(
 
     val currentDistrict = uiState.selectedDistrict
     val isFavorite = favorites.contains(currentDistrict.id)
+
+    // Handle incoming navigation from BMKG earthquake notifications
+    val initialTab = remember {
+        (context as? android.app.Activity)?.intent?.getIntExtra("EXTRA_NAVIGATE_TAB", -1) ?: -1
+    }
+    LaunchedEffect(initialTab) {
+        if (initialTab >= 0) {
+            viewModel.selectTab(initialTab)
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

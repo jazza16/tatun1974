@@ -9,11 +9,15 @@ import com.example.model.District
 import com.example.model.HistoricalWeatherRecord
 import com.example.model.MukomukoDistricts
 import com.example.model.WeatherFullReport
+import android.content.Context
+import com.example.util.EarthquakeNotificationHelper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 data class WeatherUiState(
@@ -34,7 +38,12 @@ data class WeatherUiState(
     // Community Reports
     val isReportDialogOpen: Boolean = false,
     // Early Warnings
-    val earlyWarnings: List<DetailedEarlyWarning> = emptyList()
+    val earlyWarnings: List<DetailedEarlyWarning> = emptyList(),
+    // BMKG Real-time Earthquakes
+    val latestEarthquake: com.example.model.BmkgEarthquake? = null,
+    val recentEarthquakes: List<com.example.model.BmkgEarthquake> = emptyList(),
+    val isLoadingEarthquakes: Boolean = false,
+    val isEarthquakeNotificationEnabled: Boolean = true
 )
 
 class WeatherViewModel(
@@ -66,6 +75,8 @@ class WeatherViewModel(
         loadHistoricalWeather(MukomukoDistricts.defaultDistrict, "2024-05-15")
         loadEarlyWarnings(MukomukoDistricts.defaultDistrict)
         loadAllDistrictsSummary()
+        loadEarthquakeData()
+        startPeriodicEarthquakeMonitoring()
     }
 
     fun selectDistrict(district: District) {
@@ -200,6 +211,73 @@ class WeatherViewModel(
                 allDistrictsSummary = list,
                 isLoadingAllDistricts = false
             )
+        }
+    }
+
+    private var lastNotifiedEarthquakeId: String? = null
+
+    fun loadEarthquakeData(context: Context? = null) {
+        _uiState.value = _uiState.value.copy(isLoadingEarthquakes = true)
+        viewModelScope.launch {
+            try {
+                val latest = repository.fetchLatestEarthquake()
+                val recents = repository.fetchRecentEarthquakes()
+
+                // Check if this is a newly observed earthquake and notification is enabled
+                if (_uiState.value.isEarthquakeNotificationEnabled && context != null) {
+                    if (lastNotifiedEarthquakeId == null) {
+                        // First load, don't spam unless near Mukomuko and M >= 5.0
+                        if (latest.isNearMukomuko && latest.magnitude >= 5.0) {
+                            EarthquakeNotificationHelper.postEarthquakeNotification(context, latest)
+                        }
+                    } else if (lastNotifiedEarthquakeId != latest.id) {
+                        // New earthquake arrived from BMKG feed
+                        EarthquakeNotificationHelper.postEarthquakeNotification(context, latest)
+                    }
+                }
+                lastNotifiedEarthquakeId = latest.id
+
+                _uiState.value = _uiState.value.copy(
+                    latestEarthquake = latest,
+                    recentEarthquakes = recents,
+                    isLoadingEarthquakes = false
+                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isLoadingEarthquakes = false)
+            }
+        }
+    }
+
+    fun refreshEarthquakeData(context: Context? = null) {
+        loadEarthquakeData(context)
+    }
+
+    fun toggleEarthquakeNotifications(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(isEarthquakeNotificationEnabled = enabled)
+    }
+
+    fun triggerTestEarthquakeNotification(context: Context) {
+        val currentEq = _uiState.value.latestEarthquake ?: repository.getFallbackMukomukoEarthquake()
+        EarthquakeNotificationHelper.postEarthquakeNotification(context, currentEq)
+    }
+
+    private fun startPeriodicEarthquakeMonitoring() {
+        viewModelScope.launch {
+            while (isActive) {
+                delay(60_000) // Poll BMKG live feed every 60 seconds
+                try {
+                    val latest = repository.fetchLatestEarthquake()
+                    if (_uiState.value.isEarthquakeNotificationEnabled &&
+                        lastNotifiedEarthquakeId != null &&
+                        lastNotifiedEarthquakeId != latest.id
+                    ) {
+                        _uiState.value = _uiState.value.copy(latestEarthquake = latest)
+                        lastNotifiedEarthquakeId = latest.id
+                    }
+                } catch (_: Exception) {
+                    // Ignore background polling glitches
+                }
+            }
         }
     }
 }
