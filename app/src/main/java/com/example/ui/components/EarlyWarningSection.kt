@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Emergency
+import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Shield
@@ -35,43 +37,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import android.Manifest
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.filled.Air
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.WaterDamage
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.DetailedEarlyWarning
-import com.example.model.District
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
-import com.example.util.WeatherAlertSettings
-import com.example.util.WeatherNotificationHelper
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EarlyWarningSection(
     warnings: List<DetailedEarlyWarning>,
-    currentDistrict: District,
-    weatherAlertSettings: WeatherAlertSettings,
-    onUpdateWeatherAlertSettings: (WeatherAlertSettings) -> Unit,
-    onTestWeatherAlertNotification: (android.content.Context) -> Unit,
     latestEarthquake: com.example.model.BmkgEarthquake? = null,
     recentEarthquakes: List<com.example.model.BmkgEarthquake> = emptyList(),
     isLoadingEarthquakes: Boolean = false,
@@ -81,6 +58,7 @@ fun EarlyWarningSection(
     onRefreshEarthquake: () -> Unit = {},
     onCall117: () -> Unit,
     onOpenCallCenterInfo: () -> Unit,
+    onOpenEvacuationGuide: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -89,14 +67,6 @@ fun EarlyWarningSection(
             .testTag("early_warning_section"),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Severe Weather Notification Settings Card (Orange-themed)
-        WeatherAlertNotificationSettingsCard(
-            currentDistrict = currentDistrict,
-            settings = weatherAlertSettings,
-            onUpdateSettings = onUpdateWeatherAlertSettings,
-            onTestNotification = onTestWeatherAlertNotification
-        )
-
         // BMKG Real-time Earthquake Section
         BmkgEarthquakeSection(
             latestEarthquake = latestEarthquake,
@@ -108,6 +78,62 @@ fun EarlyWarningSection(
             onRefresh = onRefreshEarthquake,
             onCall117 = onCall117
         )
+
+        // Evakuasi Mandiri Gempa Banner
+        if (onOpenEvacuationGuide != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(onClick = onOpenEvacuationGuide)
+                    .testTag("btn_early_warning_evacuation_guide"),
+                color = Color(0xFFFFF7ED),
+                border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFFF97316)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(OrangePrimary, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.HealthAndSafety,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Kesiapsiagaan Evakuasi Mandiri Gempa",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF7C2D12)
+                        )
+                        Text(
+                            text = "Rumus 20-20-20, Drop-Cover-Hold & Tas Siaga Bencana",
+                            fontSize = 10.sp,
+                            color = Color(0xFF9A3412)
+                        )
+                    }
+
+                    Text(
+                        text = "Pelajari >",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OrangePrimary
+                    )
+                }
+            }
+        }
 
         // Prominent Call Center 117 Banner
         CallCenter117HeroBanner(
@@ -378,289 +404,6 @@ fun EarlyWarningSection(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun WeatherAlertNotificationSettingsCard(
-    currentDistrict: District,
-    settings: WeatherAlertSettings,
-    onUpdateSettings: (WeatherAlertSettings) -> Unit,
-    onTestNotification: (android.content.Context) -> Unit
-) {
-    val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            onUpdateSettings(settings.copy(isEnabled = true))
-            onTestNotification(context)
-        } else {
-            onUpdateSettings(settings.copy(isEnabled = false))
-        }
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("weather_alert_settings_card"),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFDBA74))
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            // Header with Orange Theme
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .background(OrangePrimary.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationsActive,
-                            contentDescription = "Notifikasi Cuaca",
-                            tint = OrangePrimary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Notifikasi Cuaca Buruk",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                color = OrangePrimary,
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "PUSH",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = OrangeOnPrimary,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Peringatan dini cuaca ekstrem di Mukomuko",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
-                        )
-                    }
-                }
-
-                Switch(
-                    checked = settings.isEnabled,
-                    onCheckedChange = { checked ->
-                        if (checked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                            !WeatherNotificationHelper.hasNotificationPermission(context)
-                        ) {
-                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            onUpdateSettings(settings.copy(isEnabled = checked))
-                        }
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = OrangePrimary
-                    ),
-                    modifier = Modifier.testTag("switch_weather_alert_master")
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Sub-category filters description
-            Text(
-                text = "Pilih Jenis Cuaca Buruk yang Diberitahukan:",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Filter Chips in FlowRow
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Badai Petir
-                FilterChip(
-                    selected = settings.alertThunderstorm,
-                    onClick = {
-                        onUpdateSettings(settings.copy(alertThunderstorm = !settings.alertThunderstorm))
-                    },
-                    label = { Text("⚡ Badai Petir", fontSize = 11.sp) },
-                    leadingIcon = if (settings.alertThunderstorm) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = OrangePrimary.copy(alpha = 0.2f),
-                        selectedLabelColor = OrangePrimary,
-                        selectedLeadingIconColor = OrangePrimary
-                    )
-                )
-
-                // Angin Kencang
-                FilterChip(
-                    selected = settings.alertStrongWind,
-                    onClick = {
-                        onUpdateSettings(settings.copy(alertStrongWind = !settings.alertStrongWind))
-                    },
-                    label = { Text("💨 Angin Kencang", fontSize = 11.sp) },
-                    leadingIcon = if (settings.alertStrongWind) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = OrangePrimary.copy(alpha = 0.2f),
-                        selectedLabelColor = OrangePrimary,
-                        selectedLeadingIconColor = OrangePrimary
-                    )
-                )
-
-                // Banjir & Longsor
-                FilterChip(
-                    selected = settings.alertFloodHeavyRain,
-                    onClick = {
-                        onUpdateSettings(settings.copy(alertFloodHeavyRain = !settings.alertFloodHeavyRain))
-                    },
-                    label = { Text("🌧️ Banjir & Longsor", fontSize = 11.sp) },
-                    leadingIcon = if (settings.alertFloodHeavyRain) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = OrangePrimary.copy(alpha = 0.2f),
-                        selectedLabelColor = OrangePrimary,
-                        selectedLeadingIconColor = OrangePrimary
-                    )
-                )
-
-                // Gelombang Tinggi
-                FilterChip(
-                    selected = settings.alertHighWaves,
-                    onClick = {
-                        onUpdateSettings(settings.copy(alertHighWaves = !settings.alertHighWaves))
-                    },
-                    label = { Text("🌊 Gelombang Tinggi", fontSize = 11.sp) },
-                    leadingIcon = if (settings.alertHighWaves) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = OrangePrimary.copy(alpha = 0.2f),
-                        selectedLabelColor = OrangePrimary,
-                        selectedLeadingIconColor = OrangePrimary
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Location Relevance Selection Strip
-            Surface(
-                color = Color(0xFFFFF7ED),
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFED7AA)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = OrangePrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = "Lokasi Peringatan Relevan",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF9A3412)
-                            )
-                            Text(
-                                text = if (settings.onlySelectedDistrict) {
-                                    "Khusus wilayah ${currentDistrict.name}"
-                                } else {
-                                    "Seluruh 15 Kecamatan di Kab. Mukomuko"
-                                },
-                                fontSize = 11.sp,
-                                color = Color(0xFFC2410C)
-                            )
-                        }
-                    }
-
-                    Switch(
-                        checked = settings.onlySelectedDistrict,
-                        onCheckedChange = {
-                            onUpdateSettings(settings.copy(onlySelectedDistrict = it))
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = OrangePrimary
-                        ),
-                        modifier = Modifier.testTag("switch_district_relevance")
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Test Notification Trigger Button (Orange theme with preview info)
-            Button(
-                onClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                        !WeatherNotificationHelper.hasNotificationPermission(context)
-                    ) {
-                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        onTestNotification(context)
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("btn_test_weather_alert_notification"),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = null,
-                    tint = OrangeOnPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Tes Notifikasi Peringatan Cuaca (Tema Oranye)",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = OrangeOnPrimary
-                )
             }
         }
     }

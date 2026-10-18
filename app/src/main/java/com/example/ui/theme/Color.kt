@@ -56,3 +56,25 @@ val WeatherStormPurple = Color(0xFF7C3AED)
 val WeatherSeaCyan = Color(0xFF0D9488)
 val WeatherGoodGreen = Color(0xFF16A34A)
 val WeatherWarningOrange = Color(0xFFEA580C)
+
+// Adaptive High-Contrast Warning Colors
+val WarningAlertBgLight = Color(0xFFFFF7ED)      // Soft warm amber background
+val WarningAlertBorderLight = Color(0xFFFDBA74)  // Crisp orange border
+val WarningAlertTitleLight = Color(0xFF7C2D12)   // High contrast deep russet
+val WarningAlertTextLight = Color(0xFF9A3412)    // Readable dark burnt orange
+
+val WarningAlertBgDark = Color(0xFF2E170F)       // Deep charcoal with warm amber undertone
+val WarningAlertBorderDark = Color(0xFFFB923C)   // Luminous vivid orange border
+val WarningAlertTitleDark = Color(0xFFFFEDD5)    // Crisp high-contrast peach white
+val WarningAlertTextDark = Color(0xFFFED7AA)     // High-contrast soft amber
+
+val RedWarningBgLight = Color(0xFFFEF2F2)
+val RedWarningBorderLight = Color(0xFFFCA5A5)
+val RedWarningTitleLight = Color(0xFF991B1B)
+val RedWarningTextLight = Color(0xFFB91C1C)
+
+val RedWarningBgDark = Color(0xFF331414)
+val RedWarningBorderDark = Color(0xFFF87171)
+val RedWarningTitleDark = Color(0xFFFEE2E2)
+val RedWarningTextDark = Color(0xFFFECACA)
+

@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Refresh
@@ -62,7 +64,9 @@ fun WeatherTopBar(
     onDistrictClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onRefreshClick: () -> Unit,
-    onCallCenter117Click: () -> Unit
+    onCallCenter117Click: () -> Unit,
+    isBannerVisible: Boolean = true,
+    onToggleBanner: () -> Unit = {}
 ) {
     val rotation by if (isRefreshing) {
         val transition = rememberInfiniteTransition(label = "refreshRotation")
@@ -187,6 +191,20 @@ fun WeatherTopBar(
                             tint = OrangeOnPrimary,
                             modifier = Modifier.rotate(rotation).size(20.dp)
                         )
+                    }
+
+                    if (!isBannerVisible) {
+                        IconButton(
+                            onClick = onToggleBanner,
+                            modifier = Modifier.size(36.dp).testTag("btn_toggle_pusdalops_banner")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Tampilkan Banner PUSDALOPS BPBD",
+                                tint = OrangeOnPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             )

@@ -68,6 +68,7 @@ import com.example.ui.components.CommunityReportsSection
 import com.example.ui.components.DailyForecastCard
 import com.example.ui.components.DistrictSelectorBottomSheet
 import com.example.ui.components.EarlyWarningSection
+import com.example.ui.components.EarthquakeEvacuationMenu
 import com.example.ui.components.EmergencyDialer
 import com.example.ui.components.GeminiWeatherSection
 import com.example.ui.components.HeroWeatherCard
@@ -75,6 +76,7 @@ import com.example.ui.components.HistoricalWeatherSection
 import com.example.ui.components.HourlyForecastCard
 import com.example.ui.components.MarinePesisirCard
 import com.example.ui.components.MarineWaveHistoryChart
+import com.example.ui.components.PusdalopsStartupBanner
 import com.example.ui.components.WeatherTabs
 import com.example.ui.components.WeatherTopBar
 import com.example.ui.theme.MyApplicationTheme
@@ -92,9 +94,8 @@ class MainActivity : ComponentActivity() {
         // Mandatory App Check initialization with launch intent before any UI, ViewModels, or Firebase calls
         configureAppCheck(this, intent)
 
-        // Initialize BMKG Earthquake and Severe Weather Notification Channels
+        // Initialize BMKG Earthquake Notification Channel
         com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
-        com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
 
         enableEdgeToEdge()
         setContent {
@@ -130,6 +131,7 @@ fun WeatherAppScreen(
     val aiChatMessages by aiViewModel.chatMessages.collectAsStateWithLifecycle()
 
     var isCallCenter117SheetOpen by remember { mutableStateOf(false) }
+    var isStartupBannerVisible by remember { mutableStateOf(true) }
 
     val currentDistrict = uiState.selectedDistrict
     val isFavorite = favorites.contains(currentDistrict.id)
@@ -155,7 +157,9 @@ fun WeatherAppScreen(
                 onDistrictClick = { viewModel.setDistrictSheetOpen(true) },
                 onFavoriteToggle = { viewModel.toggleFavorite(currentDistrict.id) },
                 onRefreshClick = { viewModel.refresh() },
-                onCallCenter117Click = { isCallCenter117SheetOpen = true }
+                onCallCenter117Click = { isCallCenter117SheetOpen = true },
+                isBannerVisible = isStartupBannerVisible,
+                onToggleBanner = { isStartupBannerVisible = !isStartupBannerVisible }
             )
         }
     ) { innerPadding ->
@@ -165,6 +169,13 @@ fun WeatherAppScreen(
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            // Prominent Startup Banner: "Dikembangkan oleh PUSDALOPS-PB BPBD Kabupaten Mukomuko"
+            PusdalopsStartupBanner(
+                isVisible = isStartupBannerVisible,
+                onDismiss = { isStartupBannerVisible = false },
+                onCallCenter117 = { EmergencyDialer.dial(context, "117") }
+            )
+
             // Horizontal Tab Navigation
             WeatherTabs(
                 selectedTabIndex = uiState.selectedTab,
@@ -242,17 +253,6 @@ fun WeatherAppScreen(
                                     HeroWeatherCard(report = report)
                                 }
 
-                                // Live BMKG Earthquake Banner
-                                val latestEq = uiState.latestEarthquake
-                                if (latestEq != null) {
-                                    item {
-                                        LiveEarthquakeQuickCard(
-                                            earthquake = latestEq,
-                                            onClick = { viewModel.selectTab(3) }
-                                        )
-                                    }
-                                }
-
                                 // Quick Gemini AI Prompt Teaser
                                 item {
                                     QuickGeminiAdvisorBanner(
@@ -265,6 +265,13 @@ fun WeatherAppScreen(
                                     QuickEmergency117Strip(
                                         onCall117 = { EmergencyDialer.dial(context, "117") },
                                         onViewDetails = { isCallCenter117SheetOpen = true }
+                                    )
+                                }
+
+                                // Quick Kesiapsiagaan & Evakuasi Mandiri Gempa Banner
+                                item {
+                                    QuickEvacuationGuideBanner(
+                                        onOpenEvacuation = { viewModel.selectTab(4) }
                                     )
                                 }
 
@@ -291,11 +298,6 @@ fun WeatherAppScreen(
                                         district = currentDistrict,
                                         marine = report.marine
                                     )
-                                }
-
-                                // Historical Marine Wave Height Chart (Recharts-inspired Data Visualization)
-                                item {
-                                    MarineWaveHistoryChart(district = currentDistrict)
                                 }
                             }
                         }
@@ -330,29 +332,29 @@ fun WeatherAppScreen(
                         }
 
                         3 -> {
-                            // Tab 3: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Call Center 117
+                            // Tab 3: Peringatan Dini (BMKG & BPBD Warnings + Call Center 117)
                             item {
                                 EarlyWarningSection(
                                     warnings = uiState.earlyWarnings,
-                                    currentDistrict = currentDistrict,
-                                    weatherAlertSettings = uiState.weatherAlertSettings,
-                                    onUpdateWeatherAlertSettings = { viewModel.updateWeatherAlertSettings(it) },
-                                    onTestWeatherAlertNotification = { viewModel.triggerTestWeatherAlertNotification(it) },
-                                    latestEarthquake = uiState.latestEarthquake,
-                                    recentEarthquakes = uiState.recentEarthquakes,
-                                    isLoadingEarthquakes = uiState.isLoadingEarthquakes,
-                                    isNotificationEnabled = uiState.isEarthquakeNotificationEnabled,
-                                    onToggleNotification = { viewModel.toggleEarthquakeNotifications(it) },
-                                    onTestNotification = { viewModel.triggerTestEarthquakeNotification(it) },
-                                    onRefreshEarthquake = { viewModel.refreshEarthquakeData(context) },
                                     onCall117 = { EmergencyDialer.dial(context, "117") },
-                                    onOpenCallCenterInfo = { isCallCenter117SheetOpen = true }
+                                    onOpenCallCenterInfo = { isCallCenter117SheetOpen = true },
+                                    onOpenEvacuationGuide = { viewModel.selectTab(4) }
                                 )
                             }
                         }
 
                         4 -> {
-                            // Tab 4: Laporan Langsung Masyarakat
+                            // Tab 4: Kesiapsiagaan & Evakuasi Mandiri Gempa Bumi (BPBD Mukomuko)
+                            item {
+                                EarthquakeEvacuationMenu(
+                                    onCall117 = { EmergencyDialer.dial(context, "117") },
+                                    onCallPoskoMukomuko = { EmergencyDialer.dial(context, "073771112") }
+                                )
+                            }
+                        }
+
+                        5 -> {
+                            // Tab 5: Laporan Langsung Masyarakat
                             item {
                                 CommunityReportsSection(
                                     reports = communityReports,
@@ -368,8 +370,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        5 -> {
-                            // Tab 5: Cuaca Historis
+                        6 -> {
+                            // Tab 6: Cuaca Historis
                             item {
                                 HistoricalWeatherSection(
                                     district = currentDistrict,
@@ -383,8 +385,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        6 -> {
-                            // Tab 6: Maritim & Pesisir Pantai
+                        7 -> {
+                            // Tab 7: Maritim & Pesisir Pantai
                             val report = uiState.report
                             if (report != null) {
                                 item {
@@ -393,15 +395,11 @@ fun WeatherAppScreen(
                                         marine = report.marine
                                     )
                                 }
-                                // Historical Marine Wave Height Chart
-                                item {
-                                    MarineWaveHistoryChart(district = currentDistrict)
-                                }
                             }
                         }
 
-                        7 -> {
-                            // Tab 7: Kualitas Udara & Indeks UV
+                        8 -> {
+                            // Tab 8: Kualitas Udara & Indeks UV
                             val report = uiState.report
                             if (report != null) {
                                 val maxUv = report.daily.firstOrNull()?.uvIndexMax ?: 8.0
@@ -414,8 +412,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        8 -> {
-                            // Tab 8: 15 Kecamatan
+                        9 -> {
+                            // Tab 9: 15 Kecamatan
                             item {
                                 AllDistrictsView(
                                     districtsSummary = uiState.allDistrictsSummary,
@@ -748,35 +746,34 @@ private fun SunAndAtmosphereCard(
 }
 
 @Composable
-private fun LiveEarthquakeQuickCard(
-    earthquake: com.example.model.BmkgEarthquake,
-    onClick: () -> Unit
+private fun QuickEvacuationGuideBanner(
+    onOpenEvacuation: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .testTag("live_earthquake_quick_banner"),
+            .clickable(onClick = onOpenEvacuation)
+            .testTag("quick_evacuation_banner"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFEF2F2)
+            containerColor = Color(0xFFFFF7ED)
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCA5A5)),
+        border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFFFDBA74)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .background(Color(0xFFDC2626), RoundedCornerShape(8.dp)),
+                    .background(Color(0xFFEA580C), RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Vibration,
-                    contentDescription = null,
+                    contentDescription = "Evakuasi Gempa",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
@@ -787,40 +784,39 @@ private fun LiveEarthquakeQuickCard(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "GEMPA BMKG M ${earthquake.magnitude}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color(0xFF991B1B)
+                        text = "Evakuasi Mandiri Gempa Bumi",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF7C2D12)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Surface(
-                        color = Color(0xFFDC2626),
+                        color = Color(0xFFEA580C).copy(alpha = 0.15f),
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
-                            text = "LIVE",
+                            text = "BPBD SIAGA",
                             fontSize = 9.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFC2410C),
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                         )
                     }
                 }
                 Text(
-                    text = "${earthquake.region} (${earthquake.timeWib})",
-                    fontSize = 11.sp,
-                    color = Color(0xFF7F1D1D),
+                    text = "Rumus 20-20-20, Drop-Cover-Hold, & Checklist Tas Siaga",
+                    fontSize = 10.sp,
+                    color = Color(0xFF9A3412),
                     maxLines = 1
                 )
             }
 
             Text(
-                text = "Detail >",
+                text = "Buka >",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFDC2626)
+                color = Color(0xFFEA580C)
             )
         }
     }
 }
-

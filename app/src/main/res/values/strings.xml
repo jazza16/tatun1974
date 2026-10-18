@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Cuaca Mukomuko</string>
+    <string name="pusdalops_banner_title">Dikembangkan oleh PUSDALOPS-PB BPBD Kabupaten Mukomuko</string>
+    <string name="pusdalops_banner_subtitle">Pusat Pengendalian Operasi Penanggulangan Bencana Kabupaten Mukomuko • Siaga Cuaca Ekstrem &amp; Kebencanaan 24 Jam</string>
+    <string name="pusdalops_banner_dismiss">Tutup</string>
+    <string name="pusdalops_banner_understand">Mengerti</string>
 </resources>

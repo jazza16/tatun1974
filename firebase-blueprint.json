@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "User weather alert preferences and favorite districts in Mukomuko",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authenticated user ID owner"
+        },
+        "favoriteDistricts": {
+          "type": "array",
+          "description": "List of favorite Mukomuko district IDs",
+          "items": { "type": "string" }
+        },
+        "notificationsEnabled": {
+          "type": "boolean",
+          "description": "Whether severe weather push notifications are active"
+        },
+        "alertThunderstorm": {
+          "type": "boolean",
+          "description": "Receive thunderstorm alerts"
+        },
+        "alertStrongWind": {
+          "type": "boolean",
+          "description": "Receive strong wind alerts"
+        },
+        "alertFloodHeavyRain": {
+          "type": "boolean",
+          "description": "Receive flood & heavy rain alerts"
+        },
+        "alertHighWaves": {
+          "type": "boolean",
+          "description": "Receive coastal high wave alerts"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "notificationsEnabled"]
+    },
+    "CommunityReport": {
+      "title": "CommunityReport",
+      "description": "Real-time crowd-sourced citizen weather report in Mukomuko",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Report ID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Author user ID"
+        },
+        "districtId": {
+          "type": "string",
+          "description": "Target district ID"
+        },
+        "districtName": {
+          "type": "string",
+          "description": "District name"
+        },
+        "reporterName": {
+          "type": "string",
+          "description": "Citizen reporter display name"
+        },
+        "weatherCondition": {
+          "type": "string",
+          "description": "Observed weather condition"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Report notes and local observation"
+        },
+        "upvotes": {
+          "type": "integer",
+          "description": "Number of citizen upvotes"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "districtId", "districtName", "reporterName", "weatherCondition"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/preferences/{preferenceId}": {
+      "schema": "UserPreferences",
+      "description": "Private user preferences and notification settings"
+    },
+    "/community_reports/{reportId}": {
+      "schema": "CommunityReport",
+      "description": "Public community citizen weather reports"
+    }
+  }
+}

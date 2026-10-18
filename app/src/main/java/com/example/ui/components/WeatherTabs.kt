@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationCity
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -61,6 +62,7 @@ fun WeatherTabs(
         TabItem("Tanya AI (Gemini)", Icons.Default.AutoAwesome),
         TabItem("7 Hari", Icons.Default.CalendarMonth),
         TabItem("Peringatan Dini", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
+        TabItem("Evakuasi Gempa", Icons.Default.HealthAndSafety),
         TabItem("Laporan Warga", Icons.Default.RecordVoiceOver, badgeCount = if (reportCount > 0) reportCount else null),
         TabItem("Cuaca Historis", Icons.Default.History),
         TabItem("Maritim & Pesisir", Icons.Default.Surfing),

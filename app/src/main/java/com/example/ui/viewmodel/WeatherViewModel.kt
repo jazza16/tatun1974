@@ -46,7 +46,12 @@ data class WeatherUiState(
     val latestEarthquake: com.example.model.BmkgEarthquake? = null,
     val recentEarthquakes: List<com.example.model.BmkgEarthquake> = emptyList(),
     val isLoadingEarthquakes: Boolean = false,
-    val isEarthquakeNotificationEnabled: Boolean = true
+    val isEarthquakeNotificationEnabled: Boolean = true,
+    // Theme Mode Toggle (null = Follow System, true = Dark Mode, false = Light Mode)
+    val isDarkMode: Boolean? = null,
+    // App Update Online & Developer Menu
+    val isAppUpdateSheetOpen: Boolean = false,
+    val updateState: com.example.model.AppUpdateState = com.example.model.AppUpdateState()
 )
 
 class WeatherViewModel(
@@ -335,6 +340,71 @@ class WeatherViewModel(
                     // Ignore background polling glitches
                 }
             }
+        }
+    }
+
+    // --- UI Theme Toggle Methods ---
+    fun setDarkMode(isDark: Boolean?) {
+        _uiState.value = _uiState.value.copy(isDarkMode = isDark)
+    }
+
+    fun toggleDarkMode(currentIsDark: Boolean) {
+        _uiState.value = _uiState.value.copy(isDarkMode = !currentIsDark)
+    }
+
+    // --- App Update & Developer Menu Methods ---
+    fun setAppUpdateSheetOpen(isOpen: Boolean) {
+        _uiState.value = _uiState.value.copy(isAppUpdateSheetOpen = isOpen)
+    }
+
+    fun checkForUpdatesOnline() {
+        val currentState = _uiState.value.updateState
+        _uiState.value = _uiState.value.copy(
+            updateState = currentState.copy(isCheckingOnline = true)
+        )
+        viewModelScope.launch {
+            delay(1500) // Simulate network ping to Mukomuko release server
+            val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale("id", "ID"))
+            val nowTime = sdf.format(java.util.Date())
+            _uiState.value = _uiState.value.copy(
+                updateState = _uiState.value.updateState.copy(
+                    isCheckingOnline = false,
+                    isUpdateAvailable = true,
+                    lastCheckedTime = "Hari ini, $nowTime WIB"
+                )
+            )
+        }
+    }
+
+    fun downloadAndApplyUpdate() {
+        val currentState = _uiState.value.updateState
+        if (currentState.isDownloading) return
+
+        _uiState.value = _uiState.value.copy(
+            updateState = currentState.copy(
+                isDownloading = true,
+                downloadProgress = 0.05f
+            )
+        )
+        viewModelScope.launch {
+            // Smooth simulated download progress
+            for (step in 1..10) {
+                delay(200)
+                val prog = step / 10f
+                _uiState.value = _uiState.value.copy(
+                    updateState = _uiState.value.updateState.copy(downloadProgress = prog)
+                )
+            }
+            delay(300)
+            _uiState.value = _uiState.value.copy(
+                updateState = _uiState.value.updateState.copy(
+                    isDownloading = false,
+                    downloadProgress = 1f,
+                    isUpdated = true,
+                    isUpdateAvailable = false,
+                    currentVersion = _uiState.value.updateState.latestVersion
+                )
+            )
         }
     }
 }
