@@ -22,7 +22,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +60,13 @@ import com.example.ui.theme.OrangeSecondary
 import com.example.ui.viewmodel.AiChatMessage
 import com.example.ui.viewmodel.AiUiState
 
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import android.widget.Toast
+
 @Composable
 fun GeminiWeatherSection(
     currentDistrict: District,
@@ -62,14 +74,22 @@ fun GeminiWeatherSection(
     chatMessages: List<AiChatMessage>,
     uiState: AiUiState,
     onSendMessage: (String) -> Unit,
+    customApiKey: String = "",
+    onSaveApiKey: (String) -> Unit = {},
+    onClearChat: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var inputText by remember { mutableStateOf("") }
+    var isApiKeyDialogOpen by remember { mutableStateOf(false) }
+    var tempKeyInput by remember(customApiKey) { mutableStateOf(customApiKey) }
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     val presetPrompts = listOf(
         "🌊 Aman untuk melaut hari ini?",
         "🌾 Pengaruh cuaca ke panen sawit?",
         "⚠️ Potensi banjir DAS Manjunto?",
+        "🆘 Panduan evakuasi gempa bumi?",
         "🌅 Waktu terbaik ke Danau Nibung?",
         "🏖️ Kondisi ombak Pantai Abrasi?"
     )
@@ -101,53 +121,163 @@ fun GeminiWeatherSection(
                     )
                     .padding(18.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
-                        contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "Gemini AI",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "Gemini AI",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Tanya AI Cuaca Mukomuko",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    color = Color.White.copy(alpha = 0.25f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = if (customApiKey.isNotBlank()) "Gemini Direct" else "PUSDALOPS AI",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Konsultasi cerdas cuaca, maritim nelayan & mitigasi bencana",
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Tanya AI Cuaca Mukomuko",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        IconButton(
+                            onClick = onClearChat,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                                .testTag("btn_clear_gemini_chat")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = "Bersihkan Obrolan",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                color = Color.White.copy(alpha = 0.25f),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    text = "Gemini 3.8",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
                         }
-                        Text(
-                            text = "Konsultasi cerdas cuaca, maritim nelayan & mitigasi bencana",
-                            fontSize = 11.sp,
-                            color = Color.White.copy(alpha = 0.9f)
-                        )
+
+                        IconButton(
+                            onClick = { isApiKeyDialogOpen = true },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                                .testTag("btn_gemini_api_key_settings")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VpnKey,
+                                contentDescription = "Pengaturan Kunci API Gemini",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }
+        }
+
+        // Dialog Konfigurasi Kunci API Gemini (Opsional)
+        if (isApiKeyDialogOpen) {
+            AlertDialog(
+                onDismissRequest = { isApiKeyDialogOpen = false },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.VpnKey,
+                            contentDescription = null,
+                            tint = OrangePrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Kunci API Gemini",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Asisten Cerdas PUSDALOPS-PB BPBD Mukomuko siap merespons otomatis secara mandiri tanpa perlu Firebase.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                            lineHeight = 16.sp
+                        )
+                        Text(
+                            text = "Jika Anda memiliki API Key Gemini dari Google AI Studio dan ingin menggunakannya langsung:",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                            lineHeight = 15.sp
+                        )
+                        OutlinedTextField(
+                            value = tempKeyInput,
+                            onValueChange = { tempKeyInput = it },
+                            placeholder = { Text("AIzaSy...", fontSize = 12.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onSaveApiKey(tempKeyInput.trim())
+                            isApiKeyDialogOpen = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary)
+                    ) {
+                        Text("Simpan")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            tempKeyInput = ""
+                            onSaveApiKey("")
+                            isApiKeyDialogOpen = false
+                        }
+                    ) {
+                        Text("Reset Default")
+                    }
+                }
+            )
         }
 
         // Quick Suggestion Chips (Horizontal Scroll)
@@ -229,13 +359,48 @@ fun GeminiWeatherSection(
                         shadowElevation = if (isUser) 1.dp else 2.dp,
                         modifier = Modifier.widthIn(max = 300.dp)
                     ) {
-                        Text(
-                            text = msg.content,
-                            fontSize = 13.sp,
-                            color = if (isUser) OrangeOnPrimary else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(12.dp),
-                            lineHeight = 18.sp
-                        )
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = msg.content,
+                                fontSize = 13.sp,
+                                color = if (isUser) OrangeOnPrimary else MaterialTheme.colorScheme.onSurface,
+                                lineHeight = 18.sp
+                            )
+                            if (!isUser) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(6.dp),
+                                        modifier = Modifier.clickable {
+                                            clipboardManager.setText(AnnotatedString(msg.content))
+                                            Toast.makeText(context, "Jawaban disalin ke clipboard", Toast.LENGTH_SHORT).show()
+                                        }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ContentCopy,
+                                                contentDescription = "Salin",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "Salin",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     if (isUser) {

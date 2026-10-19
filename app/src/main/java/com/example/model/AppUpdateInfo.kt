@@ -30,7 +30,7 @@ data class AppUpdateState(
                 "UI Toggle Mode Gelap & Mode Terang dengan kalibrasi kontras tinggi (WCAG AAA).",
                 "Penyempurnaan kontras kartu peringatan cuaca oranye & gempa BMKG di semua kondisi pencahayaan.",
                 "Menu pembaruan aplikasi daring (online update) dari versi sebelumnya.",
-                "Penyematan profil pengembang resmi (Developer Info) di menu pilihan.",
+                "Pembaruan antarmuka dan peningkatan keandalan sistem mitigasi bencana.",
                 "Optimalisasi rendering grafik interaktif gelombang pesisir Samudra Hindia."
             )
         ),

@@ -47,6 +47,7 @@ data class DailyItem(
     val maxTemp: Double,
     val minTemp: Double,
     val rainProbabilityMax: Int,
+    val precipitationSum: Double = 0.0,
     val uvIndexMax: Double,
     val windSpeedMax: Double,
     val sunrise: String,

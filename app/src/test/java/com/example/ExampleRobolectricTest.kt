@@ -40,14 +40,13 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `verify weather alert notification channel initialization`() {
+  fun `verify bmkg earthquake notification channel initialization`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
-    com.example.util.WeatherNotificationHelper.initNotificationChannel(context)
+    com.example.util.EarthquakeNotificationHelper.initNotificationChannel(context)
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-    val channel = notificationManager.getNotificationChannel(com.example.util.WeatherNotificationHelper.CHANNEL_ID)
+    val channel = notificationManager.getNotificationChannel(com.example.util.EarthquakeNotificationHelper.CHANNEL_ID)
     assertNotNull(channel)
-    assertEquals("Peringatan Cuaca Buruk Mukomuko", channel.name)
-    assertEquals(com.example.util.WeatherNotificationHelper.ORANGE_NOTIFICATION_COLOR, channel.lightColor)
+    assertEquals("Peringatan Dini Gempa Bumi BMKG", channel.name)
   }
 
   @Test

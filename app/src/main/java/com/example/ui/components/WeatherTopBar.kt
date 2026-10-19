@@ -22,8 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Refresh
@@ -55,18 +53,23 @@ import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import com.example.ui.theme.WeatherSunGold
 
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LightMode
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeatherTopBar(
     district: District,
     isFavorite: Boolean,
     isRefreshing: Boolean,
+    isDarkMode: Boolean,
     onDistrictClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onRefreshClick: () -> Unit,
-    onCallCenter117Click: () -> Unit,
-    isBannerVisible: Boolean = true,
-    onToggleBanner: () -> Unit = {}
+    onThemeToggle: () -> Unit,
+    onOpenAppMenu: () -> Unit,
+    onCallCenter117Click: () -> Unit
 ) {
     val rotation by if (isRefreshing) {
         val transition = rememberInfiniteTransition(label = "refreshRotation")
@@ -83,16 +86,19 @@ fun WeatherTopBar(
         androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     }
 
+    val barContainerColor = if (isDarkMode) Color(0xFF1E1712) else OrangePrimary
+    val barContentColor = if (isDarkMode) Color(0xFFFFEDD5) else OrangeOnPrimary
+
     Surface(
-        color = OrangePrimary,
-        shadowElevation = 4.dp
+        color = barContainerColor,
+        shadowElevation = if (isDarkMode) 2.dp else 4.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = OrangePrimary,
-                    titleContentColor = OrangeOnPrimary,
-                    actionIconContentColor = OrangeOnPrimary
+                    containerColor = barContainerColor,
+                    titleContentColor = barContentColor,
+                    actionIconContentColor = barContentColor
                 ),
                 title = {
                     Row(
@@ -110,7 +116,7 @@ fun WeatherTopBar(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(CircleShape)
-                                .border(1.5.dp, Color.White, CircleShape)
+                                .border(1.5.dp, if (isDarkMode) OrangePrimary else Color.White, CircleShape)
                         )
 
                         Spacer(modifier = Modifier.width(8.dp))
@@ -121,20 +127,20 @@ fun WeatherTopBar(
                                     text = district.name,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = OrangeOnPrimary
+                                    color = barContentColor
                                 )
                                 Icon(
                                     imageVector = Icons.Default.KeyboardArrowDown,
                                     contentDescription = "Pilih Kecamatan",
-                                    tint = OrangeOnPrimary.copy(alpha = 0.85f),
+                                    tint = barContentColor.copy(alpha = 0.85f),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
                             Text(
-                                text = "BPBD Kab. Mukomuko",
+                                text = "Pusdalops-PB BPBD Mukomuko",
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = OrangeOnPrimary.copy(alpha = 0.9f)
+                                fontWeight = FontWeight.SemiBold,
+                                color = barContentColor.copy(alpha = 0.95f)
                             )
                         }
                     }
@@ -145,69 +151,93 @@ fun WeatherTopBar(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .clickable(onClick = onCallCenter117Click)
-                            .padding(end = 4.dp)
+                            .padding(end = 2.dp)
                             .testTag("btn_topbar_call_center_117"),
                         color = Color(0xFFDC2626)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PhoneInTalk,
                                 contentDescription = "Call Center 117",
                                 tint = Color.White,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = "117",
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White
                             )
                         }
                     }
 
+                    // UI Toggle Light / Dark Mode Button
+                    IconButton(
+                        onClick = onThemeToggle,
+                        modifier = Modifier.size(34.dp).testTag("theme_toggle_button")
+                    ) {
+                        Icon(
+                            imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = if (isDarkMode) "Ganti ke Mode Terang" else "Ganti ke Mode Gelap",
+                            tint = if (isDarkMode) WeatherSunGold else barContentColor,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+
+                    // App Menu & Online Update Button
+                    IconButton(
+                        onClick = onOpenAppMenu,
+                        modifier = Modifier.size(34.dp).testTag("app_menu_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Pusat Pembaruan Aplikasi",
+                            tint = barContentColor,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+
+                    // Favorite District Toggle Button
                     IconButton(
                         onClick = onFavoriteToggle,
-                        modifier = Modifier.size(36.dp).testTag("btn_favorite_toggle")
+                        modifier = Modifier.size(34.dp).testTag("btn_favorite_toggle")
                     ) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Star else Icons.Outlined.StarBorder,
                             contentDescription = if (isFavorite) "Hapus Favorit" else "Tambah Favorit",
-                            tint = if (isFavorite) WeatherSunGold else OrangeOnPrimary,
-                            modifier = Modifier.size(20.dp)
+                            tint = if (isFavorite) WeatherSunGold else barContentColor,
+                            modifier = Modifier.size(19.dp)
                         )
                     }
 
+                    // Refresh Button
                     IconButton(
                         onClick = onRefreshClick,
-                        modifier = Modifier.size(36.dp).testTag("btn_refresh_weather")
+                        modifier = Modifier.size(34.dp).testTag("btn_refresh_weather")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Segarkan Cuaca",
-                            tint = OrangeOnPrimary,
-                            modifier = Modifier.rotate(rotation).size(20.dp)
+                            tint = barContentColor,
+                            modifier = Modifier.rotate(rotation).size(19.dp)
                         )
-                    }
-
-                    if (!isBannerVisible) {
-                        IconButton(
-                            onClick = onToggleBanner,
-                            modifier = Modifier.size(36.dp).testTag("btn_toggle_pusdalops_banner")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Tampilkan Banner PUSDALOPS BPBD",
-                                tint = OrangeOnPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
                     }
                 }
             )
+
+            // High contrast bottom accent line for dark mode
+            if (isDarkMode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.5.dp)
+                        .background(OrangePrimary.copy(alpha = 0.5f))
+                )
+            }
         }
     }
 }

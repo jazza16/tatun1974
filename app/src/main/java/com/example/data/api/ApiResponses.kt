@@ -41,6 +41,7 @@ data class DailyDto(
     @Json(name = "temperature_2m_max") val temperature2mMax: List<Double>?,
     @Json(name = "temperature_2m_min") val temperature2mMin: List<Double>?,
     @Json(name = "precipitation_probability_max") val precipitationProbabilityMax: List<Int>?,
+    @Json(name = "precipitation_sum") val precipitationSum: List<Double>? = null,
     @Json(name = "uv_index_max") val uvIndexMax: List<Double>?,
     @Json(name = "wind_speed_10m_max") val windSpeed10mMax: List<Double>?,
     val sunrise: List<String>?,

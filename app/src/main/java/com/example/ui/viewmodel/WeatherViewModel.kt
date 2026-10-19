@@ -270,6 +270,20 @@ class WeatherViewModel(
         EarthquakeNotificationHelper.postEarthquakeNotification(context, currentEq)
     }
 
+    fun triggerTestTsunamiNotification(context: Context) {
+        val currentEq = _uiState.value.latestEarthquake ?: repository.getFallbackMukomukoEarthquake()
+        val tsunamiEq = currentEq.copy(
+            id = "tsunami_test_alert_${System.currentTimeMillis()}",
+            magnitude = 7.6,
+            depth = "10 km",
+            potentialTsunami = "BERPOTENSI TSUNAMI (STATUS AWAS EVAKUASI MANDIRI PESISIR MUKOMUKO)",
+            region = "Pusat Gempa 65 km Barat Daya Mukomuko-Bengkulu",
+            isNearMukomuko = true,
+            urgencyLevel = com.example.model.EarthquakeUrgency.CRITICAL
+        )
+        EarthquakeNotificationHelper.postTsunamiWarningNotification(context, tsunamiEq)
+    }
+
     private var lastNotifiedWeatherWarningId: String? = null
 
     fun updateWeatherAlertSettings(settings: WeatherAlertSettings) {

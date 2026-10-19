@@ -66,6 +66,7 @@ import com.example.R
 import com.example.model.AppUpdateState
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
+import com.example.ui.theme.OrangePrimaryContainerDark
 import com.example.ui.theme.OrangePrimaryDark
 import com.example.ui.theme.WarningAlertBgDark
 import com.example.ui.theme.WarningAlertBgLight
@@ -120,7 +121,7 @@ fun AppUpdateBottomSheet(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Pengembang & Pembaruan",
+                            text = "Pusat Pembaruan Aplikasi",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -148,12 +149,7 @@ fun AppUpdateBottomSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- 1. PROMINENT DEVELOPER PROFILE CARD ---
-            DeveloperProfileCard(updateState = updateState, isDark = isActuallyDark)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // --- 2. THEME MODE TOGGLE CARD (LIGHT / DARK / SYSTEM) ---
+            // --- 1. THEME MODE TOGGLE CARD (LIGHT / DARK / SYSTEM) ---
             ThemeToggleCard(
                 isDarkMode = isDarkMode,
                 isActuallyDark = isActuallyDark,
@@ -181,149 +177,6 @@ fun AppUpdateBottomSheet(
             VersionChangelogSection(updateState = updateState, isDark = isActuallyDark)
 
             Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
-
-@Composable
-private fun DeveloperProfileCard(
-    updateState: AppUpdateState,
-    isDark: Boolean
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("developer_profile_card"),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isDark) Color(0xFF261D18) else Color(0xFFFFF7ED)
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.5.dp,
-            if (isDark) OrangePrimaryDark.copy(alpha = 0.6f) else Color(0xFFFDBA74)
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    color = OrangePrimary,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.VerifiedUser,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Profil Pengembang",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
-
-                Text(
-                    text = "Kabupaten Mukomuko",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (isDark) Color(0xFFFDC5A2) else Color(0xFFC2410C)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            if (isDark) OrangePrimaryContainerDark else Color(0xFFFFEDD5),
-                            CircleShape
-                        )
-                        .border(1.5.dp, OrangePrimary, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Code,
-                        contentDescription = "Developer",
-                        tint = OrangePrimary,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column {
-                    Text(
-                        text = updateState.developerName,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF7C2D12)
-                    )
-                    Text(
-                        text = updateState.developerRole,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (isDark) Color(0xFFFDC5A2) else Color(0xFF9A3412)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Organization & Contact Info
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = if (isDark) Color(0xFF1E1612) else Color(0xFFFFFFFF),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = null,
-                            tint = OrangePrimary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Mitra: ${updateState.organization}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isDark) Color(0xFFFBECE5) else Color(0xFF261912)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Email,
-                            contentDescription = null,
-                            tint = OrangePrimary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Email: ${updateState.developerEmail}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = if (isDark) Color(0xFFFED7AA) else Color(0xFF7C2D12)
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -834,8 +687,8 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
 
             FeatureDetailItem(
                 emoji = "📱",
-                title = "Menu Pembaruan Online & Profil Pengembang",
-                desc = "Pemeriksaan versi aplikasi terbaru secara langsung melalui jaringan, riwayat changelog transparan, serta identitas pengembang resmi aplikasi.",
+                title = "Pusat Pembaruan Online Aplikasi",
+                desc = "Pemeriksaan versi aplikasi terbaru secara langsung melalui jaringan dan riwayat catatan rilis pembaruan resmi aplikasi.",
                 isDark = isDark
             )
         }

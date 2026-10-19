@@ -450,6 +450,7 @@ class WeatherRepository(
                         maxTemp = maxT,
                         minTemp = minT,
                         rainProbabilityMax = rainProb,
+                        precipitationSum = dailyDto.precipitationSum?.getOrNull(i) ?: 0.0,
                         uvIndexMax = uvMax,
                         windSpeedMax = windMax,
                         sunrise = sunrise,
