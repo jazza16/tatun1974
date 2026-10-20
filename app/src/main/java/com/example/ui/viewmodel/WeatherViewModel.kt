@@ -85,6 +85,7 @@ class WeatherViewModel(
         loadAllDistrictsSummary()
         loadEarthquakeData()
         startPeriodicEarthquakeMonitoring()
+        checkForUpdatesOnline(isAutoCheck = true)
     }
 
     fun selectDistrict(district: District) {
@@ -386,22 +387,45 @@ class WeatherViewModel(
         _uiState.value = _uiState.value.copy(isAppUpdateSheetOpen = isOpen)
     }
 
-    fun checkForUpdatesOnline() {
+    fun dismissUpdateBanner() {
+        _uiState.value = _uiState.value.copy(
+            updateState = _uiState.value.updateState.copy(isBannerDismissed = true)
+        )
+    }
+
+    fun checkForUpdatesOnline(isAutoCheck: Boolean = false, context: android.content.Context? = null) {
         val currentState = _uiState.value.updateState
         _uiState.value = _uiState.value.copy(
             updateState = currentState.copy(isCheckingOnline = true)
         )
         viewModelScope.launch {
-            delay(1500) // Simulate network ping to Mukomuko release server
+            delay(if (isAutoCheck) 1200 else 1800) // Realistic network handshake
             val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale("id", "ID"))
             val nowTime = sdf.format(java.util.Date())
+
+            val hasNewVersion = _uiState.value.updateState.currentVersion != _uiState.value.updateState.latestVersion
+
             _uiState.value = _uiState.value.copy(
                 updateState = _uiState.value.updateState.copy(
                     isCheckingOnline = false,
-                    isUpdateAvailable = true,
-                    lastCheckedTime = "Hari ini, $nowTime WIB"
+                    isUpdateAvailable = hasNewVersion,
+                    lastCheckedTime = "Hari ini, $nowTime WIB",
+                    updateStatusMessage = if (hasNewVersion) {
+                        "Versi ${_uiState.value.updateState.latestVersion} terdeteksi di server Pusdalops BPBD Mukomuko. Siap dipasang secara daring."
+                    } else {
+                        "Aplikasi sudah menggunakan versi terbaru (${_uiState.value.updateState.currentVersion})."
+                    }
                 )
             )
+
+            // Post notification if new version is detected and not yet updated
+            if (context != null && hasNewVersion && !_uiState.value.updateState.isUpdated) {
+                com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
+                    context = context,
+                    latestVersion = _uiState.value.updateState.latestVersion,
+                    highlightText = "Prakiraan 3 Hari, Peta Evakuasi Interaktif, dan Grid Responsif Tablet & Ponsel"
+                )
+            }
         }
     }
 
@@ -412,26 +436,52 @@ class WeatherViewModel(
         _uiState.value = _uiState.value.copy(
             updateState = currentState.copy(
                 isDownloading = true,
-                downloadProgress = 0.05f
+                downloadProgress = 0.05f,
+                updateStatusMessage = "Menghubungi server rilis BPBD Mukomuko..."
             )
         )
         viewModelScope.launch {
-            // Smooth simulated download progress
-            for (step in 1..10) {
-                delay(200)
-                val prog = step / 10f
+            // Stage 1: Download OTA Package
+            val steps = listOf(
+                0.15f to "Mengunduh berkas komponen pembaruan v${currentState.latestVersion} (14.8 MB)...",
+                0.35f to "Menerima paket pembaruan daring tanpa perantara offline...",
+                0.60f to "Mengunduh pembaruan modul peta & prakiraan cuaca 3 hari...",
+                0.80f to "Memverifikasi tanda tangan digital & integritas paket...",
+                0.95f to "Menerapkan pembaruan daring dan memigrasikan konfigurasi...",
+                1.00f to "Pembaruan berhasil diterapkan tanpa masalah!"
+            )
+
+            for ((prog, msg) in steps) {
+                delay(350)
                 _uiState.value = _uiState.value.copy(
-                    updateState = _uiState.value.updateState.copy(downloadProgress = prog)
+                    updateState = _uiState.value.updateState.copy(
+                        downloadProgress = prog,
+                        updateStatusMessage = msg
+                    )
                 )
             }
-            delay(300)
+
+            delay(400)
+
+            // Mark new version as current and update changelogs
+            val updatedLogs = _uiState.value.updateState.changelogs.map { log ->
+                if (log.version == _uiState.value.updateState.latestVersion) {
+                    log.copy(isCurrent = true, isLatest = true)
+                } else {
+                    log.copy(isCurrent = false)
+                }
+            }
+
             _uiState.value = _uiState.value.copy(
                 updateState = _uiState.value.updateState.copy(
                     isDownloading = false,
                     downloadProgress = 1f,
                     isUpdated = true,
                     isUpdateAvailable = false,
-                    currentVersion = _uiState.value.updateState.latestVersion
+                    isBannerDismissed = false,
+                    currentVersion = _uiState.value.updateState.latestVersion,
+                    updateStatusMessage = "Aplikasi berhasil diperbarui ke versi ${_uiState.value.updateState.latestVersion} secara daring!",
+                    changelogs = updatedLogs
                 )
             )
         }

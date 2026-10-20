@@ -61,7 +61,7 @@ fun WeatherTabs(
     val tabs = listOf(
         TabItem("Hari Ini", Icons.Default.WbSunny),
         TabItem("Tanya AI (Gemini)", Icons.Default.AutoAwesome),
-        TabItem("7 Hari", Icons.Default.CalendarMonth),
+        TabItem("Prakiraan Cuaca", Icons.Default.CalendarMonth),
         TabItem("Peringatan Dini", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
         TabItem("Peta & SOP Evakuasi", Icons.Default.Map),
         TabItem("inaRISK BNPB", Icons.Default.Security),

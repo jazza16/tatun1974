@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Compress
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material3.Button
@@ -63,8 +66,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.DisposableEffect
 import com.example.data.local.AppDatabase
 import com.example.data.repository.WeatherRepository
+import com.example.model.CurrentWeather
 import com.example.model.DailyItem
 import com.example.model.WeatherFullReport
+import java.util.Locale
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -89,6 +94,8 @@ import com.example.ui.components.GeminiWeatherSection
 import com.example.ui.components.HeroWeatherCard
 import com.example.ui.components.HistoricalWeatherSection
 import com.example.ui.components.HourlyForecastCard
+import com.example.ui.components.InAppUpdateBannerCard
+import com.example.ui.components.InAppUpdateSuccessCard
 import com.example.ui.components.InaRiskBnpbSection
 import com.example.ui.components.InteractiveDisasterMapSection
 import com.example.ui.components.MarinePesisirCard
@@ -112,6 +119,7 @@ class MainActivity : ComponentActivity() {
         // Initialize BMKG Earthquake and Severe Weather Notification Channels
         com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
         com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
+        com.example.util.WeatherNotificationHelper.initAppUpdateNotificationChannel(this)
 
         enableEdgeToEdge()
         setContent {
@@ -154,14 +162,22 @@ fun WeatherAppScreen(
     val currentDistrict = uiState.selectedDistrict
     val isFavorite = favorites.contains(currentDistrict.id)
 
-    // Handle incoming navigation from BMKG earthquake notifications
+    // Handle incoming navigation from BMKG earthquake or App Update notifications
     val initialTab = remember {
         (context as? android.app.Activity)?.intent?.getIntExtra("EXTRA_NAVIGATE_TAB", -1) ?: -1
     }
-    LaunchedEffect(initialTab) {
+    val shouldOpenUpdate = remember {
+        (context as? android.app.Activity)?.intent?.getBooleanExtra("EXTRA_OPEN_UPDATE_SHEET", false) ?: false
+    }
+    LaunchedEffect(initialTab, shouldOpenUpdate) {
         if (initialTab >= 0) {
             viewModel.selectTab(initialTab)
         }
+        if (shouldOpenUpdate) {
+            viewModel.setAppUpdateSheetOpen(true)
+        }
+        // Seamlessly check for newest version online on startup and notify
+        viewModel.checkForUpdatesOnline(isAutoCheck = true, context = context)
     }
 
     val isActuallyDark = uiState.isDarkMode ?: false
@@ -175,6 +191,7 @@ fun WeatherAppScreen(
                 isFavorite = isFavorite,
                 isRefreshing = uiState.isRefreshing,
                 isDarkMode = isActuallyDark,
+                isUpdateAvailable = uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated,
                 onDistrictClick = { viewModel.setDistrictSheetOpen(true) },
                 onFavoriteToggle = { viewModel.toggleFavorite(currentDistrict.id) },
                 onRefreshClick = { viewModel.refresh() },
@@ -290,103 +307,171 @@ fun WeatherAppScreen(
                 ) { currentTabIndex ->
                     when (currentTabIndex) {
                         0 -> {
-                            // Tab 0: Hari Ini (Responsive LazyVerticalGrid Dashboard)
+                            // Tab 0: Hari Ini (Responsive Balanced LazyVerticalGrid Dashboard)
                             val report = uiState.report
                             if (report != null) {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Adaptive(minSize = 340.dp),
+                                BoxWithConstraints(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .testTag("weather_content_list"),
-                                    contentPadding = PaddingValues(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                        .testTag("weather_dashboard_container")
                                 ) {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        HeroWeatherCard(report = report)
+                                    val screenWidth = maxWidth
+                                    val columnCount = when {
+                                        screenWidth >= 960.dp -> 3
+                                        screenWidth >= 600.dp -> 2
+                                        else -> 1
                                     }
 
-                                    // Live BMKG Earthquake Banner
-                                    val latestEq = uiState.latestEarthquake
-                                    if (latestEq != null) {
-                                        item(span = { GridItemSpan(maxLineSpan) }) {
-                                            LiveEarthquakeQuickCard(
-                                                earthquake = latestEq,
-                                                onClick = { viewModel.selectTab(3) }
+                                    val contentPadding = when {
+                                        screenWidth >= 960.dp -> PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 96.dp)
+                                        screenWidth >= 600.dp -> PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 88.dp)
+                                        else -> PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 80.dp)
+                                    }
+
+                                    val gridSpacing = when {
+                                        screenWidth >= 960.dp -> 18.dp
+                                        screenWidth >= 600.dp -> 16.dp
+                                        else -> 14.dp
+                                    }
+
+                                    LazyVerticalGrid(
+                                        columns = GridCells.Fixed(columnCount),
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .testTag("weather_content_list"),
+                                        contentPadding = contentPadding,
+                                        verticalArrangement = Arrangement.spacedBy(gridSpacing),
+                                        horizontalArrangement = Arrangement.spacedBy(gridSpacing)
+                                    ) {
+                                        // Active Severe Weather Alert if available (full line on all devices)
+                                        if (report.alert != null) {
+                                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                                ActiveAlertCard(
+                                                    alert = report.alert,
+                                                    onViewDetail = { viewModel.selectTab(3) }
+                                                )
+                                            }
+                                        }
+
+                                        // In-App OTA Update Available Banner (Seamless Online Update)
+                                        if (uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
+                                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                                InAppUpdateBannerCard(
+                                                    updateState = uiState.updateState,
+                                                    onUpdateNow = { viewModel.downloadAndApplyUpdate() },
+                                                    onViewDetails = { viewModel.setAppUpdateSheetOpen(true) },
+                                                    onDismiss = { viewModel.dismissUpdateBanner() }
+                                                )
+                                            }
+                                        } else if (uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
+                                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                                InAppUpdateSuccessCard(
+                                                    version = uiState.updateState.currentVersion,
+                                                    onDismiss = { viewModel.dismissUpdateBanner() }
+                                                )
+                                            }
+                                        }
+
+                                        // Hero Weather Overview Card
+                                        item(span = {
+                                            GridItemSpan(
+                                                when (maxLineSpan) {
+                                                    3 -> 2 // On 3-column tablet: spans 2 columns, leaving 1 column for 3-Day Forecast
+                                                    else -> maxLineSpan // On phone & 2-column tablet: full width hero banner
+                                                }
+                                            )
+                                        }) {
+                                            HeroWeatherCard(report = report)
+                                        }
+
+                                        // Feature: Prakiraan Cuaca 3 Hari (Mukomuko)
+                                        item(span = {
+                                            GridItemSpan(
+                                                when (maxLineSpan) {
+                                                    3 -> 1 // Beside Hero Card on 3-column tablet (2 + 1 = 3)
+                                                    2 -> 1 // Col 1 on 2-column tablet, paired with Sun & Atmosphere (1 + 1 = 2)
+                                                    else -> 1 // Full width on phone (1 column)
+                                                }
+                                            )
+                                        }) {
+                                            ThreeDayForecastCard(
+                                                district = currentDistrict,
+                                                dailyList = report.daily,
+                                                isDark = isActuallyDark
                                             )
                                         }
-                                    }
 
-                                    // Feature: Prakiraan Cuaca 3 Hari (Mukomuko)
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        ThreeDayForecastCard(
-                                            district = currentDistrict,
-                                            dailyList = report.daily,
-                                            isDark = isActuallyDark
-                                        )
-                                    }
-
-                                    // Quick Kesiapsiagaan Evakuasi Mandiri Gempa Bumi Banner
-                                    item(span = { GridItemSpan(if (maxLineSpan > 1) 1 else maxLineSpan) }) {
-                                        QuickEvacuationPreparednessBanner(
-                                            isDark = isActuallyDark,
-                                            onOpenGuide = { viewModel.selectTab(4) }
-                                        )
-                                    }
-
-                                    // Quick Gemini AI Prompt Teaser
-                                    item(span = { GridItemSpan(if (maxLineSpan > 1) 1 else maxLineSpan) }) {
-                                        QuickGeminiAdvisorBanner(
-                                            isDark = isActuallyDark,
-                                            onAskAi = { viewModel.selectTab(1) }
-                                        )
-                                    }
-
-                                    // Quick Call Center 117 Alert Strip
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        QuickEmergency117Strip(
-                                            isDark = isActuallyDark,
-                                            onCall117 = { EmergencyDialer.dial(context, "117") },
-                                            onViewDetails = { isCallCenter117SheetOpen = true }
-                                        )
-                                    }
-
-                                    // Active Alert Card if available
-                                    if (report.alert != null) {
-                                        item(span = { GridItemSpan(maxLineSpan) }) {
-                                            ActiveAlertCard(
-                                                alert = report.alert,
-                                                onViewDetail = { viewModel.selectTab(3) }
+                                        // Sun, UV Index & Atmospheric Metrics Card
+                                        item(span = {
+                                            GridItemSpan(
+                                                when (maxLineSpan) {
+                                                    3 -> 1 // Beside Hourly Forecast on 3-column tablet (1 + 2 = 3)
+                                                    2 -> 1 // Paired with 3-Day Forecast on 2-column tablet (1 + 1 = 2)
+                                                    else -> 1 // Full width on phone
+                                                }
+                                            )
+                                        }) {
+                                            SunAndAtmosphereCard(
+                                                daily = report.daily.firstOrNull(),
+                                                current = report.current
                                             )
                                         }
-                                    }
 
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        HourlyForecastCard(hourlyList = report.hourly)
-                                    }
+                                        // 24-Hour Forecast Timeline
+                                        item(span = {
+                                            GridItemSpan(
+                                                when (maxLineSpan) {
+                                                    3 -> 2 // Spans 2 columns paired with Sun & Atmosphere (2 + 1 = 3)
+                                                    else -> maxLineSpan // Full line on phone & 2-column tablet
+                                                }
+                                            )
+                                        }) {
+                                            HourlyForecastCard(hourlyList = report.hourly)
+                                        }
 
-                                    item(span = { GridItemSpan(if (maxLineSpan > 1) 1 else maxLineSpan) }) {
-                                        SunAndAtmosphereCard(daily = report.daily.firstOrNull())
-                                    }
+                                        // Data Visualization: Weekly Rainfall Precipitation Bar Chart (Recharts-inspired)
+                                        item(span = {
+                                            GridItemSpan(
+                                                when (maxLineSpan) {
+                                                    3 -> 1 // Large tablet visual row column 1 (1 + 1 + 1 = 3)
+                                                    2 -> 1 // 2-column tablet paired with Marine Wave Chart (1 + 1 = 2)
+                                                    else -> 1 // Full width on phone
+                                                }
+                                            )
+                                        }) {
+                                            WeeklyRainfallBarChartCard(
+                                                currentDistrict = currentDistrict,
+                                                dailyList = report.daily
+                                            )
+                                        }
 
-                                    // Weekly Rainfall Precipitation Bar Chart Card (Recharts-inspired Data Visualization)
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        WeeklyRainfallBarChartCard(
-                                            currentDistrict = currentDistrict,
-                                            dailyList = report.daily
-                                        )
-                                    }
+                                        // Data Visualization: Historical Marine Wave Height Chart
+                                        item(span = {
+                                            GridItemSpan(
+                                                when (maxLineSpan) {
+                                                    3 -> 1 // Large tablet visual row column 2 (1 + 1 + 1 = 3)
+                                                    2 -> 1 // 2-column tablet paired with Rainfall Bar Chart (1 + 1 = 2)
+                                                    else -> 1 // Full width on phone
+                                                }
+                                            )
+                                        }) {
+                                            MarineWaveHistoryChart(district = currentDistrict)
+                                        }
 
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        MarinePesisirCard(
-                                            district = currentDistrict,
-                                            marine = report.marine
-                                        )
-                                    }
-
-                                    // Historical Marine Wave Height Chart
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        MarineWaveHistoryChart(district = currentDistrict)
+                                        // Marine Pesisir Conditions Card
+                                        item(span = {
+                                            GridItemSpan(
+                                                when (maxLineSpan) {
+                                                    3 -> 1 // Large tablet visual row column 3 (1 + 1 + 1 = 3)
+                                                    else -> maxLineSpan // 2-column tablet & phone: full width
+                                                }
+                                            )
+                                        }) {
+                                            MarinePesisirCard(
+                                                district = currentDistrict,
+                                                marine = report.marine
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -977,76 +1062,274 @@ private fun ActiveAlertCard(
 
 @Composable
 private fun SunAndAtmosphereCard(
-    daily: DailyItem?
+    daily: DailyItem?,
+    current: CurrentWeather? = null
 ) {
     val sunrise = daily?.sunrise ?: "06:05"
     val sunset = daily?.sunset ?: "18:15"
+    val uvIndex = daily?.uvIndexMax ?: 6.5
+    val pressure = current?.surfacePressure ?: 1012.0
+    val humidity = current?.humidity ?: 78
+
+    val uvCategory = when {
+        uvIndex >= 11.0 -> "Ekstrem"
+        uvIndex >= 8.0 -> "Sgt Tinggi"
+        uvIndex >= 6.0 -> "Tinggi"
+        uvIndex >= 3.0 -> "Sedang"
+        else -> "Rendah"
+    }
+
+    val uvBadgeColor = when {
+        uvIndex >= 8.0 -> Color(0xFFDC2626)
+        uvIndex >= 6.0 -> Color(0xFFEA580C)
+        uvIndex >= 3.0 -> Color(0xFFD97706)
+        else -> Color(0xFF16A34A)
+    }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("sun_astro_card"),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.WbSunny,
-                    contentDescription = "Matahari Terbit",
-                    tint = OrangeSecondary,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(OrangePrimary.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.WbSunny,
+                            contentDescription = "Matahari & Atmosfer",
+                            tint = OrangePrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Matahari & Atmosfer",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Radiasi UV & Siklus Surya Mukomuko",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        )
+                    }
+                }
+
+                Surface(
+                    color = OrangePrimary.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
                     Text(
-                        text = "Terbit (WIB)",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
-                    )
-                    Text(
-                        text = sunrise,
-                        fontSize = 16.sp,
+                        text = "BMKG",
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = OrangePrimary,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                     )
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(36.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
+            Spacer(modifier = Modifier.height(14.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.WbTwilight,
-                    contentDescription = "Matahari Terbenam",
-                    tint = OrangePrimary,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
+            // Sunrise & Sunset Cards
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Sunrise
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    color = Color(0xFFFFF7ED),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFEDD5))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(OrangeSecondary.copy(alpha = 0.2f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WbSunny,
+                                contentDescription = null,
+                                tint = OrangeSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Terbit (WIB)",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF9A3412)
+                            )
+                            Text(
+                                text = sunrise,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF7C2D12)
+                            )
+                        }
+                    }
+                }
+
+                // Sunset
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    color = Color(0xFFFEF2F2),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFEE2E2))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(OrangePrimary.copy(alpha = 0.2f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WbTwilight,
+                                contentDescription = null,
+                                tint = OrangePrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Terbenam",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF991B1B)
+                            )
+                            Text(
+                                text = sunset,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF7F1D1D)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Atmospheric Metrics Strip (UV, Pressure, Humidity)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        RoundedCornerShape(12.dp)
+                    )
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // UV Index
                 Column {
                     Text(
-                        text = "Terbenam (WIB)",
-                        fontSize = 11.sp,
+                        text = "Indeks UV Maks",
+                        fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .background(uvBadgeColor, CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = String.format(Locale.US, "%.1f", uvIndex),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "($uvCategory)",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = uvBadgeColor
+                        )
+                    }
+                }
+
+                // Air Pressure
+                Column {
                     Text(
-                        text = sunset,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "Tekanan Udara",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Compress,
+                            contentDescription = null,
+                            tint = OrangePrimary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "${pressure.toInt()} hPa",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                // Humidity
+                Column {
+                    Text(
+                        text = "Kelembaban",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.WaterDrop,
+                            contentDescription = null,
+                            tint = Color(0xFF0284C7),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "$humidity%",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }

@@ -220,5 +220,72 @@ object WeatherNotificationHelper {
             false
         }
     }
+
+    const val APP_UPDATE_CHANNEL_ID = "mukomuko_app_update_channel"
+
+    fun initAppUpdateNotificationChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                APP_UPDATE_CHANNEL_ID,
+                "Pembaruan Daring Aplikasi Cuaca Mukomuko",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifikasi rilis versi terbaru dan status pembaruan online"
+                enableLights(true)
+                lightColor = ORANGE_NOTIFICATION_COLOR
+            }
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            notificationManager?.createNotificationChannel(channel)
+        }
+    }
+
+    fun postAppUpdateNotification(
+        context: Context,
+        latestVersion: String,
+        highlightText: String
+    ): Boolean {
+        initAppUpdateNotificationChannel(context)
+        if (!hasNotificationPermission(context)) return false
+
+        val openAppIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("EXTRA_OPEN_UPDATE_SHEET", true)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            2026,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, APP_UPDATE_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("Pembaruan Aplikasi Tersedia: v$latestVersion")
+            .setContentText("Versi terbaru siap dipasang langsung secara daring (tanpa update offline).")
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    "Pusdalops BPBD Mukomuko merilis Cuaca Mukomuko v$latestVersion!\n\n" +
+                    "Fitur Baru:\n$highlightText\n\n" +
+                    "Ketuk untuk langsung menginstal secara daring tanpa perlu unduh berkas offline."
+                )
+            )
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setColor(ORANGE_NOTIFICATION_COLOR)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .addAction(
+                android.R.drawable.stat_sys_download,
+                "Perbarui Daring",
+                pendingIntent
+            )
+            .build()
+
+        return try {
+            NotificationManagerCompat.from(context).notify(2026, notification)
+            true
+        } catch (_: SecurityException) {
+            false
+        }
+    }
 }
 

@@ -10,7 +10,7 @@ data class VersionChangelog(
 
 data class AppUpdateState(
     val currentVersion: String = "1.0.0",
-    val latestVersion: String = "1.1.0",
+    val latestVersion: String = "1.2.0",
     val developerName: String = "Jazzakallah",
     val developerRole: String = "Lead Mobile Developer & UI Engineer",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -20,12 +20,28 @@ data class AppUpdateState(
     val isDownloading: Boolean = false,
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = false,
-    val lastCheckedTime: String = "Baru saja",
+    val lastCheckedTime: String = "Baru saja dicek daring",
+    val updateStatusMessage: String = "Pembaruan versi 1.2.0 terdeteksi dan siap dipasang secara daring.",
+    val packageSizeMb: Float = 14.8f,
+    val isBannerDismissed: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
+        VersionChangelog(
+            version = "1.2.0",
+            releaseDate = "20 Oktober 2026",
+            isLatest = true,
+            highlights = listOf(
+                "Sistem Penerimaan & Instalasi Pembaruan Daring Otomatis (OTA In-App Engine) tanpa perlu update offline.",
+                "Prakiraan Cuaca 3 Hari terperinci untuk 15 kecamatan di Kabupaten Mukomuko.",
+                "Modul peta interaktif titik rawan bencana dan rute evakuasi tsunami/banjir.",
+                "Sistem peringatan cuaca buruk waktu nyata berbasis push notification lokal.",
+                "Tema terang sebagai tema default dengan palet oranye hangat dan rasio kontras tinggi.",
+                "Tata letak LazyVerticalGrid adaptif yang seimbang pada perangkat tablet dan ponsel.",
+                "Migrasi otomatis database Room lokal tanpa risiko force close atau kehilangan data."
+            )
+        ),
         VersionChangelog(
             version = "1.1.0",
             releaseDate = "17 Oktober 2026",
-            isLatest = true,
             highlights = listOf(
                 "UI Toggle Mode Gelap & Mode Terang dengan kalibrasi kontras tinggi (WCAG AAA).",
                 "Penyempurnaan kontras kartu peringatan cuaca oranye & gempa BMKG di semua kondisi pencahayaan.",

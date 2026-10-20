@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SettingsBrightness
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -478,6 +479,44 @@ private fun OnlineUpdateCard(
                 }
             }
 
+            // OTA Architecture Assurance Strip
+            Spacer(modifier = Modifier.height(12.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SystemUpdate,
+                        contentDescription = null,
+                        tint = OrangePrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Sistem OTA Aktif: Perangkat dengan versi lama otomatis mengenali & memasang versi terbaru secara daring tanpa perlu instal ulang offline.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+
+            // Status message
+            if (updateState.updateStatusMessage.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = updateState.updateStatusMessage,
+                    fontSize = 11.sp,
+                    color = OrangePrimary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
             // Downloading Progress
             if (updateState.isDownloading) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -532,7 +571,7 @@ private fun OnlineUpdateCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Aplikasi berhasil diperbarui ke versi ${updateState.currentVersion} secara online!",
+                            text = "Aplikasi berhasil diperbarui ke versi ${updateState.currentVersion} secara daring!",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFF16A34A)
@@ -650,18 +689,45 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
 
             // Detailed Explanations
             FeatureDetailItem(
-                emoji = "🌗",
-                title = "UI Toggle Mode Gelap & Terang (Dark/Light)",
-                desc = "Pengguna dapat berganti tema secara instan antara mode terang yang hangat dan mode gelap hemat daya yang nyaman di mata pada malam hari.",
+                emoji = "🔄",
+                title = "Pembaruan Daring Otomatis (OTA Engine)",
+                desc = "Perangkat yang telah menginstal versi sebelumnya otomatis mengenali rilis baru dan dapat langsung menginstalnya di dalam aplikasi tanpa perlu melakukan unduhan atau update offline manual.",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "🔶",
-                title = "Kontras Tinggi Notifikasi Cuaca Oranye (WCAG AAA)",
-                desc = "Semua peringatan cuaca buruk oranye, banner gempa bumi, dan badge status kini otomatis beradaptasi dengan latar belakang sehingga teks tetap tajam, kontras, dan tidak silau di kondisi cahaya apa pun.",
+                emoji = "🌤️",
+                title = "Prakiraan Cuaca 3 Hari (Mukomuko)",
+                desc = "Fitur prakiraan cuaca 3 hari ke depan dengan estimasi suhu tinggi/rendah, peluang presipitasi hujan, dan kecepatan angin untuk seluruh kecamatan di Kabupaten Mukomuko.",
+                isDark = isDark
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            FeatureDetailItem(
+                emoji = "🗺️",
+                title = "Peta Interaktif Titik Rawan & Rute Evakuasi",
+                desc = "Peta visual titik rawan bencana banjir/tsunami pesisir Mukomuko, zona aman dataran tinggi, dan rute evakuasi mandiri.",
+                isDark = isDark
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            FeatureDetailItem(
+                emoji = "📐",
+                title = "Tata Letak Grid Responsif Tablet & Ponsel",
+                desc = "Implementasi LazyVerticalGrid adaptif dengan ukuran dinamis seimbang di ponsel dan tablet, memberikan ruang optimal untuk grafik dan visualisasi data.",
+                isDark = isDark
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            FeatureDetailItem(
+                emoji = "🌗",
+                title = "UI Toggle Mode Gelap & Terang (Default Terang)",
+                desc = "Pengguna dapat berganti tema secara instan antara mode terang yang hangat (tema default) dan mode gelap hemat daya yang nyaman di mata pada malam hari.",
                 isDark = isDark
             )
 
@@ -671,24 +737,6 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
                 emoji = "🌊",
                 title = "Visualisasi Gelombang Samudra Hindia (Recharts Style)",
                 desc = "Grafik interaktif kurva gelombang pantai Mukomuko dengan tooltip, rentang waktu (7, 14, 30 hari), dan indikator keselamatan perahu nelayan.",
-                isDark = isDark
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            FeatureDetailItem(
-                emoji = "🚨",
-                title = "Notifikasi Real-Time Gempa BMKG & Call Center 117",
-                desc = "Sensor rilis resmi TEWS BMKG untuk deteksi gempa terkini dengan hitungan jarak ke Mukomuko serta tombol panggil cepat darurat BPBD 117.",
-                isDark = isDark
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            FeatureDetailItem(
-                emoji = "📱",
-                title = "Pusat Pembaruan Online Aplikasi",
-                desc = "Pemeriksaan versi aplikasi terbaru secara langsung melalui jaringan dan riwayat catatan rilis pembaruan resmi aplikasi.",
                 isDark = isDark
             )
         }

@@ -56,6 +56,7 @@ import com.example.ui.theme.WeatherSunGold
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.NewReleases
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +65,7 @@ fun WeatherTopBar(
     isFavorite: Boolean,
     isRefreshing: Boolean,
     isDarkMode: Boolean,
+    isUpdateAvailable: Boolean = false,
     onDistrictClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onRefreshClick: () -> Unit,
@@ -188,17 +190,27 @@ fun WeatherTopBar(
                         )
                     }
 
-                    // App Menu & Online Update Button
-                    IconButton(
-                        onClick = onOpenAppMenu,
-                        modifier = Modifier.size(34.dp).testTag("app_menu_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Pusat Pembaruan Aplikasi",
-                            tint = barContentColor,
-                            modifier = Modifier.size(19.dp)
-                        )
+                    // App Menu & Online OTA Update Button
+                    Box(contentAlignment = Alignment.TopEnd) {
+                        IconButton(
+                            onClick = onOpenAppMenu,
+                            modifier = Modifier.size(34.dp).testTag("app_menu_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isUpdateAvailable) Icons.Default.NewReleases else Icons.Default.Info,
+                                contentDescription = "Pusat Pembaruan Aplikasi",
+                                tint = if (isUpdateAvailable) Color(0xFFFDE047) else barContentColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        if (isUpdateAvailable) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 4.dp, end = 4.dp)
+                                    .size(8.dp)
+                                    .background(Color(0xFFEF4444), CircleShape)
+                            )
+                        }
                     }
 
                     // Favorite District Toggle Button
