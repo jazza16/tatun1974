@@ -47,8 +47,8 @@ data class WeatherUiState(
     val recentEarthquakes: List<com.example.model.BmkgEarthquake> = emptyList(),
     val isLoadingEarthquakes: Boolean = false,
     val isEarthquakeNotificationEnabled: Boolean = true,
-    // Theme Mode Toggle (null = Follow System, true = Dark Mode, false = Light Mode)
-    val isDarkMode: Boolean? = null,
+    // Theme Mode Toggle (default: false = Light Mode as requested, true = Dark Mode, null = Follow System)
+    val isDarkMode: Boolean? = false,
     // App Update Online & Developer Menu
     val isAppUpdateSheetOpen: Boolean = false,
     val updateState: com.example.model.AppUpdateState = com.example.model.AppUpdateState()
@@ -308,6 +308,21 @@ class WeatherViewModel(
             bpbdContact = "Pusdalops BPBD: 0737-71112"
         )
         WeatherNotificationHelper.postWeatherAlertNotification(context, sampleWarning, currentDistrict.name)
+    }
+
+    fun triggerSuddenSevereWeatherPushNotification(context: Context) {
+        val currentDistrict = _uiState.value.selectedDistrict
+        val currentReport = _uiState.value.report
+        val windSpeed = currentReport?.current?.windSpeed ?: 54.0
+        val rainProb = currentReport?.hourly?.firstOrNull()?.rainProbability ?: 95
+
+        WeatherNotificationHelper.postLocationBasedSuddenSevereWeatherPushNotification(
+            context = context,
+            districtName = currentDistrict.name,
+            alertType = "Badai Petir & Angin Kencang Mendadak",
+            windSpeedKmH = windSpeed.coerceAtLeast(48.0),
+            rainProbability = rainProb.coerceAtLeast(85)
+        )
     }
 
     private fun checkAndPostSevereWeatherAlertIfNeeded(context: Context?, district: District, warnings: List<DetailedEarlyWarning>) {

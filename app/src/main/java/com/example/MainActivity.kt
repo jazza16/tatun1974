@@ -66,6 +66,16 @@ import com.example.data.repository.WeatherRepository
 import com.example.model.DailyItem
 import com.example.model.WeatherFullReport
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import com.example.ui.components.AirQualityAndUvCard
 import com.example.ui.components.AllDistrictsView
 import com.example.ui.components.AppUpdateBottomSheet
@@ -80,11 +90,14 @@ import com.example.ui.components.HeroWeatherCard
 import com.example.ui.components.HistoricalWeatherSection
 import com.example.ui.components.HourlyForecastCard
 import com.example.ui.components.InaRiskBnpbSection
+import com.example.ui.components.InteractiveDisasterMapSection
 import com.example.ui.components.MarinePesisirCard
 import com.example.ui.components.MarineWaveHistoryChart
-import com.example.ui.components.WeeklyRainfallBarChartCard
+import com.example.ui.components.QuickActionsFab
+import com.example.ui.components.ThreeDayForecastCard
 import com.example.ui.components.WeatherTabs
 import com.example.ui.components.WeatherTopBar
+import com.example.ui.components.WeeklyRainfallBarChartCard
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
@@ -110,8 +123,7 @@ class MainActivity : ComponentActivity() {
             }
             val aiViewModel: AiWeatherViewModel = viewModel()
             val uiState by weatherViewModel.uiState.collectAsStateWithLifecycle()
-            val systemInDark = isSystemInDarkTheme()
-            val isDark = uiState.isDarkMode ?: systemInDark
+            val isDark = uiState.isDarkMode ?: false
 
             MyApplicationTheme(darkTheme = isDark) {
                 WeatherAppScreen(
@@ -137,7 +149,7 @@ fun WeatherAppScreen(
     val aiChatMessages by aiViewModel.chatMessages.collectAsStateWithLifecycle()
 
     var isCallCenter117SheetOpen by remember { mutableStateOf(false) }
-
+    var isQuickActionsFabExpanded by remember { mutableStateOf(false) }
 
     val currentDistrict = uiState.selectedDistrict
     val isFavorite = favorites.contains(currentDistrict.id)
@@ -152,8 +164,7 @@ fun WeatherAppScreen(
         }
     }
 
-    val systemInDark = isSystemInDarkTheme()
-    val isActuallyDark = uiState.isDarkMode ?: systemInDark
+    val isActuallyDark = uiState.isDarkMode ?: false
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -170,6 +181,29 @@ fun WeatherAppScreen(
                 onThemeToggle = { viewModel.toggleDarkMode(isActuallyDark) },
                 onOpenAppMenu = { viewModel.setAppUpdateSheetOpen(true) },
                 onCallCenter117Click = { isCallCenter117SheetOpen = true }
+            )
+        },
+        floatingActionButton = {
+            QuickActionsFab(
+                isExpanded = isQuickActionsFabExpanded,
+                onToggleExpand = { isQuickActionsFabExpanded = !isQuickActionsFabExpanded },
+                onSelectMaritimeGuide = {
+                    isQuickActionsFabExpanded = false
+                    viewModel.selectTab(7)
+                },
+                onSelectEvacuationProcedures = {
+                    isQuickActionsFabExpanded = false
+                    viewModel.selectTab(4)
+                },
+                onSelectDisasterMap = {
+                    isQuickActionsFabExpanded = false
+                    viewModel.selectTab(4)
+                },
+                onCall117 = {
+                    isQuickActionsFabExpanded = false
+                    EmergencyDialer.dial(context, "117")
+                },
+                isDark = isActuallyDark
             )
         }
     ) { innerPadding ->
@@ -240,114 +274,148 @@ fun WeatherAppScreen(
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .testTag("weather_content_list"),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    when (uiState.selectedTab) {
+                AnimatedContent(
+                    targetState = uiState.selectedTab,
+                    transitionSpec = {
+                        if (targetState > initialState) {
+                            (slideInHorizontally(animationSpec = tween(280)) { width -> width / 4 } + fadeIn(animationSpec = tween(280)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(220)) { width -> -width / 4 } + fadeOut(animationSpec = tween(180)))
+                        } else {
+                            (slideInHorizontally(animationSpec = tween(280)) { width -> -width / 4 } + fadeIn(animationSpec = tween(280)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(220)) { width -> width / 4 } + fadeOut(animationSpec = tween(180)))
+                        }
+                    },
+                    label = "tabModuleTransition",
+                    modifier = Modifier.fillMaxSize()
+                ) { currentTabIndex ->
+                    when (currentTabIndex) {
                         0 -> {
-                            // Tab 0: Hari Ini (Summary + Hourly + Astro Highlights)
+                            // Tab 0: Hari Ini (Responsive LazyVerticalGrid Dashboard)
                             val report = uiState.report
                             if (report != null) {
-                                item {
-                                    HeroWeatherCard(report = report)
-                                }
+                                LazyVerticalGrid(
+                                    columns = GridCells.Adaptive(minSize = 340.dp),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .testTag("weather_content_list"),
+                                    contentPadding = PaddingValues(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        HeroWeatherCard(report = report)
+                                    }
 
-                                // Live BMKG Earthquake Banner
-                                val latestEq = uiState.latestEarthquake
-                                if (latestEq != null) {
-                                    item {
-                                        LiveEarthquakeQuickCard(
-                                            earthquake = latestEq,
-                                            onClick = { viewModel.selectTab(3) }
+                                    // Live BMKG Earthquake Banner
+                                    val latestEq = uiState.latestEarthquake
+                                    if (latestEq != null) {
+                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                            LiveEarthquakeQuickCard(
+                                                earthquake = latestEq,
+                                                onClick = { viewModel.selectTab(3) }
+                                            )
+                                        }
+                                    }
+
+                                    // Feature: Prakiraan Cuaca 3 Hari (Mukomuko)
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        ThreeDayForecastCard(
+                                            district = currentDistrict,
+                                            dailyList = report.daily,
+                                            isDark = isActuallyDark
                                         )
                                     }
-                                }
 
-                                // Quick Kesiapsiagaan Evakuasi Mandiri Gempa Bumi Banner
-                                item {
-                                    QuickEvacuationPreparednessBanner(
-                                        isDark = isActuallyDark,
-                                        onOpenGuide = { viewModel.selectTab(4) }
-                                    )
-                                }
-
-                                // Quick Gemini AI Prompt Teaser
-                                item {
-                                    QuickGeminiAdvisorBanner(
-                                        isDark = isActuallyDark,
-                                        onAskAi = { viewModel.selectTab(1) }
-                                    )
-                                }
-
-                                // Quick Call Center 117 Alert Strip
-                                item {
-                                    QuickEmergency117Strip(
-                                        isDark = isActuallyDark,
-                                        onCall117 = { EmergencyDialer.dial(context, "117") },
-                                        onViewDetails = { isCallCenter117SheetOpen = true }
-                                    )
-                                }
-
-                                // Active Alert Card if available
-                                if (report.alert != null) {
-                                    item {
-                                        ActiveAlertCard(
-                                            alert = report.alert,
-                                            onViewDetail = { viewModel.selectTab(3) }
+                                    // Quick Kesiapsiagaan Evakuasi Mandiri Gempa Bumi Banner
+                                    item(span = { GridItemSpan(if (maxLineSpan > 1) 1 else maxLineSpan) }) {
+                                        QuickEvacuationPreparednessBanner(
+                                            isDark = isActuallyDark,
+                                            onOpenGuide = { viewModel.selectTab(4) }
                                         )
                                     }
-                                }
 
-                                item {
-                                    HourlyForecastCard(hourlyList = report.hourly)
-                                }
+                                    // Quick Gemini AI Prompt Teaser
+                                    item(span = { GridItemSpan(if (maxLineSpan > 1) 1 else maxLineSpan) }) {
+                                        QuickGeminiAdvisorBanner(
+                                            isDark = isActuallyDark,
+                                            onAskAi = { viewModel.selectTab(1) }
+                                        )
+                                    }
 
-                                item {
-                                    SunAndAtmosphereCard(daily = report.daily.firstOrNull())
-                                }
+                                    // Quick Call Center 117 Alert Strip
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        QuickEmergency117Strip(
+                                            isDark = isActuallyDark,
+                                            onCall117 = { EmergencyDialer.dial(context, "117") },
+                                            onViewDetails = { isCallCenter117SheetOpen = true }
+                                        )
+                                    }
 
-                                // Weekly Rainfall Precipitation Bar Chart Card (Recharts-inspired Data Visualization)
-                                item {
-                                    WeeklyRainfallBarChartCard(
-                                        currentDistrict = currentDistrict,
-                                        dailyList = report.daily
-                                    )
-                                }
+                                    // Active Alert Card if available
+                                    if (report.alert != null) {
+                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                            ActiveAlertCard(
+                                                alert = report.alert,
+                                                onViewDetail = { viewModel.selectTab(3) }
+                                            )
+                                        }
+                                    }
 
-                                item {
-                                    MarinePesisirCard(
-                                        district = currentDistrict,
-                                        marine = report.marine
-                                    )
-                                }
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        HourlyForecastCard(hourlyList = report.hourly)
+                                    }
 
-                                // Historical Marine Wave Height Chart (Recharts-inspired Data Visualization)
-                                item {
-                                    MarineWaveHistoryChart(district = currentDistrict)
+                                    item(span = { GridItemSpan(if (maxLineSpan > 1) 1 else maxLineSpan) }) {
+                                        SunAndAtmosphereCard(daily = report.daily.firstOrNull())
+                                    }
+
+                                    // Weekly Rainfall Precipitation Bar Chart Card (Recharts-inspired Data Visualization)
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        WeeklyRainfallBarChartCard(
+                                            currentDistrict = currentDistrict,
+                                            dailyList = report.daily
+                                        )
+                                    }
+
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        MarinePesisirCard(
+                                            district = currentDistrict,
+                                            marine = report.marine
+                                        )
+                                    }
+
+                                    // Historical Marine Wave Height Chart
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        MarineWaveHistoryChart(district = currentDistrict)
+                                    }
                                 }
                             }
                         }
 
                         1 -> {
                             // Tab 1: Tanya AI (Gemini)
-                            item {
-                                GeminiWeatherSection(
-                                    currentDistrict = currentDistrict,
-                                    weatherReport = uiState.report,
-                                    chatMessages = aiChatMessages,
-                                    uiState = aiUiState,
-                                    onSendMessage = { prompt ->
-                                        aiViewModel.askGemini(
-                                            prompt = prompt,
-                                            currentDistrict = currentDistrict,
-                                            weatherReport = uiState.report
-                                        )
-                                    }
-                                )
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("tab_gemini_list"),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                item {
+                                    GeminiWeatherSection(
+                                        currentDistrict = currentDistrict,
+                                        weatherReport = uiState.report,
+                                        chatMessages = aiChatMessages,
+                                        uiState = aiUiState,
+                                        onSendMessage = { prompt ->
+                                            aiViewModel.askGemini(
+                                                prompt = prompt,
+                                                currentDistrict = currentDistrict,
+                                                weatherReport = uiState.report
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
 
@@ -355,78 +423,139 @@ fun WeatherAppScreen(
                             // Tab 2: 7 Hari
                             val report = uiState.report
                             if (report != null) {
-                                // Weekly Rainfall Precipitation Bar Chart Card (Recharts-inspired Data Visualization)
-                                item {
-                                    WeeklyRainfallBarChartCard(
-                                        currentDistrict = currentDistrict,
-                                        dailyList = report.daily
-                                    )
-                                }
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .testTag("tab_forecast_list"),
+                                    contentPadding = PaddingValues(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    // Feature: Prakiraan Cuaca 3 Hari Mukomuko
+                                    item {
+                                        ThreeDayForecastCard(
+                                            district = currentDistrict,
+                                            dailyList = report.daily,
+                                            isDark = isActuallyDark
+                                        )
+                                    }
 
-                                item {
-                                    DailyForecastCard(dailyList = report.daily)
+                                    // Weekly Rainfall Precipitation Bar Chart Card (Recharts-inspired Data Visualization)
+                                    item {
+                                        WeeklyRainfallBarChartCard(
+                                            currentDistrict = currentDistrict,
+                                            dailyList = report.daily
+                                        )
+                                    }
+
+                                    item {
+                                        DailyForecastCard(dailyList = report.daily)
+                                    }
                                 }
                             }
                         }
 
                         3 -> {
-                            // Tab 3: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Call Center 117
-                            item {
-                                EarlyWarningSection(
-                                    warnings = uiState.earlyWarnings,
-                                    currentDistrict = currentDistrict,
-                                    weatherAlertSettings = uiState.weatherAlertSettings,
-                                    onUpdateWeatherAlertSettings = { viewModel.updateWeatherAlertSettings(it) },
-                                    onTestWeatherAlertNotification = { viewModel.triggerTestWeatherAlertNotification(it) },
-                                    latestEarthquake = uiState.latestEarthquake,
-                                    recentEarthquakes = uiState.recentEarthquakes,
-                                    isLoadingEarthquakes = uiState.isLoadingEarthquakes,
-                                    isNotificationEnabled = uiState.isEarthquakeNotificationEnabled,
-                                    onToggleNotification = { viewModel.toggleEarthquakeNotifications(it) },
-                                    onTestNotification = { viewModel.triggerTestEarthquakeNotification(it) },
-                                    onRefreshEarthquake = { viewModel.refreshEarthquakeData(context) },
-                                    onCall117 = { EmergencyDialer.dial(context, "117") },
-                                    onOpenCallCenterInfo = { isCallCenter117SheetOpen = true },
-                                    onOpenEvacuationGuide = { viewModel.selectTab(4) }
-                                )
+                            // Tab 3: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Push Notification
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("tab_early_warning_list"),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                item {
+                                    EarlyWarningSection(
+                                        warnings = uiState.earlyWarnings,
+                                        currentDistrict = currentDistrict,
+                                        weatherAlertSettings = uiState.weatherAlertSettings,
+                                        onUpdateWeatherAlertSettings = { viewModel.updateWeatherAlertSettings(it) },
+                                        onTestWeatherAlertNotification = { viewModel.triggerTestWeatherAlertNotification(it) },
+                                        onTestSuddenSevereWeatherNotification = { viewModel.triggerSuddenSevereWeatherPushNotification(it) },
+                                        latestEarthquake = uiState.latestEarthquake,
+                                        recentEarthquakes = uiState.recentEarthquakes,
+                                        isLoadingEarthquakes = uiState.isLoadingEarthquakes,
+                                        isNotificationEnabled = uiState.isEarthquakeNotificationEnabled,
+                                        onToggleNotification = { viewModel.toggleEarthquakeNotifications(it) },
+                                        onTestNotification = { viewModel.triggerTestEarthquakeNotification(it) },
+                                        onRefreshEarthquake = { viewModel.refreshEarthquakeData(context) },
+                                        onCall117 = { EmergencyDialer.dial(context, "117") },
+                                        onOpenCallCenterInfo = { isCallCenter117SheetOpen = true },
+                                        onOpenEvacuationGuide = { viewModel.selectTab(4) }
+                                    )
+                                }
                             }
                         }
 
                         4 -> {
-                            // Tab 4: Kesiapsiagaan & SOP Evakuasi Mandiri Gempa Bumi
-                            item {
-                                EarthquakeEvacuationPreparednessSection(
-                                    currentDistrict = currentDistrict,
-                                    onCall117 = { EmergencyDialer.dial(context, "117") },
-                                    onTestTsunamiAlert = { viewModel.triggerTestTsunamiNotification(it) },
-                                    onTestSevereWeatherAlert = { viewModel.triggerTestWeatherAlertNotification(it) }
-                                )
+                            // Tab 4: Modul Peta Interaktif Bencana & SOP Evakuasi Mandiri
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("tab_disaster_map_list"),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                // Interactive Map Module with Disaster Prone Points & Evacuation Routes
+                                item {
+                                    InteractiveDisasterMapSection(
+                                        currentDistrict = currentDistrict,
+                                        onCall117 = { EmergencyDialer.dial(context, "117") },
+                                        onOpenSopEvacuation = { /* View SOP below */ },
+                                        isDark = isActuallyDark
+                                    )
+                                }
+
+                                // Kesiapsiagaan & SOP Evakuasi Mandiri Gempa Bumi & Tsunami
+                                item {
+                                    EarthquakeEvacuationPreparednessSection(
+                                        currentDistrict = currentDistrict,
+                                        onCall117 = { EmergencyDialer.dial(context, "117") },
+                                        onTestTsunamiAlert = { viewModel.triggerTestTsunamiNotification(it) },
+                                        onTestSevereWeatherAlert = { viewModel.triggerSuddenSevereWeatherPushNotification(it) }
+                                    )
+                                }
                             }
                         }
 
                         5 -> {
                             // Tab 5: inaRISK BNPB - Kajian Risiko Bencana Indonesia Kabupaten Mukomuko
-                            item {
-                                InaRiskBnpbSection(
-                                    currentDistrict = currentDistrict,
-                                    onOpenEvacuationGuide = { viewModel.selectTab(4) },
-                                    onCall117 = { EmergencyDialer.dial(context, "117") }
-                                )
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("tab_inarisk_list"),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                item {
+                                    InaRiskBnpbSection(
+                                        currentDistrict = currentDistrict,
+                                        onOpenEvacuationGuide = { viewModel.selectTab(4) },
+                                        onCall117 = { EmergencyDialer.dial(context, "117") }
+                                    )
+                                }
                             }
                         }
 
                         6 -> {
                             // Tab 6: Cuaca Historis
-                            item {
-                                HistoricalWeatherSection(
-                                    district = currentDistrict,
-                                    record = uiState.historicalRecord,
-                                    selectedDate = uiState.selectedHistoricalDate,
-                                    isLoading = uiState.isLoadingHistorical,
-                                    onDateSelected = { newDate ->
-                                        viewModel.loadHistoricalWeather(currentDistrict, newDate)
-                                    }
-                                )
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("tab_historical_list"),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                item {
+                                    HistoricalWeatherSection(
+                                        district = currentDistrict,
+                                        record = uiState.historicalRecord,
+                                        selectedDate = uiState.selectedHistoricalDate,
+                                        isLoading = uiState.isLoadingHistorical,
+                                        onDateSelected = { newDate ->
+                                            viewModel.loadHistoricalWeather(currentDistrict, newDate)
+                                        }
+                                    )
+                                }
                             }
                         }
 
@@ -434,15 +563,23 @@ fun WeatherAppScreen(
                             // Tab 7: Maritim & Pesisir Pantai
                             val report = uiState.report
                             if (report != null) {
-                                item {
-                                    MarinePesisirCard(
-                                        district = currentDistrict,
-                                        marine = report.marine
-                                    )
-                                }
-                                // Historical Marine Wave Height Chart
-                                item {
-                                    MarineWaveHistoryChart(district = currentDistrict)
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .testTag("tab_marine_list"),
+                                    contentPadding = PaddingValues(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    item {
+                                        MarinePesisirCard(
+                                            district = currentDistrict,
+                                            marine = report.marine
+                                        )
+                                    }
+                                    // Historical Marine Wave Height Chart
+                                    item {
+                                        MarineWaveHistoryChart(district = currentDistrict)
+                                    }
                                 }
                             }
                         }
@@ -452,27 +589,43 @@ fun WeatherAppScreen(
                             val report = uiState.report
                             if (report != null) {
                                 val maxUv = report.daily.firstOrNull()?.uvIndexMax ?: 8.0
-                                item {
-                                    AirQualityAndUvCard(
-                                        airQuality = report.airQuality,
-                                        uvIndex = maxUv
-                                    )
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .testTag("tab_air_quality_list"),
+                                    contentPadding = PaddingValues(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    item {
+                                        AirQualityAndUvCard(
+                                            airQuality = report.airQuality,
+                                            uvIndex = maxUv
+                                        )
+                                    }
                                 }
                             }
                         }
 
                         9 -> {
                             // Tab 9: 15 Kecamatan
-                            item {
-                                AllDistrictsView(
-                                    districtsSummary = uiState.allDistrictsSummary,
-                                    selectedDistrict = currentDistrict,
-                                    favoriteDistricts = favorites,
-                                    onSelectDistrict = { dist ->
-                                        viewModel.selectDistrict(dist)
-                                        viewModel.selectTab(0)
-                                    }
-                                )
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("tab_all_districts_list"),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                item {
+                                    AllDistrictsView(
+                                        districtsSummary = uiState.allDistrictsSummary,
+                                        selectedDistrict = currentDistrict,
+                                        favoriteDistricts = favorites,
+                                        onSelectDistrict = { dist ->
+                                            viewModel.selectDistrict(dist)
+                                            viewModel.selectTab(0)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

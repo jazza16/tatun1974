@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationCity
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Surfing
@@ -62,7 +63,7 @@ fun WeatherTabs(
         TabItem("Tanya AI (Gemini)", Icons.Default.AutoAwesome),
         TabItem("7 Hari", Icons.Default.CalendarMonth),
         TabItem("Peringatan Dini", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
-        TabItem("Evakuasi Gempa", Icons.Default.Shield),
+        TabItem("Peta & SOP Evakuasi", Icons.Default.Map),
         TabItem("inaRISK BNPB", Icons.Default.Security),
         TabItem("Cuaca Historis", Icons.Default.History),
         TabItem("Maritim & Pesisir", Icons.Default.Surfing),

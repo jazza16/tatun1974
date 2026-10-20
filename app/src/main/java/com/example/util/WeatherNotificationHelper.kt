@@ -140,4 +140,85 @@ object WeatherNotificationHelper {
             false
         }
     }
+
+    /**
+     * Push notification for sudden, localized severe weather alerts in Mukomuko Regency
+     */
+    fun postLocationBasedSuddenSevereWeatherPushNotification(
+        context: Context,
+        districtName: String,
+        alertType: String = "Badai Petir & Angin Kencang Mendadak",
+        windSpeedKmH: Double = 52.0,
+        rainProbability: Int = 95
+    ): Boolean {
+        initNotificationChannel(context)
+
+        if (!hasNotificationPermission(context)) {
+            return false
+        }
+
+        val openAppIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("EXTRA_NAVIGATE_TAB", 3)
+        }
+
+        val openAppPendingIntent = PendingIntent.getActivity(
+            context,
+            "sudden_weather_$districtName".hashCode(),
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val dial117Intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:117")).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        val dial117PendingIntent = PendingIntent.getActivity(
+            context,
+            117,
+            dial117Intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val title = "⚡ PERINGATAN CUACA BURUK MENDADAK: $districtName"
+        val subtitle = "$alertType • Kecepatan Angin ${windSpeedKmH.toInt()} km/j"
+
+        val bigText = buildString {
+            append("⚠️ PERINGATAN DINI CUACA EKSTREM BERBASIS LOKASI\n")
+            append("Lokasi Terdeteksi: Kecamatan $districtName, Kabupaten Mukomuko\n\n")
+            append("BMKG Stasiun Meteorologi Fatmawati Soekarno mendeteksi pertumbuhan awan Cumulonimbus (Cb) pekat di atas wilayah Anda.\n\n")
+            append("Dampak Potensial:\n")
+            append("• Hujan lebat disertai kilat/petir (Peluang: $rainProbability%)\n")
+            append("• Angin kencang sesaat hingga ${windSpeedKmH.toInt()} km/jam\n")
+            append("• Potensi pohon tumbang dan genangan banjir kilat di titik cekung\n\n")
+            append("Arahan Kesiapsiagaan Pusdalops BPBD Mukomuko:\n")
+            append("1. Hindari berteduh di bawah pohon besar, tiang listrik, atau baliho reklame.\n")
+            append("2. Nelayan pesisir tunda pelayaran dan amankan perahu ke tambatan aman.\n")
+            append("3. Pengendara jalan lintas kurangi kecepatan dan nyalakan lampu kabut.\n\n")
+            append("Layanan Bantuan Darurat BPBD Mukomuko Bebas Pulsa: 117")
+        }
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(title)
+            .setContentText(subtitle)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setColor(ORANGE_NOTIFICATION_COLOR)
+            .setColorized(true)
+            .setAutoCancel(true)
+            .setContentIntent(openAppPendingIntent)
+            .addAction(android.R.drawable.ic_menu_view, "Buka Radar & Panduan", openAppPendingIntent)
+            .addAction(android.R.drawable.ic_menu_call, "Panggil 117", dial117PendingIntent)
+            .setVibrate(longArrayOf(0, 450, 150, 450, 200, 600))
+            .build()
+
+        return try {
+            NotificationManagerCompat.from(context).notify("sudden_weather_$districtName".hashCode(), notification)
+            true
+        } catch (_: SecurityException) {
+            false
+        }
+    }
 }
+

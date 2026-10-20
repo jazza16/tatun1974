@@ -72,6 +72,7 @@ fun EarlyWarningSection(
     weatherAlertSettings: WeatherAlertSettings,
     onUpdateWeatherAlertSettings: (WeatherAlertSettings) -> Unit,
     onTestWeatherAlertNotification: (android.content.Context) -> Unit,
+    onTestSuddenSevereWeatherNotification: (android.content.Context) -> Unit = {},
     latestEarthquake: com.example.model.BmkgEarthquake? = null,
     recentEarthquakes: List<com.example.model.BmkgEarthquake> = emptyList(),
     isLoadingEarthquakes: Boolean = false,
@@ -95,7 +96,8 @@ fun EarlyWarningSection(
             currentDistrict = currentDistrict,
             settings = weatherAlertSettings,
             onUpdateSettings = onUpdateWeatherAlertSettings,
-            onTestNotification = onTestWeatherAlertNotification
+            onTestNotification = onTestWeatherAlertNotification,
+            onTestSuddenNotification = onTestSuddenSevereWeatherNotification
         )
 
         // BMKG Real-time Earthquake Section
@@ -462,7 +464,8 @@ private fun WeatherAlertNotificationSettingsCard(
     currentDistrict: District,
     settings: WeatherAlertSettings,
     onUpdateSettings: (WeatherAlertSettings) -> Unit,
-    onTestNotification: (android.content.Context) -> Unit
+    onTestNotification: (android.content.Context) -> Unit,
+    onTestSuddenNotification: (android.content.Context) -> Unit = {}
 ) {
     val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -733,6 +736,40 @@ private fun WeatherAlertNotificationSettingsCard(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = OrangeOnPrimary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Sudden Severe Weather Push Notification Button
+            OutlinedButton(
+                onClick = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        !WeatherNotificationHelper.hasNotificationPermission(context)
+                    ) {
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        onTestSuddenNotification(context)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("btn_test_sudden_weather_push_notification"),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFDC2626)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Thunderstorm,
+                    contentDescription = null,
+                    tint = Color(0xFFDC2626),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Simulasi Push Notifikasi Cuaca Buruk Mendadak (${currentDistrict.name})",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

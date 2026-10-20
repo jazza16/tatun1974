@@ -52,7 +52,7 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     // Preserve custom orange theme identity requested by the user
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
