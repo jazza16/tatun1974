@@ -43,15 +43,22 @@ import com.example.model.MukomukoDistricts
 import com.example.ui.theme.OrangePrimary
 import com.example.ui.theme.WeatherSunGold
 
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DistrictSelectorBottomSheet(
     selectedDistrict: District,
     searchQuery: String,
     favoriteDistricts: List<String>,
+    isDetectingLocation: Boolean = false,
     onQueryChange: (String) -> Unit,
     onSelectDistrict: (District) -> Unit,
     onToggleFavorite: (String) -> Unit,
+    onDetectLocationClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -101,6 +108,52 @@ fun DistrictSelectorBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(14.dp))
+
+            // GPS Location Auto-Detection Button
+            Surface(
+                color = OrangePrimary.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !isDetectingLocation, onClick = onDetectLocationClick)
+                    .testTag("btn_detect_gps_district")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isDetectingLocation) {
+                        CircularProgressIndicator(
+                            color = OrangePrimary,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.MyLocation,
+                            contentDescription = "Deteksi GPS",
+                            tint = OrangePrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isDetectingLocation) "Mendeteksi posisi GPS..." else "Gunakan Lokasi Saat Ini (GPS)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = OrangePrimary
+                        )
+                        Text(
+                            text = "Otomatis memilih kecamatan terdekat di Mukomuko",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             OutlinedTextField(
                 value = searchQuery,

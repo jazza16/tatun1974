@@ -160,25 +160,24 @@ fun HeroWeatherCard(
                         )
                     }
 
-                    // Condition Badge & Icon
+                    // Condition Badge & Dynamic Animated Weather Icon
                     Column(
                         horizontalAlignment = Alignment.End
                     ) {
                         Surface(
-                            color = Color.White.copy(alpha = 0.25f),
-                            shape = RoundedCornerShape(16.dp)
+                            color = Color.White.copy(alpha = 0.22f),
+                            shape = RoundedCornerShape(18.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
-                                Icon(
-                                    imageVector = weatherInfo.icon,
-                                    contentDescription = weatherInfo.conditionText,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(28.dp)
+                                DynamicWeatherIcon(
+                                    weatherCode = current.weatherCode,
+                                    isDay = current.isDay,
+                                    size = 38.dp
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = weatherInfo.conditionText,
                                     fontSize = 16.sp,

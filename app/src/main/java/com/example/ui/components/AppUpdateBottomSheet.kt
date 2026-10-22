@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Refresh
@@ -86,7 +87,12 @@ fun AppUpdateBottomSheet(
     onDismiss: () -> Unit,
     onSetThemeMode: (Boolean?) -> Unit,
     onCheckUpdateOnline: () -> Unit,
-    onDownloadUpdate: () -> Unit
+    onDownloadUpdate: () -> Unit,
+    onSimulateOlderVersion: () -> Unit = {},
+    onResetLatestRelease: () -> Unit = {},
+    onOpenOnboarding: () -> Unit = {},
+    onOpenCompass: () -> Unit = {},
+    onShowStartupWallpaper: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val systemInDark = isSystemInDarkTheme()
@@ -159,12 +165,115 @@ fun AppUpdateBottomSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // --- 2. USER GUIDE & COMPASS TOOLS CARD ---
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("guide_and_tools_card"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Panduan & Alat Keselamatan",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Pelajari kembali fitur utama aplikasi atau gunakan kompas digital evakuasi darurat.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                onDismiss()
+                                onOpenOnboarding()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_reopen_onboarding"),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = OrangePrimary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Panduan Fitur", fontSize = 11.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                onDismiss()
+                                onOpenCompass()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_open_compass_from_sheet"),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Explore,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Kompas Digital", fontSize = 11.sp, color = Color.White)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = {
+                            onDismiss()
+                            onShowStartupWallpaper()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("btn_show_startup_wallpaper"),
+                        colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = OrangeOnPrimary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Wallpaper Awal & Logo BPBD",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = OrangeOnPrimary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // --- 3. ONLINE APP UPDATE SECTION ---
             OnlineUpdateCard(
                 updateState = updateState,
                 isDark = isActuallyDark,
                 onCheckUpdate = onCheckUpdateOnline,
-                onApplyUpdate = onDownloadUpdate
+                onApplyUpdate = onDownloadUpdate,
+                onSimulateOlderVersion = onSimulateOlderVersion,
+                onResetLatestRelease = onResetLatestRelease
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -368,7 +477,9 @@ private fun OnlineUpdateCard(
     updateState: AppUpdateState,
     isDark: Boolean,
     onCheckUpdate: () -> Unit,
-    onApplyUpdate: () -> Unit
+    onApplyUpdate: () -> Unit,
+    onSimulateOlderVersion: () -> Unit = {},
+    onResetLatestRelease: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
@@ -388,20 +499,24 @@ private fun OnlineUpdateCard(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .background(Color(0xFF0284C7).copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                            .background(
+                                if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A).copy(alpha = 0.15f)
+                                else Color(0xFF0284C7).copy(alpha = 0.15f),
+                                RoundedCornerShape(10.dp)
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.NewReleases,
+                            imageVector = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Icons.Default.VerifiedUser else Icons.Default.NewReleases,
                             contentDescription = "Pembaruan",
-                            tint = Color(0xFF0284C7),
+                            tint = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A) else Color(0xFF0284C7),
                             modifier = Modifier.size(20.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Status Versi Aplikasi",
+                            text = "Status Versi & Rilis",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -415,16 +530,16 @@ private fun OnlineUpdateCard(
                 }
 
                 Surface(
-                    color = if (updateState.isUpdated) Color(0xFF16A34A).copy(alpha = 0.15f)
+                    color = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A).copy(alpha = 0.15f)
                     else OrangePrimary.copy(alpha = 0.15f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = if (updateState.isUpdated) "Terkini v${updateState.currentVersion}"
+                        text = if (updateState.isPermanentlyInstalled && updateState.isUpdated) "Terkini v${updateState.currentVersion} (Permanen)"
                         else "Update v${updateState.latestVersion}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (updateState.isUpdated) Color(0xFF16A34A) else OrangePrimary,
+                        color = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A) else OrangePrimary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -482,7 +597,11 @@ private fun OnlineUpdateCard(
             // OTA Architecture Assurance Strip
             Spacer(modifier = Modifier.height(12.dp))
             Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                color = if (updateState.isPermanentlyInstalled && updateState.isUpdated) {
+                    Color(0xFF16A34A).copy(alpha = 0.10f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -491,18 +610,34 @@ private fun OnlineUpdateCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.SystemUpdate,
+                        imageVector = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Icons.Default.CheckCircle else Icons.Default.SystemUpdate,
                         contentDescription = null,
-                        tint = OrangePrimary,
+                        tint = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A) else OrangePrimary,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Sistem OTA Aktif: Perangkat dengan versi lama otomatis mengenali & memasang versi terbaru secara daring tanpa perlu instal ulang offline.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                        lineHeight = 15.sp
-                    )
+                    Column {
+                        Text(
+                            text = if (updateState.isPermanentlyInstalled && updateState.isUpdated) {
+                                "Perangkat Berada Pada Rilis Terbaru (Tetap & Permanen)"
+                            } else {
+                                "Sistem OTA Aktif (Tanpa Offline Update)"
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A) else OrangePrimary
+                        )
+                        Text(
+                            text = if (updateState.isPermanentlyInstalled && updateState.isUpdated) {
+                                "Perangkat yang sudah memperbarui tidak berulang meminta update. Cukup sekali saja dan posisi rilis tersimpan permanen di DataStore."
+                            } else {
+                                "Perangkat yang sebelumnya menginstal versi lama langsung mengenali & memasang v${updateState.latestVersion} secara daring tanpa perantara offline."
+                            },
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                            lineHeight = 15.sp
+                        )
+                    }
                 }
             }
 
@@ -512,7 +647,7 @@ private fun OnlineUpdateCard(
                 Text(
                     text = updateState.updateStatusMessage,
                     fontSize = 11.sp,
-                    color = OrangePrimary,
+                    color = if (updateState.isUpdated) Color(0xFF16A34A) else OrangePrimary,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -571,7 +706,7 @@ private fun OnlineUpdateCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Aplikasi berhasil diperbarui ke versi ${updateState.currentVersion} secara daring!",
+                            text = "Aplikasi berhasil diperbarui ke versi ${updateState.currentVersion} secara daring dan tersimpan permanen!",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFF16A34A)
@@ -629,7 +764,66 @@ private fun OnlineUpdateCard(
                             tint = OrangeOnPrimary
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Update ke v${updateState.latestVersion}", fontSize = 12.sp, color = OrangeOnPrimary)
+                        Text("Pasang OTA v${updateState.latestVersion}", fontSize = 12.sp, color = OrangeOnPrimary)
+                    }
+                }
+            }
+
+            // Developer / QA Simulation Section
+            Spacer(modifier = Modifier.height(14.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "Pengujian Alur Pembaruan OTA (Perangkat Versi Lama)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = "Simulasikan perangkat yang sebelumnya menginstal versi lama (v1.0.0) untuk menguji pengenalan rilis baru, pengunduhan daring, dan penyimpanan permanen tanpa update offline.",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        lineHeight = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onSimulateOlderVersion,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_simulate_older_version"),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = if (updateState.isSimulationActive) "Simulasi v1.0.0 Aktif" else "Uji Versi Lama (v1.0.0)",
+                                fontSize = 10.sp
+                            )
+                        }
+
+                        Button(
+                            onClick = onResetLatestRelease,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_reset_latest_release"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (updateState.isUpdated && updateState.isPermanentlyInstalled) Color(0xFF16A34A) else OrangePrimary
+                            ),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "Kunci Rilis v1.2.0",
+                                fontSize = 10.sp,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }

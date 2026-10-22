@@ -98,11 +98,11 @@ fun HourlyForecastCard(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            Icon(
-                                imageVector = weatherInfo.icon,
-                                contentDescription = weatherInfo.conditionText,
-                                tint = if (isFirst) OrangePrimary else weatherInfo.color,
-                                modifier = Modifier.size(26.dp)
+                            val isDayHour = item.hourLabel.replace(".00", "").toIntOrNull()?.let { it in 6..18 } ?: true
+                            DynamicWeatherIcon(
+                                weatherCode = item.weatherCode,
+                                isDay = isDayHour,
+                                size = 28.dp
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))

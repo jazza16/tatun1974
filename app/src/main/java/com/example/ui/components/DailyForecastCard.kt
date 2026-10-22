@@ -94,11 +94,10 @@ fun DailyForecastCard(
                         modifier = Modifier.width(110.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = weatherInfo.icon,
-                            contentDescription = weatherInfo.conditionText,
-                            tint = weatherInfo.color,
-                            modifier = Modifier.size(22.dp)
+                        DynamicWeatherIcon(
+                            weatherCode = day.weatherCode,
+                            isDay = true,
+                            size = 24.dp
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(

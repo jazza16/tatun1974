@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PhoneInTalk
@@ -58,6 +60,8 @@ fun QuickActionsFab(
     onSelectEvacuationProcedures: () -> Unit,
     onSelectDisasterMap: () -> Unit,
     onCall117: () -> Unit,
+    onOpenCompass: () -> Unit = {},
+    onOpenOnboarding: () -> Unit = {},
     isDark: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -95,7 +99,33 @@ fun QuickActionsFab(
                     testTag = "action_dial_117"
                 )
 
-                // 2. SOP Evakuasi Mandiri Action
+                // 2. Digital Compass Action
+                QuickActionMenuItem(
+                    label = "Kompas Evakuasi Digital",
+                    icon = Icons.Default.Explore,
+                    containerColor = Color(0xFF16A34A),
+                    contentColor = Color.White,
+                    onClick = {
+                        onToggleExpand()
+                        onOpenCompass()
+                    },
+                    testTag = "action_open_compass"
+                )
+
+                // 3. Onboarding Guide Action
+                QuickActionMenuItem(
+                    label = "Panduan Aplikasi (Onboarding)",
+                    icon = Icons.Default.AutoAwesome,
+                    containerColor = Color(0xFF8B5CF6),
+                    contentColor = Color.White,
+                    onClick = {
+                        onToggleExpand()
+                        onOpenOnboarding()
+                    },
+                    testTag = "action_open_onboarding"
+                )
+
+                // 4. SOP Evakuasi Mandiri Action
                 QuickActionMenuItem(
                     label = "SOP Evakuasi Gempa & Tsunami",
                     icon = Icons.Default.Shield,
@@ -108,7 +138,7 @@ fun QuickActionsFab(
                     testTag = "action_evacuation_procedures"
                 )
 
-                // 3. Maritime Safety Guide Action
+                // 5. Maritime Safety Guide Action
                 QuickActionMenuItem(
                     label = "Panduan Keselamatan Maritim",
                     icon = Icons.Default.Surfing,
@@ -121,11 +151,11 @@ fun QuickActionsFab(
                     testTag = "action_maritime_safety_guide"
                 )
 
-                // 4. Interactive Map Action
+                // 6. Interactive Map Action
                 QuickActionMenuItem(
                     label = "Peta Bencana & Rute Mukomuko",
                     icon = Icons.Default.Map,
-                    containerColor = Color(0xFF16A34A),
+                    containerColor = Color(0xFF0D9488),
                     contentColor = Color.White,
                     onClick = {
                         onToggleExpand()

@@ -311,3 +311,154 @@ fun InAppUpdateSuccessCard(
         }
     }
 }
+
+/**
+ * Dialog modal pemberitahuan pembaruan versi baru yang muncul otomatis pada perangkat versi sebelumnya
+ * (misal v1.0.0) sehingga pengguna langsung mengetahui dan dapat memasang pembaruan daring seketika.
+ */
+@Composable
+fun AppUpdatePromptDialog(
+    updateState: AppUpdateState,
+    onUpdateNow: () -> Unit,
+    onViewDetails: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(OrangePrimary.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SystemUpdate,
+                        contentDescription = null,
+                        tint = OrangePrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "Pembaruan v${updateState.latestVersion} Tersedia!",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Pusdalops BPBD Mukomuko Daring",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Aplikasi di perangkat Anda saat ini menjalankan versi ${updateState.currentVersion}. Pembaruan resmi telah dirilis dan dapat langsung dipasang secara daring tanpa perlu melakukan update offline manual.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    lineHeight = 18.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Sorotan Fitur Baru v${updateState.latestVersion}:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = OrangePrimary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "• Prakiraan Cuaca 3 Hari (15 Kecamatan)\n" +
+                                   "• Peta Interaktif & Jalur Evakuasi Bencana\n" +
+                                   "• Notifikasi Dini Cuaca Buruk Otomatis\n" +
+                                   "• Layout Responsif Tablet & Ponsel (LazyVerticalGrid)\n" +
+                                   "• Migrasi aman tanpa kehilangan data",
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+
+                if (updateState.isDownloading) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = updateState.updateStatusMessage.ifEmpty { "Mengunduh pembaruan... ${(updateState.downloadProgress * 100).toInt()}%" },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = OrangePrimary
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { updateState.downloadProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = OrangePrimary,
+                        trackColor = OrangePrimary.copy(alpha = 0.2f)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onUpdateNow,
+                enabled = !updateState.isDownloading,
+                colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.testTag("btn_dialog_update_now")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = OrangeOnPrimary
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (updateState.isDownloading) "Menginstal..." else "Perbarui Daring (OTA)",
+                    fontWeight = FontWeight.Bold,
+                    color = OrangeOnPrimary,
+                    fontSize = 12.sp
+                )
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedButton(
+                    onClick = onViewDetails,
+                    enabled = !updateState.isDownloading,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.testTag("btn_dialog_view_details")
+                ) {
+                    Text("Rincian", fontSize = 12.sp)
+                }
+                androidx.compose.material3.TextButton(
+                    onClick = onDismiss,
+                    enabled = !updateState.isDownloading,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.testTag("btn_dialog_dismiss")
+                ) {
+                    Text("Nanti", fontSize = 12.sp)
+                }
+            }
+        },
+        shape = RoundedCornerShape(22.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+}

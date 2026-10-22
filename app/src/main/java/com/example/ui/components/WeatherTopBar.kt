@@ -56,7 +56,9 @@ import com.example.ui.theme.WeatherSunGold
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NewReleases
+import androidx.compose.material3.CircularProgressIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,12 +68,14 @@ fun WeatherTopBar(
     isRefreshing: Boolean,
     isDarkMode: Boolean,
     isUpdateAvailable: Boolean = false,
+    isDetectingLocation: Boolean = false,
     onDistrictClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onRefreshClick: () -> Unit,
     onThemeToggle: () -> Unit,
     onOpenAppMenu: () -> Unit,
-    onCallCenter117Click: () -> Unit
+    onCallCenter117Click: () -> Unit,
+    onDetectLocationClick: () -> Unit = {}
 ) {
     val rotation by if (isRefreshing) {
         val transition = rememberInfiniteTransition(label = "refreshRotation")

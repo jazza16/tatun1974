@@ -228,11 +228,13 @@ object WeatherNotificationHelper {
             val channel = NotificationChannel(
                 APP_UPDATE_CHANNEL_ID,
                 "Pembaruan Daring Aplikasi Cuaca Mukomuko",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifikasi rilis versi terbaru dan status pembaruan online"
+                description = "Pemberitahuan rilis versi terbaru dan instalasi pembaruan daring"
                 enableLights(true)
                 lightColor = ORANGE_NOTIFICATION_COLOR
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 300, 150, 300)
             }
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             notificationManager?.createNotificationChannel(channel)
@@ -250,6 +252,7 @@ object WeatherNotificationHelper {
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("EXTRA_OPEN_UPDATE_SHEET", true)
+            putExtra("EXTRA_AUTO_START_UPDATE", true)
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -260,7 +263,7 @@ object WeatherNotificationHelper {
 
         val notification = NotificationCompat.Builder(context, APP_UPDATE_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("Pembaruan Aplikasi Tersedia: v$latestVersion")
+            .setContentTitle("🚀 Pembaruan Aplikasi Tersedia: v$latestVersion")
             .setContentText("Versi terbaru siap dipasang langsung secara daring (tanpa update offline).")
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
@@ -269,13 +272,15 @@ object WeatherNotificationHelper {
                     "Ketuk untuk langsung menginstal secara daring tanpa perlu unduh berkas offline."
                 )
             )
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVibrate(longArrayOf(0, 300, 150, 300))
             .setColor(ORANGE_NOTIFICATION_COLOR)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .addAction(
                 android.R.drawable.stat_sys_download,
-                "Perbarui Daring",
+                "Perbarui Daring (OTA)",
                 pendingIntent
             )
             .build()

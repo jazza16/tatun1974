@@ -505,26 +505,38 @@ private fun LatestEarthquakeCard(
                 }
             }
 
-            // Shakemap Image (if present from BMKG TEWS)
-            if (!earthquake.shakemapUrl.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(12.dp))
+            // Zoomable BMKG Shakemap Feature (Peta Guncangan yang bisa di Zoom In & Zoom Out)
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = "Peta Guncangan (Shakemap BMKG):",
-                    fontSize = 11.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                AsyncImage(
-                    model = earthquake.shakemapUrl,
-                    contentDescription = "Peta Guncangan BMKG",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
-                )
+                Surface(
+                    color = OrangePrimary.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = "Zoom In / Out Aktif",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OrangePrimary,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
             }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            ZoomableShakemapViewer(
+                earthquake = earthquake,
+                height = 320.dp
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 

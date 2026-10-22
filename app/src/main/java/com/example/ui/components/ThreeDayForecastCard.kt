@@ -237,11 +237,10 @@ private fun ThreeDayColumnItem(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = weatherInfo.icon,
-                    contentDescription = weatherInfo.conditionText,
-                    tint = weatherInfo.color,
-                    modifier = Modifier.size(24.dp)
+                DynamicWeatherIcon(
+                    weatherCode = day.weatherCode,
+                    isDay = true,
+                    size = 30.dp
                 )
             }
 

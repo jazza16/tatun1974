@@ -1,9 +1,16 @@
 package com.example
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.example.ui.components.AppUpdatePromptDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,16 +39,22 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Compress
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -98,9 +111,11 @@ import com.example.ui.components.InAppUpdateBannerCard
 import com.example.ui.components.InAppUpdateSuccessCard
 import com.example.ui.components.InaRiskBnpbSection
 import com.example.ui.components.InteractiveDisasterMapSection
+import com.example.ui.components.InteractiveTemperatureMapCard
 import com.example.ui.components.MarinePesisirCard
 import com.example.ui.components.MarineWaveHistoryChart
 import com.example.ui.components.QuickActionsFab
+import com.example.ui.components.StartupSplashWallpaperScreen
 import com.example.ui.components.ThreeDayForecastCard
 import com.example.ui.components.WeatherTabs
 import com.example.ui.components.WeatherTopBar
@@ -109,6 +124,7 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import com.example.ui.theme.OrangeSecondary
+import com.example.ui.theme.WeatherGoodGreen
 import com.example.ui.viewmodel.AiWeatherViewModel
 import com.example.ui.viewmodel.WeatherViewModel
 
@@ -126,8 +142,9 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val database = AppDatabase.getInstance(context)
             val repository = WeatherRepository(database.weatherDao())
+            val updatePreferences = remember { com.example.data.local.AppUpdatePreferences(context.applicationContext) }
             val weatherViewModel: WeatherViewModel = viewModel {
-                WeatherViewModel(repository)
+                WeatherViewModel(repository, updatePreferences)
             }
             val aiViewModel: AiWeatherViewModel = viewModel()
             val uiState by weatherViewModel.uiState.collectAsStateWithLifecycle()
@@ -182,6 +199,29 @@ fun WeatherAppScreen(
 
     val isActuallyDark = uiState.isDarkMode ?: false
 
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fineGranted || coarseGranted) {
+            viewModel.detectCurrentLocation(context)
+        }
+    }
+
+    val triggerLocationDetection: () -> Unit = {
+        if (com.example.util.LocationHelper.hasLocationPermission(context)) {
+            viewModel.detectCurrentLocation(context)
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets.safeDrawing,
@@ -192,12 +232,14 @@ fun WeatherAppScreen(
                 isRefreshing = uiState.isRefreshing,
                 isDarkMode = isActuallyDark,
                 isUpdateAvailable = uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated,
+                isDetectingLocation = uiState.isDetectingLocation,
                 onDistrictClick = { viewModel.setDistrictSheetOpen(true) },
                 onFavoriteToggle = { viewModel.toggleFavorite(currentDistrict.id) },
                 onRefreshClick = { viewModel.refresh() },
                 onThemeToggle = { viewModel.toggleDarkMode(isActuallyDark) },
                 onOpenAppMenu = { viewModel.setAppUpdateSheetOpen(true) },
-                onCallCenter117Click = { isCallCenter117SheetOpen = true }
+                onCallCenter117Click = { isCallCenter117SheetOpen = true },
+                onDetectLocationClick = triggerLocationDetection
             )
         },
         floatingActionButton = {
@@ -220,6 +262,14 @@ fun WeatherAppScreen(
                     isQuickActionsFabExpanded = false
                     EmergencyDialer.dial(context, "117")
                 },
+                onOpenCompass = {
+                    isQuickActionsFabExpanded = false
+                    viewModel.setCompassSheetOpen(true)
+                },
+                onOpenOnboarding = {
+                    isQuickActionsFabExpanded = false
+                    viewModel.setOnboardingOpen(true)
+                },
                 isDark = isActuallyDark
             )
         }
@@ -237,6 +287,48 @@ fun WeatherAppScreen(
                 reportCount = communityReports.size,
                 onTabSelected = { viewModel.selectTab(it) }
             )
+
+            // Location detection notification banner if any
+            if (uiState.locationDetectionMessage != null) {
+                Surface(
+                    color = if (uiState.isLocationDetected) WeatherGoodGreen.copy(alpha = 0.12f) else OrangePrimary.copy(alpha = 0.12f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MyLocation,
+                            contentDescription = null,
+                            tint = if (uiState.isLocationDetected) WeatherGoodGreen else OrangePrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = uiState.locationDetectionMessage ?: "",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { viewModel.clearLocationMessage() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Tutup",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
 
             // Error notice banner if any
             if (uiState.errorMessage != null && uiState.report == null) {
@@ -294,12 +386,30 @@ fun WeatherAppScreen(
                 AnimatedContent(
                     targetState = uiState.selectedTab,
                     transitionSpec = {
+                        val duration = 320
+                        val slideDistanceFraction = 0.22f
                         if (targetState > initialState) {
-                            (slideInHorizontally(animationSpec = tween(280)) { width -> width / 4 } + fadeIn(animationSpec = tween(280)))
-                                .togetherWith(slideOutHorizontally(animationSpec = tween(220)) { width -> -width / 4 } + fadeOut(animationSpec = tween(180)))
+                            (slideInHorizontally(
+                                animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                            ) { width -> (width * slideDistanceFraction).toInt() } +
+                             fadeIn(animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)))
+                                .togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(duration - 60, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                    ) { width -> (-width * slideDistanceFraction).toInt() } +
+                                    fadeOut(animationSpec = tween(duration - 60))
+                                )
                         } else {
-                            (slideInHorizontally(animationSpec = tween(280)) { width -> -width / 4 } + fadeIn(animationSpec = tween(280)))
-                                .togetherWith(slideOutHorizontally(animationSpec = tween(220)) { width -> width / 4 } + fadeOut(animationSpec = tween(180)))
+                            (slideInHorizontally(
+                                animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                            ) { width -> (-width * slideDistanceFraction).toInt() } +
+                             fadeIn(animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)))
+                                .togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(duration - 60, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                    ) { width -> (width * slideDistanceFraction).toInt() } +
+                                    fadeOut(animationSpec = tween(duration - 60))
+                                )
                         }
                     },
                     label = "tabModuleTransition",
@@ -307,171 +417,102 @@ fun WeatherAppScreen(
                 ) { currentTabIndex ->
                     when (currentTabIndex) {
                         0 -> {
-                            // Tab 0: Hari Ini (Responsive Balanced LazyVerticalGrid Dashboard)
+                            // Tab 0: Hari Ini (Maximized Mobile Phone Portrait Single-Column Dashboard)
                             val report = uiState.report
                             if (report != null) {
-                                BoxWithConstraints(
+                                LazyColumn(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .testTag("weather_dashboard_container")
+                                        .testTag("weather_content_list"),
+                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 84.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
                                 ) {
-                                    val screenWidth = maxWidth
-                                    val columnCount = when {
-                                        screenWidth >= 960.dp -> 3
-                                        screenWidth >= 600.dp -> 2
-                                        else -> 1
+                                    // Active Severe Weather Alert if available
+                                    if (report.alert != null) {
+                                        item {
+                                            ActiveAlertCard(
+                                                alert = report.alert,
+                                                onViewDetail = { viewModel.selectTab(3) }
+                                            )
+                                        }
                                     }
 
-                                    val contentPadding = when {
-                                        screenWidth >= 960.dp -> PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 96.dp)
-                                        screenWidth >= 600.dp -> PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 88.dp)
-                                        else -> PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 80.dp)
+                                    // In-App OTA Update Available Banner
+                                    if (uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
+                                        item {
+                                            InAppUpdateBannerCard(
+                                                updateState = uiState.updateState,
+                                                onUpdateNow = { viewModel.downloadAndApplyUpdate() },
+                                                onViewDetails = { viewModel.setAppUpdateSheetOpen(true) },
+                                                onDismiss = { viewModel.dismissUpdateBanner() }
+                                            )
+                                        }
+                                    } else if (uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
+                                        item {
+                                            InAppUpdateSuccessCard(
+                                                version = uiState.updateState.currentVersion,
+                                                onDismiss = { viewModel.dismissUpdateBanner() }
+                                            )
+                                        }
                                     }
 
-                                    val gridSpacing = when {
-                                        screenWidth >= 960.dp -> 18.dp
-                                        screenWidth >= 600.dp -> 16.dp
-                                        else -> 14.dp
+                                    // Hero Weather Overview Card with Dynamic Animated Weather Icon
+                                    item {
+                                        HeroWeatherCard(report = report)
                                     }
 
-                                    LazyVerticalGrid(
-                                        columns = GridCells.Fixed(columnCount),
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .testTag("weather_content_list"),
-                                        contentPadding = contentPadding,
-                                        verticalArrangement = Arrangement.spacedBy(gridSpacing),
-                                        horizontalArrangement = Arrangement.spacedBy(gridSpacing)
-                                    ) {
-                                        // Active Severe Weather Alert if available (full line on all devices)
-                                        if (report.alert != null) {
-                                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                                ActiveAlertCard(
-                                                    alert = report.alert,
-                                                    onViewDetail = { viewModel.selectTab(3) }
-                                                )
+                                    // Feature: Prakiraan Cuaca 3 Hari (Mukomuko)
+                                    item {
+                                        ThreeDayForecastCard(
+                                            district = currentDistrict,
+                                            dailyList = report.daily,
+                                            isDark = isActuallyDark
+                                        )
+                                    }
+
+                                    // Sun, UV Index & Atmospheric Metrics Card
+                                    item {
+                                        SunAndAtmosphereCard(
+                                            daily = report.daily.firstOrNull(),
+                                            current = report.current
+                                        )
+                                    }
+
+                                    // 24-Hour Forecast Timeline
+                                    item {
+                                        HourlyForecastCard(hourlyList = report.hourly)
+                                    }
+
+                                    // Feature: Overlay Peta Suhu Interaktif BMKG (Distribusi Panas 15 Kecamatan)
+                                    item {
+                                        InteractiveTemperatureMapCard(
+                                            currentDistrict = currentDistrict,
+                                            districtsSummary = uiState.allDistrictsSummary,
+                                            onSelectDistrict = { dist ->
+                                                viewModel.selectDistrict(dist)
                                             }
-                                        }
+                                        )
+                                    }
 
-                                        // In-App OTA Update Available Banner (Seamless Online Update)
-                                        if (uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
-                                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                                InAppUpdateBannerCard(
-                                                    updateState = uiState.updateState,
-                                                    onUpdateNow = { viewModel.downloadAndApplyUpdate() },
-                                                    onViewDetails = { viewModel.setAppUpdateSheetOpen(true) },
-                                                    onDismiss = { viewModel.dismissUpdateBanner() }
-                                                )
-                                            }
-                                        } else if (uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
-                                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                                InAppUpdateSuccessCard(
-                                                    version = uiState.updateState.currentVersion,
-                                                    onDismiss = { viewModel.dismissUpdateBanner() }
-                                                )
-                                            }
-                                        }
+                                    // Data Visualization: Weekly Rainfall Precipitation Bar Chart
+                                    item {
+                                        WeeklyRainfallBarChartCard(
+                                            currentDistrict = currentDistrict,
+                                            dailyList = report.daily
+                                        )
+                                    }
 
-                                        // Hero Weather Overview Card
-                                        item(span = {
-                                            GridItemSpan(
-                                                when (maxLineSpan) {
-                                                    3 -> 2 // On 3-column tablet: spans 2 columns, leaving 1 column for 3-Day Forecast
-                                                    else -> maxLineSpan // On phone & 2-column tablet: full width hero banner
-                                                }
-                                            )
-                                        }) {
-                                            HeroWeatherCard(report = report)
-                                        }
+                                    // Data Visualization: Historical Marine Wave Height Chart
+                                    item {
+                                        MarineWaveHistoryChart(district = currentDistrict)
+                                    }
 
-                                        // Feature: Prakiraan Cuaca 3 Hari (Mukomuko)
-                                        item(span = {
-                                            GridItemSpan(
-                                                when (maxLineSpan) {
-                                                    3 -> 1 // Beside Hero Card on 3-column tablet (2 + 1 = 3)
-                                                    2 -> 1 // Col 1 on 2-column tablet, paired with Sun & Atmosphere (1 + 1 = 2)
-                                                    else -> 1 // Full width on phone (1 column)
-                                                }
-                                            )
-                                        }) {
-                                            ThreeDayForecastCard(
-                                                district = currentDistrict,
-                                                dailyList = report.daily,
-                                                isDark = isActuallyDark
-                                            )
-                                        }
-
-                                        // Sun, UV Index & Atmospheric Metrics Card
-                                        item(span = {
-                                            GridItemSpan(
-                                                when (maxLineSpan) {
-                                                    3 -> 1 // Beside Hourly Forecast on 3-column tablet (1 + 2 = 3)
-                                                    2 -> 1 // Paired with 3-Day Forecast on 2-column tablet (1 + 1 = 2)
-                                                    else -> 1 // Full width on phone
-                                                }
-                                            )
-                                        }) {
-                                            SunAndAtmosphereCard(
-                                                daily = report.daily.firstOrNull(),
-                                                current = report.current
-                                            )
-                                        }
-
-                                        // 24-Hour Forecast Timeline
-                                        item(span = {
-                                            GridItemSpan(
-                                                when (maxLineSpan) {
-                                                    3 -> 2 // Spans 2 columns paired with Sun & Atmosphere (2 + 1 = 3)
-                                                    else -> maxLineSpan // Full line on phone & 2-column tablet
-                                                }
-                                            )
-                                        }) {
-                                            HourlyForecastCard(hourlyList = report.hourly)
-                                        }
-
-                                        // Data Visualization: Weekly Rainfall Precipitation Bar Chart (Recharts-inspired)
-                                        item(span = {
-                                            GridItemSpan(
-                                                when (maxLineSpan) {
-                                                    3 -> 1 // Large tablet visual row column 1 (1 + 1 + 1 = 3)
-                                                    2 -> 1 // 2-column tablet paired with Marine Wave Chart (1 + 1 = 2)
-                                                    else -> 1 // Full width on phone
-                                                }
-                                            )
-                                        }) {
-                                            WeeklyRainfallBarChartCard(
-                                                currentDistrict = currentDistrict,
-                                                dailyList = report.daily
-                                            )
-                                        }
-
-                                        // Data Visualization: Historical Marine Wave Height Chart
-                                        item(span = {
-                                            GridItemSpan(
-                                                when (maxLineSpan) {
-                                                    3 -> 1 // Large tablet visual row column 2 (1 + 1 + 1 = 3)
-                                                    2 -> 1 // 2-column tablet paired with Rainfall Bar Chart (1 + 1 = 2)
-                                                    else -> 1 // Full width on phone
-                                                }
-                                            )
-                                        }) {
-                                            MarineWaveHistoryChart(district = currentDistrict)
-                                        }
-
-                                        // Marine Pesisir Conditions Card
-                                        item(span = {
-                                            GridItemSpan(
-                                                when (maxLineSpan) {
-                                                    3 -> 1 // Large tablet visual row column 3 (1 + 1 + 1 = 3)
-                                                    else -> maxLineSpan // 2-column tablet & phone: full width
-                                                }
-                                            )
-                                        }) {
-                                            MarinePesisirCard(
-                                                district = currentDistrict,
-                                                marine = report.marine
-                                            )
-                                        }
+                                    // Marine Pesisir Conditions Card
+                                    item {
+                                        MarinePesisirCard(
+                                            district = currentDistrict,
+                                            marine = report.marine
+                                        )
                                     }
                                 }
                             }
@@ -670,7 +711,7 @@ fun WeatherAppScreen(
                         }
 
                         8 -> {
-                            // Tab 8: Kualitas Udara & Indeks UV
+                            // Tab 8: Kualitas Udara Lengkap BMKG & Himbauan Kesehatan Masyarakat + Grafik Harian UV
                             val report = uiState.report
                             if (report != null) {
                                 val maxUv = report.daily.firstOrNull()?.uvIndexMax ?: 8.0
@@ -682,9 +723,10 @@ fun WeatherAppScreen(
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     item {
-                                        AirQualityAndUvCard(
+                                        com.example.ui.components.BmkgAirQualityDetailedSection(
                                             airQuality = report.airQuality,
-                                            uvIndex = maxUv
+                                            uvIndex = maxUv,
+                                            currentDistrict = currentDistrict
                                         )
                                     }
                                 }
@@ -728,15 +770,17 @@ fun WeatherAppScreen(
         )
     }
 
-    // District Selector Bottom Sheet
+    // District Selector Bottom Sheet with GPS Auto-Detection
     if (uiState.isDistrictSheetOpen) {
         DistrictSelectorBottomSheet(
             selectedDistrict = currentDistrict,
             searchQuery = uiState.districtSearchQuery,
             favoriteDistricts = favorites,
+            isDetectingLocation = uiState.isDetectingLocation,
             onQueryChange = { viewModel.updateSearchQuery(it) },
             onSelectDistrict = { viewModel.selectDistrict(it) },
             onToggleFavorite = { viewModel.toggleFavorite(it) },
+            onDetectLocationClick = triggerLocationDetection,
             onDismiss = { viewModel.setDistrictSheetOpen(false) }
         )
     }
@@ -748,8 +792,124 @@ fun WeatherAppScreen(
             isDarkMode = uiState.isDarkMode,
             onDismiss = { viewModel.setAppUpdateSheetOpen(false) },
             onSetThemeMode = { viewModel.setDarkMode(it) },
-            onCheckUpdateOnline = { viewModel.checkForUpdatesOnline() },
-            onDownloadUpdate = { viewModel.downloadAndApplyUpdate() }
+            onCheckUpdateOnline = { viewModel.checkForUpdatesOnline(context = context) },
+            onDownloadUpdate = { viewModel.downloadAndApplyUpdate(context = context) },
+            onSimulateOlderVersion = { viewModel.simulateOlderVersionForTesting() },
+            onResetLatestRelease = { viewModel.resetToLatestReleaseState() },
+            onOpenOnboarding = { viewModel.setOnboardingOpen(true) },
+            onOpenCompass = { viewModel.setCompassSheetOpen(true) },
+            onShowStartupWallpaper = { viewModel.showStartupWallpaper() }
+        )
+    }
+
+    // In-App OTA Update Dialog (Prompts only once per release, persistent in DataStore)
+    if (uiState.isUpdateDialogOpen && uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { viewModel.dismissUpdateDialog(dontShowAgainForThisVersion = true) },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(OrangePrimary.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SystemUpdate,
+                        contentDescription = null,
+                        tint = OrangePrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    text = "Pembaruan Versi ${uiState.updateState.latestVersion} Tersedia",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Perangkat Anda menjalankan versi ${uiState.updateState.currentVersion}. Rilis pembaruan v${uiState.updateState.latestVersion} resmi dari Pusdalops BPBD Mukomuko dapat langsung dipasang secara daring tanpa offline update.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "Sorotan Pembaruan v${uiState.updateState.latestVersion}:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = OrangePrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "• Prakiraan cuaca 3 hari rinci 15 kecamatan\n• Peta interaktif & SOP evakuasi tsunami\n• Grid adaptif tablet & ponsel seimbang\n• Pemasangan permanen tanpa update offline",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Ukuran paket: ${uiState.updateState.packageSizeMb} MB • Tanda Tangan Digital Terverifikasi",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.downloadAndApplyUpdate(context) },
+                    colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                    modifier = Modifier.testTag("btn_dialog_install_update")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = OrangeOnPrimary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Perbarui Daring", color = OrangeOnPrimary, fontSize = 13.sp)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { viewModel.dismissUpdateDialog(dontShowAgainForThisVersion = true) },
+                    modifier = Modifier.testTag("btn_dialog_dismiss_update")
+                ) {
+                    Text("Nanti Saja (Cukup Sekali)", fontSize = 12.sp)
+                }
+            }
+        )
+    }
+
+    // Interactive Onboarding Guide (First launch or opened via menu)
+    if (uiState.isOnboardingOpen) {
+        com.example.ui.components.InteractiveOnboardingDialog(
+            onComplete = { viewModel.completeOnboarding() },
+            onOpenCompassDetailed = {
+                viewModel.setOnboardingOpen(false)
+                viewModel.setCompassSheetOpen(true)
+            }
+        )
+    }
+
+    // Digital Compass & Tsunami Evacuation Direction Bottom Sheet
+    if (uiState.isCompassSheetOpen) {
+        com.example.ui.components.DigitalCompassBottomSheet(
+            onDismiss = { viewModel.setCompassSheetOpen(false) },
+            onOpenEvacuationMap = { viewModel.selectTab(4) },
+            onCall117 = { EmergencyDialer.dial(context, "117") }
         )
     }
 }

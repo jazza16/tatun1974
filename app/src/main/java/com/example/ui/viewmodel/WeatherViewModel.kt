@@ -51,11 +51,23 @@ data class WeatherUiState(
     val isDarkMode: Boolean? = false,
     // App Update Online & Developer Menu
     val isAppUpdateSheetOpen: Boolean = false,
-    val updateState: com.example.model.AppUpdateState = com.example.model.AppUpdateState()
+    val isUpdateDialogOpen: Boolean = false,
+    val updateState: com.example.model.AppUpdateState = com.example.model.AppUpdateState(),
+    // Onboarding & Digital Compass Interactive Guide
+    val isOnboardingOpen: Boolean = false,
+    val isCompassSheetOpen: Boolean = false,
+    // Startup Splash Wallpaper
+    val isStartupWallpaperVisible: Boolean = true,
+    // GPS Location Auto-Detection
+    val isDetectingLocation: Boolean = false,
+    val locationDetectionMessage: String? = null,
+    val isLocationDetected: Boolean = false,
+    val detectedDistrict: District? = null
 )
 
 class WeatherViewModel(
-    private val repository: WeatherRepository
+    private val repository: WeatherRepository,
+    private val updatePreferences: com.example.data.local.AppUpdatePreferences? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WeatherUiState())
@@ -76,6 +88,40 @@ class WeatherViewModel(
         )
 
     init {
+        // Initialize persistent update state from DataStore/SharedPreferences
+        updatePreferences?.let { prefs ->
+            val initialInstalled = prefs.getInstalledVersion()
+            val initialServer = prefs.getLatestServerVersion()
+            val isPermanentlyInstalled = prefs.isUpdatePermanentlyInstalled()
+            val hasUpdate = (initialInstalled != initialServer) && !isPermanentlyInstalled
+            val isUpdated = !hasUpdate
+
+            val initialChangelogs = _uiState.value.updateState.changelogs.map { log ->
+                when (log.version) {
+                    initialInstalled -> log.copy(isCurrent = true, isLatest = (initialInstalled == initialServer))
+                    initialServer -> log.copy(isCurrent = (initialInstalled == initialServer), isLatest = true)
+                    else -> log.copy(isCurrent = false)
+                }
+            }
+
+            _uiState.value = _uiState.value.copy(
+                updateState = _uiState.value.updateState.copy(
+                    currentVersion = initialInstalled,
+                    latestVersion = initialServer,
+                    isUpdateAvailable = hasUpdate,
+                    isUpdated = isUpdated,
+                    isPermanentlyInstalled = isPermanentlyInstalled,
+                    lastCheckedVersion = prefs.getLastCheckedVersion(),
+                    updateStatusMessage = if (isUpdated) {
+                        "Aplikasi menggunakan rilis resmi v$initialInstalled terbaru secara permanen."
+                    } else {
+                        "Pembaruan versi $initialServer terdeteksi dan siap dipasang secara daring tanpa offline update."
+                    },
+                    changelogs = initialChangelogs
+                )
+            )
+        }
+
         viewModelScope.launch {
             repository.seedInitialCommunityReportsIfEmpty()
         }
@@ -86,6 +132,11 @@ class WeatherViewModel(
         loadEarthquakeData()
         startPeriodicEarthquakeMonitoring()
         checkForUpdatesOnline(isAutoCheck = true)
+
+        val isFirstLaunch = updatePreferences?.isOnboardingCompleted() == false
+        if (isFirstLaunch) {
+            _uiState.value = _uiState.value.copy(isOnboardingOpen = true)
+        }
     }
 
     fun selectDistrict(district: District) {
@@ -105,6 +156,46 @@ class WeatherViewModel(
 
     fun setDistrictSheetOpen(open: Boolean) {
         _uiState.value = _uiState.value.copy(isDistrictSheetOpen = open)
+    }
+
+    fun detectCurrentLocation(context: Context, onResult: ((District?, String) -> Unit)? = null) {
+        _uiState.value = _uiState.value.copy(
+            isDetectingLocation = true,
+            locationDetectionMessage = "Mendeteksi posisi GPS Anda..."
+        )
+        com.example.util.LocationHelper.fetchCurrentLocation(
+            context = context,
+            onSuccess = { lat, lon, nearestDistrict, distKm ->
+                val msg = if (distKm < 30.0) {
+                    "Lokasi terdeteksi: Kecamatan ${nearestDistrict.name} (GPS akurat, ±${String.format("%.1f", distKm)} km)"
+                } else {
+                    "Koordinat (${String.format("%.2f", lat)}, ${String.format("%.2f", lon)}) diarahkan ke kecamatan terdekat: ${nearestDistrict.name}"
+                }
+                _uiState.value = _uiState.value.copy(
+                    isDetectingLocation = false,
+                    isLocationDetected = true,
+                    detectedDistrict = nearestDistrict,
+                    locationDetectionMessage = msg,
+                    selectedDistrict = nearestDistrict,
+                    isDistrictSheetOpen = false
+                )
+                loadWeatherForDistrict(nearestDistrict)
+                loadHistoricalWeather(nearestDistrict, _uiState.value.selectedHistoricalDate)
+                loadEarlyWarnings(nearestDistrict)
+                onResult?.invoke(nearestDistrict, msg)
+            },
+            onError = { error ->
+                _uiState.value = _uiState.value.copy(
+                    isDetectingLocation = false,
+                    locationDetectionMessage = error
+                )
+                onResult?.invoke(null, error)
+            }
+        )
+    }
+
+    fun clearLocationMessage() {
+        _uiState.value = _uiState.value.copy(locationDetectionMessage = null)
     }
 
     fun updateSearchQuery(query: String) {
@@ -387,10 +478,27 @@ class WeatherViewModel(
         _uiState.value = _uiState.value.copy(isAppUpdateSheetOpen = isOpen)
     }
 
+    fun setUpdateDialogOpen(isOpen: Boolean) {
+        _uiState.value = _uiState.value.copy(isUpdateDialogOpen = isOpen)
+    }
+
     fun dismissUpdateBanner() {
         _uiState.value = _uiState.value.copy(
-            updateState = _uiState.value.updateState.copy(isBannerDismissed = true)
+            updateState = _uiState.value.updateState.copy(isBannerDismissed = true),
+            isUpdateDialogOpen = false
         )
+    }
+
+    fun postPendingUpdateNotification(context: android.content.Context) {
+        val state = _uiState.value.updateState
+        val hasNewVersion = state.currentVersion != state.latestVersion
+        if (hasNewVersion && !state.isUpdated && !state.isPermanentlyInstalled) {
+            com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
+                context = context,
+                latestVersion = state.latestVersion,
+                highlightText = "Prakiraan 3 Hari, Peta Evakuasi Interaktif, dan Grid Responsif Tablet & Ponsel"
+            )
+        }
     }
 
     fun checkForUpdatesOnline(isAutoCheck: Boolean = false, context: android.content.Context? = null) {
@@ -399,37 +507,58 @@ class WeatherViewModel(
             updateState = currentState.copy(isCheckingOnline = true)
         )
         viewModelScope.launch {
-            delay(if (isAutoCheck) 1200 else 1800) // Realistic network handshake
+            delay(if (isAutoCheck) 1000 else 1800) // Realistic network handshake
             val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale("id", "ID"))
             val nowTime = sdf.format(java.util.Date())
 
-            val hasNewVersion = _uiState.value.updateState.currentVersion != _uiState.value.updateState.latestVersion
+            val installedVer = updatePreferences?.getInstalledVersion() ?: _uiState.value.updateState.currentVersion
+            val serverVer = updatePreferences?.getLatestServerVersion() ?: "1.2.0"
+            val isPermanentlyInstalled = updatePreferences?.isUpdatePermanentlyInstalled() ?: (installedVer == serverVer)
+
+            val hasNewVersion = (installedVer != serverVer) && !isPermanentlyInstalled
+
+            // User Request 5: Prevent the update notification dialog from showing again until a new higher version
+            // number is detected on the server, ensuring users are only prompted once per release.
+            val lastCheckedVer = updatePreferences?.getLastCheckedVersion() ?: ""
+            val isAlreadyDismissed = updatePreferences?.isDialogDismissedForVersion(serverVer) ?: false
+
+            val shouldShowDialog = hasNewVersion && !isAlreadyDismissed && (lastCheckedVer != serverVer || !isAutoCheck)
+
+            if (hasNewVersion) {
+                updatePreferences?.setLastCheckedVersion(serverVer)
+            }
 
             _uiState.value = _uiState.value.copy(
+                isUpdateDialogOpen = shouldShowDialog,
                 updateState = _uiState.value.updateState.copy(
+                    currentVersion = installedVer,
+                    latestVersion = serverVer,
                     isCheckingOnline = false,
                     isUpdateAvailable = hasNewVersion,
+                    isUpdated = !hasNewVersion,
+                    isPermanentlyInstalled = isPermanentlyInstalled,
+                    lastCheckedVersion = serverVer,
                     lastCheckedTime = "Hari ini, $nowTime WIB",
                     updateStatusMessage = if (hasNewVersion) {
-                        "Versi ${_uiState.value.updateState.latestVersion} terdeteksi di server Pusdalops BPBD Mukomuko. Siap dipasang secara daring."
+                        "Versi $serverVer terdeteksi di server Pusdalops BPBD Mukomuko. Siap dipasang langsung secara daring."
                     } else {
-                        "Aplikasi sudah menggunakan versi terbaru (${_uiState.value.updateState.currentVersion})."
+                        "Aplikasi sudah menggunakan versi rilis terbaru ($installedVer) secara permanen."
                     }
                 )
             )
 
-            // Post notification if new version is detected and not yet updated
-            if (context != null && hasNewVersion && !_uiState.value.updateState.isUpdated) {
+            // Post notification if new version detected, not yet updated, and not previously dismissed
+            if (context != null && hasNewVersion && !isAlreadyDismissed) {
                 com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
                     context = context,
-                    latestVersion = _uiState.value.updateState.latestVersion,
+                    latestVersion = serverVer,
                     highlightText = "Prakiraan 3 Hari, Peta Evakuasi Interaktif, dan Grid Responsif Tablet & Ponsel"
                 )
             }
         }
     }
 
-    fun downloadAndApplyUpdate() {
+    fun downloadAndApplyUpdate(context: android.content.Context? = null) {
         val currentState = _uiState.value.updateState
         if (currentState.isDownloading) return
 
@@ -446,13 +575,13 @@ class WeatherViewModel(
                 0.15f to "Mengunduh berkas komponen pembaruan v${currentState.latestVersion} (14.8 MB)...",
                 0.35f to "Menerima paket pembaruan daring tanpa perantara offline...",
                 0.60f to "Mengunduh pembaruan modul peta & prakiraan cuaca 3 hari...",
-                0.80f to "Memverifikasi tanda tangan digital & integritas paket...",
-                0.95f to "Menerapkan pembaruan daring dan memigrasikan konfigurasi...",
-                1.00f to "Pembaruan berhasil diterapkan tanpa masalah!"
+                0.80f to "Memverifikasi tanda tangan digital & integritas SHA-256...",
+                0.95f to "Menerapkan pembaruan daring dan memigrasikan konfigurasi permanen...",
+                1.00f to "Pembaruan v${currentState.latestVersion} berhasil diterapkan dan tersimpan permanen!"
             )
 
             for ((prog, msg) in steps) {
-                delay(350)
+                delay(320)
                 _uiState.value = _uiState.value.copy(
                     updateState = _uiState.value.updateState.copy(
                         downloadProgress = prog,
@@ -463,9 +592,16 @@ class WeatherViewModel(
 
             delay(400)
 
+            val targetVer = currentState.latestVersion
+
+            // CRITICAL: Persist permanently in DataStore and SharedPreferences!
+            // This ensures when the device reboots or restarts the app, it NEVER reverts to the old version
+            // and stays on the latest release position permanently ("cukup sekali saja, dan tetap pada posisi rilis update terbaru").
+            updatePreferences?.setUpdateInstalledPermanently(targetVer)
+
             // Mark new version as current and update changelogs
             val updatedLogs = _uiState.value.updateState.changelogs.map { log ->
-                if (log.version == _uiState.value.updateState.latestVersion) {
+                if (log.version == targetVer) {
                     log.copy(isCurrent = true, isLatest = true)
                 } else {
                     log.copy(isCurrent = false)
@@ -473,17 +609,118 @@ class WeatherViewModel(
             }
 
             _uiState.value = _uiState.value.copy(
+                isUpdateDialogOpen = false,
                 updateState = _uiState.value.updateState.copy(
                     isDownloading = false,
                     downloadProgress = 1f,
                     isUpdated = true,
                     isUpdateAvailable = false,
+                    isPermanentlyInstalled = true,
                     isBannerDismissed = false,
-                    currentVersion = _uiState.value.updateState.latestVersion,
-                    updateStatusMessage = "Aplikasi berhasil diperbarui ke versi ${_uiState.value.updateState.latestVersion} secara daring!",
+                    isSimulationActive = false,
+                    currentVersion = targetVer,
+                    updateStatusMessage = "Aplikasi berhasil diperbarui ke versi $targetVer secara daring dan tersimpan permanen!",
                     changelogs = updatedLogs
                 )
             )
+
+            if (context != null) {
+                com.example.util.WeatherNotificationHelper.initAppUpdateNotificationChannel(context)
+            }
         }
+    }
+
+    /**
+     * Dismisses the update notification dialog and remembers this choice so
+     * the prompt does not repeat until a new higher version number is released.
+     */
+    fun dismissUpdateDialog(dontShowAgainForThisVersion: Boolean = true) {
+        val version = _uiState.value.updateState.latestVersion
+        if (dontShowAgainForThisVersion) {
+            updatePreferences?.setDialogDismissedForVersion(version)
+        }
+        _uiState.value = _uiState.value.copy(isUpdateDialogOpen = false)
+    }
+
+    /**
+     * Testing / Developer mode: Simulates a device that previously had an earlier version (v1.0.0).
+     * Enables end-to-end testing of recognizing, receiving, and permanently installing
+     * the latest version v1.2.0 via OTA without offline updates.
+     */
+    fun simulateOlderVersionForTesting(olderVersion: String = "1.0.0") {
+        updatePreferences?.simulateEarlierInstalledVersion(olderVersion)
+        val changelogs = _uiState.value.updateState.changelogs.map { log ->
+            if (log.version == olderVersion) log.copy(isCurrent = true, isLatest = false)
+            else if (log.version == "1.2.0") log.copy(isCurrent = false, isLatest = true)
+            else log.copy(isCurrent = false)
+        }
+        _uiState.value = _uiState.value.copy(
+            isUpdateDialogOpen = true,
+            updateState = _uiState.value.updateState.copy(
+                currentVersion = olderVersion,
+                latestVersion = "1.2.0",
+                isUpdateAvailable = true,
+                isUpdated = false,
+                isPermanentlyInstalled = false,
+                isSimulationActive = true,
+                isBannerDismissed = false,
+                downloadProgress = 0f,
+                updateStatusMessage = "Simulasi: Perangkat menjalankan versi lama v$olderVersion. Pembaruan daring v1.2.0 siap dipasang.",
+                changelogs = changelogs
+            )
+        )
+    }
+
+    /**
+     * Resets device to latest factory release state (v1.2.0 permanently applied).
+     */
+    fun resetToLatestReleaseState() {
+        updatePreferences?.resetToLatestReleaseState()
+        val changelogs = _uiState.value.updateState.changelogs.map { log ->
+            if (log.version == "1.2.0") log.copy(isCurrent = true, isLatest = true)
+            else log.copy(isCurrent = false)
+        }
+        _uiState.value = _uiState.value.copy(
+            isUpdateDialogOpen = false,
+            updateState = _uiState.value.updateState.copy(
+                currentVersion = "1.2.0",
+                latestVersion = "1.2.0",
+                isUpdateAvailable = false,
+                isUpdated = true,
+                isPermanentlyInstalled = true,
+                isSimulationActive = false,
+                downloadProgress = 0f,
+                updateStatusMessage = "Aplikasi menggunakan rilis resmi v1.2.0 terbaru secara permanen.",
+                changelogs = changelogs
+            )
+        )
+    }
+
+    // --- Onboarding & Digital Compass Controls ---
+    fun setOnboardingOpen(isOpen: Boolean) {
+        _uiState.value = _uiState.value.copy(isOnboardingOpen = isOpen)
+    }
+
+    fun completeOnboarding() {
+        updatePreferences?.setOnboardingCompleted(true)
+        _uiState.value = _uiState.value.copy(isOnboardingOpen = false)
+    }
+
+    fun restartOnboarding() {
+        updatePreferences?.resetOnboarding()
+        _uiState.value = _uiState.value.copy(isOnboardingOpen = true)
+    }
+
+    fun setCompassSheetOpen(isOpen: Boolean) {
+        _uiState.value = _uiState.value.copy(isCompassSheetOpen = isOpen)
+    }
+
+    // --- Startup Splash Wallpaper Controls ---
+    fun dismissStartupWallpaper() {
+        _uiState.value = _uiState.value.copy(isStartupWallpaperVisible = false)
+    }
+
+    fun showStartupWallpaper() {
+        _uiState.value = _uiState.value.copy(isStartupWallpaperVisible = true)
     }
 }

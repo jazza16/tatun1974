@@ -9,21 +9,24 @@ data class VersionChangelog(
 )
 
 data class AppUpdateState(
-    val currentVersion: String = "1.0.0",
+    val currentVersion: String = "1.2.0",
     val latestVersion: String = "1.2.0",
     val developerName: String = "Jazzakallah",
     val developerRole: String = "Lead Mobile Developer & UI Engineer",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
     val developerEmail: String = "jazzakallah@gmail.com",
     val isCheckingOnline: Boolean = false,
-    val isUpdateAvailable: Boolean = true,
+    val isUpdateAvailable: Boolean = false,
     val isDownloading: Boolean = false,
     val downloadProgress: Float = 0f,
-    val isUpdated: Boolean = false,
+    val isUpdated: Boolean = true,
+    val isPermanentlyInstalled: Boolean = true,
+    val lastCheckedVersion: String = "1.2.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Pembaruan versi 1.2.0 terdeteksi dan siap dipasang secara daring.",
+    val updateStatusMessage: String = "Aplikasi menggunakan rilis resmi v1.2.0 terbaru secara permanen.",
     val packageSizeMb: Float = 14.8f,
     val isBannerDismissed: Boolean = false,
+    val isSimulationActive: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
         VersionChangelog(
             version = "1.2.0",

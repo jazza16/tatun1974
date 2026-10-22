@@ -25,6 +25,12 @@ data class CurrentWeather(
             in 293..337 -> "Barat Laut (NW)"
             else -> "Utara (N)"
         }
+
+    val isDay: Boolean
+        get() {
+            val hour = time.substringAfter("T", "").substringBefore(":").toIntOrNull()
+            return hour == null || hour in 6..18
+        }
 }
 
 data class HourlyItem(
