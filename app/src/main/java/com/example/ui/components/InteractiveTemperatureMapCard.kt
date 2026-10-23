@@ -201,17 +201,20 @@ fun InteractiveTemperatureMapCard(
 
                     Spacer(modifier = Modifier.width(10.dp))
 
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Peta Suhu Interaktif BMKG",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Peta Suhu Interaktif BMKG",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = RoundedCornerShape(5.dp),
                                 color = OrangePrimary.copy(alpha = 0.15f)
                             ) {
                                 Text(
@@ -219,15 +222,16 @@ fun InteractiveTemperatureMapCard(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = OrangePrimary,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                                 )
                             }
+                            Text(
+                                text = "Distribusi panas wilayah Mukomuko",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                maxLines = 1
+                            )
                         }
-                        Text(
-                            text = "Distribusi panas wilayah Kabupaten Mukomuko",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
-                        )
                     }
                 }
 

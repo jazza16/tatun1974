@@ -443,7 +443,7 @@ fun WeatherAppScreen(
                                         item {
                                             InAppUpdateBannerCard(
                                                 updateState = uiState.updateState,
-                                                onUpdateNow = { viewModel.downloadAndApplyUpdate() },
+                                                onUpdateNow = { viewModel.downloadAndApplyUpdate(context) },
                                                 onViewDetails = { viewModel.setAppUpdateSheetOpen(true) },
                                                 onDismiss = { viewModel.dismissUpdateBanner() }
                                             )
@@ -535,7 +535,8 @@ fun WeatherAppScreen(
                                                 organization = uiState.updateState.organization,
                                                 developerEmail = uiState.updateState.developerEmail,
                                                 developerTelegram = uiState.updateState.developerTelegram,
-                                                isDark = isActuallyDark
+                                                isDark = isActuallyDark,
+                                                onOpenWallpaper = { viewModel.showStartupWallpaper() }
                                             )
                                     }
                                 }
@@ -818,7 +819,8 @@ fun WeatherAppScreen(
             onSetThemeMode = { viewModel.setDarkMode(it) },
             onCheckUpdateOnline = { viewModel.checkForUpdatesOnline(context = context) },
             onDownloadUpdate = { viewModel.downloadAndApplyUpdate(context = context) },
-            onSimulateOlderVersion = { viewModel.simulateOlderVersionForTesting() },
+            onSimulateOlderVersion = { viewModel.simulateOlderVersionForTesting("1.2.0", context) },
+            onSimulatePublishNextVersion = { viewModel.simulatePublishNextVersion("1.4.0", context) },
             onResetLatestRelease = { viewModel.resetToLatestReleaseState() },
             onOpenOnboarding = { viewModel.setOnboardingOpen(true) },
             onOpenCompass = { viewModel.setCompassSheetOpen(true) },
@@ -936,6 +938,12 @@ fun WeatherAppScreen(
             onCall117 = { EmergencyDialer.dial(context, "117") }
         )
     }
+
+    // High-Resolution Wallpaper & Mukomuko Disaster Mitigation Screen
+    StartupSplashWallpaperScreen(
+        isVisible = uiState.isStartupWallpaperVisible,
+        onDismiss = { viewModel.dismissStartupWallpaper() }
+    )
 }
 
 @Composable

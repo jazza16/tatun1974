@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SettingsBrightness
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -89,6 +90,7 @@ fun AppUpdateBottomSheet(
     onCheckUpdateOnline: () -> Unit,
     onDownloadUpdate: () -> Unit,
     onSimulateOlderVersion: () -> Unit = {},
+    onSimulatePublishNextVersion: () -> Unit = {},
     onResetLatestRelease: () -> Unit = {},
     onOpenOnboarding: () -> Unit = {},
     onOpenCompass: () -> Unit = {},
@@ -248,14 +250,14 @@ fun AppUpdateBottomSheet(
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Security,
+                            imageVector = Icons.Default.Terrain,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
                             tint = OrangeOnPrimary
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Wallpaper Awal & Logo BPBD",
+                            text = "Wallpaper HD & Mitigasi Bencana Mukomuko",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = OrangeOnPrimary
@@ -273,6 +275,7 @@ fun AppUpdateBottomSheet(
                 onCheckUpdate = onCheckUpdateOnline,
                 onApplyUpdate = onDownloadUpdate,
                 onSimulateOlderVersion = onSimulateOlderVersion,
+                onSimulatePublishNextVersion = onSimulatePublishNextVersion,
                 onResetLatestRelease = onResetLatestRelease
             )
 
@@ -290,7 +293,11 @@ fun AppUpdateBottomSheet(
                 organization = updateState.organization,
                 developerEmail = updateState.developerEmail,
                 developerTelegram = updateState.developerTelegram,
-                isDark = isActuallyDark
+                isDark = isActuallyDark,
+                onOpenWallpaper = {
+                    onDismiss()
+                    onShowStartupWallpaper()
+                }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -491,6 +498,7 @@ private fun OnlineUpdateCard(
     onCheckUpdate: () -> Unit,
     onApplyUpdate: () -> Unit,
     onSimulateOlderVersion: () -> Unit = {},
+    onSimulatePublishNextVersion: () -> Unit = {},
     onResetLatestRelease: () -> Unit = {}
 ) {
     Card(
@@ -790,14 +798,14 @@ private fun OnlineUpdateCard(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "Pengujian Alur Pembaruan OTA (Perangkat Versi Lama)",
+                        text = "Pengujian Alur Pembaruan Daring (OTA)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        text = "Simulasikan perangkat yang sebelumnya menginstal versi lama (v1.0.0) untuk menguji pengenalan rilis baru, pengunduhan daring, dan penyimpanan permanen tanpa update offline.",
+                        text = "Sistem menggunakan Semantic Versioning (AppVersionHelper) untuk mendeteksi perangkat versi sebelumnya (v1.2.0) guna memicu notifikasi update ke v1.3.0, serta otomatis berlaku untuk versi berikutnya (v1.4.0, dst) saat dirilis pengembang.",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         lineHeight = 14.sp
@@ -805,35 +813,51 @@ private fun OnlineUpdateCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         OutlinedButton(
                             onClick = onSimulateOlderVersion,
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("btn_simulate_older_version"),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                .testTag("btn_simulate_v120"),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = if (updateState.isSimulationActive) "Simulasi v1.0.0 Aktif" else "Uji Versi Lama (v1.0.0)",
-                                fontSize = 10.sp
+                                text = "Uji v1.2.0 (Notif v1.3.0)",
+                                fontSize = 10.sp,
+                                maxLines = 1
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = onSimulatePublishNextVersion,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_simulate_v140"),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "Uji Rilis v1.4.0",
+                                fontSize = 10.sp,
+                                maxLines = 1
                             )
                         }
 
                         Button(
                             onClick = onResetLatestRelease,
                             modifier = Modifier
-                                .weight(1f)
+                                .weight(0.9f)
                                 .testTag("btn_reset_latest_release"),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (updateState.isUpdated && updateState.isPermanentlyInstalled) Color(0xFF16A34A) else OrangePrimary
                             ),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = "Kunci Rilis v1.3.0",
+                                text = "Kunci v1.3.0",
                                 fontSize = 10.sp,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1
                             )
                         }
                     }

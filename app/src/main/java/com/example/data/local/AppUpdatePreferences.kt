@@ -105,9 +105,36 @@ class AppUpdatePreferences(private val context: Context) {
 
     /**
      * Whether the update has been installed permanently into persistent storage.
+     * Returns false if a newer server version is available.
      */
     fun isUpdatePermanentlyInstalled(): Boolean {
-        return sharedPrefs.getBoolean(PREF_IS_PERMANENTLY_INSTALLED, true)
+        val installed = getInstalledVersion()
+        val server = getLatestServerVersion()
+        val hasNewer = com.example.util.AppVersionHelper.isVersionNewer(installed, server)
+        return !hasNewer && sharedPrefs.getBoolean(PREF_IS_PERMANENTLY_INSTALLED, true)
+    }
+
+    /**
+     * Publishes a new version release by the developer (e.g. v1.4.0, v1.5.0, etc.).
+     * Sets latest server version and resets dismissal status so update notifications
+     * will be triggered for all users on earlier versions.
+     */
+    fun publishNewVersionRelease(newVersion: String) {
+        sharedPrefs.edit()
+            .putString(PREF_LATEST_SERVER_VERSION, newVersion)
+            .remove(PREF_DISMISSED_DIALOG_VERSION)
+            .remove(PREF_LAST_CHECKED_VERSION)
+            .apply()
+
+        scope.launch {
+            try {
+                context.dataStore.edit { prefs ->
+                    prefs[KEY_LATEST_SERVER_VERSION] = newVersion
+                    prefs.remove(KEY_DISMISSED_DIALOG_VERSION)
+                    prefs.remove(KEY_LAST_CHECKED_VERSION)
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     /**

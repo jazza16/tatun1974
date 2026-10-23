@@ -65,52 +65,55 @@ fun MarinePesisirCard(
             // Header with coastal badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(WeatherSeaCyan.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
-                        contentAlignment = Alignment.Center
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(WeatherSeaCyan.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Surfing,
+                        contentDescription = "Cuaca Maritim",
+                        tint = WeatherSeaCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Info Maritim Samudra Hindia",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Surfing,
-                            contentDescription = "Cuaca Maritim",
-                            tint = WeatherSeaCyan,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column {
-                        Text(
-                            text = "Info Maritim Samudra Hindia",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Surface(
+                            color = safetyBadgeColor.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = marine.fishermanSafety,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = safetyBadgeColor,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                         Text(
                             text = "Pesisir Mukomuko • ${district.name}",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            maxLines = 1
                         )
                     }
-                }
-
-                Surface(
-                    color = safetyBadgeColor.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text(
-                        text = marine.fishermanSafety,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = safetyBadgeColor,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
                 }
             }
 

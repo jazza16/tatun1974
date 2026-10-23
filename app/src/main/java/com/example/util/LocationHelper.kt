@@ -31,6 +31,13 @@ object LocationHelper {
         return fineLocation || coarseLocation
     }
 
+    fun isLocationServiceEnabled(context: Context): Boolean {
+        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+        val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        return isGpsEnabled || isNetworkEnabled
+    }
+
     /**
      * Calculates distance between two GPS coordinates in kilometers using Haversine formula.
      */
@@ -63,16 +70,26 @@ object LocationHelper {
     }
 
     /**
-     * Attempts to acquire current location using FusedLocationProviderClient with LocationManager fallback.
+     * Attempts to acquire current user location using Google Play Services FusedLocationProviderClient.
+     * Implements multi-tier fallback:
+     * 1. High Accuracy fresh GPS fix via getCurrentLocation(PRIORITY_HIGH_ACCURACY)
+     * 2. Cached FusedLocationProviderClient.lastLocation
+     * 3. Balanced Power Accuracy via getCurrentLocation(PRIORITY_BALANCED_POWER_ACCURACY)
+     * 4. System LocationManager (GPS_PROVIDER & NETWORK_PROVIDER)
      */
     @SuppressLint("MissingPermission")
     fun fetchCurrentLocation(
         context: Context,
-        onSuccess: (latitude: Double, longitude: Double, nearestDistrict: District, distanceKm: Double) -> Unit,
+        onSuccess: (latitude: Double, longitude: Double, nearestDistrict: District, distanceKm: Double, accuracyMeters: Float?) -> Unit,
         onError: (message: String) -> Unit
     ) {
         if (!hasLocationPermission(context)) {
-            onError("Izin lokasi belum diberikan. Mohon izinkan akses lokasi.")
+            onError("Izin lokasi belum diberikan. Mohon izinkan akses lokasi agar cuaca kecamatan Anda dapat dideteksi secara otomatis.")
+            return
+        }
+
+        if (!isLocationServiceEnabled(context)) {
+            onError("GPS / Layanan lokasi perangkat Anda sedang dinonaktifkan. Mohon aktifkan GPS di pengaturan perangkat.")
             return
         }
 
@@ -80,23 +97,54 @@ object LocationHelper {
             val fusedClient = LocationServices.getFusedLocationProviderClient(context)
             val cts = CancellationTokenSource()
 
+            // Step 1: Request fresh high accuracy location fix
             fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
                 .addOnSuccessListener { location: Location? ->
                     if (location != null) {
                         val (nearest, distKm) = findNearestDistrict(location.latitude, location.longitude)
-                        onSuccess(location.latitude, location.longitude, nearest, distKm)
+                        val accuracy = if (location.hasAccuracy()) location.accuracy else null
+                        onSuccess(location.latitude, location.longitude, nearest, distKm, accuracy)
                     } else {
-                        // Fallback to last location
+                        // Step 2: Fallback to lastLocation if available
                         fusedClient.lastLocation.addOnSuccessListener { lastLoc: Location? ->
                             if (lastLoc != null) {
                                 val (nearest, distKm) = findNearestDistrict(lastLoc.latitude, lastLoc.longitude)
-                                onSuccess(lastLoc.latitude, lastLoc.longitude, nearest, distKm)
+                                val accuracy = if (lastLoc.hasAccuracy()) lastLoc.accuracy else null
+                                onSuccess(lastLoc.latitude, lastLoc.longitude, nearest, distKm, accuracy)
                             } else {
-                                fallbackLocationManager(context, onSuccess, onError)
+                                // Step 3: Try balanced power accuracy
+                                tryBalancedFusedLocation(context, fusedClient, onSuccess, onError)
                             }
                         }.addOnFailureListener {
-                            fallbackLocationManager(context, onSuccess, onError)
+                            tryBalancedFusedLocation(context, fusedClient, onSuccess, onError)
                         }
+                    }
+                }
+                .addOnFailureListener {
+                    tryBalancedFusedLocation(context, fusedClient, onSuccess, onError)
+                }
+        } catch (e: Exception) {
+            fallbackLocationManager(context, onSuccess, onError)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun tryBalancedFusedLocation(
+        context: Context,
+        fusedClient: com.google.android.gms.location.FusedLocationProviderClient,
+        onSuccess: (latitude: Double, longitude: Double, nearestDistrict: District, distanceKm: Double, accuracyMeters: Float?) -> Unit,
+        onError: (message: String) -> Unit
+    ) {
+        try {
+            val cts = CancellationTokenSource()
+            fusedClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
+                .addOnSuccessListener { location: Location? ->
+                    if (location != null) {
+                        val (nearest, distKm) = findNearestDistrict(location.latitude, location.longitude)
+                        val accuracy = if (location.hasAccuracy()) location.accuracy else null
+                        onSuccess(location.latitude, location.longitude, nearest, distKm, accuracy)
+                    } else {
+                        fallbackLocationManager(context, onSuccess, onError)
                     }
                 }
                 .addOnFailureListener {
@@ -110,24 +158,28 @@ object LocationHelper {
     @SuppressLint("MissingPermission")
     private fun fallbackLocationManager(
         context: Context,
-        onSuccess: (latitude: Double, longitude: Double, nearestDistrict: District, distanceKm: Double) -> Unit,
+        onSuccess: (latitude: Double, longitude: Double, nearestDistrict: District, distanceKm: Double, accuracyMeters: Float?) -> Unit,
         onError: (message: String) -> Unit
     ) {
         try {
             val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
             if (locationManager == null) {
-                onError("Layanan lokasi sistem tidak tersedia.")
+                onError("Layanan lokasi sistem tidak tersedia pada perangkat.")
                 return
             }
 
-            val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
+            val providers = listOf(
+                LocationManager.GPS_PROVIDER,
+                LocationManager.NETWORK_PROVIDER,
+                LocationManager.PASSIVE_PROVIDER
+            )
             var bestLocation: Location? = null
 
             for (provider in providers) {
                 if (locationManager.isProviderEnabled(provider)) {
                     val loc = locationManager.getLastKnownLocation(provider)
                     if (loc != null) {
-                        if (bestLocation == null || loc.accuracy < bestLocation.accuracy) {
+                        if (bestLocation == null || (loc.hasAccuracy() && loc.accuracy < (bestLocation?.accuracy ?: Float.MAX_VALUE))) {
                             bestLocation = loc
                         }
                     }
@@ -136,12 +188,13 @@ object LocationHelper {
 
             if (bestLocation != null) {
                 val (nearest, distKm) = findNearestDistrict(bestLocation.latitude, bestLocation.longitude)
-                onSuccess(bestLocation.latitude, bestLocation.longitude, nearest, distKm)
+                val accuracy = if (bestLocation.hasAccuracy()) bestLocation.accuracy else null
+                onSuccess(bestLocation.latitude, bestLocation.longitude, nearest, distKm, accuracy)
             } else {
-                onError("Tidak dapat mendeteksi koordinat GPS saat ini. Pastikan GPS aktif.")
+                onError("Tidak dapat mendeteksi koordinat GPS saat ini. Pastikan GPS aktif dan berada di area dengan jangkauan sinyal yang cukup.")
             }
         } catch (e: Exception) {
-            onError("Gagal mengambil lokasi: ${e.localizedMessage ?: "Terjadi kesalahan"}")
+            onError("Gagal mengambil lokasi GPS: ${e.localizedMessage ?: "Terjadi kesalahan"}")
         }
     }
 }

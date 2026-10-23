@@ -56,13 +56,16 @@ data class WeatherUiState(
     // Onboarding & Digital Compass Interactive Guide
     val isOnboardingOpen: Boolean = false,
     val isCompassSheetOpen: Boolean = false,
-    // Startup Splash Wallpaper
+    // Startup Splash Wallpaper & High-Resolution Disaster Infographic
     val isStartupWallpaperVisible: Boolean = true,
+    val isDisasterWallpaperDialogOpen: Boolean = false,
     // GPS Location Auto-Detection
     val isDetectingLocation: Boolean = false,
     val locationDetectionMessage: String? = null,
     val isLocationDetected: Boolean = false,
-    val detectedDistrict: District? = null
+    val detectedDistrict: District? = null,
+    val detectedDistanceKm: Double? = null,
+    val detectedAccuracyMeters: Float? = null
 )
 
 class WeatherViewModel(
@@ -158,23 +161,34 @@ class WeatherViewModel(
         _uiState.value = _uiState.value.copy(isDistrictSheetOpen = open)
     }
 
-    fun detectCurrentLocation(context: Context, onResult: ((District?, String) -> Unit)? = null) {
+    fun detectCurrentLocation(
+        context: Context,
+        isAutoDetect: Boolean = false,
+        onResult: ((District?, String) -> Unit)? = null
+    ) {
         _uiState.value = _uiState.value.copy(
             isDetectingLocation = true,
-            locationDetectionMessage = "Mendeteksi posisi GPS Anda..."
+            locationDetectionMessage = if (isAutoDetect) {
+                "Mendeteksi posisi otomatis via FusedLocationProviderClient..."
+            } else {
+                "Mendeteksi posisi GPS Anda..."
+            }
         )
         com.example.util.LocationHelper.fetchCurrentLocation(
             context = context,
-            onSuccess = { lat, lon, nearestDistrict, distKm ->
-                val msg = if (distKm < 30.0) {
-                    "Lokasi terdeteksi: Kecamatan ${nearestDistrict.name} (GPS akurat, ±${String.format("%.1f", distKm)} km)"
+            onSuccess = { lat, lon, nearestDistrict, distKm, accuracy ->
+                val accuracyInfo = if (accuracy != null && accuracy > 0) " (Akurasi ±${accuracy.toInt()}m)" else ""
+                val msg = if (distKm < 35.0) {
+                    "Lokasi terdeteksi: Kecamatan ${nearestDistrict.name}$accuracyInfo. Prakiraan cuaca disesuaikan otomatis."
                 } else {
-                    "Koordinat (${String.format("%.2f", lat)}, ${String.format("%.2f", lon)}) diarahkan ke kecamatan terdekat: ${nearestDistrict.name}"
+                    "Koordinat GPS (${String.format(java.util.Locale.US, "%.3f", lat)}, ${String.format(java.util.Locale.US, "%.3f", lon)}) diarahkan ke kecamatan terdekat: ${nearestDistrict.name} (±${String.format(java.util.Locale.US, "%.1f", distKm)} km)"
                 }
                 _uiState.value = _uiState.value.copy(
                     isDetectingLocation = false,
                     isLocationDetected = true,
                     detectedDistrict = nearestDistrict,
+                    detectedDistanceKm = distKm,
+                    detectedAccuracyMeters = accuracy,
                     locationDetectionMessage = msg,
                     selectedDistrict = nearestDistrict,
                     isDistrictSheetOpen = false
@@ -491,12 +505,15 @@ class WeatherViewModel(
 
     fun postPendingUpdateNotification(context: android.content.Context) {
         val state = _uiState.value.updateState
-        val hasNewVersion = state.currentVersion != state.latestVersion
-        if (hasNewVersion && !state.isUpdated && !state.isPermanentlyInstalled) {
+        val hasNewVersion = com.example.util.AppVersionHelper.isVersionNewer(state.currentVersion, state.latestVersion)
+        if (hasNewVersion && !state.isUpdated) {
+            val targetLog = state.changelogs.find { it.version == state.latestVersion }
+            val highlightText = targetLog?.highlights?.firstOrNull()
+                ?: "Pembaruan fitur terkini dari Pusdalops BPBD Kabupaten Mukomuko"
             com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
                 context = context,
                 latestVersion = state.latestVersion,
-                highlightText = "Prakiraan 3 Hari, Peta Evakuasi Interaktif, dan Grid Responsif Tablet & Ponsel"
+                highlightText = highlightText
             )
         }
     }
@@ -513,12 +530,13 @@ class WeatherViewModel(
 
             val installedVer = updatePreferences?.getInstalledVersion() ?: _uiState.value.updateState.currentVersion
             val serverVer = updatePreferences?.getLatestServerVersion() ?: "1.3.0"
-            val isPermanentlyInstalled = updatePreferences?.isUpdatePermanentlyInstalled() ?: (installedVer == serverVer)
 
-            val hasNewVersion = (installedVer != serverVer) && !isPermanentlyInstalled
+            val hasNewVersion = com.example.util.AppVersionHelper.isVersionNewer(
+                currentVersion = installedVer,
+                targetVersion = serverVer
+            )
+            val isPermanentlyInstalled = !hasNewVersion && (installedVer == serverVer)
 
-            // User Request 5: Prevent the update notification dialog from showing again until a new higher version
-            // number is detected on the server, ensuring users are only prompted once per release.
             val lastCheckedVer = updatePreferences?.getLastCheckedVersion() ?: ""
             val isAlreadyDismissed = updatePreferences?.isDialogDismissedForVersion(serverVer) ?: false
 
@@ -527,6 +545,10 @@ class WeatherViewModel(
             if (hasNewVersion) {
                 updatePreferences?.setLastCheckedVersion(serverVer)
             }
+
+            val targetLog = _uiState.value.updateState.changelogs.find { it.version == serverVer }
+            val highlightText = targetLog?.highlights?.firstOrNull()
+                ?: "Konsol Gempa WRS-NTWC InaTEWS BMKG, Tab ISPU Kualitas Udara, Peta Shake Map Interaktif & Optimalisasi Mode Ponsel Portrait"
 
             _uiState.value = _uiState.value.copy(
                 isUpdateDialogOpen = shouldShowDialog,
@@ -552,7 +574,7 @@ class WeatherViewModel(
                 com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
                     context = context,
                     latestVersion = serverVer,
-                    highlightText = "Prakiraan 3 Hari, Peta Evakuasi Interaktif, dan Grid Responsif Tablet & Ponsel"
+                    highlightText = highlightText
                 )
             }
         }
@@ -643,11 +665,10 @@ class WeatherViewModel(
     }
 
     /**
-     * Testing / Developer mode: Simulates a device that previously had an earlier version (e.g. v1.2.0 or v1.0.0).
-     * Enables end-to-end testing of recognizing, receiving, and permanently installing
-     * the latest version v1.3.0 via OTA without offline updates.
+     * Testing / Developer mode: Simulates a device that previously had an earlier version (e.g. v1.2.0).
+     * Immediately triggers real push notification and in-app update prompt for v1.3.0.
      */
-     fun simulateOlderVersionForTesting(olderVersion: String = "1.2.0") {
+    fun simulateOlderVersionForTesting(olderVersion: String = "1.2.0", context: android.content.Context? = null) {
         updatePreferences?.simulateEarlierInstalledVersion(olderVersion)
         val changelogs = _uiState.value.updateState.changelogs.map { log ->
             if (log.version == olderVersion) log.copy(isCurrent = true, isLatest = false)
@@ -665,10 +686,67 @@ class WeatherViewModel(
                 isSimulationActive = true,
                 isBannerDismissed = false,
                 downloadProgress = 0f,
-                updateStatusMessage = "Simulasi: Perangkat menjalankan versi sebelumnya v$olderVersion. Pembaruan daring v1.3.0 siap dipasang.",
+                updateStatusMessage = "Simulasi Aktif: Perangkat menjalankan versi sebelumnya v$olderVersion. Notifikasi update daring v1.3.0 aktif & siap dipasang.",
                 changelogs = changelogs
             )
         )
+
+        if (context != null) {
+            com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
+                context = context,
+                latestVersion = "1.3.0",
+                highlightText = "Konsol Gempa WRS-NTWC InaTEWS BMKG, Tab ISPU Kualitas Udara, Peta Shake Map Interaktif & Optimalisasi Mode Ponsel Portrait"
+            )
+        }
+    }
+
+    /**
+     * Developer / QA simulation: Simulates the developer ("TnT@74") publishing a newer version (e.g. v1.4.0).
+     * Tests that current devices (on v1.3.0) detect the new version, receive real push notification,
+     * and can apply the OTA online update.
+     */
+    fun simulatePublishNextVersion(nextVersion: String = "1.4.0", context: android.content.Context? = null) {
+        updatePreferences?.publishNewVersionRelease(nextVersion)
+
+        val nextChangelog = com.example.model.VersionChangelog(
+            version = nextVersion,
+            releaseDate = "Rilis Mendatang Pengembang",
+            isCurrent = false,
+            isLatest = true,
+            highlights = listOf(
+                "Pembaruan telemetri otomatis stasiun cuaca AWS 15 kecamatan Mukomuko.",
+                "Peningkatan resolusi peta bahaya tsunami dan jalur evakuasi interaktif.",
+                "Sinkronisasi waktu nyata peringatan dini cuaca maritim & gelombang nelayan."
+            )
+        )
+        val filteredLogs = _uiState.value.updateState.changelogs.filter { it.version != nextVersion }
+        val updatedLogs = listOf(nextChangelog) + filteredLogs.map { it.copy(isLatest = false) }
+
+        val installedVer = _uiState.value.updateState.currentVersion
+        val hasNew = com.example.util.AppVersionHelper.isVersionNewer(installedVer, nextVersion)
+
+        _uiState.value = _uiState.value.copy(
+            isUpdateDialogOpen = true,
+            updateState = _uiState.value.updateState.copy(
+                latestVersion = nextVersion,
+                isUpdateAvailable = hasNew,
+                isUpdated = !hasNew,
+                isPermanentlyInstalled = false,
+                isSimulationActive = true,
+                isBannerDismissed = false,
+                downloadProgress = 0f,
+                updateStatusMessage = "Rilis Versi $nextVersion Diterbitkan oleh Pengembang di Server BPBD Mukomuko. Siap diinstal secara daring.",
+                changelogs = updatedLogs
+            )
+        )
+
+        if (context != null) {
+            com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
+                context = context,
+                latestVersion = nextVersion,
+                highlightText = "Pembaruan Telemetri Stasiun Cuaca 15 Kecamatan, Peta Jalur Evakuasi & Gelombang Nelayan"
+            )
+        }
     }
 
     /**
@@ -676,7 +754,7 @@ class WeatherViewModel(
      */
     fun resetToLatestReleaseState() {
         updatePreferences?.resetToLatestReleaseState()
-        val changelogs = _uiState.value.updateState.changelogs.map { log ->
+        val changelogs = _uiState.value.updateState.changelogs.filter { it.version != "1.4.0" }.map { log ->
             if (log.version == "1.3.0") log.copy(isCurrent = true, isLatest = true)
             else log.copy(isCurrent = false, isLatest = false)
         }
@@ -722,5 +800,9 @@ class WeatherViewModel(
 
     fun showStartupWallpaper() {
         _uiState.value = _uiState.value.copy(isStartupWallpaperVisible = true)
+    }
+
+    fun setDisasterWallpaperDialogOpen(isOpen: Boolean) {
+        _uiState.value = _uiState.value.copy(isDisasterWallpaperDialogOpen = isOpen)
     }
 }

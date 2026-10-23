@@ -139,10 +139,13 @@ fun MarineWaveHistoryChart(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .background(WeatherSeaCyan.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -150,7 +153,7 @@ fun MarineWaveHistoryChart(
                             imageVector = Icons.Default.ShowChart,
                             contentDescription = "Grafik Gelombang",
                             tint = WeatherSeaCyan,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
@@ -159,22 +162,41 @@ fun MarineWaveHistoryChart(
                     Column {
                         Text(
                             text = "Tren Gelombang Historis",
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = "Pesisir Samudra Hindia • ${district.name}",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
-                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(5.dp),
+                                color = WeatherSeaCyan.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "Historis BMKG",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = WeatherSeaCyan,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                )
+                            }
+                            Text(
+                                text = "Pesisir Samudra Hindia • ${district.name}",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
 
                 // Range Selector Pills (7 Hari / 14 Hari)
                 Row(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
                         .padding(2.dp)
                 ) {
                     val ranges = listOf("7 Hari", "14 Hari")
@@ -182,15 +204,15 @@ fun MarineWaveHistoryChart(
                         val isSel = selectedRangeIndex == idx
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(if (isSel) OrangePrimary else Color.Transparent)
                                 .clickable { selectedRangeIndex = idx }
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = label,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSel) OrangeOnPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )

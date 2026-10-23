@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Card
@@ -72,7 +73,8 @@ fun DeveloperInfoCard(
     organization: String = "PUSDALOPS-PB BPBD Kabupaten Mukomuko",
     developerEmail: String = "jazzakallah@gmail.com",
     developerTelegram: String = "@takajuekgue",
-    isDark: Boolean = false
+    isDark: Boolean = false,
+    onOpenWallpaper: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     var isPlayProtectGuideExpanded by remember { mutableStateOf(false) }
@@ -92,69 +94,72 @@ fun DeveloperInfoCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            // Header Row: Section Category & Verified Badge
+            // Header Row: Section Category & Verified Badge directly underneath title
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(OrangePrimary, Color(0xFFC2410C))
-                                ),
-                                RoundedCornerShape(10.dp)
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(OrangePrimary, Color(0xFFC2410C))
                             ),
-                        contentAlignment = Alignment.Center
+                            RoundedCornerShape(10.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Terminal,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Informasi Pengembang Aplikasi",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF7C2D12)
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Terminal,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column {
-                        Text(
-                            text = "Informasi Pengembang Aplikasi",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF7C2D12)
-                        )
+                        Surface(
+                            color = WeatherGoodGreen.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Verified,
+                                    contentDescription = "Verified",
+                                    tint = WeatherGoodGreen,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Terverifikasi",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = WeatherGoodGreen
+                                )
+                            }
+                        }
                         Text(
                             text = "Profil Kreator & Arsitek Sistem",
                             fontSize = 11.sp,
-                            color = if (isDark) Color(0xFFFDBA74) else Color(0xFF9A3412)
-                        )
-                    }
-                }
-
-                Surface(
-                    color = WeatherGoodGreen.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Verified,
-                            contentDescription = "Verified",
-                            tint = WeatherGoodGreen,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Terverifikasi",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WeatherGoodGreen
+                            color = if (isDark) Color(0xFFFDBA74) else Color(0xFF9A3412),
+                            maxLines = 1
                         )
                     }
                 }
@@ -249,6 +254,17 @@ fun DeveloperInfoCard(
             ) {
                 TechPill(icon = Icons.Default.Code, label = "Kotlin 2.0 & Compose", isDark = isDark, modifier = Modifier.weight(1f))
                 TechPill(icon = Icons.Default.Security, label = "WRS-NTWC BMKG", isDark = isDark, modifier = Modifier.weight(1f))
+            }
+
+            if (onOpenWallpaper != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                TechPill(
+                    icon = Icons.Default.Terrain,
+                    label = "Lihat Wallpaper HD & Mitigasi Alam Mukomuko",
+                    isDark = isDark,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onOpenWallpaper
+                )
             }
 
             Spacer(modifier = Modifier.height(6.dp))
