@@ -392,7 +392,7 @@ fun StartupSplashWallpaperScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "Sentuh layar untuk langsung masuk • v1.2.0 PUSDALOPS",
+                        text = "Sentuh layar untuk langsung masuk • v1.3.0 PUSDALOPS",
                         fontSize = 10.sp,
                         color = Color.White.copy(alpha = 0.6f)
                     )

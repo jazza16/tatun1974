@@ -62,7 +62,7 @@ fun WeatherTabs(
         TabItem("Hari Ini", Icons.Default.WbSunny),
         TabItem("Tanya AI (Gemini)", Icons.Default.AutoAwesome),
         TabItem("Prakiraan Cuaca", Icons.Default.CalendarMonth),
-        TabItem("Peringatan Dini", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
+        TabItem("Peringatan & Gempa WRS", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
         TabItem("Peta & SOP Evakuasi", Icons.Default.Map),
         TabItem("inaRISK BNPB", Icons.Default.Security),
         TabItem("Cuaca Historis", Icons.Default.History),

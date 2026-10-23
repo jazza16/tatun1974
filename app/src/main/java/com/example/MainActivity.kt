@@ -99,6 +99,7 @@ import com.example.ui.components.AllDistrictsView
 import com.example.ui.components.AppUpdateBottomSheet
 import com.example.ui.components.CallCenter117DetailBottomSheet
 import com.example.ui.components.DailyForecastCard
+import com.example.ui.components.DeveloperInfoCard
 import com.example.ui.components.DistrictSelectorBottomSheet
 import com.example.ui.components.EarlyWarningSection
 import com.example.ui.components.EarthquakeEvacuationPreparednessSection
@@ -456,6 +457,17 @@ fun WeatherAppScreen(
                                         }
                                     }
 
+                                    // Real-Time WRS-NTWC BMKG Earthquake Quick Banner
+                                    val latestEq = uiState.latestEarthquake
+                                    if (latestEq != null) {
+                                        item {
+                                            WrsLiveEarthquakeQuickCard(
+                                                earthquake = latestEq,
+                                                onClick = { viewModel.selectTab(3) }
+                                            )
+                                        }
+                                    }
+
                                     // Hero Weather Overview Card with Dynamic Animated Weather Icon
                                     item {
                                         HeroWeatherCard(report = report)
@@ -513,6 +525,18 @@ fun WeatherAppScreen(
                                             district = currentDistrict,
                                             marine = report.marine
                                         )
+                                    }
+
+                                    // Kolom Informasi Pengembang Aplikasi ("TnT@74")
+                                    item {
+                                            DeveloperInfoCard(
+                                                developerName = uiState.updateState.developerName,
+                                                developerRole = uiState.updateState.developerRole,
+                                                organization = uiState.updateState.organization,
+                                                developerEmail = uiState.updateState.developerEmail,
+                                                developerTelegram = uiState.updateState.developerTelegram,
+                                                isDark = isActuallyDark
+                                            )
                                     }
                                 }
                             }
@@ -1497,78 +1521,141 @@ private fun SunAndAtmosphereCard(
 }
 
 @Composable
-private fun LiveEarthquakeQuickCard(
+private fun WrsLiveEarthquakeQuickCard(
     earthquake: com.example.model.BmkgEarthquake,
     onClick: () -> Unit
 ) {
+    val isTsunami = earthquake.potentialTsunami.contains("berpotensi tsunami", ignoreCase = true) &&
+            !earthquake.potentialTsunami.contains("tidak", ignoreCase = true)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .testTag("live_earthquake_quick_banner"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFEF2F2)
+            containerColor = if (isTsunami) Color(0xFFFEF2F2) else Color(0xFFFFFBEB)
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCA5A5)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = androidx.compose.foundation.BorderStroke(
+            1.2.dp,
+            if (isTsunami) Color(0xFFFCA5A5) else Color(0xFFFDE68A)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.5.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(Color(0xFFDC2626), RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Vibration,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "GEMPA BMKG M ${earthquake.magnitude}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color(0xFF991B1B)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Surface(
-                        color = Color(0xFFDC2626),
-                        shape = RoundedCornerShape(4.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .background(if (isTsunami) Color(0xFFDC2626) else Color(0xFFEA580C), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.Vibration,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "WRS-NTWC BMKG",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black,
+                                color = if (isTsunami) Color(0xFF991B1B) else Color(0xFF9A3412)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                color = if (isTsunami) Color(0xFFDC2626) else Color(0xFF16A34A),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "LIVE",
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
                         Text(
-                            text = "LIVE",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            text = "${earthquake.date} • ${earthquake.timeWib}",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                         )
                     }
                 }
-                Text(
-                    text = "${earthquake.region} (${earthquake.timeWib})",
-                    fontSize = 11.sp,
-                    color = Color(0xFF7F1D1D),
-                    maxLines = 1
-                )
+
+                Surface(
+                    color = if (isTsunami) Color(0xFFDC2626).copy(alpha = 0.15f) else Color(0xFF16A34A).copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = if (isTsunami) "⚠️ POTENSI TSUNAMI" else "✓ AMAN TSUNAMI",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isTsunami) Color(0xFFDC2626) else Color(0xFF16A34A),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    )
+                }
             }
 
-            Text(
-                text = "Detail >",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFDC2626)
-            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Magnitude Badge
+                Surface(
+                    color = Color(0xFFDC2626).copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "M ${String.format(java.util.Locale.US, "%.1f", earthquake.magnitude)}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFFDC2626),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = earthquake.region,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "Kedalaman: ${earthquake.depth} • ~${earthquake.distanceKmToMukomuko} km dari Mukomuko",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Text(
+                    text = "Peta WRS >",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OrangePrimary
+                )
+            }
         }
     }
 }

@@ -89,12 +89,12 @@ class ExampleRobolectricTest {
     org.junit.Assert.assertFalse(prefs.isUpdatePermanentlyInstalled())
 
     // Testing dialog dismissal for version
-    prefs.setDialogDismissedForVersion("1.2.0")
-    assertTrue(prefs.isDialogDismissedForVersion("1.2.0"))
+    prefs.setDialogDismissedForVersion("1.3.0")
+    assertTrue(prefs.isDialogDismissedForVersion("1.3.0"))
 
     // Testing permanent installation of latest version
-    prefs.setUpdateInstalledPermanently("1.2.0")
-    assertEquals("1.2.0", prefs.getInstalledVersion())
+    prefs.setUpdateInstalledPermanently("1.3.0")
+    assertEquals("1.3.0", prefs.getInstalledVersion())
     assertTrue(prefs.isUpdatePermanentlyInstalled())
   }
 
@@ -160,5 +160,14 @@ class ExampleRobolectricTest {
 
     val coolThermalData = thermalData.copy(temperature = 26.5)
     assertEquals("Sejuk Segar Pegunungan", coolThermalData.heatIndexCategory)
+  }
+
+  @Test
+  fun `verify wrs ntwc basemap types exist`() {
+    val basemaps = com.example.ui.components.WrsBasemapType.values()
+    assertEquals(3, basemaps.size)
+    assertEquals("Streets", com.example.ui.components.WrsBasemapType.STREETS.displayName)
+    assertEquals("Satelit", com.example.ui.components.WrsBasemapType.SATELLITE.displayName)
+    assertEquals("Grayscale", com.example.ui.components.WrsBasemapType.GRAYSCALE.displayName)
   }
 }

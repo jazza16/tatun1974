@@ -512,7 +512,7 @@ class WeatherViewModel(
             val nowTime = sdf.format(java.util.Date())
 
             val installedVer = updatePreferences?.getInstalledVersion() ?: _uiState.value.updateState.currentVersion
-            val serverVer = updatePreferences?.getLatestServerVersion() ?: "1.2.0"
+            val serverVer = updatePreferences?.getLatestServerVersion() ?: "1.3.0"
             val isPermanentlyInstalled = updatePreferences?.isUpdatePermanentlyInstalled() ?: (installedVer == serverVer)
 
             val hasNewVersion = (installedVer != serverVer) && !isPermanentlyInstalled
@@ -643,54 +643,54 @@ class WeatherViewModel(
     }
 
     /**
-     * Testing / Developer mode: Simulates a device that previously had an earlier version (v1.0.0).
+     * Testing / Developer mode: Simulates a device that previously had an earlier version (e.g. v1.2.0 or v1.0.0).
      * Enables end-to-end testing of recognizing, receiving, and permanently installing
-     * the latest version v1.2.0 via OTA without offline updates.
+     * the latest version v1.3.0 via OTA without offline updates.
      */
-    fun simulateOlderVersionForTesting(olderVersion: String = "1.0.0") {
+     fun simulateOlderVersionForTesting(olderVersion: String = "1.2.0") {
         updatePreferences?.simulateEarlierInstalledVersion(olderVersion)
         val changelogs = _uiState.value.updateState.changelogs.map { log ->
             if (log.version == olderVersion) log.copy(isCurrent = true, isLatest = false)
-            else if (log.version == "1.2.0") log.copy(isCurrent = false, isLatest = true)
-            else log.copy(isCurrent = false)
+            else if (log.version == "1.3.0") log.copy(isCurrent = false, isLatest = true)
+            else log.copy(isCurrent = false, isLatest = false)
         }
         _uiState.value = _uiState.value.copy(
             isUpdateDialogOpen = true,
             updateState = _uiState.value.updateState.copy(
                 currentVersion = olderVersion,
-                latestVersion = "1.2.0",
+                latestVersion = "1.3.0",
                 isUpdateAvailable = true,
                 isUpdated = false,
                 isPermanentlyInstalled = false,
                 isSimulationActive = true,
                 isBannerDismissed = false,
                 downloadProgress = 0f,
-                updateStatusMessage = "Simulasi: Perangkat menjalankan versi lama v$olderVersion. Pembaruan daring v1.2.0 siap dipasang.",
+                updateStatusMessage = "Simulasi: Perangkat menjalankan versi sebelumnya v$olderVersion. Pembaruan daring v1.3.0 siap dipasang.",
                 changelogs = changelogs
             )
         )
     }
 
     /**
-     * Resets device to latest factory release state (v1.2.0 permanently applied).
+     * Resets device to latest factory release state (v1.3.0 permanently applied).
      */
     fun resetToLatestReleaseState() {
         updatePreferences?.resetToLatestReleaseState()
         val changelogs = _uiState.value.updateState.changelogs.map { log ->
-            if (log.version == "1.2.0") log.copy(isCurrent = true, isLatest = true)
-            else log.copy(isCurrent = false)
+            if (log.version == "1.3.0") log.copy(isCurrent = true, isLatest = true)
+            else log.copy(isCurrent = false, isLatest = false)
         }
         _uiState.value = _uiState.value.copy(
             isUpdateDialogOpen = false,
             updateState = _uiState.value.updateState.copy(
-                currentVersion = "1.2.0",
-                latestVersion = "1.2.0",
+                currentVersion = "1.3.0",
+                latestVersion = "1.3.0",
                 isUpdateAvailable = false,
                 isUpdated = true,
                 isPermanentlyInstalled = true,
                 isSimulationActive = false,
                 downloadProgress = 0f,
-                updateStatusMessage = "Aplikasi menggunakan rilis resmi v1.2.0 terbaru secara permanen.",
+                updateStatusMessage = "Aplikasi menggunakan rilis resmi v1.3.0 terbaru secara permanen.",
                 changelogs = changelogs
             )
         )

@@ -9,29 +9,47 @@ data class VersionChangelog(
 )
 
 data class AppUpdateState(
-    val currentVersion: String = "1.2.0",
-    val latestVersion: String = "1.2.0",
-    val developerName: String = "Jazzakallah",
-    val developerRole: String = "Lead Mobile Developer & UI Engineer",
+    val currentVersion: String = "1.3.0",
+    val latestVersion: String = "1.3.0",
+    val developerName: String = "TnT@74",
+    val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
     val developerEmail: String = "jazzakallah@gmail.com",
+    val developerTelegram: String = "@takajuekgue",
     val isCheckingOnline: Boolean = false,
     val isUpdateAvailable: Boolean = false,
     val isDownloading: Boolean = false,
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "1.2.0",
+    val lastCheckedVersion: String = "1.3.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi menggunakan rilis resmi v1.2.0 terbaru secara permanen.",
-    val packageSizeMb: Float = 14.8f,
+    val updateStatusMessage: String = "Aplikasi menggunakan rilis resmi v1.3.0 terbaru secara permanen.",
+    val packageSizeMb: Float = 15.6f,
     val isBannerDismissed: Boolean = false,
     val isSimulationActive: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
         VersionChangelog(
+            version = "1.3.0",
+            releaseDate = "22 Oktober 2026",
+            isCurrent = true,
+            isLatest = true,
+            highlights = listOf(
+                "Konsol Gempa WRS-NTWC InaTEWS BMKG: Tampilan peta geospasial GIS interaktif (Streets, Satelit, Grayscale) dengan animasi gelombang seismik P/S, patahan Megathrust Sunda, status ancaman tsunami nasional, dan tautan resmi inatews.bmkg.go.id/wrs.",
+                "Integrasi Tab Kualitas Udara (ISPU): Pemantauan PM2.5, PM10, SO2, CO, O3, NO2 dan himbauan kesehatan masyarakat resmi BMKG.",
+                "Peta Shake Map Gempa Terkini Interaktif: Fitur zoom in, zoom out, pan, dan penampil gambar peta guncangan gempa BMKG layar penuh.",
+                "Dynamic Weather Icon: Ikon cuaca beranimasi dinamis yang menyesuaikan kondisi cuaca real-time (cerah, berawan, hujan, badai, kabut).",
+                "Grafik Kurva Indeks UV Harian: Visualisasi kurva paparan UV dengan penanda waktu paparan sinar UV puncak (10.00 - 14.00 WIB) dan rekomendasi perlindungan diri.",
+                "Deteksi Otomatis Lokasi GPS Kecamatan: Deteksi akurat 15 kecamatan di Kabupaten Mukomuko melalui GPS perangkat dengan izin lokasi runtime.",
+                "Optimalisasi Mode Pengguna Ponsel Portrait: Kunci orientasi portrait penuh dan tata letak satu kolom vertikal yang responsif & ergonomis.",
+                "Animasi Transisi Tab Halus: Transisi navigasi antar tab cuaca, maritim, dan kualitas udara yang lebih lembut dan nyaman."
+            )
+        ),
+        VersionChangelog(
             version = "1.2.0",
             releaseDate = "20 Oktober 2026",
-            isLatest = true,
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "Sistem Penerimaan & Instalasi Pembaruan Daring Otomatis (OTA In-App Engine) tanpa perlu update offline.",
                 "Prakiraan Cuaca 3 Hari terperinci untuk 15 kecamatan di Kabupaten Mukomuko.",
@@ -45,6 +63,8 @@ data class AppUpdateState(
         VersionChangelog(
             version = "1.1.0",
             releaseDate = "17 Oktober 2026",
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "UI Toggle Mode Gelap & Mode Terang dengan kalibrasi kontras tinggi (WCAG AAA).",
                 "Penyempurnaan kontras kartu peringatan cuaca oranye & gempa BMKG di semua kondisi pencahayaan.",
@@ -56,7 +76,8 @@ data class AppUpdateState(
         VersionChangelog(
             version = "1.0.0",
             releaseDate = "16 Oktober 2026",
-            isCurrent = true,
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "Prakiraan cuaca lengkap untuk 15 kecamatan se-Kabupaten Mukomuko.",
                 "Sistem peringatan cuaca buruk berstatus AWAS, SIAGA, dan WASPADA.",

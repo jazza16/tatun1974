@@ -283,7 +283,19 @@ fun AppUpdateBottomSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- 5. VERSION CHANGELOG HISTORY ---
+            // --- 5. DEVELOPER INFORMATION SECTION ("TnT@74") ---
+            DeveloperInfoCard(
+                developerName = updateState.developerName,
+                developerRole = updateState.developerRole,
+                organization = updateState.organization,
+                developerEmail = updateState.developerEmail,
+                developerTelegram = updateState.developerTelegram,
+                isDark = isActuallyDark
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- 6. VERSION CHANGELOG HISTORY ---
             VersionChangelogSection(updateState = updateState, isDark = isActuallyDark)
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -819,7 +831,7 @@ private fun OnlineUpdateCard(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = "Kunci Rilis v1.2.0",
+                                text = "Kunci Rilis v1.3.0",
                                 fontSize = 10.sp,
                                 color = Color.White
                             )
@@ -881,20 +893,20 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Detailed Explanations
+            // Detailed Explanations for v1.3.0
             FeatureDetailItem(
-                emoji = "🔄",
-                title = "Pembaruan Daring Otomatis (OTA Engine)",
-                desc = "Perangkat yang telah menginstal versi sebelumnya otomatis mengenali rilis baru dan dapat langsung menginstalnya di dalam aplikasi tanpa perlu melakukan unduhan atau update offline manual.",
+                emoji = "🚨",
+                title = "Konsol Gempa WRS-NTWC InaTEWS BMKG",
+                desc = "Transformasi total tampilan gempa bumi mengadopsi standar sistem WRS-NTWC BMKG (inatews.bmkg.go.id/wrs): Peta GIS interaktif (Streets, Satelit, Grayscale), animasi gelombang seismik P/S-wave, zona subduksi Sunda Megathrust, status ancaman tsunami nasional, matrix parameter OT, dan pengujian sirene.",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "🌤️",
-                title = "Prakiraan Cuaca 3 Hari (Mukomuko)",
-                desc = "Fitur prakiraan cuaca 3 hari ke depan dengan estimasi suhu tinggi/rendah, peluang presipitasi hujan, dan kecepatan angin untuk seluruh kecamatan di Kabupaten Mukomuko.",
+                emoji = "🍃",
+                title = "Tab Kualitas Udara (ISPU) & Himbauan BMKG",
+                desc = "Pemantauan komprehensif 6 parameter polutan udara (PM2.5, PM10, SO2, CO, O3, NO2) lengkap dengan status ISPU, rilis resmi BMKG, dan himbauan pencegahan kesehatan untuk masyarakat serta kelompok rentan.",
                 isDark = isDark
             )
 
@@ -902,35 +914,53 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
 
             FeatureDetailItem(
                 emoji = "🗺️",
-                title = "Peta Interaktif Titik Rawan & Rute Evakuasi",
-                desc = "Peta visual titik rawan bencana banjir/tsunami pesisir Mukomuko, zona aman dataran tinggi, dan rute evakuasi mandiri.",
+                title = "Peta Shake Map Gempa Interaktif (Zoom In / Out)",
+                desc = "Penampil peta guncangan gempa bumi BMKG interaktif dengan gestur pinch-to-zoom, pan navigasi, double tap, dan penampil gambar resolusi tinggi layar penuh (Fullscreen Viewer).",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "📐",
-                title = "Tata Letak Grid Responsif Tablet & Ponsel",
-                desc = "Implementasi LazyVerticalGrid adaptif dengan ukuran dinamis seimbang di ponsel dan tablet, memberikan ruang optimal untuk grafik dan visualisasi data.",
+                emoji = "✨",
+                title = "Dynamic Weather Icon (Ikon Cuaca Dinamis)",
+                desc = "Set ikon cuaca hidup beranimasi yang bereaksi dinamis sesuai kondisi cuaca waktu nyata (cerah bersinar, awan bergerak, tetesan hujan turun, badai petir berdenyut).",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "🌗",
-                title = "UI Toggle Mode Gelap & Terang (Default Terang)",
-                desc = "Pengguna dapat berganti tema secara instan antara mode terang yang hangat (tema default) dan mode gelap hemat daya yang nyaman di mata pada malam hari.",
+                emoji = "☀️",
+                title = "Grafik Kurva Indeks UV & Jam Paparan Puncak",
+                desc = "Visualisasi kurva interaktif indeks radiasi ultraviolet matahari harian dengan penanda zona waktu paparan puncak (10.00 - 14.00 WIB) serta protokol perlindungan diri.",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "🌊",
-                title = "Visualisasi Gelombang Samudra Hindia (Recharts Style)",
-                desc = "Grafik interaktif kurva gelombang pantai Mukomuko dengan tooltip, rentang waktu (7, 14, 30 hari), dan indikator keselamatan perahu nelayan.",
+                emoji = "📍",
+                title = "Deteksi Otomatis Lokasi GPS 15 Kecamatan",
+                desc = "Mendeteksi secara otomatis posisi kecamatan pengguna di wilayah Kabupaten Mukomuko melalui GPS perangkat dengan alur izin lokasi runtime yang ramah.",
+                isDark = isDark
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            FeatureDetailItem(
+                emoji = "📱",
+                title = "Optimalisasi Pengguna Ponsel Mode Portrait",
+                desc = "Tampilan antarmuka disempurnakan khusus untuk penggunaan ponsel satu tangan dalam posisi tegak (portrait) yang rapi, proporsional, dan tanpa pergeseran elemen.",
+                isDark = isDark
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            FeatureDetailItem(
+                emoji = "🔄",
+                title = "Pembaruan Daring Otomatis (OTA In-App Engine)",
+                desc = "Sistem pembaruan langsung di dalam aplikasi (OTA) yang mengenali rilis terbaru dan menginstalnya secara permanen tanpa perlu update file manual.",
                 isDark = isDark
             )
         }

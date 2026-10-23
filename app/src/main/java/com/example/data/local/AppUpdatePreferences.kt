@@ -47,8 +47,8 @@ class AppUpdatePreferences(private val context: Context) {
         private const val PREF_DISMISSED_DIALOG_VERSION = "dismissed_dialog_version"
         private const val PREF_IS_ONBOARDING_COMPLETED = "is_onboarding_completed"
 
-        const val DEFAULT_LATEST_VERSION = "1.2.0"
-        const val PREVIOUS_VERSION_MOCK = "1.0.0"
+        const val DEFAULT_LATEST_VERSION = "1.3.0"
+        const val PREVIOUS_VERSION_MOCK = "1.2.0"
     }
 
     init {
@@ -182,9 +182,9 @@ class AppUpdatePreferences(private val context: Context) {
     }
 
     /**
-     * Developer / QA Simulation: sets the device to simulate an earlier installed version (e.g. 1.0.0).
-     * This allows full end-to-end verification that a device previously on 1.0.0 receives,
-     * recognizes, downloads, and installs 1.2.0 permanently without offline updates.
+     * Developer / QA Simulation: sets the device to simulate an earlier installed version (e.g. 1.2.0 or 1.0.0).
+     * This allows full end-to-end verification that a device previously on an earlier version receives,
+     * recognizes, downloads, and installs 1.3.0 permanently without offline updates.
      */
     fun simulateEarlierInstalledVersion(earlierVersion: String = PREVIOUS_VERSION_MOCK) {
         sharedPrefs.edit()
@@ -209,7 +209,7 @@ class AppUpdatePreferences(private val context: Context) {
     }
 
     /**
-     * Reset to latest official release state (v1.2.0 permanently applied).
+     * Reset to latest official release state (v1.3.0 permanently applied).
      */
     fun resetToLatestReleaseState() {
         setUpdateInstalledPermanently(DEFAULT_LATEST_VERSION)
