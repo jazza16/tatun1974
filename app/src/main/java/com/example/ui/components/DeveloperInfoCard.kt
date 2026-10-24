@@ -68,11 +68,11 @@ import com.example.ui.theme.WeatherGoodGreen
 @Composable
 fun DeveloperInfoCard(
     modifier: Modifier = Modifier,
-    developerName: String = "TnT@74",
+    developerName: String = "tathoenz_arazak",
     developerRole: String = "Lead Software Engineer & System Architect",
     organization: String = "PUSDALOPS-PB BPBD Kabupaten Mukomuko",
     developerEmail: String = "jazzakallah@gmail.com",
-    developerTelegram: String = "@takajuekgue",
+    developerTelegram: String = "@takajuikgue",
     isDark: Boolean = false,
     onOpenWallpaper: (() -> Unit)? = null
 ) {
@@ -195,7 +195,7 @@ fun DeveloperInfoCard(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "TnT",
+                            text = if (developerName.contains("_")) "TA" else developerName.take(2).uppercase(),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Black,
                             color = Color.White

@@ -690,7 +690,7 @@ private fun DisasterMitigationSection(isDark: Boolean) {
         InfoDetailCard(
             icon = Icons.Default.Tsunami,
             title = "Sistem Peringatan Dini WRS-NTWC BMKG",
-            description = "Aplikasi Cuaca Mukomuko terhubung langsung ke server InaTEWS BMKG secara daring untuk menampilkan peringatan dini gempa terkini, estimasi waktu gelombang tsunami, dan magnitudo secara seketika.",
+            description = "Aplikasi SIPAGAR KITA terhubung langsung ke server InaTEWS BMKG secara daring untuk menampilkan peringatan dini gempa terkini, estimasi waktu gelombang tsunami, dan magnitudo secara seketika.",
             tag = "Telemetri Real-Time",
             tagColor = OrangePrimary,
             isDark = isDark

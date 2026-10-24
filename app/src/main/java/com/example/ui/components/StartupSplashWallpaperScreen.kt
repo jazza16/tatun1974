@@ -247,35 +247,7 @@ fun StartupSplashWallpaperScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Top Header Badge
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.Black.copy(alpha = 0.60f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.7f)),
-                        modifier = Modifier
-                            .padding(top = 24.dp)
-                            .testTag("startup_header_tag")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = null,
-                                tint = OrangePrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "PEMERINTAH KABUPATEN MUKOMUKO",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                letterSpacing = 0.8.sp
-                            )
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Middle Section: Logo with Pulsing Halo and App Branding
                     Column(

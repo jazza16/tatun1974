@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,32 +55,43 @@ fun AllDistrictsView(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
+                containerColor = MaterialTheme.colorScheme.surface
             ),
-            shape = RoundedCornerShape(18.dp)
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+            shape = RoundedCornerShape(20.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
-                modifier = Modifier.padding(14.dp),
+                modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.LocationCity,
-                    contentDescription = null,
-                    tint = OrangePrimary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(OrangePrimary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationCity,
+                        contentDescription = null,
+                        tint = OrangePrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
                         text = "15 Kecamatan di Kabupaten Mukomuko",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onSurface
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Ketuk untuk melihat rincian cuaca tiap wilayah",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
                 }
             }
@@ -95,19 +107,23 @@ fun AllDistrictsView(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(18.dp))
                     .clickable { onSelectDistrict(dist) }
                     .testTag("district_item_${dist.id}"),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isCurrentSelected) OrangePrimary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface
+                    containerColor = if (isCurrentSelected) OrangePrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = if (isCurrentSelected) 3.dp else 1.dp)
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isCurrentSelected) OrangePrimary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = if (isCurrentSelected) 3.dp else 1.5.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -129,8 +145,25 @@ fun AllDistrictsView(
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = OrangePrimary.copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                text = dist.category,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = OrangePrimary,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(3.dp))
+
                         Text(
-                            text = "${dist.category} • ${dist.landmark}",
+                            text = dist.landmark,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                             maxLines = 1

@@ -227,7 +227,7 @@ object WeatherNotificationHelper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 APP_UPDATE_CHANNEL_ID,
-                "Pembaruan Daring Aplikasi Cuaca Mukomuko",
+                "Pembaruan Daring Aplikasi SIPAGAR KITA",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Pemberitahuan rilis versi terbaru dan instalasi pembaruan daring"
@@ -267,7 +267,7 @@ object WeatherNotificationHelper {
             .setContentText("Versi terbaru siap dipasang langsung secara daring (tanpa update offline).")
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
-                    "Pusdalops BPBD Mukomuko merilis Cuaca Mukomuko v$latestVersion!\n\n" +
+                    "Pusdalops BPBD Mukomuko merilis SIPAGAR KITA v$latestVersion!\n\n" +
                     "Fitur Baru:\n$highlightText\n\n" +
                     "Ketuk untuk langsung menginstal secara daring tanpa perlu unduh berkas offline."
                 )

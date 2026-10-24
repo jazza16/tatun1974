@@ -513,30 +513,33 @@ fun EarthquakeEvacuationPreparednessSection(
                 .testTag("card_evacuation_drill_simulator"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (isDrillRunning) Color(0xFFFEF2F2) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                containerColor = MaterialTheme.colorScheme.surface
             ),
-            border = if (isDrillRunning) BorderStroke(1.5.dp, Color(0xFFDC2626)) else null,
+            border = BorderStroke(
+                1.dp,
+                if (isDrillRunning) OrangePrimary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            ),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .background(Color(0xFF0284C7).copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                            .size(38.dp)
+                            .background(OrangePrimary.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Timer,
                             contentDescription = null,
-                            tint = Color(0xFF0284C7),
+                            tint = OrangePrimary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Latihan Mandiri 60 Detik (Drill)",
@@ -544,30 +547,29 @@ fun EarthquakeEvacuationPreparednessSection(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Surface(
+                            color = if (isDrillRunning) Color(0xFFDC2626) else OrangePrimary,
+                            shape = RoundedCornerShape(6.dp)
                         ) {
-                            Surface(
-                                color = if (isDrillRunning) Color(0xFFDC2626) else Color(0xFF0284C7),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    text = if (isDrillRunning) "00:${drillSecondsLeft.toString().padStart(2, '0')}" else "60 Detik",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
                             Text(
-                                text = "Latih refleks evakuasi bersama anggota keluarga",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                                maxLines = 1
+                                text = if (isDrillRunning) "00:${drillSecondsLeft.toString().padStart(2, '0')}" else "60 Detik",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(3.dp))
+
+                        Text(
+                            text = "Latih refleks evakuasi bersama anggota keluarga",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
                     }
                 }
 

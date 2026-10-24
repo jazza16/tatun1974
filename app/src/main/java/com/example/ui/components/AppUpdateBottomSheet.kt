@@ -136,7 +136,7 @@ fun AppUpdateBottomSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Cuaca Mukomuko v${updateState.currentVersion}",
+                            text = "SIPAGAR KITA v${updateState.currentVersion}",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold

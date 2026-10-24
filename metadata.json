@@ -1,6 +1,6 @@
 {
-  "name": "Cuaca Mukomuko",
-  "description": "Aplikasi prakiraan cuaca lengkap dan maritim pesisir untuk seluruh kecamatan di Kabupaten Mukomuko, Bengkulu.",
+  "name": "SIPAGAR KITA",
+  "description": "Sistem Informasi Maritim, Atmosfer & Kebencanaan Mukomuko (SIPAGAR KITA) untuk seluruh kecamatan di Kabupaten Mukomuko, Bengkulu.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

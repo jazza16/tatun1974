@@ -265,7 +265,7 @@ fun InteractiveOnboardingDialog(
 }
 
 /**
- * Slide 0: Selamat Datang di Cuaca Mukomuko
+ * Slide 0: Selamat Datang di SIPAGAR KITA
  */
 @Composable
 private fun OnboardingWelcomePage() {
