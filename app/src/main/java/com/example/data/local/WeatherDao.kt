@@ -39,6 +39,19 @@ interface WeatherDao {
     @Query("UPDATE community_reports SET upvotes = upvotes + 1 WHERE id = :reportId")
     suspend fun upvoteReport(reportId: String)
 
+    // Citizen Disaster Reports
+    @Query("SELECT * FROM citizen_disaster_reports ORDER BY timestamp DESC")
+    fun getAllCitizenDisasterReports(): Flow<List<CitizenDisasterReportEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCitizenDisasterReport(report: CitizenDisasterReportEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllCitizenDisasterReports(reports: List<CitizenDisasterReportEntity>)
+
+    @Query("UPDATE citizen_disaster_reports SET status = :newStatus WHERE id = :reportId")
+    suspend fun updateCitizenReportStatus(reportId: String, newStatus: String)
+
     // Historical Cache
     @Query("SELECT * FROM historical_cache WHERE districtId = :districtId AND date = :date LIMIT 1")
     suspend fun getHistoricalCache(districtId: String, date: String): HistoricalWeatherEntity?

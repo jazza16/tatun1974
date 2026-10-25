@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.repository.WeatherRepository
+import com.example.model.CitizenDisasterReport
 import com.example.model.CommunityWeatherReport
 import com.example.model.DetailedEarlyWarning
 import com.example.model.District
@@ -90,6 +91,13 @@ class WeatherViewModel(
             initialValue = emptyList()
         )
 
+    val citizenDisasterReports: StateFlow<List<CitizenDisasterReport>> = repository.getCitizenDisasterReports()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     init {
         // Initialize persistent update state from DataStore/SharedPreferences
         updatePreferences?.let { prefs ->
@@ -127,6 +135,7 @@ class WeatherViewModel(
 
         viewModelScope.launch {
             repository.seedInitialCommunityReportsIfEmpty()
+            repository.seedInitialCitizenDisasterReportsIfEmpty()
         }
         loadWeatherForDistrict(MukomukoDistricts.defaultDistrict)
         loadHistoricalWeather(MukomukoDistricts.defaultDistrict, "2024-05-15")
@@ -307,6 +316,18 @@ class WeatherViewModel(
     fun upvoteReport(reportId: String) {
         viewModelScope.launch {
             repository.upvoteReport(reportId)
+        }
+    }
+
+    fun submitCitizenDisasterReport(report: CitizenDisasterReport) {
+        viewModelScope.launch {
+            repository.submitCitizenDisasterReport(report)
+        }
+    }
+
+    fun updateCitizenReportStatus(reportId: String, newStatus: String) {
+        viewModelScope.launch {
+            repository.updateCitizenReportStatus(reportId, newStatus)
         }
     }
 

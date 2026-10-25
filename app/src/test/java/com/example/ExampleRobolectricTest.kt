@@ -20,7 +20,7 @@ class ExampleRobolectricTest {
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
-    assertEquals("Cuaca Mukomuko", appName)
+    assertEquals("SIPAGAR KITA", appName)
   }
 
   @Test
@@ -169,5 +169,36 @@ class ExampleRobolectricTest {
     assertEquals("Streets", com.example.ui.components.WrsBasemapType.STREETS.displayName)
     assertEquals("Satelit", com.example.ui.components.WrsBasemapType.SATELLITE.displayName)
     assertEquals("Grayscale", com.example.ui.components.WrsBasemapType.GRAYSCALE.displayName)
+  }
+
+  @Test
+  fun `verify citizen disaster report status values and hazard zones`() {
+    val report = com.example.model.CitizenDisasterReport(
+      id = "LAP-MMK-TEST-001",
+      disasterType = "Banjir / Genangan Luapan Air",
+      incidentTime = "25 Okt 2026, 10:00 WIB",
+      incidentLocation = "Jl. Lintas Koto Jaya",
+      district = "Kota Mukomuko",
+      village = "Kelurahan Koto Jaya",
+      latitude = -2.5833,
+      longitude = 101.1167,
+      gpsAccuracyMeters = 5.0f,
+      isGpsVerified = true,
+      casualtiesDead = 0,
+      casualtiesInjured = 0,
+      casualtiesMissing = 0,
+      photoUri = null,
+      reporterName = "Warga Test",
+      reporterPhone = "08123456789",
+      additionalNotes = "Catatan uji coba",
+      timestamp = System.currentTimeMillis(),
+      status = "Diproses"
+    )
+    assertEquals("Diproses", report.status)
+    val validated = report.copy(status = "Divalidasi")
+    assertEquals("Divalidasi", validated.status)
+    val completed = report.copy(status = "Selesai")
+    assertEquals("Selesai", completed.status)
+    assertTrue(com.example.ui.components.MUKOMUKO_HAZARD_ZONES.isNotEmpty())
   }
 }

@@ -98,6 +98,7 @@ import com.example.ui.components.AirQualityAndUvCard
 import com.example.ui.components.AllDistrictsView
 import com.example.ui.components.AppUpdateBottomSheet
 import com.example.ui.components.CallCenter117DetailBottomSheet
+import com.example.ui.components.CitizenReportScreen
 import com.example.ui.components.DailyForecastCard
 import com.example.ui.components.DeveloperInfoCard
 import com.example.ui.components.DistrictSelectorBottomSheet
@@ -171,6 +172,7 @@ fun WeatherAppScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteDistricts.collectAsStateWithLifecycle()
     val communityReports by viewModel.communityReports.collectAsStateWithLifecycle()
+    val citizenDisasterReports by viewModel.citizenDisasterReports.collectAsStateWithLifecycle()
 
     val aiUiState by aiViewModel.uiState.collectAsStateWithLifecycle()
     val aiChatMessages by aiViewModel.chatMessages.collectAsStateWithLifecycle()
@@ -260,7 +262,7 @@ fun WeatherAppScreen(
             WeatherTabs(
                 selectedTabIndex = uiState.selectedTab,
                 warningCount = uiState.earlyWarnings.size,
-                reportCount = communityReports.size,
+                reportCount = citizenDisasterReports.size,
                 onTabSelected = { viewModel.selectTab(it) }
             )
 
@@ -719,6 +721,23 @@ fun WeatherAppScreen(
                                     )
                                 }
                             }
+                        }
+
+                        9 -> {
+                            // Tab 9: Laporan Warga Bencana (Formulir, Peta GIS Spasial, Tabel Riwayat, Kontak Penting)
+                            CitizenReportScreen(
+                                reports = citizenDisasterReports,
+                                currentDistrict = currentDistrict,
+                                onSubmitReport = { report ->
+                                    viewModel.submitCitizenDisasterReport(report)
+                                },
+                                onUpdateReportStatus = { id, status ->
+                                    viewModel.updateCitizenReportStatus(id, status)
+                                },
+                                onBackClick = {
+                                    viewModel.selectTab(0)
+                                }
+                            )
                         }
                     }
                 }

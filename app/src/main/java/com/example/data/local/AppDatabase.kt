@@ -10,9 +10,10 @@ import androidx.room.RoomDatabase
         WeatherCacheEntity::class,
         FavoriteDistrictEntity::class,
         CommunityReportEntity::class,
-        HistoricalWeatherEntity::class
+        HistoricalWeatherEntity::class,
+        CitizenDisasterReportEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

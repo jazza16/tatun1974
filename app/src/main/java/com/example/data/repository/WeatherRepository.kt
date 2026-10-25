@@ -3,7 +3,9 @@ package com.example.data.repository
 import com.example.data.api.NetworkClient
 import com.example.data.api.OpenMeteoAirQualityResponse
 import com.example.data.api.OpenMeteoForecastResponse
+import com.example.data.local.CitizenDisasterReportEntity
 import com.example.data.local.CommunityReportEntity
+import com.example.model.CitizenDisasterReport
 import com.example.data.local.HistoricalWeatherEntity
 import com.example.data.local.WeatherCacheEntity
 import com.example.data.local.WeatherDao
@@ -144,6 +146,133 @@ class WeatherRepository(
 
     suspend fun upvoteReport(reportId: String) = withContext(Dispatchers.IO) {
         weatherDao.upvoteReport(reportId)
+    }
+
+    // Citizen Disaster Reports (Anti-Hoax GPS Verified)
+    fun getCitizenDisasterReports(): Flow<List<CitizenDisasterReport>> {
+        return weatherDao.getAllCitizenDisasterReports().map { entities ->
+            entities.map { entity ->
+                CitizenDisasterReport(
+                    id = entity.id,
+                    disasterType = entity.disasterType,
+                    incidentTime = entity.incidentTime,
+                    incidentLocation = entity.incidentLocation,
+                    district = entity.district,
+                    village = entity.village,
+                    latitude = entity.latitude,
+                    longitude = entity.longitude,
+                    gpsAccuracyMeters = entity.gpsAccuracyMeters,
+                    isGpsVerified = entity.isGpsVerified,
+                    casualtiesDead = entity.casualtiesDead,
+                    casualtiesInjured = entity.casualtiesInjured,
+                    casualtiesMissing = entity.casualtiesMissing,
+                    photoUri = entity.photoUri,
+                    reporterName = entity.reporterName,
+                    reporterPhone = entity.reporterPhone,
+                    additionalNotes = entity.additionalNotes,
+                    timestamp = entity.timestamp,
+                    status = entity.status
+                )
+            }
+        }
+    }
+
+    suspend fun submitCitizenDisasterReport(report: CitizenDisasterReport) = withContext(Dispatchers.IO) {
+        val entity = CitizenDisasterReportEntity(
+            id = report.id,
+            disasterType = report.disasterType,
+            incidentTime = report.incidentTime,
+            incidentLocation = report.incidentLocation,
+            district = report.district,
+            village = report.village,
+            latitude = report.latitude,
+            longitude = report.longitude,
+            gpsAccuracyMeters = report.gpsAccuracyMeters,
+            isGpsVerified = report.isGpsVerified,
+            casualtiesDead = report.casualtiesDead,
+            casualtiesInjured = report.casualtiesInjured,
+            casualtiesMissing = report.casualtiesMissing,
+            photoUri = report.photoUri,
+            reporterName = report.reporterName,
+            reporterPhone = report.reporterPhone,
+            additionalNotes = report.additionalNotes,
+            timestamp = report.timestamp,
+            status = report.status
+        )
+        weatherDao.insertCitizenDisasterReport(entity)
+    }
+
+    suspend fun updateCitizenReportStatus(reportId: String, newStatus: String) = withContext(Dispatchers.IO) {
+        weatherDao.updateCitizenReportStatus(reportId, newStatus)
+    }
+
+    suspend fun seedInitialCitizenDisasterReportsIfEmpty() = withContext(Dispatchers.IO) {
+        val initialList = listOf(
+            CitizenDisasterReportEntity(
+                id = "LAP-MMK-20261025-001",
+                disasterType = "Gelombang Pasang & Abrasi Pantai",
+                incidentTime = "25 Okt 2026, 08:30 WIB",
+                incidentLocation = "Pesisir Pantai Pasar Ipuh, Dekat TPI Nelayan",
+                district = "Ipuh",
+                village = "Pasar Ipuh",
+                latitude = -3.0083,
+                longitude = 101.4912,
+                gpsAccuracyMeters = 6.4f,
+                isGpsVerified = true,
+                casualtiesDead = 0,
+                casualtiesInjured = 0,
+                casualtiesMissing = 0,
+                photoUri = null,
+                reporterName = "Nelayan Siaga Ipuh",
+                reporterPhone = "0812-7890-xxxx",
+                additionalNotes = "Ombak pasang mencapai bibir tanggul pengaman, perahu nelayan dievakuasi ke dataran lebih tinggi.",
+                timestamp = System.currentTimeMillis() - 75 * 60 * 1000,
+                status = "Divalidasi"
+            ),
+            CitizenDisasterReportEntity(
+                id = "LAP-MMK-20261025-002",
+                disasterType = "Pohon Tumbang & Angin Kencang",
+                incidentTime = "25 Okt 2026, 06:15 WIB",
+                incidentLocation = "Jl. Lintas Barat Sumatera Km 7, Depan SPBU",
+                district = "Kota Mukomuko",
+                village = "Koto Jaya",
+                latitude = -2.5833,
+                longitude = 101.1167,
+                gpsAccuracyMeters = 4.8f,
+                isGpsVerified = true,
+                casualtiesDead = 0,
+                casualtiesInjured = 1,
+                casualtiesMissing = 0,
+                photoUri = null,
+                reporterName = "Warga RT 03 Koto Jaya",
+                reporterPhone = "0852-6712-xxxx",
+                additionalNotes = "Dahan pohon trembesi patah melintang di badan jalan lintas, arus lalu lintas sempat terhambat. Tim BPBD sudah tiba memotong kayu.",
+                timestamp = System.currentTimeMillis() - 210 * 60 * 1000,
+                status = "Selesai"
+            ),
+            CitizenDisasterReportEntity(
+                id = "LAP-MMK-20261024-003",
+                disasterType = "Genangan Luapan Saluran Primer",
+                incidentTime = "24 Okt 2026, 17:45 WIB",
+                incidentLocation = "Dekat Jembatan Irigasi Manjunto",
+                district = "Lubuk Pinang",
+                village = "Aie Manjunto",
+                latitude = -2.4833,
+                longitude = 101.1833,
+                gpsAccuracyMeters = 8.1f,
+                isGpsVerified = true,
+                casualtiesDead = 0,
+                casualtiesInjured = 0,
+                casualtiesMissing = 0,
+                photoUri = null,
+                reporterName = "Kelompok Petani Manjunto",
+                reporterPhone = "0813-9021-xxxx",
+                additionalNotes = "Air saluran primer meluap sekitar 20 cm ke pekarangan jalan tani akibat hujan lebat perbukitan.",
+                timestamp = System.currentTimeMillis() - 14 * 60 * 60 * 1000,
+                status = "Diproses"
+            )
+        )
+        weatherDao.insertAllCitizenDisasterReports(initialList)
     }
 
     // Historical Weather Data Query
