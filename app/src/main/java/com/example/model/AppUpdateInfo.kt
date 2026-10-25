@@ -39,6 +39,7 @@ data class AppUpdateState(
                 "Edukasi Akronim SIPAGAR KITA: Penjelasan rinci makna SIMAK (Sistem Informasi Maritim, Atmosfer & Kebencanaan Mukomuko), PAGAR (Peringatan Awal, Gelombang, Air & Resiko Mukomuko), dan KITA (Kesiapsiagaan, Iklim, dan Tanggap Bencana Mukomuko) di layar utama dengan tipografi oranye khas.",
                 "Sistem Notifikasi Popup Peringatan Dini: Popup otomatis aktif saat ada peringatan cuaca buruk BMKG, gelombang tinggi (>= 2m), atau gempa bumi BMKG InaTEWS WRS-NTWC dengan aksi panggilan cepat Call Center 117 BPBD dan SOP Evakuasi.",
                 "Penyegaran Tampilan Wallpaper Startup: Tampilan wallpaper pembuka lebih bersih, fokus, dan modern tanpa elemen header berlebih.",
+                "Aksi Cepat Portabel & Kompak: Tombol Aksi Cepat kini berukuran minimalis (48dp), dapat digeser (drag & drop) secara bebas ke posisi mana pun di layar, dilengkapi preset docking (Kanan/Kiri Bawah/Tengah), serta urutan aksi yang dapat disesuaikan.",
                 "Pembaruan Informasi Pengembang: Nama pengembang resmi diperbarui menjadi tathoenz_arazak dengan kontak Telegram @takajuikgue pada menu informasi aplikasi.",
                 "Optimalisasi Desain & Shadow Modern: Tata letak kartu cuaca dipercantik dengan sudut rounded 20-24dp, bayangan lembut elegan, serta standardisasi hierarki status badge."
             )

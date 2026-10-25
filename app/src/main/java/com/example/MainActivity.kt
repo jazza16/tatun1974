@@ -244,45 +244,18 @@ fun WeatherAppScreen(
                 onCallCenter117Click = { isCallCenter117SheetOpen = true },
                 onDetectLocationClick = triggerLocationDetection
             )
-        },
-        floatingActionButton = {
-            QuickActionsFab(
-                isExpanded = isQuickActionsFabExpanded,
-                onToggleExpand = { isQuickActionsFabExpanded = !isQuickActionsFabExpanded },
-                onSelectMaritimeGuide = {
-                    isQuickActionsFabExpanded = false
-                    viewModel.selectTab(6)
-                },
-                onSelectEvacuationProcedures = {
-                    isQuickActionsFabExpanded = false
-                    viewModel.selectTab(3)
-                },
-                onSelectDisasterMap = {
-                    isQuickActionsFabExpanded = false
-                    viewModel.selectTab(3)
-                },
-                onCall117 = {
-                    isQuickActionsFabExpanded = false
-                    EmergencyDialer.dial(context, "117")
-                },
-                onOpenCompass = {
-                    isQuickActionsFabExpanded = false
-                    viewModel.setCompassSheetOpen(true)
-                },
-                onOpenOnboarding = {
-                    isQuickActionsFabExpanded = false
-                    viewModel.setOnboardingOpen(true)
-                },
-                isDark = isActuallyDark
-            )
         }
     ) { innerPadding ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(MaterialTheme.colorScheme.background)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
             // Horizontal Tab Navigation
             WeatherTabs(
                 selectedTabIndex = uiState.selectedTab,
@@ -750,6 +723,40 @@ fun WeatherAppScreen(
                     }
                 }
             }
+        }
+
+        // Movable, Draggable & Compact Quick Actions FAB Overlay
+        QuickActionsFab(
+                isExpanded = isQuickActionsFabExpanded,
+                onToggleExpand = { isQuickActionsFabExpanded = !isQuickActionsFabExpanded },
+                onSelectMaritimeGuide = {
+                    isQuickActionsFabExpanded = false
+                    viewModel.selectTab(6)
+                },
+                onSelectEvacuationProcedures = {
+                    isQuickActionsFabExpanded = false
+                    viewModel.selectTab(3)
+                },
+                onSelectDisasterMap = {
+                    isQuickActionsFabExpanded = false
+                    viewModel.selectTab(3)
+                },
+                onCall117 = {
+                    isQuickActionsFabExpanded = false
+                    EmergencyDialer.dial(context, "117")
+                },
+                onOpenCompass = {
+                    isQuickActionsFabExpanded = false
+                    viewModel.setCompassSheetOpen(true)
+                },
+                onOpenOnboarding = {
+                    isQuickActionsFabExpanded = false
+                    viewModel.setOnboardingOpen(true)
+                },
+                parentMaxWidth = this.maxWidth,
+                parentMaxHeight = this.maxHeight,
+                isDark = isActuallyDark
+            )
         }
     }
 
