@@ -62,14 +62,14 @@ fun WeatherTabs(
     val tabs = listOf(
         TabItem("Hari Ini", Icons.Default.WbSunny),
         TabItem("Prakiraan Cuaca", Icons.Default.CalendarMonth),
+        TabItem("Laporan Warga", Icons.Default.Edit, badgeCount = if (reportCount > 0) reportCount else null),
         TabItem("Peringatan & Gempa WRS", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
         TabItem("Peta & SOP Evakuasi", Icons.Default.Map),
         TabItem("inaRISK BNPB", Icons.Default.Security),
         TabItem("Cuaca Historis", Icons.Default.History),
         TabItem("Maritim & Pesisir", Icons.Default.Surfing),
         TabItem("Kualitas Udara", Icons.Default.Air),
-        TabItem("15 Kecamatan", Icons.Default.LocationCity),
-        TabItem("Laporan Warga", Icons.Default.Edit, badgeCount = if (reportCount > 0) reportCount else null)
+        TabItem("15 Kecamatan", Icons.Default.LocationCity)
     )
 
     Surface(

@@ -77,6 +77,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
@@ -86,7 +88,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.local.OfficerAuthManager
 import com.example.model.CitizenDisasterReport
+import com.example.util.GoogleMapsHelper
 import kotlin.math.sqrt
 
 // Disaster Categories for Map Filter
@@ -624,22 +628,37 @@ fun CitizenReportMapView(
 
         // 3. Selected Report Detail Card (Popup Sheet at bottom of map)
         selectedReport?.let { report ->
+            val officerAuthManager = remember { OfficerAuthManager(context) }
+            val isOfficer = officerAuthManager.isOfficerLoggedIn()
+
             ReportInspectionCard(
                 report = report,
+                isOfficer = isOfficer,
                 onClose = { selectedReport = null },
                 onUpdateStatus = { newStatus ->
-                    onUpdateReportStatus(report.id, newStatus)
-                    selectedReport = report.copy(status = newStatus)
-                    Toast.makeText(context, "Status laporan #${report.id.takeLast(7)} diubah menjadi '$newStatus'", Toast.LENGTH_SHORT).show()
+                    if (isOfficer) {
+                        onUpdateReportStatus(report.id, newStatus)
+                        selectedReport = report.copy(status = newStatus)
+                        Toast.makeText(
+                            context,
+                            "Status laporan #${report.id.takeLast(7)} diubah menjadi '$newStatus' oleh Petugas ${officerAuthManager.getOfficerName()}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Khusus Petugas Jaga BPBD: Silakan masuk sebagai petugas jaga di Tab 'Tabel Riwayat' untuk memvalidasi laporan.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 },
                 onOpenExternalMap = {
-                    val uri = Uri.parse("geo:${report.latitude},${report.longitude}?q=${report.latitude},${report.longitude}(${Uri.encode(report.disasterType + " - " + report.village)})")
-                    val intent = Intent(Intent.ACTION_VIEW, uri)
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        Toast.makeText(context, "Aplikasi peta tidak ditemukan", Toast.LENGTH_SHORT).show()
-                    }
+                    GoogleMapsHelper.openNavigationRoute(
+                        context = context,
+                        destLat = report.latitude,
+                        destLon = report.longitude,
+                        destName = "${report.disasterType} - ${report.village}"
+                    )
                 },
                 onCallBpbd = {
                     EmergencyDialer.dial(context, "117")
@@ -650,11 +669,12 @@ fun CitizenReportMapView(
 }
 
 /**
- * Inspection Card for a Pin clicked on the spatial map
+ * Inspection Card for a Pin clicked on the spatial map with Photo & Google Maps
  */
 @Composable
 private fun ReportInspectionCard(
     report: CitizenDisasterReport,
+    isOfficer: Boolean,
     onClose: () -> Unit,
     onUpdateStatus: (String) -> Unit,
     onOpenExternalMap: () -> Unit,
@@ -696,6 +716,40 @@ private fun ReportInspectionCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Photo Preview if available
+            if (!report.photoUri.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF1E293B),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(130.dp)
+                        .padding(bottom = 8.dp)
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AsyncImage(
+                            model = report.photoUri,
+                            contentDescription = "Foto Laporan Bencana",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.75f),
+                            shape = RoundedCornerShape(topStart = 6.dp),
+                            modifier = Modifier.align(Alignment.BottomEnd)
+                        ) {
+                            Text(
+                                text = "🛡️ FOTO KAMERA GPS SATELIT",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF86EFAC),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             // Location & GPS Row
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -734,18 +788,29 @@ private fun ReportInspectionCard(
 
             HorizontalDivider(color = Color(0xFFE5E7EB), thickness = 1.dp, modifier = Modifier.padding(vertical = 6.dp))
 
-            // Status Management Controls
+            // Status Management Controls (Role-gated)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = "Ubah Status Laporan:",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF374151)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!isOfficer) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Terkunci",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                    }
+                    Text(
+                        text = if (isOfficer) "Ubah Status (Petugas):" else "Status (Khusus Petugas):",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isOfficer) Color(0xFF15803D) else Color(0xFF374151)
+                    )
+                }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     StatusButton("Diproses", report.status == "Diproses", Color(0xFFEA580C)) {
@@ -767,15 +832,15 @@ private fun ReportInspectionCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
+                Button(
                     onClick = onOpenExternalMap,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF2563EB))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8))
                 ) {
                     Icon(imageVector = Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Buka di Google Maps", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Rute Google Maps", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Button(

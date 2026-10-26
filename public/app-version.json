@@ -1,0 +1,19 @@
+{
+  "latestVersion": "1.5.0",
+  "versionCode": 5,
+  "releaseDate": "25 Oktober 2026",
+  "minSupportedVersion": "1.0.0",
+  "downloadUrl": "https://t.me/takajuikgue",
+  "packageSizeMb": 16.2,
+  "highlights": [
+    "Tab Laporan Warga Bersebelahan dengan Prakiraan Cuaca (Index 2)",
+    "Formulir Pelaporan Bencana Terpadu & Geotag Anti-Hoax",
+    "Peluncur Kamera Langsung (Live Camera Launcher) dengan Watermark Geotag BPBD Mukomuko",
+    "Peta Spasial GIS Interaktif Laporan Warga & Filter Kategori Bencana",
+    "Layer Overlay Titik Rawan Bencana BPBD Mukomuko (Zona Abrasi, DAS Banjir, Rawan Longsor)",
+    "Sistem Pelacakan Status Laporan (Diproses, Divalidasi, Selesai) + Notifikasi Toast Konfirmasi",
+    "Direktori 'Kontak Penting' Darurat Mukomuko & Dial Cepat Call Center 117 BPBD",
+    "Optimalisasi Tombol Aksi Cepat (Speed Dial FAB) M3 dengan Respons Sentuhan 100%",
+    "Caching Offline Room Database untuk Kelancaran Akses di Pesisir Mukomuko"
+  ]
+}

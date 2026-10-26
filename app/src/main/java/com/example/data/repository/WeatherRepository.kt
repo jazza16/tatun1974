@@ -200,10 +200,173 @@ class WeatherRepository(
             status = report.status
         )
         weatherDao.insertCitizenDisasterReport(entity)
+
+        // Push updated list to cloud container so all devices see the new report
+        try {
+            val allLocal = weatherDao.getAllCitizenDisasterReportsSync().map { e ->
+                CitizenDisasterReport(
+                    id = e.id,
+                    disasterType = e.disasterType,
+                    incidentTime = e.incidentTime,
+                    incidentLocation = e.incidentLocation,
+                    district = e.district,
+                    village = e.village,
+                    latitude = e.latitude,
+                    longitude = e.longitude,
+                    gpsAccuracyMeters = e.gpsAccuracyMeters,
+                    isGpsVerified = e.isGpsVerified,
+                    casualtiesDead = e.casualtiesDead,
+                    casualtiesInjured = e.casualtiesInjured,
+                    casualtiesMissing = e.casualtiesMissing,
+                    photoUri = e.photoUri,
+                    reporterName = e.reporterName,
+                    reporterPhone = e.reporterPhone,
+                    additionalNotes = e.additionalNotes,
+                    timestamp = e.timestamp,
+                    status = e.status
+                )
+            }
+            com.example.data.api.CitizenReportCloudSyncService.pushReportsToCloud(allLocal)
+        } catch (_: Exception) {}
     }
 
     suspend fun updateCitizenReportStatus(reportId: String, newStatus: String) = withContext(Dispatchers.IO) {
         weatherDao.updateCitizenReportStatus(reportId, newStatus)
+        // Push status change to cloud container
+        try {
+            val allLocal = weatherDao.getAllCitizenDisasterReportsSync().map { e ->
+                CitizenDisasterReport(
+                    id = e.id,
+                    disasterType = e.disasterType,
+                    incidentTime = e.incidentTime,
+                    incidentLocation = e.incidentLocation,
+                    district = e.district,
+                    village = e.village,
+                    latitude = e.latitude,
+                    longitude = e.longitude,
+                    gpsAccuracyMeters = e.gpsAccuracyMeters,
+                    isGpsVerified = e.isGpsVerified,
+                    casualtiesDead = e.casualtiesDead,
+                    casualtiesInjured = e.casualtiesInjured,
+                    casualtiesMissing = e.casualtiesMissing,
+                    photoUri = e.photoUri,
+                    reporterName = e.reporterName,
+                    reporterPhone = e.reporterPhone,
+                    additionalNotes = e.additionalNotes,
+                    timestamp = e.timestamp,
+                    status = if (e.id == reportId) newStatus else e.status
+                )
+            }
+            com.example.data.api.CitizenReportCloudSyncService.pushReportsToCloud(allLocal)
+        } catch (_: Exception) {}
+    }
+
+    suspend fun updateCitizenReportStatusAndNotes(reportId: String, newStatus: String, notes: String) = withContext(Dispatchers.IO) {
+        weatherDao.updateCitizenReportStatusAndNotes(reportId, newStatus, notes)
+        // Push status & follow-up notes change to cloud container
+        try {
+            val allLocal = weatherDao.getAllCitizenDisasterReportsSync().map { e ->
+                CitizenDisasterReport(
+                    id = e.id,
+                    disasterType = e.disasterType,
+                    incidentTime = e.incidentTime,
+                    incidentLocation = e.incidentLocation,
+                    district = e.district,
+                    village = e.village,
+                    latitude = e.latitude,
+                    longitude = e.longitude,
+                    gpsAccuracyMeters = e.gpsAccuracyMeters,
+                    isGpsVerified = e.isGpsVerified,
+                    casualtiesDead = e.casualtiesDead,
+                    casualtiesInjured = e.casualtiesInjured,
+                    casualtiesMissing = e.casualtiesMissing,
+                    photoUri = e.photoUri,
+                    reporterName = e.reporterName,
+                    reporterPhone = e.reporterPhone,
+                    additionalNotes = if (e.id == reportId) notes else e.additionalNotes,
+                    timestamp = e.timestamp,
+                    status = if (e.id == reportId) newStatus else e.status
+                )
+            }
+            com.example.data.api.CitizenReportCloudSyncService.pushReportsToCloud(allLocal)
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Synchronizes citizen reports with the cloud container across all Android devices.
+     * Inserts any new reports from other citizens into local Room DB.
+     */
+    suspend fun syncCitizenDisasterReportsOnline(): Int = withContext(Dispatchers.IO) {
+        val cloudReports = com.example.data.api.CitizenReportCloudSyncService.fetchReportsFromCloud() ?: return@withContext 0
+        var newCount = 0
+        val localList = weatherDao.getAllCitizenDisasterReportsSync()
+        val localMap = localList.associateBy { it.id }
+
+        cloudReports.forEach { cloudReport ->
+            val local = localMap[cloudReport.id]
+            if (local == null) {
+                // New report from another citizen's device
+                weatherDao.insertCitizenDisasterReport(
+                    CitizenDisasterReportEntity(
+                        id = cloudReport.id,
+                        disasterType = cloudReport.disasterType,
+                        incidentTime = cloudReport.incidentTime,
+                        incidentLocation = cloudReport.incidentLocation,
+                        district = cloudReport.district,
+                        village = cloudReport.village,
+                        latitude = cloudReport.latitude,
+                        longitude = cloudReport.longitude,
+                        gpsAccuracyMeters = cloudReport.gpsAccuracyMeters,
+                        isGpsVerified = cloudReport.isGpsVerified,
+                        casualtiesDead = cloudReport.casualtiesDead,
+                        casualtiesInjured = cloudReport.casualtiesInjured,
+                        casualtiesMissing = cloudReport.casualtiesMissing,
+                        photoUri = cloudReport.photoUri,
+                        reporterName = cloudReport.reporterName,
+                        reporterPhone = cloudReport.reporterPhone,
+                        additionalNotes = cloudReport.additionalNotes,
+                        timestamp = cloudReport.timestamp,
+                        status = cloudReport.status
+                    )
+                )
+                newCount++
+            } else if (local.status != cloudReport.status) {
+                // Status updated by BPBD officer on another device
+                weatherDao.updateCitizenReportStatus(cloudReport.id, cloudReport.status)
+            }
+        }
+
+        // If local has reports missing in cloud, push merged set
+        val cloudIds = cloudReports.map { it.id }.toSet()
+        val missingInCloud = localList.filter { it.id !in cloudIds }
+        if (missingInCloud.isNotEmpty()) {
+            val combined = cloudReports + missingInCloud.map { e ->
+                CitizenDisasterReport(
+                    id = e.id,
+                    disasterType = e.disasterType,
+                    incidentTime = e.incidentTime,
+                    incidentLocation = e.incidentLocation,
+                    district = e.district,
+                    village = e.village,
+                    latitude = e.latitude,
+                    longitude = e.longitude,
+                    gpsAccuracyMeters = e.gpsAccuracyMeters,
+                    isGpsVerified = e.isGpsVerified,
+                    casualtiesDead = e.casualtiesDead,
+                    casualtiesInjured = e.casualtiesInjured,
+                    casualtiesMissing = e.casualtiesMissing,
+                    photoUri = e.photoUri,
+                    reporterName = e.reporterName,
+                    reporterPhone = e.reporterPhone,
+                    additionalNotes = e.additionalNotes,
+                    timestamp = e.timestamp,
+                    status = e.status
+                )
+            }
+            com.example.data.api.CitizenReportCloudSyncService.pushReportsToCloud(combined)
+        }
+
+        newCount
     }
 
     suspend fun seedInitialCitizenDisasterReportsIfEmpty() = withContext(Dispatchers.IO) {

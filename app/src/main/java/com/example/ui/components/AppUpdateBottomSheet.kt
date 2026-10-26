@@ -805,7 +805,7 @@ private fun OnlineUpdateCard(
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        text = "Sistem menggunakan Semantic Versioning (AppVersionHelper) untuk mendeteksi perangkat versi sebelumnya (v1.2.0) guna memicu notifikasi update ke v1.3.0, serta otomatis berlaku untuk versi berikutnya (v1.4.0, dst) saat dirilis pengembang.",
+                        text = "Sistem menggunakan Semantic Versioning (AppVersionHelper) untuk mendeteksi perangkat versi sebelumnya (v1.4.0) guna memicu notifikasi update ke v1.5.0, serta otomatis berlaku untuk versi berikutnya (v1.6.0, dst) saat dirilis pengembang.",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         lineHeight = 14.sp
@@ -819,11 +819,11 @@ private fun OnlineUpdateCard(
                             onClick = onSimulateOlderVersion,
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("btn_simulate_v120"),
+                                .testTag("btn_simulate_v140"),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = "Uji v1.2.0 (Notif v1.3.0)",
+                                text = "Uji v1.4.0 (Notif v1.5.0)",
                                 fontSize = 10.sp,
                                 maxLines = 1
                             )
@@ -833,11 +833,11 @@ private fun OnlineUpdateCard(
                             onClick = onSimulatePublishNextVersion,
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("btn_simulate_v140"),
+                                .testTag("btn_simulate_v160"),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = "Uji Rilis v1.4.0",
+                                text = "Uji Rilis v1.6.0",
                                 fontSize = 10.sp,
                                 maxLines = 1
                             )
@@ -854,7 +854,7 @@ private fun OnlineUpdateCard(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = "Kunci v1.3.0",
+                                text = "Kunci v1.5.0",
                                 fontSize = 10.sp,
                                 color = Color.White,
                                 maxLines = 1
@@ -917,20 +917,20 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Detailed Explanations for v1.3.0
+            // Detailed Explanations for v1.5.0
             FeatureDetailItem(
-                emoji = "🚨",
-                title = "Konsol Gempa WRS-NTWC InaTEWS BMKG",
-                desc = "Transformasi total tampilan gempa bumi mengadopsi standar sistem WRS-NTWC BMKG (inatews.bmkg.go.id/wrs): Peta GIS interaktif (Streets, Satelit, Grayscale), animasi gelombang seismik P/S-wave, zona subduksi Sunda Megathrust, status ancaman tsunami nasional, matrix parameter OT, dan pengujian sirene.",
+                emoji = "📋",
+                title = "Tab Laporan Warga Bersebelahan dengan Prakiraan Cuaca",
+                desc = "Navigasi cepat pelaporan insiden darurat dan bencana tepat di samping tab Prakiraan Cuaca (Index 2). Memudahkan warga Mukomuko melaporkan kejadian secara instan tanpa mencari ke tab tersembunyi.",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "🍃",
-                title = "Tab Kualitas Udara (ISPU) & Himbauan BMKG",
-                desc = "Pemantauan komprehensif 6 parameter polutan udara (PM2.5, PM10, SO2, CO, O3, NO2) lengkap dengan status ISPU, rilis resmi BMKG, dan himbauan pencegahan kesehatan untuk masyarakat serta kelompok rentan.",
+                emoji = "📷",
+                title = "Peluncur Kamera Langsung (Live Camera Launcher)",
+                desc = "Ambil foto bukti kejadian bencana langsung dari lokasi secara real-time dengan stempel digital watermark koordinat GPS satelit resmi Pusdalops BPBD Mukomuko.",
                 isDark = isDark
             )
 
@@ -938,53 +938,53 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
 
             FeatureDetailItem(
                 emoji = "🗺️",
-                title = "Peta Shake Map Gempa Interaktif (Zoom In / Out)",
-                desc = "Penampil peta guncangan gempa bumi BMKG interaktif dengan gestur pinch-to-zoom, pan navigasi, double tap, dan penampil gambar resolusi tinggi layar penuh (Fullscreen Viewer).",
+                title = "Peta Spasial GIS Laporan Warga & Filter Kategori",
+                desc = "Pemetaan sebaran titik laporan warga interaktif dengan filter kategori kejadian (Banjir, Angin Kencang, Gelombang/Abrasi, Tanah Longsor, Kerusakan Infrastruktur) dan tombol navigasi langsung ke Google Maps.",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "✨",
-                title = "Dynamic Weather Icon (Ikon Cuaca Dinamis)",
-                desc = "Set ikon cuaca hidup beranimasi yang bereaksi dinamis sesuai kondisi cuaca waktu nyata (cerah bersinar, awan bergerak, tetesan hujan turun, badai petir berdenyut).",
+                emoji = "⚡",
+                title = "Layer Overlay Titik Rawan Bencana BPBD Mukomuko",
+                desc = "Korelasi visual aduan masyarakat dengan zona bahaya tinggi Mukomuko (Zona Abrasi Koto Jaya - Teramang Jaya, DAS Manjunto & Selagan, Daerah Rawan Longsor V Koto & Malin Deman, Pesisir Ipuh & Air Rami).",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "☀️",
-                title = "Grafik Kurva Indeks UV & Jam Paparan Puncak",
-                desc = "Visualisasi kurva interaktif indeks radiasi ultraviolet matahari harian dengan penanda zona waktu paparan puncak (10.00 - 14.00 WIB) serta protokol perlindungan diri.",
+                emoji = "🟢",
+                title = "Sistem Pelacakan Status Laporan & Notifikasi Toast",
+                desc = "Indikator status berwarna (Diproses, Divalidasi, Selesai) pada riwayat laporan warga lengkap dengan aksi pembaruan status interaktif dan notifikasi toast konfirmasi seketika.",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "📍",
-                title = "Deteksi Otomatis Lokasi GPS 15 Kecamatan",
-                desc = "Mendeteksi secara otomatis posisi kecamatan pengguna di wilayah Kabupaten Mukomuko melalui GPS perangkat dengan alur izin lokasi runtime yang ramah.",
+                emoji = "📞",
+                title = "Direktori Kontak Darurat Mukomuko & Dial Cepat",
+                desc = "Akses panggilan cepat satu sentuhan ke Call Center Bebas Pulsa 117 BPBD, Pusdalops BPBD (0737-71112), Polres 110, RSUD Mukomuko IGD 24 Jam, Damkar 113, dan Basarnas 115.",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "📱",
-                title = "Optimalisasi Pengguna Ponsel Mode Portrait",
-                desc = "Tampilan antarmuka disempurnakan khusus untuk penggunaan ponsel satu tangan dalam posisi tegak (portrait) yang rapi, proporsional, dan tanpa pergeseran elemen.",
+                emoji = "🔘",
+                title = "Optimalisasi Tombol Aksi Cepat (Speed Dial FAB)",
+                desc = "Floating Action Button Material 3 yang 100% responsif terhadap sentuhan tanpa konflik gestur, dilengkapi tombol pemindah posisi jempol (kiri/kanan) dan pintasan ke Laporan Warga.",
                 isDark = isDark
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             FeatureDetailItem(
-                emoji = "🔄",
-                title = "Pembaruan Daring Otomatis (OTA In-App Engine)",
-                desc = "Sistem pembaruan langsung di dalam aplikasi (OTA) yang mengenali rilis terbaru dan menginstalnya secara permanen tanpa perlu update file manual.",
+                emoji = "💾",
+                title = "Caching Offline Room Database",
+                desc = "Penyimpanan lokal prakiraan cuaca dan riwayat aduan warga agar data tetap dapat diakses dengan lancar saat berada di kawasan pesisir Mukomuko dengan konektivitas minim.",
                 isDark = isDark
             )
         }

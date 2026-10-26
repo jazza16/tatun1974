@@ -103,14 +103,14 @@ class WeatherViewModel(
         updatePreferences?.let { prefs ->
             val initialInstalled = prefs.getInstalledVersion()
             val initialServer = prefs.getLatestServerVersion()
+            val hasUpdate = com.example.util.AppVersionHelper.isVersionNewer(initialInstalled, initialServer)
             val isPermanentlyInstalled = prefs.isUpdatePermanentlyInstalled()
-            val hasUpdate = (initialInstalled != initialServer) && !isPermanentlyInstalled
-            val isUpdated = !hasUpdate
+            val isUpdated = !hasUpdate && (initialInstalled == initialServer)
 
             val initialChangelogs = _uiState.value.updateState.changelogs.map { log ->
-                when (log.version) {
-                    initialInstalled -> log.copy(isCurrent = true, isLatest = (initialInstalled == initialServer))
-                    initialServer -> log.copy(isCurrent = (initialInstalled == initialServer), isLatest = true)
+                when {
+                    log.version == initialInstalled -> log.copy(isCurrent = true, isLatest = (initialInstalled == initialServer))
+                    log.version == initialServer -> log.copy(isCurrent = false, isLatest = true)
                     else -> log.copy(isCurrent = false)
                 }
             }
@@ -136,6 +136,7 @@ class WeatherViewModel(
         viewModelScope.launch {
             repository.seedInitialCommunityReportsIfEmpty()
             repository.seedInitialCitizenDisasterReportsIfEmpty()
+            repository.syncCitizenDisasterReportsOnline()
         }
         loadWeatherForDistrict(MukomukoDistricts.defaultDistrict)
         loadHistoricalWeather(MukomukoDistricts.defaultDistrict, "2024-05-15")
@@ -328,6 +329,23 @@ class WeatherViewModel(
     fun updateCitizenReportStatus(reportId: String, newStatus: String) {
         viewModelScope.launch {
             repository.updateCitizenReportStatus(reportId, newStatus)
+        }
+    }
+
+    fun updateCitizenReportStatusAndNotes(reportId: String, newStatus: String, notes: String) {
+        viewModelScope.launch {
+            repository.updateCitizenReportStatusAndNotes(reportId, newStatus, notes)
+        }
+    }
+
+    fun syncCitizenDisasterReportsOnline(onComplete: ((Int) -> Unit)? = null) {
+        viewModelScope.launch {
+            try {
+                val newCount = repository.syncCitizenDisasterReportsOnline()
+                onComplete?.invoke(newCount)
+            } catch (_: Exception) {
+                onComplete?.invoke(0)
+            }
         }
     }
 
@@ -545,12 +563,20 @@ class WeatherViewModel(
             updateState = currentState.copy(isCheckingOnline = true)
         )
         viewModelScope.launch {
-            delay(if (isAutoCheck) 1000 else 1800) // Realistic network handshake
+            // Check real remote endpoint over HTTP with multi-tier failover
+            val remoteInfo = com.example.data.api.AppUpdateRemoteService.fetchLatestRelease()
+
             val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale("id", "ID"))
             val nowTime = sdf.format(java.util.Date())
 
             val installedVer = updatePreferences?.getInstalledVersion() ?: _uiState.value.updateState.currentVersion
-            val serverVer = updatePreferences?.getLatestServerVersion() ?: "1.3.0"
+            val serverVer = remoteInfo?.latestVersion
+                ?: updatePreferences?.getLatestServerVersion()
+                ?: com.example.data.local.AppUpdatePreferences.DEFAULT_LATEST_VERSION
+
+            if (remoteInfo != null && com.example.util.AppVersionHelper.isVersionNewer(installedVer, remoteInfo.latestVersion)) {
+                updatePreferences?.publishNewVersionRelease(remoteInfo.latestVersion)
+            }
 
             val hasNewVersion = com.example.util.AppVersionHelper.isVersionNewer(
                 currentVersion = installedVer,
@@ -567,9 +593,22 @@ class WeatherViewModel(
                 updatePreferences?.setLastCheckedVersion(serverVer)
             }
 
-            val targetLog = _uiState.value.updateState.changelogs.find { it.version == serverVer }
+            // Merge remote changelog if available
+            var currentChangelogs = _uiState.value.updateState.changelogs
+            if (remoteInfo != null && currentChangelogs.none { it.version == remoteInfo.latestVersion }) {
+                val newLog = com.example.model.VersionChangelog(
+                    version = remoteInfo.latestVersion,
+                    releaseDate = remoteInfo.releaseDate,
+                    isCurrent = (installedVer == remoteInfo.latestVersion),
+                    isLatest = true,
+                    highlights = remoteInfo.highlights
+                )
+                currentChangelogs = listOf(newLog) + currentChangelogs.map { it.copy(isLatest = false) }
+            }
+
+            val targetLog = currentChangelogs.find { it.version == serverVer }
             val highlightText = targetLog?.highlights?.firstOrNull()
-                ?: "Konsol Gempa WRS-NTWC InaTEWS BMKG, Tab ISPU Kualitas Udara, Peta Shake Map Interaktif & Optimalisasi Mode Ponsel Portrait"
+                ?: "Integrasi Peta Interaktif Laporan Warga, Tombol Aksi Cepat M3, Peluncur Kamera Geotag & Kontak Darurat Mukomuko"
 
             _uiState.value = _uiState.value.copy(
                 isUpdateDialogOpen = shouldShowDialog,
@@ -582,6 +621,7 @@ class WeatherViewModel(
                     isPermanentlyInstalled = isPermanentlyInstalled,
                     lastCheckedVersion = serverVer,
                     lastCheckedTime = "Hari ini, $nowTime WIB",
+                    changelogs = currentChangelogs,
                     updateStatusMessage = if (hasNewVersion) {
                         "Versi $serverVer terdeteksi di server Pusdalops BPBD Mukomuko. Siap dipasang langsung secara daring."
                     } else {
@@ -686,28 +726,28 @@ class WeatherViewModel(
     }
 
     /**
-     * Testing / Developer mode: Simulates a device that previously had an earlier version (e.g. v1.2.0).
-     * Immediately triggers real push notification and in-app update prompt for v1.3.0.
+     * Testing / Developer mode: Simulates a device that previously had an earlier version (e.g. v1.5.0).
+     * Immediately triggers real push notification and in-app update prompt for v1.6.0.
      */
-    fun simulateOlderVersionForTesting(olderVersion: String = "1.2.0", context: android.content.Context? = null) {
+    fun simulateOlderVersionForTesting(olderVersion: String = "1.5.0", context: android.content.Context? = null) {
         updatePreferences?.simulateEarlierInstalledVersion(olderVersion)
         val changelogs = _uiState.value.updateState.changelogs.map { log ->
             if (log.version == olderVersion) log.copy(isCurrent = true, isLatest = false)
-            else if (log.version == "1.3.0") log.copy(isCurrent = false, isLatest = true)
+            else if (log.version == "1.6.0") log.copy(isCurrent = false, isLatest = true)
             else log.copy(isCurrent = false, isLatest = false)
         }
         _uiState.value = _uiState.value.copy(
             isUpdateDialogOpen = true,
             updateState = _uiState.value.updateState.copy(
                 currentVersion = olderVersion,
-                latestVersion = "1.3.0",
+                latestVersion = "1.6.0",
                 isUpdateAvailable = true,
                 isUpdated = false,
                 isPermanentlyInstalled = false,
                 isSimulationActive = true,
                 isBannerDismissed = false,
                 downloadProgress = 0f,
-                updateStatusMessage = "Simulasi Aktif: Perangkat menjalankan versi sebelumnya v$olderVersion. Notifikasi update daring v1.3.0 aktif & siap dipasang.",
+                updateStatusMessage = "Simulasi Aktif: Perangkat menjalankan versi sebelumnya v$olderVersion. Notifikasi update daring v1.6.0 aktif & siap dipasang.",
                 changelogs = changelogs
             )
         )
@@ -715,18 +755,18 @@ class WeatherViewModel(
         if (context != null) {
             com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
                 context = context,
-                latestVersion = "1.3.0",
-                highlightText = "Konsol Gempa WRS-NTWC InaTEWS BMKG, Tab ISPU Kualitas Udara, Peta Shake Map Interaktif & Optimalisasi Mode Ponsel Portrait"
+                latestVersion = "1.6.0",
+                highlightText = "Konsol Khusus Petugas Pusdalops BPBD, Validasi & Tindak Lanjut TRC, dan Navigasi Google Maps"
             )
         }
     }
 
     /**
-     * Developer / QA simulation: Simulates the developer ("TnT@74") publishing a newer version (e.g. v1.4.0).
-     * Tests that current devices (on v1.3.0) detect the new version, receive real push notification,
+     * Developer / QA simulation: Simulates the developer publishing a newer version (e.g. v1.7.0).
+     * Tests that current devices (on v1.6.0) detect the new version, receive real push notification,
      * and can apply the OTA online update.
      */
-    fun simulatePublishNextVersion(nextVersion: String = "1.4.0", context: android.content.Context? = null) {
+    fun simulatePublishNextVersion(nextVersion: String = "1.7.0", context: android.content.Context? = null) {
         updatePreferences?.publishNewVersionRelease(nextVersion)
 
         val nextChangelog = com.example.model.VersionChangelog(
@@ -771,25 +811,25 @@ class WeatherViewModel(
     }
 
     /**
-     * Resets device to latest factory release state (v1.3.0 permanently applied).
+     * Resets device to latest factory release state (v1.6.0 permanently applied).
      */
     fun resetToLatestReleaseState() {
         updatePreferences?.resetToLatestReleaseState()
-        val changelogs = _uiState.value.updateState.changelogs.filter { it.version != "1.4.0" }.map { log ->
-            if (log.version == "1.3.0") log.copy(isCurrent = true, isLatest = true)
+        val changelogs = _uiState.value.updateState.changelogs.filter { it.version != "1.7.0" }.map { log ->
+            if (log.version == "1.6.0") log.copy(isCurrent = true, isLatest = true)
             else log.copy(isCurrent = false, isLatest = false)
         }
         _uiState.value = _uiState.value.copy(
             isUpdateDialogOpen = false,
             updateState = _uiState.value.updateState.copy(
-                currentVersion = "1.3.0",
-                latestVersion = "1.3.0",
+                currentVersion = "1.6.0",
+                latestVersion = "1.6.0",
                 isUpdateAvailable = false,
                 isUpdated = true,
                 isPermanentlyInstalled = true,
                 isSimulationActive = false,
                 downloadProgress = 0f,
-                updateStatusMessage = "Aplikasi menggunakan rilis resmi v1.3.0 terbaru secara permanen.",
+                updateStatusMessage = "Aplikasi menggunakan rilis resmi v1.6.0 terbaru secara permanen.",
                 changelogs = changelogs
             )
         )

@@ -410,7 +410,7 @@ fun WeatherAppScreen(
                                         item {
                                             ActiveAlertCard(
                                                 alert = report.alert,
-                                                onViewDetail = { viewModel.selectTab(2) }
+                                                onViewDetail = { viewModel.selectTab(3) }
                                             )
                                         }
                                     }
@@ -440,7 +440,7 @@ fun WeatherAppScreen(
                                         item {
                                             WrsLiveEarthquakeQuickCard(
                                                 earthquake = latestEq,
-                                                onClick = { viewModel.selectTab(2) }
+                                                onClick = { viewModel.selectTab(3) }
                                             )
                                         }
                                     }
@@ -548,7 +548,30 @@ fun WeatherAppScreen(
                         }
 
                         2 -> {
-                            // Tab 2: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Push Notification
+                            // Tab 2: Laporan Warga Bencana (Formulir, Peta GIS Spasial, Tabel Riwayat, Kontak Penting) - Moved next to Prakiraan Cuaca!
+                            CitizenReportScreen(
+                                reports = citizenDisasterReports,
+                                currentDistrict = currentDistrict,
+                                onSubmitReport = { report ->
+                                    viewModel.submitCitizenDisasterReport(report)
+                                },
+                                onUpdateReportStatus = { id, status ->
+                                    viewModel.updateCitizenReportStatus(id, status)
+                                },
+                                onUpdateReportStatusAndNotes = { id, status, notes ->
+                                    viewModel.updateCitizenReportStatusAndNotes(id, status, notes)
+                                },
+                                onSyncReports = { onComplete ->
+                                    viewModel.syncCitizenDisasterReportsOnline(onComplete)
+                                },
+                                onBackClick = {
+                                    viewModel.selectTab(0)
+                                }
+                            )
+                        }
+
+                        3 -> {
+                            // Tab 3: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Push Notification
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -573,14 +596,14 @@ fun WeatherAppScreen(
                                         onRefreshEarthquake = { viewModel.refreshEarthquakeData(context) },
                                         onCall117 = { EmergencyDialer.dial(context, "117") },
                                         onOpenCallCenterInfo = { isCallCenter117SheetOpen = true },
-                                        onOpenEvacuationGuide = { viewModel.selectTab(3) }
+                                        onOpenEvacuationGuide = { viewModel.selectTab(4) }
                                     )
                                 }
                             }
                         }
 
-                        3 -> {
-                            // Tab 3: Modul Peta Interaktif Bencana & SOP Evakuasi Mandiri
+                        4 -> {
+                            // Tab 4: Modul Peta Interaktif Bencana & SOP Evakuasi Mandiri
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -610,8 +633,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        4 -> {
-                            // Tab 4: inaRISK BNPB - Kajian Risiko Bencana Indonesia Kabupaten Mukomuko
+                        5 -> {
+                            // Tab 5: inaRISK BNPB - Kajian Risiko Bencana Indonesia Kabupaten Mukomuko
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -622,15 +645,15 @@ fun WeatherAppScreen(
                                 item {
                                     InaRiskBnpbSection(
                                         currentDistrict = currentDistrict,
-                                        onOpenEvacuationGuide = { viewModel.selectTab(3) },
+                                        onOpenEvacuationGuide = { viewModel.selectTab(4) },
                                         onCall117 = { EmergencyDialer.dial(context, "117") }
                                     )
                                 }
                             }
                         }
 
-                        5 -> {
-                            // Tab 5: Cuaca Historis
+                        6 -> {
+                            // Tab 6: Cuaca Historis
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -652,8 +675,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        6 -> {
-                            // Tab 6: Maritim & Pesisir Pantai
+                        7 -> {
+                            // Tab 7: Maritim & Pesisir Pantai
                             val report = uiState.report
                             if (report != null) {
                                 LazyColumn(
@@ -677,8 +700,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        7 -> {
-                            // Tab 7: Kualitas Udara Lengkap BMKG & Himbauan Kesehatan Masyarakat + Grafik Harian UV
+                        8 -> {
+                            // Tab 8: Kualitas Udara Lengkap BMKG & Himbauan Kesehatan Masyarakat + Grafik Harian UV
                             val report = uiState.report
                             if (report != null) {
                                 val maxUv = report.daily.firstOrNull()?.uvIndexMax ?: 8.0
@@ -700,8 +723,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        8 -> {
-                            // Tab 8: 15 Kecamatan
+                        9 -> {
+                            // Tab 9: 15 Kecamatan
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -722,60 +745,51 @@ fun WeatherAppScreen(
                                 }
                             }
                         }
-
-                        9 -> {
-                            // Tab 9: Laporan Warga Bencana (Formulir, Peta GIS Spasial, Tabel Riwayat, Kontak Penting)
-                            CitizenReportScreen(
-                                reports = citizenDisasterReports,
-                                currentDistrict = currentDistrict,
-                                onSubmitReport = { report ->
-                                    viewModel.submitCitizenDisasterReport(report)
-                                },
-                                onUpdateReportStatus = { id, status ->
-                                    viewModel.updateCitizenReportStatus(id, status)
-                                },
-                                onBackClick = {
-                                    viewModel.selectTab(0)
-                                }
-                            )
-                        }
                     }
                 }
             }
         }
 
-        // Movable, Draggable & Compact Quick Actions FAB Overlay
+        // Speed Dial Quick Actions FAB Overlay (100% Reliable Tap & Direct Links)
         QuickActionsFab(
-                isExpanded = isQuickActionsFabExpanded,
-                onToggleExpand = { isQuickActionsFabExpanded = !isQuickActionsFabExpanded },
-                onSelectMaritimeGuide = {
-                    isQuickActionsFabExpanded = false
-                    viewModel.selectTab(6)
-                },
-                onSelectEvacuationProcedures = {
-                    isQuickActionsFabExpanded = false
-                    viewModel.selectTab(3)
-                },
-                onSelectDisasterMap = {
-                    isQuickActionsFabExpanded = false
-                    viewModel.selectTab(3)
-                },
-                onCall117 = {
-                    isQuickActionsFabExpanded = false
-                    EmergencyDialer.dial(context, "117")
-                },
-                onOpenCompass = {
-                    isQuickActionsFabExpanded = false
-                    viewModel.setCompassSheetOpen(true)
-                },
-                onOpenOnboarding = {
-                    isQuickActionsFabExpanded = false
-                    viewModel.setOnboardingOpen(true)
-                },
-                parentMaxWidth = this.maxWidth,
-                parentMaxHeight = this.maxHeight,
-                isDark = isActuallyDark
-            )
+            isExpanded = isQuickActionsFabExpanded,
+            onToggleExpand = { isQuickActionsFabExpanded = !isQuickActionsFabExpanded },
+            onSelectCitizenReport = {
+                isQuickActionsFabExpanded = false
+                viewModel.selectTab(2)
+            },
+            onSelectForecast = {
+                isQuickActionsFabExpanded = false
+                viewModel.selectTab(1)
+            },
+            onSelectMaritimeGuide = {
+                isQuickActionsFabExpanded = false
+                viewModel.selectTab(7)
+            },
+            onSelectEvacuationProcedures = {
+                isQuickActionsFabExpanded = false
+                viewModel.selectTab(4)
+            },
+            onSelectDisasterMap = {
+                isQuickActionsFabExpanded = false
+                viewModel.selectTab(4)
+            },
+            onCall117 = {
+                isQuickActionsFabExpanded = false
+                EmergencyDialer.dial(context, "117")
+            },
+            onOpenCompass = {
+                isQuickActionsFabExpanded = false
+                viewModel.setCompassSheetOpen(true)
+            },
+            onOpenOnboarding = {
+                isQuickActionsFabExpanded = false
+                viewModel.setOnboardingOpen(true)
+            },
+            parentMaxWidth = this.maxWidth,
+            parentMaxHeight = this.maxHeight,
+            isDark = isActuallyDark
+        )
         }
     }
 
@@ -812,8 +826,8 @@ fun WeatherAppScreen(
             onSetThemeMode = { viewModel.setDarkMode(it) },
             onCheckUpdateOnline = { viewModel.checkForUpdatesOnline(context = context) },
             onDownloadUpdate = { viewModel.downloadAndApplyUpdate(context = context) },
-            onSimulateOlderVersion = { viewModel.simulateOlderVersionForTesting("1.2.0", context) },
-            onSimulatePublishNextVersion = { viewModel.simulatePublishNextVersion("1.4.0", context) },
+            onSimulateOlderVersion = { viewModel.simulateOlderVersionForTesting("1.4.0", context) },
+            onSimulatePublishNextVersion = { viewModel.simulatePublishNextVersion("1.6.0", context) },
             onResetLatestRelease = { viewModel.resetToLatestReleaseState() },
             onOpenOnboarding = { viewModel.setOnboardingOpen(true) },
             onOpenCompass = { viewModel.setCompassSheetOpen(true) },
@@ -869,12 +883,28 @@ fun WeatherAppScreen(
                                 color = OrangePrimary
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "• Prakiraan cuaca 3 hari rinci 15 kecamatan\n• Peta interaktif & SOP evakuasi tsunami\n• Grid adaptif tablet & ponsel seimbang\n• Pemasangan permanen tanpa update offline",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                lineHeight = 16.sp
-                            )
+                            val activeHighlights = uiState.updateState.changelogs
+                                .find { it.version == uiState.updateState.latestVersion }
+                                ?.highlights
+                                ?: listOf(
+                                    "Tab Laporan Warga Bersebelahan dengan Prakiraan Cuaca",
+                                    "Peluncur Kamera Langsung (Live Camera Launcher) & Geotag",
+                                    "Peta Spasial GIS Laporan Warga & Filter Kategori Kejadian",
+                                    "Layer Overlay Titik Rawan Bencana BPBD Mukomuko",
+                                    "Pelacakan Status Laporan & Notifikasi Toast Konfirmasi",
+                                    "Direktori Kontak Darurat Mukomuko & Dial Cepat 117 BPBD",
+                                    "Optimalisasi Tombol Aksi Cepat Speed Dial FAB Material 3"
+                                )
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                activeHighlights.take(4).forEach { hl ->
+                                    Text(
+                                        text = "• $hl",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                        lineHeight = 15.sp
+                                    )
+                                }
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -927,7 +957,7 @@ fun WeatherAppScreen(
     if (uiState.isCompassSheetOpen) {
         com.example.ui.components.DigitalCompassBottomSheet(
             onDismiss = { viewModel.setCompassSheetOpen(false) },
-            onOpenEvacuationMap = { viewModel.selectTab(3) },
+            onOpenEvacuationMap = { viewModel.selectTab(4) },
             onCall117 = { EmergencyDialer.dial(context, "117") }
         )
     }
@@ -949,7 +979,7 @@ fun WeatherAppScreen(
             onDismiss = { isEmergencyPopupDismissed = true },
             onCall117 = { EmergencyDialer.dial(context, "117") },
             onOpenEvacuationMap = {
-                viewModel.selectTab(3)
+                viewModel.selectTab(4)
             }
         )
     }

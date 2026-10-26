@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
@@ -77,12 +78,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.District
+import com.example.util.GoogleMapsHelper
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import kotlin.math.roundToInt
@@ -127,6 +130,7 @@ fun InteractiveDisasterMapSection(
     isDark: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var selectedCategory by remember { mutableStateOf(DisasterCategory.ALL) }
     var selectedPoint by remember { mutableStateOf<DisasterMapPoint?>(null) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
@@ -748,18 +752,39 @@ fun InteractiveDisasterMapSection(
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
+                                Button(
+                                    onClick = {
+                                        val targetLat = -2.25 - (point.normalizedY * 1.15)
+                                        val targetLon = 101.00 + (point.normalizedX * 0.90)
+                                        GoogleMapsHelper.openNavigationRoute(
+                                            context = context,
+                                            destLat = targetLat,
+                                            destLon = targetLon,
+                                            destName = point.name
+                                        )
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1.1f).height(36.dp),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("Rute Maps", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+
                                 Button(
                                     onClick = onOpenSopEvacuation,
                                     colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                                     shape = RoundedCornerShape(10.dp),
                                     modifier = Modifier.weight(1f).height(36.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
                                 ) {
-                                    Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Buka Panduan SOP", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("SOP Evakuasi", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
 
                                 OutlinedButton(
@@ -768,11 +793,11 @@ fun InteractiveDisasterMapSection(
                                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
                                     shape = RoundedCornerShape(10.dp),
                                     modifier = Modifier.height(36.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
-                                    Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Darurat 117", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("117", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }

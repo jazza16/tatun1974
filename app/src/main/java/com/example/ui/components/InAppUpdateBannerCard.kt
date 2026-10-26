@@ -381,16 +381,28 @@ fun AppUpdatePromptDialog(
                             color = OrangePrimary
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "• Prakiraan Cuaca 3 Hari (15 Kecamatan)\n" +
-                                   "• Peta Interaktif & Jalur Evakuasi Bencana\n" +
-                                   "• Notifikasi Dini Cuaca Buruk Otomatis\n" +
-                                   "• Layout Responsif Tablet & Ponsel (LazyVerticalGrid)\n" +
-                                   "• Migrasi aman tanpa kehilangan data",
-                            fontSize = 11.sp,
-                            lineHeight = 16.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                        )
+                        val activeHighlights = updateState.changelogs
+                            .find { it.version == updateState.latestVersion }
+                            ?.highlights
+                            ?: listOf(
+                                "Tab Laporan Warga Bersebelahan dengan Prakiraan Cuaca",
+                                "Peluncur Kamera Langsung (Live Camera Launcher) & Geotag",
+                                "Peta Spasial GIS Laporan Warga & Filter Kategori Kejadian",
+                                "Layer Overlay Titik Rawan Bencana BPBD Mukomuko",
+                                "Pelacakan Status Laporan & Notifikasi Toast Konfirmasi",
+                                "Direktori Kontak Darurat Mukomuko & Dial Cepat 117 BPBD",
+                                "Optimalisasi Tombol Aksi Cepat Speed Dial FAB Material 3"
+                            )
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            activeHighlights.take(5).forEach { highlight ->
+                                Text(
+                                    text = "• $highlight",
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
                     }
                 }
 

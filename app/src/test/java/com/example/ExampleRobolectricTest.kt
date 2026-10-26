@@ -89,12 +89,12 @@ class ExampleRobolectricTest {
     org.junit.Assert.assertFalse(prefs.isUpdatePermanentlyInstalled())
 
     // Testing dialog dismissal for version
-    prefs.setDialogDismissedForVersion("1.3.0")
-    assertTrue(prefs.isDialogDismissedForVersion("1.3.0"))
+    prefs.setDialogDismissedForVersion("1.5.0")
+    assertTrue(prefs.isDialogDismissedForVersion("1.5.0"))
 
     // Testing permanent installation of latest version
-    prefs.setUpdateInstalledPermanently("1.3.0")
-    assertEquals("1.3.0", prefs.getInstalledVersion())
+    prefs.setUpdateInstalledPermanently("1.5.0")
+    assertEquals("1.5.0", prefs.getInstalledVersion())
     assertTrue(prefs.isUpdatePermanentlyInstalled())
   }
 
@@ -200,5 +200,30 @@ class ExampleRobolectricTest {
     val completed = report.copy(status = "Selesai")
     assertEquals("Selesai", completed.status)
     assertTrue(com.example.ui.components.MUKOMUKO_HAZARD_ZONES.isNotEmpty())
+  }
+
+  @Test
+  fun `verify bpbd officer authentication and valid pins`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val officerAuth = com.example.data.local.OfficerAuthManager(context)
+
+    // Test invalid pin
+    val failed = officerAuth.loginOfficer("Bripka Hendra", "TRC-01", "Shift 1", "0000")
+    org.junit.Assert.assertFalse(failed)
+
+    // Test valid BPBD PIN 117
+    val success117 = officerAuth.loginOfficer("Bripka Hendra", "TRC-01", "Shift Siaga 24 Jam", "117")
+    assertTrue(success117)
+    assertTrue(officerAuth.isOfficerLoggedIn())
+    assertEquals("Bripka Hendra", officerAuth.getOfficerName())
+
+    // Test logout
+    officerAuth.logoutOfficer()
+    org.junit.Assert.assertFalse(officerAuth.isOfficerLoggedIn())
+
+    // Test valid TRC2026 PIN
+    val successTrc = officerAuth.loginOfficer("Tim Reaksi Cepat", "TRC-MMK-117", "Regu Siaga", "TRC2026")
+    assertTrue(successTrc)
+    assertTrue(officerAuth.isOfficerLoggedIn())
   }
 }

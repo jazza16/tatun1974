@@ -35,13 +35,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
@@ -53,7 +58,11 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -77,6 +86,7 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -93,14 +103,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.example.data.local.OfficerAuthManager
 import com.example.model.CitizenDisasterReport
 import com.example.model.District
 import com.example.model.MukomukoDistricts
 import com.example.ui.theme.OrangePrimary
+import com.example.util.GoogleMapsHelper
 import com.example.util.LocationHelper
 import java.io.File
 import java.io.FileOutputStream
@@ -168,10 +184,41 @@ fun CitizenReportScreen(
     onSubmitReport: (CitizenDisasterReport) -> Unit,
     onUpdateReportStatus: (String, String) -> Unit,
     onBackClick: () -> Unit,
+    onSyncReports: (((Int) -> Unit) -> Unit)? = null,
+    onUpdateReportStatusAndNotes: ((String, String, String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Formulir, 1 = Peta Sebaran, 2 = Tabel Riwayat, 3 = Kontak Penting
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Formulir, 1 = Peta Sebaran, 2 = Tabel Riwayat, 3 = Kontak Penting, 4 = Konsol Petugas
+
+    // Officer Authentication State (BPBD Mukomuko Petugas Jaga)
+    val officerAuthManager = remember { OfficerAuthManager(context) }
+    var isOfficerLoggedIn by remember { mutableStateOf(officerAuthManager.isOfficerLoggedIn()) }
+    var officerName by remember { mutableStateOf(officerAuthManager.getOfficerName()) }
+    var officerBadgeId by remember { mutableStateOf(officerAuthManager.getOfficerBadgeId()) }
+    var officerShift by remember { mutableStateOf(officerAuthManager.getOfficerShift()) }
+
+    // Officer Login & Status Gating Modal State
+    var showOfficerLoginDialog by remember { mutableStateOf(false) }
+    var pendingStatusReportId by remember { mutableStateOf<String?>(null) }
+    var pendingStatusTarget by remember { mutableStateOf<String?>(null) }
+
+    // Photo Fullscreen Zoom Dialog State
+    var previewPhotoUri by remember { mutableStateOf<String?>(null) }
+    var previewPhotoReport by remember { mutableStateOf<CitizenDisasterReport?>(null) }
+
+    // Cloud Online Sync State
+    var isSyncingOnline by remember { mutableStateOf(false) }
+    var lastSyncStatusMessage by remember { mutableStateOf<String?>(null) }
+
+    // Trigger auto-sync once on screen open
+    LaunchedEffect(Unit) {
+        onSyncReports?.invoke { count ->
+            if (count > 0) {
+                lastSyncStatusMessage = "$count laporan baru disinkronkan"
+            }
+        }
+    }
 
     // Form inputs state
     var selectedDisasterType by remember { mutableStateOf(DISASTER_TYPES[0]) }
@@ -205,10 +252,9 @@ fun CitizenReportScreen(
     var injuredCount by remember { mutableIntStateOf(0) }
     var missingCount by remember { mutableIntStateOf(0) }
 
-    // Photo & Geotag Verification (Anti-Hoax)
+    // Photo & Geotag Verification (Anti-Hoax: Live camera only, gallery upload disabled)
     var photoUriString by remember { mutableStateOf<String?>(null) }
     var cameraCapturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var showPhotoSourceDialog by remember { mutableStateOf(false) }
 
     var reporterName by remember { mutableStateOf("") }
     var reporterPhone by remember { mutableStateOf("") }
@@ -238,18 +284,7 @@ fun CitizenReportScreen(
             } catch (_: Exception) {
                 // Keep bitmap in memory
             }
-            Toast.makeText(context, "Foto kamera berhasil diambil dengan stempel GPS!", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // Photo picker launcher (PickVisualMedia)
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            photoUriString = uri.toString()
-            cameraCapturedBitmap = null
-            Toast.makeText(context, "Foto kejadian terpilih. Stempel GPS disematkan.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Foto kamera langsung berhasil diambil dengan stempel GPS!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -465,6 +500,42 @@ fun CitizenReportScreen(
                                 fontSize = 12.sp,
                                 color = if (selectedTab == 3) Color.White else Color.White.copy(alpha = 0.7f)
                             )
+                        }
+                    }
+                )
+
+                // Tab 4: Konsol Petugas (Validasi & Tindak Lanjut TRC)
+                Tab(
+                    selected = selectedTab == 4,
+                    onClick = { selectedTab = 4 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = null,
+                                tint = if (selectedTab == 4) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Konsol Petugas",
+                                fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 12.sp,
+                                color = if (selectedTab == 4) Color.White else Color.White.copy(alpha = 0.7f)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Surface(
+                                shape = CircleShape,
+                                color = if (selectedTab == 4) Color(0xFFFBBF24) else Color(0xFF16A34A)
+                            ) {
+                                Text(
+                                    text = if (isOfficerLoggedIn) "ON" else "PIN",
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (selectedTab == 4) Color.Black else Color.White,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
                         }
                     }
                 )
@@ -892,64 +963,59 @@ fun CitizenReportScreen(
 
                                     Spacer(modifier = Modifier.height(10.dp))
 
-                                    // Action Buttons: Ambil Foto Kamera vs Pilih Galeri
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    // Action Button: Buka Kamera Langsung Saja (Pilihan galeri dinonaktifkan demi integritas anti-palsu)
+                                    Button(
+                                        onClick = {
+                                            if (!isGpsLocked) {
+                                                fetchGpsLocation()
+                                            }
+                                            cameraLauncher.launch(null)
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("btn_launch_camera"),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
                                     ) {
-                                        Button(
-                                            onClick = {
-                                                if (!isGpsLocked) {
-                                                    fetchGpsLocation()
-                                                }
-                                                cameraLauncher.launch(null)
-                                            },
-                                            modifier = Modifier
-                                                .weight(1.2f)
-                                                .testTag("btn_launch_camera"),
-                                            shape = RoundedCornerShape(10.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+                                        Icon(
+                                            imageVector = Icons.Default.CameraAlt,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Buka Kamera Langsung (Geotag Anti-Palsu)",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Surface(
+                                        color = Color(0xFFFEF2F2),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.CameraAlt,
+                                                imageVector = Icons.Default.Shield,
                                                 contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(16.dp)
+                                                tint = Color(0xFFDC2626),
+                                                modifier = Modifier.size(14.dp)
                                             )
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
-                                                text = "Buka Kamera",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color.White
-                                            )
-                                        }
-
-                                        OutlinedButton(
-                                            onClick = {
-                                                if (!isGpsLocked) {
-                                                    fetchGpsLocation()
-                                                }
-                                                photoPickerLauncher.launch(
-                                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                                )
-                                            },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(10.dp),
-                                            colors = ButtonDefaults.outlinedButtonColors(
-                                                contentColor = Color(0xFF15803D)
-                                            )
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.PhotoLibrary,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "Galeri",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
+                                                text = "Pilihan galeri dinonaktifkan. Demi integritas anti-palsu, hanya foto kamera langsung di tempat kejadian dengan stempel satelit GPS yang diterima sistem BPBD.",
+                                                fontSize = 9.sp,
+                                                color = Color(0xFF991B1B),
+                                                lineHeight = 12.sp
                                             )
                                         }
                                     }
@@ -1052,13 +1118,211 @@ fun CitizenReportScreen(
                 }
 
                 2 -> {
-                    // TAB 2: TABEL RIWAYAT LAPORAN WARGA (With Status Filters & Status Change Buttons)
+                    // TAB 2: TABEL RIWAYAT LAPORAN WARGA (With Status Filters, Cloud Sync, & Officer Role-Gating)
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        // 1. Officer Role & Authentication Status Card
+                        item {
+                            Surface(
+                                color = if (isOfficerLoggedIn) Color(0xFFF0FDF4) else Color(0xFFEFF6FF),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isOfficerLoggedIn) Color(0xFFBBF7D0) else Color(0xFFBFDBFE)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isOfficerLoggedIn) Icons.Default.Badge else Icons.Default.Shield,
+                                            contentDescription = null,
+                                            tint = if (isOfficerLoggedIn) Color(0xFF15803D) else Color(0xFF2563EB),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = if (isOfficerLoggedIn) {
+                                                    "PETUGAS JAGA AKTIF: $officerName"
+                                                } else {
+                                                    "Akses Respon: Khusus Petugas BPBD"
+                                                },
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isOfficerLoggedIn) Color(0xFF14532D) else Color(0xFF1E40AF)
+                                            )
+                                            Text(
+                                                text = if (isOfficerLoggedIn) {
+                                                    "ID/NIP: $officerBadgeId • $officerShift"
+                                                } else {
+                                                    "Hanya Petugas Jaga terdaftar yang dapat memvalidasi & mengubah status laporan"
+                                                },
+                                                fontSize = 10.sp,
+                                                color = if (isOfficerLoggedIn) Color(0xFF166534) else Color(0xFF3B82F6)
+                                            )
+                                        }
+                                    }
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Button(
+                                            onClick = { selectedTab = 4 },
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                            modifier = Modifier.height(34.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Shield,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text(
+                                                text = "Konsol Petugas",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                if (isOfficerLoggedIn) {
+                                                    officerAuthManager.logoutOfficer()
+                                                    isOfficerLoggedIn = false
+                                                    Toast.makeText(context, "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    showOfficerLoginDialog = true
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (isOfficerLoggedIn) Color(0xFFDC2626) else Color(0xFF2563EB)
+                                            ),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                            modifier = Modifier.height(34.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isOfficerLoggedIn) Icons.Default.LockOpen else Icons.Default.Lock,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = if (isOfficerLoggedIn) "Keluar" else "PIN",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2. Cloud Synchronization Card across Android phones
+                        item {
+                            Surface(
+                                color = Color(0xFFFFFBEB),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CloudSync,
+                                            contentDescription = null,
+                                            tint = Color(0xFFD97706),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                text = "Sinkronisasi Cloud Antar-Ponsel",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF92400E)
+                                            )
+                                            Text(
+                                                text = lastSyncStatusMessage ?: "Sinkronkan agar laporan warga dari ponsel lain tampil otomatis.",
+                                                fontSize = 9.sp,
+                                                color = Color(0xFFB45309)
+                                            )
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            if (!isSyncingOnline) {
+                                                isSyncingOnline = true
+                                                onSyncReports?.invoke { count ->
+                                                    isSyncingOnline = false
+                                                    lastSyncStatusMessage = "Tersinkron: $count laporan diperbarui dari server"
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Sinkronisasi selesai! $count laporan warga terunduh dari server Pusdalops.",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                } ?: run {
+                                                    isSyncingOnline = false
+                                                }
+                                            }
+                                        },
+                                        enabled = !isSyncingOnline,
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                        modifier = Modifier.height(34.dp)
+                                    ) {
+                                        if (isSyncingOnline) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(14.dp),
+                                                strokeWidth = 2.dp,
+                                                color = Color.White
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.Sync,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (isSyncingOnline) "Menyinkronkan..." else "Sinkronkan",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 3. Filter by status chips
                         item {
                             Surface(
                                 color = Color(0xFFF3F4F6),
@@ -1068,22 +1332,22 @@ fun CitizenReportScreen(
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
-                                            imageVector = Icons.Default.Shield,
+                                            imageVector = Icons.Default.Info,
                                             contentDescription = null,
                                             tint = Color(0xFF15803D),
-                                            modifier = Modifier.size(22.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "Tabel & Status Validasi Laporan",
-                                            fontSize = 13.sp,
+                                            text = "Filter Riwayat Laporan Bencana",
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF111827)
                                         )
                                     }
                                     Text(
-                                        text = "Indikator status: 'Diproses' (kuning), 'Divalidasi' (hijau), 'Selesai' (biru). Ketuk tombol status untuk memperbarui laporan.",
-                                        fontSize = 11.sp,
+                                        text = "Indikator status: 'Diproses' (kuning), 'Divalidasi' (hijau), 'Selesai' (biru). Terkoneksi langsung dengan Google Maps & GPS Kamera.",
+                                        fontSize = 10.sp,
                                         color = Color(0xFF4B5563),
                                         modifier = Modifier.padding(top = 2.dp)
                                     )
@@ -1145,13 +1409,24 @@ fun CitizenReportScreen(
                             items(displayedReports) { report ->
                                 CitizenReportItemCard(
                                     report = report,
+                                    isOfficerLoggedIn = isOfficerLoggedIn,
                                     onUpdateStatus = { newStatus ->
-                                        onUpdateReportStatus(report.id, newStatus)
-                                        Toast.makeText(
-                                            context,
-                                            "Status laporan #${report.id.takeLast(7)} diubah menjadi '$newStatus'",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        if (isOfficerLoggedIn) {
+                                            onUpdateReportStatus(report.id, newStatus)
+                                            Toast.makeText(
+                                                context,
+                                                "Status laporan #${report.id.takeLast(7)} diubah menjadi '$newStatus' oleh Petugas $officerName",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        } else {
+                                            pendingStatusReportId = report.id
+                                            pendingStatusTarget = newStatus
+                                            showOfficerLoginDialog = true
+                                        }
+                                    },
+                                    onViewPhoto = { photoUri ->
+                                        previewPhotoUri = photoUri
+                                        previewPhotoReport = report
                                     }
                                 )
                             }
@@ -1166,6 +1441,31 @@ fun CitizenReportScreen(
                 3 -> {
                     // TAB 3: KONTAK PENTING DARURAT MUKOMUKO
                     CitizenEmergencyContactsView()
+                }
+
+                4 -> {
+                    // TAB 4: KONSOL KHUSUS PETUGAS PUSDALOPS BPBD & TIM TRC
+                    OfficerDashboardConsoleView(
+                        reports = reports,
+                        currentDistrict = currentDistrict,
+                        isOfficerLoggedIn = isOfficerLoggedIn,
+                        officerName = officerName,
+                        officerBadgeId = officerBadgeId,
+                        officerShift = officerShift,
+                        onLoginClick = { showOfficerLoginDialog = true },
+                        onLogoutClick = {
+                            officerAuthManager.logoutOfficer()
+                            isOfficerLoggedIn = false
+                            Toast.makeText(context, "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)", Toast.LENGTH_SHORT).show()
+                        },
+                        onUpdateReportStatus = onUpdateReportStatus,
+                        onUpdateReportStatusAndNotes = onUpdateReportStatusAndNotes,
+                        onViewPhoto = { photoUri, rep ->
+                            previewPhotoUri = photoUri
+                            previewPhotoReport = rep
+                        },
+                        onSyncReports = onSyncReports
+                    )
                 }
             }
         }
@@ -1243,6 +1543,333 @@ fun CitizenReportScreen(
                 }
             }
         )
+    }
+
+    // Officer Login & PIN Verification Dialog
+    if (showOfficerLoginDialog) {
+        var inputName by remember { mutableStateOf(officerName) }
+        var inputBadge by remember { mutableStateOf(officerBadgeId) }
+        var inputShift by remember { mutableStateOf(officerShift) }
+        var inputPin by remember { mutableStateOf("") }
+        var isPinVisible by remember { mutableStateOf(false) }
+        var isError by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = {
+                showOfficerLoginDialog = false
+                pendingStatusReportId = null
+                pendingStatusTarget = null
+            },
+            icon = {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFFEFF6FF),
+                    modifier = Modifier.size(50.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Badge,
+                            contentDescription = null,
+                            tint = Color(0xFF2563EB),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    text = "Verifikasi Petugas Jaga BPBD",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Khusus Petugas Pusdalops / Tim Reaksi Cepat (TRC) BPBD Kabupaten Mukomuko yang berwenang memvalidasi dan mengubah status penanganan bencana.",
+                        fontSize = 11.sp,
+                        color = Color(0xFF4B5563),
+                        lineHeight = 15.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = inputName,
+                        onValueChange = { inputName = it },
+                        label = { Text("Nama Petugas Jaga", fontSize = 11.sp) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = inputBadge,
+                            onValueChange = { inputBadge = it },
+                            label = { Text("NIP / ID Petugas", fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = inputShift,
+                            onValueChange = { inputShift = it },
+                            label = { Text("Regu / Shift", fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = inputPin,
+                        onValueChange = {
+                            inputPin = it
+                            isError = false
+                        },
+                        label = { Text("PIN Keamanan Petugas", fontSize = 11.sp) },
+                        placeholder = { Text("PIN: 117 / BPBD117", fontSize = 11.sp) },
+                        visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        trailingIcon = {
+                            IconButton(onClick = { isPinVisible = !isPinVisible }) {
+                                Icon(
+                                    imageVector = if (isPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        },
+                        isError = isError,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (isError) {
+                        Text(
+                            text = "PIN salah. Gunakan PIN resmi BPBD (117 / BPBD117 / TRC2026).",
+                            color = Color(0xFFDC2626),
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    } else {
+                        Text(
+                            text = "Petunjuk: PIN default Pusdalops adalah 117 atau BPBD117",
+                            color = Color(0xFF6B7280),
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val success = officerAuthManager.loginOfficer(
+                            name = inputName,
+                            badgeId = inputBadge,
+                            shift = inputShift,
+                            pin = inputPin
+                        )
+                        if (success) {
+                            isOfficerLoggedIn = true
+                            officerName = officerAuthManager.getOfficerName()
+                            officerBadgeId = officerAuthManager.getOfficerBadgeId()
+                            officerShift = officerAuthManager.getOfficerShift()
+                            showOfficerLoginDialog = false
+
+                            // If there was a pending report status change, execute it now!
+                            val targetId = pendingStatusReportId
+                            val targetStatus = pendingStatusTarget
+                            if (targetId != null && targetStatus != null) {
+                                onUpdateReportStatus(targetId, targetStatus)
+                                Toast.makeText(
+                                    context,
+                                    "Terverifikasi sebagai $officerName. Status laporan diperbarui menjadi '$targetStatus'",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                Toast.makeText(context, "Selamat bertugas, $officerName!", Toast.LENGTH_SHORT).show()
+                            }
+                            pendingStatusReportId = null
+                            pendingStatusTarget = null
+                        } else {
+                            isError = true
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+                ) {
+                    Text("Verifikasi & Masuk")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        showOfficerLoginDialog = false
+                        pendingStatusReportId = null
+                        pendingStatusTarget = null
+                    }
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Enlarged Fullscreen Photo Dialog
+    if (previewPhotoUri != null && previewPhotoReport != null) {
+        val activeRep = previewPhotoReport!!
+        Dialog(
+            onDismissRequest = {
+                previewPhotoUri = null
+                previewPhotoReport = null
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.95f)),
+                color = Color.Black.copy(alpha = 0.95f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                ) {
+                    // Top Bar with Close Button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Foto Kejadian Bencana Lapangan",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+                            Text(
+                                text = "ID: ${activeRep.id} • ${activeRep.village}, ${activeRep.district}",
+                                color = Color(0xFFD1D5DB),
+                                fontSize = 11.sp
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                previewPhotoUri = null
+                                previewPhotoReport = null
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Tutup",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Full Photo Container
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF111827)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = previewPhotoUri,
+                            contentDescription = "Foto Bencana Resolusi Penuh",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        // GPS Satellite Geotag Watermark Overlay (Bottom)
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.85f),
+                            shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp),
+                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Shield,
+                                        contentDescription = null,
+                                        tint = Color(0xFF22C55E),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "STEMPEL DIGITAL BPBD MUKOMUKO (KAMERA SATELLITE GPS)",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFF86EFAC)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "📍 Koordinat: %.5f, %.5f (Akurasi: ${activeRep.gpsAccuracyMeters?.let { "%.1f m".format(it) } ?: "Terkunci Satelit"})".format(activeRep.latitude, activeRep.longitude),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFBBF24)
+                                )
+                                Text(
+                                    text = "🕒 Waktu Kejadian: ${activeRep.incidentTime} • Pelapor: ${activeRep.reporterName}",
+                                    fontSize = 10.sp,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Bottom Navigation Button: Open route in Google Maps
+                    Button(
+                        onClick = {
+                            GoogleMapsHelper.openNavigationRoute(
+                                context = context,
+                                destLat = activeRep.latitude,
+                                destLon = activeRep.longitude,
+                                destName = "${activeRep.disasterType} - ${activeRep.village}"
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Navigation,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Buka Rute Evakuasi di Google Maps",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1375,12 +2002,15 @@ private fun CasualtyCounterRow(
 }
 
 /**
- * Report Card Item inside the History Table view with interactive status buttons
+ * Report Card Item inside the History Table view with interactive status buttons,
+ * GPS Photo display with watermark, Google Maps navigation, and officer-gated actions.
  */
 @Composable
 private fun CitizenReportItemCard(
     report: CitizenDisasterReport,
-    onUpdateStatus: (String) -> Unit
+    isOfficerLoggedIn: Boolean,
+    onUpdateStatus: (String) -> Unit,
+    onViewPhoto: (String) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -1476,6 +2106,76 @@ private fun CitizenReportItemCard(
                 modifier = Modifier.padding(top = 2.dp)
             )
 
+            // PHOTO DISPLAY: Captured Photo with BPBD GPS Watermark
+            if (!report.photoUri.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD1D5DB)),
+                    color = Color(0xFF1E293B),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .clickable { onViewPhoto(report.photoUri) }
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AsyncImage(
+                            model = report.photoUri,
+                            contentDescription = "Foto Bencana di Lokasi",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        // GPS Satellite Watermark Banner (Bottom)
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.78f),
+                            shape = RoundedCornerShape(topStart = 8.dp),
+                            modifier = Modifier.align(Alignment.BottomEnd)
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                                Text(
+                                    text = "📍 %.5f, %.5f".format(report.latitude, report.longitude),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFBBF24)
+                                )
+                                Text(
+                                    text = "🛡️ FOTO ASLI BPBD MUKOMUKO",
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF86EFAC)
+                                )
+                            }
+                        }
+
+                        // Zoom indicator badge (Top End)
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            shape = CircleShape,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp)
+                                .size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.ZoomIn,
+                                    contentDescription = "Perbesar Foto",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                Text(
+                    text = "🔍 Ketuk foto untuk melihat dalam resolusi penuh & stempel digital",
+                    fontSize = 9.sp,
+                    color = Color(0xFF6B7280),
+                    modifier = Modifier.padding(top = 3.dp)
+                )
+            }
+
             // GPS Coordinates Banner
             Surface(
                 shape = RoundedCornerShape(6.dp),
@@ -1540,24 +2240,99 @@ private fun CitizenReportItemCard(
                 modifier = Modifier.padding(top = 4.dp)
             )
 
+            // GOOGLE MAPS CONNECTION BUTTONS (Universal Route & Navigation)
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Button(
+                    onClick = {
+                        GoogleMapsHelper.openNavigationRoute(
+                            context = context,
+                            destLat = report.latitude,
+                            destLon = report.longitude,
+                            destName = "${report.disasterType} - ${report.village}"
+                        )
+                    },
+                    modifier = Modifier.weight(1.3f).height(36.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Navigation,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Rute Google Maps",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        GoogleMapsHelper.openLocation(
+                            context = context,
+                            latitude = report.latitude,
+                            longitude = report.longitude,
+                            label = "${report.disasterType} (${report.village})"
+                        )
+                    },
+                    modifier = Modifier.weight(1f).height(36.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1D4ED8)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF93C5FD)),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Pin Maps",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             HorizontalDivider(
                 color = Color(0xFFF3F4F6),
                 thickness = 1.dp,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
 
-            // Status Management Row with Buttons
+            // Status Management Row with Buttons (Officer role-gated)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Update Status:",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF4B5563)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!isOfficerLoggedIn) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Terkunci",
+                            tint = Color(0xFF9CA3AF),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                    }
+                    Text(
+                        text = if (isOfficerLoggedIn) "Update Status (Petugas):" else "Status (Khusus Petugas):",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isOfficerLoggedIn) Color(0xFF15803D) else Color(0xFF4B5563)
+                    )
+                }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     ReportStatusChip(

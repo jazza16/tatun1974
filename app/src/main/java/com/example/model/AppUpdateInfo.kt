@@ -9,8 +9,8 @@ data class VersionChangelog(
 )
 
 data class AppUpdateState(
-    val currentVersion: String = "1.4.0",
-    val latestVersion: String = "1.4.0",
+    val currentVersion: String = "1.6.0",
+    val latestVersion: String = "1.6.0",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -22,18 +22,50 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "1.4.0",
+    val lastCheckedVersion: String = "1.6.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis resmi v1.4.0 terbaru secara permanen.",
-    val packageSizeMb: Float = 15.8f,
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis resmi v1.6.0 terbaru secara permanen.",
+    val packageSizeMb: Float = 16.8f,
     val isBannerDismissed: Boolean = false,
     val isSimulationActive: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
         VersionChangelog(
-            version = "1.4.0",
-            releaseDate = "24 Oktober 2026",
+            version = "1.6.0",
+            releaseDate = "26 Oktober 2026",
             isCurrent = true,
             isLatest = true,
+            highlights = listOf(
+                "Konsol Khusus Petugas Pusdalops BPBD & TRC: Antarmuka terdedikasi bagi petugas jaga Pusdalops dan Tim Reaksi Cepat (TRC) untuk validasi, verifikasi, dan pengelolaan laporan bencana warga secara terpusat.",
+                "Dasbor KPI & Metrik Siaga Bencana Real-Time: Pemantauan statistik operasional interaktif (Total Masuk, Menunggu Validasi, Tim Lapangan Diterjunkan, Tuntas Ditangani, dan Akumulasi Korban Jiwa).",
+                "Log Tindak Lanjut & Catatan Lapangan TRC: Fitur pencatatan resmi aksi penanganan, pengerahan armada/logistik (perahu karet, tenda darurat, genset), yang tersimpan permanen dan tersinkronisasi daring.",
+                "Pemanduan Langsung Google Maps & Kontak Pelapor Cepat: Satu ketukan untuk rute navigasi armada darurat ke koordinat satelit GPS pelapor, disertai panggilan telepon dan WhatsApp instan.",
+                "Disposisi Laporan Format Resmi Pusdalops BPBD: Ekspor dan bagikan laporan situasi (Sitrep) lengkap dengan koordinat dan tautan Google Maps langsung ke posko siaga atau grup WhatsApp komando.",
+                "Sinkronisasi Multi-Device Cloud Real-Time: Sinkronisasi instan status laporan (Diproses -> Divalidasi -> Selesai) antar perangkat ponsel warga, relawan, dan posko induk BPBD Kabupaten Mukomuko.",
+                "Autentikasi Keamanan PIN Petugas Jaga: Perlindungan akses perubahan status dan log TRC menggunakan PIN resmi terverifikasi (117 / BPBD117 / TRC2026)."
+            )
+        ),
+        VersionChangelog(
+            version = "1.5.0",
+            releaseDate = "25 Oktober 2026",
+            isCurrent = false,
+            isLatest = false,
+            highlights = listOf(
+                "Tab Laporan Warga Bersebelahan dengan Prakiraan Cuaca: Navigasi cepat tepat di samping tab Prakiraan Cuaca untuk pelaporan insiden darurat dan bencana secara instan.",
+                "Formulir Pelaporan Bencana Terpadu & Geotag Anti-Hoax: Pencatatan data bencana lengkap (jenis bencana, waktu WIB, lokasi detail, 15 kecamatan & desa/kelurahan Mukomuko, data korban jiwa meninggal/luka/hilang) dengan kunci koordinat GPS satelit ponsel.",
+                "Peluncur Kamera Langsung (Live Camera Launcher): Ambil foto kondisi kejadian langsung di lokasi dengan stempel digital watermark GPS resmi BPBD Mukomuko.",
+                "Peta Spasial GIS Interaktif Laporan Warga: Pemetaan pin kejadian real-time dengan filter kategori (Banjir, Angin Kencang, Gelombang/Abrasi, Longsor, Infrastruktur) dan tombol navigasi langsung ke Google Maps.",
+                "Layer Overlay Titik Rawan Bencana BPBD Mukomuko: Pemantauan korelasi sebaran aduan warga dengan zona risiko tinggi (Zona Pesisir Abrasi Koto Jaya - Teramang Jaya, DAS Manjunto & Selagan, Perbukitan V Koto & Malin Deman, Pesisir Ipuh & Air Rami).",
+                "Sistem Pelacakan Status Laporan & Notifikasi Toast: Indikator status berwarna (Diproses, Divalidasi, Selesai) pada tabel riwayat laporan dengan aksi pembaruan status interaktif dan notifikasi toast konfirmasi.",
+                "Direktori 'Kontak Penting' Darurat Mukomuko: Akses panggilan cepat satu ketukan ke Call Center Bebas Pulsa 117 BPBD, Pusdalops BPBD (0737-71112), Polres 110, RSUD Mukomuko IGD 24 Jam, Damkar 113, Basarnas 115, PMI, dan Polsek se-Mukomuko.",
+                "Optimalisasi Tombol Aksi Cepat (Speed Dial FAB): Tombol aksi cepat Material 3 yang 100% responsif terhadap ketukan tanpa konflik gestur, dilengkapi tombol alih posisi jempol (kiri/kanan) dan pintasan ke Laporan Warga.",
+                "Caching Offline Room Database: Dukungan penyimpanan offline prakiraan cuaca dan riwayat aduan warga untuk kelancaran akses di daerah pesisir Mukomuko dengan sinyal terbatas."
+            )
+        ),
+        VersionChangelog(
+            version = "1.4.0",
+            releaseDate = "24 Oktober 2026",
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "Identitas Baru SIPAGAR KITA: Resmi berganti nama dari Cuaca Mukomuko menjadi SIPAGAR KITA (SIMAK, PAGAR, KITA) sebagai benteng pertahanan & kesiapsiagaan masyarakat Mukomuko.",
                 "Edukasi Akronim SIPAGAR KITA: Penjelasan rinci makna SIMAK (Sistem Informasi Maritim, Atmosfer & Kebencanaan Mukomuko), PAGAR (Peringatan Awal, Gelombang, Air & Resiko Mukomuko), dan KITA (Kesiapsiagaan, Iklim, dan Tanggap Bencana Mukomuko) di layar utama dengan tipografi oranye khas.",

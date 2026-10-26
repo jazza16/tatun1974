@@ -86,6 +86,7 @@ import com.example.model.EarthquakeUrgency
 import com.example.ui.theme.OrangePrimary
 import com.example.ui.theme.WeatherGoodGreen
 import com.example.util.EarthquakeNotificationHelper
+import com.example.util.GoogleMapsHelper
 import java.util.Locale
 
 /**
@@ -598,6 +599,7 @@ private fun WrsParameterMatrixCard(
     earthquake: BmkgEarthquake,
     onCall117: () -> Unit
 ) {
+    val context = LocalContext.current
     val depthVal = earthquake.depth.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 15
     val depthCategory = when {
         depthVal < 60 -> "Dangkal (< 60 km)"
@@ -865,6 +867,40 @@ private fun WrsParameterMatrixCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            // Google Maps Episentrum Button
+            Button(
+                onClick = {
+                    GoogleMapsHelper.openEarthquakeEpicenter(
+                        context = context,
+                        latitude = earthquake.latitude,
+                        longitude = earthquake.longitude,
+                        magnitude = String.format(Locale.US, "%.1f", earthquake.magnitude),
+                        wilayah = earthquake.region
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("btn_open_earthquake_maps")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Map,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Buka Episentrum di Google Maps",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             // Emergency call button
             Button(
                 onClick = onCall117,
@@ -944,6 +980,7 @@ private fun WrsShakemapSection(earthquake: BmkgEarthquake) {
 
 @Composable
 private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
+    val context = LocalContext.current
     var filterType by remember { mutableStateOf("ALL") } // ALL, NEAR, FELT
     var isExpanded by remember { mutableStateOf(false) }
 
@@ -1082,6 +1119,25 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                         )
+                        IconButton(
+                            onClick = {
+                                GoogleMapsHelper.openEarthquakeEpicenter(
+                                    context = context,
+                                    latitude = eq.latitude,
+                                    longitude = eq.longitude,
+                                    magnitude = String.format(Locale.US, "%.1f", eq.magnitude),
+                                    wilayah = eq.region
+                                )
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Map,
+                                contentDescription = "Buka di Google Maps",
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
 
