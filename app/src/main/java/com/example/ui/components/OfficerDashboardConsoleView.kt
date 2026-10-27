@@ -1,13 +1,17 @@
 package com.example.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,10 +32,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -43,18 +48,16 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.PhoneInTalk
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.AlertDialog
@@ -82,33 +85,34 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.data.local.OfficerAuthManager
 import com.example.model.CitizenDisasterReport
 import com.example.model.District
 import com.example.util.GoogleMapsHelper
+import com.example.util.ReportExporter
 
 /**
- * Konsol Khusus Petugas Pusdalops BPBD Kabupaten Mukomuko & Tim Reaksi Cepat (TRC).
- * Tampilan antarmuka khusus untuk:
- * 1. Validasi keabsahan laporan warga (anti-laporan palsu)
- * 2. Pemantauan metrik KPI real-time (butuh validasi, TRC diterjunkan, tuntas)
- * 3. Log catatan resmi tindak lanjut petugas di lapangan
- * 4. Pemanduan navigasi Google Maps armada rescue ke titik GPS
- * 5. Komunikasi instan dengan pelapor & komando posko siaga 117
+ * Modul Petugas Dashboard Aman (Khusus Staf Pusdalops BPBD & Tim Reaksi Cepat TRC).
+ * Fitur:
+ * 1. Filter status, kecamatan, dan multi-kategori bencana (Banjir, Cuaca Ekstrem, Keamanan Pesisir, dll.)
+ * 2. Auto-Pin lokasi tepat di peta mini interaktif saat meninjau laporan
+ * 3. Grafik batang visualisasi statistik tren bulanan kategori bencana
+ * 4. Ekspor dokumen resmi ke PDF (arsip digital) dan CSV (analisis Excel)
+ * 5. Modul 'Arsip' untuk memisahkan laporan berstatus 'Selesai'
+ * 6. Validasi status ('Diproses', 'Divalidasi', 'Selesai') dengan toast notifikasi
  */
 @Composable
 fun OfficerDashboardConsoleView(
@@ -128,12 +132,22 @@ fun OfficerDashboardConsoleView(
 ) {
     val context = LocalContext.current
 
-    // Filters & Search State
+    // View Mode: 0 = Antrean Aktif, 1 = Modul Arsip (Selesai), 2 = Grafik Statistik
+    var dashboardSubTab by remember { mutableStateOf(0) }
+
+    // Filters State
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatusFilter by remember { mutableStateOf("Semua") } // "Semua", "Diproses", "Divalidasi", "Selesai"
+    var selectedCategoryFilter by remember { mutableStateOf("Semua Kategori") }
+    var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
     var selectedDistrictFilter by remember { mutableStateOf("Semua Kecamatan") }
     var isDistrictDropdownExpanded by remember { mutableStateOf(false) }
     var onlyWithCasualties by remember { mutableStateOf(false) }
+
+    // Auto-Pin Location on Mini Map State
+    var pinnedReportForMap by remember {
+        mutableStateOf<CitizenDisasterReport?>(reports.firstOrNull { it.status != "Selesai" } ?: reports.firstOrNull())
+    }
 
     // Sync State
     var isSyncing by remember { mutableStateOf(false) }
@@ -152,7 +166,18 @@ fun OfficerDashboardConsoleView(
     val totalInjured = reports.sumOf { it.casualtiesInjured }
     val totalMissing = reports.sumOf { it.casualtiesMissing }
 
-    // District options
+    val categoryOptions = listOf(
+        "Semua Kategori",
+        "Banjir",
+        "Cuaca Ekstrem",
+        "Keamanan Pesisir",
+        "Gempa Bumi",
+        "Tanah Longsor",
+        "Pohon Tumbang",
+        "Kebakaran Hutan/Lahan",
+        "Lainnya"
+    )
+
     val districtOptions = listOf("Semua Kecamatan") + listOf(
         "Kota Mukomuko", "Ipuh", "Teramang Jaya", "Penarik", "Lubuk Pinang",
         "Pondok Suguh", "Air Dikit", "Selagan Raya", "XIV Koto", "Malin Deman",
@@ -160,13 +185,24 @@ fun OfficerDashboardConsoleView(
     )
 
     // Filtered Reports
-    val filteredReports = reports.filter { rep ->
+    val baseReports = when (dashboardSubTab) {
+        1 -> reports.filter { it.status.equals("Selesai", ignoreCase = true) } // Modul Arsip
+        else -> reports.filter { !it.status.equals("Selesai", ignoreCase = true) } // Antrean Aktif
+    }
+
+    val filteredReports = baseReports.filter { rep ->
         val matchesStatus = when (selectedStatusFilter) {
             "Semua" -> true
             "Diproses" -> rep.status.equals("Diproses", ignoreCase = true) || rep.status.equals("Terverifikasi GPS", ignoreCase = true)
             "Divalidasi" -> rep.status.equals("Divalidasi", ignoreCase = true) || rep.status.contains("TRC", ignoreCase = true)
             "Selesai" -> rep.status.equals("Selesai", ignoreCase = true)
             else -> true
+        }
+
+        val matchesCategory = if (selectedCategoryFilter == "Semua Kategori") true else {
+            rep.disasterType.contains(selectedCategoryFilter, ignoreCase = true) ||
+            (selectedCategoryFilter == "Keamanan Pesisir" && (rep.disasterType.contains("Abrasi", ignoreCase = true) || rep.disasterType.contains("Gelombang", ignoreCase = true))) ||
+            (selectedCategoryFilter == "Cuaca Ekstrem" && (rep.disasterType.contains("Angin", ignoreCase = true) || rep.disasterType.contains("Badai", ignoreCase = true)))
         }
 
         val matchesDistrict = if (selectedDistrictFilter == "Semua Kecamatan") true else rep.district.equals(selectedDistrictFilter, ignoreCase = true)
@@ -186,7 +222,7 @@ fun OfficerDashboardConsoleView(
             rep.additionalNotes.lowercase().contains(q)
         }
 
-        matchesStatus && matchesDistrict && matchesCasualties && matchesSearch
+        matchesStatus && matchesCategory && matchesDistrict && matchesCasualties && matchesSearch
     }
 
     LazyColumn(
@@ -196,10 +232,10 @@ fun OfficerDashboardConsoleView(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 1. OFFICER IDENTITY & COMMAND BAR
+        // 1. OFFICER COMMAND BAR WITH EXPORT PDF & CSV BUTTONS
         item {
             Card(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (isOfficerLoggedIn) Color(0xFF0F172A) else Color(0xFF1E293B)
                 ),
@@ -209,6 +245,7 @@ fun OfficerDashboardConsoleView(
                     .testTag("officer_command_bar")
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
+                    // Profile Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -218,7 +255,7 @@ fun OfficerDashboardConsoleView(
                             Surface(
                                 shape = CircleShape,
                                 color = if (isOfficerLoggedIn) Color(0xFF16A34A) else Color(0xFFEA580C),
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(38.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
@@ -233,7 +270,7 @@ fun OfficerDashboardConsoleView(
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "KONSOL PUSDALOPS BPBD",
+                                        text = "PETUGAS DASHBOARD PUSDALOPS",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFFBBF24),
@@ -245,7 +282,7 @@ fun OfficerDashboardConsoleView(
                                         color = if (isOfficerLoggedIn) Color(0xFF166534) else Color(0xFF7C2D12)
                                     ) {
                                         Text(
-                                            text = if (isOfficerLoggedIn) "SESI RESMI AKTIF" else "MODE TERBATAS",
+                                            text = if (isOfficerLoggedIn) "SESI RESMI AKTIF" else "TERKUNCI",
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
@@ -254,7 +291,7 @@ fun OfficerDashboardConsoleView(
                                     }
                                 }
                                 Text(
-                                    text = if (isOfficerLoggedIn) officerName else "Akses Petugas Berwenang Diperlukan",
+                                    text = if (isOfficerLoggedIn) officerName else "Autentikasi Petugas Diperlukan",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color.White
@@ -262,7 +299,7 @@ fun OfficerDashboardConsoleView(
                             }
                         }
 
-                        // Login / Switch Officer Button
+                        // Logout / Login
                         if (isOfficerLoggedIn) {
                             OutlinedButton(
                                 onClick = onLogoutClick,
@@ -286,9 +323,7 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier
-                                    .height(34.dp)
-                                    .testTag("officer_login_action_btn")
+                                modifier = Modifier.height(34.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Badge,
@@ -304,63 +339,115 @@ fun OfficerDashboardConsoleView(
 
                     if (isOfficerLoggedIn) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                        Text(
+                            text = "NIP/ID: $officerBadgeId • $officerShift • BPBD Kab. Mukomuko",
+                            fontSize = 10.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
                         Spacer(modifier = Modifier.height(8.dp))
+
+                        // EXPORT DIGITAL ARCHIVE (PDF & CSV) ACTIONS
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = "NIP/ID: $officerBadgeId • $officerShift",
-                                fontSize = 10.sp,
-                                color = Color(0xFF94A3B8)
-                            )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable {
-                                    if (!isSyncing && onSyncReports != null) {
-                                        isSyncing = true
-                                        onSyncReports.invoke { count ->
-                                            isSyncing = false
-                                            Toast.makeText(context, "Cloud sync selesai! $count laporan diperbarui.", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
+                            // PDF Export Button
+                            Button(
+                                onClick = {
+                                    val exportList = reports.filter { it.status.equals("Divalidasi", ignoreCase = true) || it.status.equals("Selesai", ignoreCase = true) }
+                                    val finalExport = if (exportList.isNotEmpty()) exportList else reports
+                                    ReportExporter.exportToPdf(context, finalExport, officerName)
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
                             ) {
-                                if (isSyncing) {
-                                    CircularProgressIndicator(modifier = Modifier.size(11.dp), strokeWidth = 1.5.dp, color = Color(0xFF38BDF8))
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Sync,
-                                        contentDescription = "Sync Cloud",
-                                        tint = Color(0xFF38BDF8),
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = if (isSyncing) "Menyinkronkan..." else "Sinkron Cloud",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF38BDF8),
-                                    fontWeight = FontWeight.Medium
+                                Icon(
+                                    imageVector = Icons.Default.PictureAsPdf,
+                                    contentDescription = "Ekspor PDF",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
                                 )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "Ekspor PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            // CSV Export Button
+                            Button(
+                                onClick = {
+                                    ReportExporter.exportToCsv(context, reports)
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.TableChart,
+                                    contentDescription = "Ekspor CSV",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "Ekspor CSV (Excel)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
-                    } else {
-                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+                }
+            }
+        }
+
+        // 2. SUB-TABS: ANTREAN AKTIF vs MODUL ARSIP vs STATISTIK
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf(
+                    0 to "🚨 Antrean Aktif (${pendingCount + validatedCount})",
+                    1 to "🗄️ Modul Arsip ($resolvedCount)",
+                    2 to "📊 Tren Bulanan"
+                ).forEach { (idx, label) ->
+                    val isSel = dashboardSubTab == idx
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSel) Color.White else Color.Transparent,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { dashboardSubTab = idx }
+                    ) {
                         Text(
-                            text = "Petugas Pusdalops & Tim Reaksi Cepat (TRC) dapat masuk menggunakan PIN resmi (117 / BPBD117 / TRC2026) untuk memvalidasi laporan, mencatat tindak lanjut, dan menerjunkan armada.",
+                            text = label,
                             fontSize = 10.sp,
-                            color = Color(0xFFCBD5E1),
-                            lineHeight = 14.sp
+                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSel) Color(0xFF0F172A) else Color(0xFF64748B),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 7.dp)
                         )
                     }
                 }
             }
         }
 
-        // 2. REAL-TIME INCIDENT KPI METRICS
+        // 3. STATISTICAL BAR CHART VIEW (IF SELECTED)
+        if (dashboardSubTab == 2) {
+            item {
+                DisasterMonthlyBarChartCard(reports = reports)
+            }
+        }
+
+        // 4. REAL-TIME KPI CARDS
         item {
             Column {
                 Row(
@@ -369,13 +456,13 @@ fun OfficerDashboardConsoleView(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Metrik Penanganan & Triage Bencana",
+                        text = "Metrik Triage & Validasi Laporan",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1E293B)
                     )
                     Text(
-                        text = "$totalCount Total Insiden",
+                        text = "$totalCount Total Aduan",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF64748B)
@@ -383,78 +470,171 @@ fun OfficerDashboardConsoleView(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // KPI 4-Grid
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Pending Validation
                     KpiMetricCard(
-                        title = "Butuh Validasi",
+                        title = "Diproses",
                         count = pendingCount,
                         badgeColor = Color(0xFFD97706),
                         bgColor = Color(0xFFFFFBEB),
                         borderColor = Color(0xFFFDE68A),
-                        subtitle = "Status Diproses",
+                        subtitle = "Butuh Validasi",
                         modifier = Modifier.weight(1f)
                     )
-
-                    // Field Dispatched (TRC)
                     KpiMetricCard(
-                        title = "Tim Lapangan",
+                        title = "Divalidasi",
                         count = validatedCount,
                         badgeColor = Color(0xFF16A34A),
                         bgColor = Color(0xFFF0FDF4),
                         borderColor = Color(0xFFBBF7D0),
-                        subtitle = "TRC Diterjunkan",
+                        subtitle = "Tim TRC Meluncur",
                         modifier = Modifier.weight(1f)
                     )
-
-                    // Resolved
                     KpiMetricCard(
                         title = "Selesai",
                         count = resolvedCount,
                         badgeColor = Color(0xFF2563EB),
                         bgColor = Color(0xFFEFF6FF),
                         borderColor = Color(0xFFBFDBFE),
-                        subtitle = "Tuntas Ditangani",
+                        subtitle = "Tuntas / Arsip",
                         modifier = Modifier.weight(1f)
                     )
                 }
+            }
+        }
 
-                // Casualties summary strip if any
-                if (totalDead > 0 || totalInjured > 0 || totalMissing > 0) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFFFEF2F2),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+        // 5. AUTO-PIN MINI-MAP CARD FOR INSPECTING INCIDENTS
+        if (pinnedReportForMap != null) {
+            val rep = pinnedReportForMap!!
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = Color(0xFFDC2626),
-                                modifier = Modifier.size(16.dp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.MyLocation,
+                                    contentDescription = null,
+                                    tint = Color(0xFF38BDF8),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Auto-Pin Peta Lokasi Tinjauan Laporan",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFF0284C7)
+                            ) {
+                                Text(
+                                    text = "#${rep.id.takeLast(7)}",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Interactive Mini Map Canvas with Pin & Radar Pulse
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(130.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF1E293B))
+                                .border(1.dp, Color(0xFF334155), RoundedCornerShape(12.dp))
+                        ) {
+                            MiniMapWithPinCanvas(
+                                latitude = rep.latitude,
+                                longitude = rep.longitude,
+                                disasterType = rep.disasterType
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Akumulasi Korban Jiwa Warga: $totalDead Meninggal Dunia • $totalInjured Luka-Luka • $totalMissing Hilang",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF991B1B)
-                            )
+
+                            // Coords & District Overlay
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color.Black.copy(alpha = 0.6f)
+                                ) {
+                                    Text(
+                                        text = "${rep.village}, Kec. ${rep.district} • ${rep.disasterType}",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color.Black.copy(alpha = 0.65f)
+                                    ) {
+                                        Text(
+                                            text = "GPS: %.4f, %.4f (±%.0fm)".format(rep.latitude, rep.longitude, rep.gpsAccuracyMeters ?: 5f),
+                                            fontSize = 9.sp,
+                                            color = Color(0xFF86EFAC),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            GoogleMapsHelper.openNavigationRoute(
+                                                context = context,
+                                                destLat = rep.latitude,
+                                                destLon = rep.longitude,
+                                                destName = "Bencana ${rep.disasterType} - ${rep.village}"
+                                            )
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                                        shape = RoundedCornerShape(6.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Navigation,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("Rute Maps", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // 3. SEARCH & TRIAGE FILTERS
+        // 6. SEARCH & MULTI-CATEGORY FILTERS
         item {
             Card(
                 shape = RoundedCornerShape(14.dp),
@@ -469,7 +649,7 @@ fun OfficerDashboardConsoleView(
                         onValueChange = { searchQuery = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp)
+                            .height(48.dp)
                             .testTag("officer_search_input"),
                         placeholder = { Text("Cari ID, jenis bencana, desa, atau pelapor...", fontSize = 11.sp) },
                         leadingIcon = {
@@ -502,37 +682,37 @@ fun OfficerDashboardConsoleView(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // Status filter chips
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    // Disaster Category Filter Chips (Scrollable)
+                    Text(
+                        text = "Kategori Bencana:",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF475569)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        listOf(
-                            "Semua" to "Semua",
-                            "Diproses" to "🟡 Butuh Validasi",
-                            "Divalidasi" to "🟢 Lapangan",
-                            "Selesai" to "🔵 Selesai"
-                        ).forEach { (key, label) ->
-                            val isSel = selectedStatusFilter == key
+                        items(categoryOptions) { cat ->
+                            val isSel = selectedCategoryFilter == cat
                             Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = if (isSel) Color(0xFF15803D) else Color.White,
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isSel) Color(0xFF0F172A) else Color.White,
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.dp,
-                                    if (isSel) Color(0xFF15803D) else Color(0xFFCBD5E1)
+                                    if (isSel) Color(0xFF0F172A) else Color(0xFFCBD5E1)
                                 ),
-                                modifier = Modifier
-                                    .clickable { selectedStatusFilter = key }
-                                    .testTag("filter_status_$key")
+                                modifier = Modifier.clickable { selectedCategoryFilter = cat }
                             ) {
                                 Text(
-                                    text = label,
+                                    text = cat,
                                     fontSize = 10.sp,
                                     fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                                     color = if (isSel) Color.White else Color(0xFF334155),
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                                 )
                             }
                         }
@@ -540,13 +720,12 @@ fun OfficerDashboardConsoleView(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // District dropdown & Casualty toggle
+                    // District Selector Dropdown & Casualties Switch
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // District selector
                         Box {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -555,7 +734,7 @@ fun OfficerDashboardConsoleView(
                                 modifier = Modifier.clickable { isDistrictDropdownExpanded = true }
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -580,7 +759,7 @@ fun OfficerDashboardConsoleView(
                             ) {
                                 districtOptions.forEach { dist ->
                                     DropdownMenuItem(
-                                        text = { Text(dist, fontSize = 12.sp) },
+                                        text = { Text(dist, fontSize = 11.sp) },
                                         onClick = {
                                             selectedDistrictFilter = dist
                                             isDistrictDropdownExpanded = false
@@ -590,7 +769,6 @@ fun OfficerDashboardConsoleView(
                             }
                         }
 
-                        // Casualty switch
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = if (onlyWithCasualties) Color(0xFFFEF2F2) else Color.White,
@@ -624,7 +802,7 @@ fun OfficerDashboardConsoleView(
             }
         }
 
-        // 4. REPORTS LIST FOR OFFICER TRIAGE & VALIDATION
+        // 7. REPORTS LIST WITH ACTION BUTTONS & STATUS TOASTS
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -632,13 +810,13 @@ fun OfficerDashboardConsoleView(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Daftar Antrean Verifikasi & Penanganan",
+                    text = if (dashboardSubTab == 1) "Daftar Arsip Laporan Selesai" else "Antrean Penanganan Bencana Aktif",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A)
                 )
                 Text(
-                    text = "${filteredReports.size} laporan ditemukan",
+                    text = "${filteredReports.size} laporan",
                     fontSize = 11.sp,
                     color = Color(0xFF64748B)
                 )
@@ -654,25 +832,25 @@ fun OfficerDashboardConsoleView(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(vertical = 36.dp, horizontal = 16.dp),
+                        modifier = Modifier.padding(vertical = 32.dp, horizontal = 16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
                             tint = Color(0xFF16A34A),
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(36.dp)
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Tidak Ada Laporan yang Cocok",
+                            text = if (dashboardSubTab == 1) "Belum Ada Laporan yang Diarsipkan" else "Tidak Ada Laporan Aktif",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             color = Color(0xFF1E293B)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Semua laporan dalam kriteria filter ini telah ditangani atau coba sesuaikan kata kunci pencarian Anda.",
+                            text = "Semua laporan dalam kriteria ini telah ditangani atau periksa kata kunci pencarian.",
                             fontSize = 11.sp,
                             color = Color(0xFF64748B),
                             textAlign = TextAlign.Center
@@ -686,12 +864,16 @@ fun OfficerDashboardConsoleView(
                     report = report,
                     isOfficerLoggedIn = isOfficerLoggedIn,
                     officerName = officerName,
+                    onInspectMapPin = {
+                        pinnedReportForMap = report
+                        Toast.makeText(context, "Pin peta dipusatkan ke #${report.id.takeLast(7)} (${report.village})", Toast.LENGTH_SHORT).show()
+                    },
                     onUpdateStatus = { targetStatus ->
                         if (isOfficerLoggedIn) {
                             onUpdateReportStatus(report.id, targetStatus)
                             Toast.makeText(
                                 context,
-                                "Status laporan #${report.id.takeLast(7)} diubah menjadi '$targetStatus' oleh Petugas $officerName",
+                                "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName",
                                 Toast.LENGTH_SHORT
                             ).show()
                         } else {
@@ -719,7 +901,7 @@ fun OfficerDashboardConsoleView(
         }
     }
 
-    // 5. OFFICIAL OFFICER FOLLOW-UP NOTE EDITOR DIALOG
+    // 8. OFFICIAL OFFICER FOLLOW-UP NOTE EDITOR DIALOG
     if (noteEditingReport != null) {
         val activeRep = noteEditingReport!!
         AlertDialog(
@@ -802,7 +984,7 @@ fun OfficerDashboardConsoleView(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "Catatan Tindak Lanjut Petugas / Personel TRC:",
+                        text = "Catatan Tindak Lanjut Personel TRC:",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF1E293B)
@@ -860,6 +1042,192 @@ fun OfficerDashboardConsoleView(
 }
 
 /**
+ * Visualisasi Grafik Batang Tren Bulanan Kategori Bencana
+ */
+@Composable
+private fun DisasterMonthlyBarChartCard(
+    reports: List<CitizenDisasterReport>,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.BarChart,
+                        contentDescription = null,
+                        tint = Color(0xFF15803D),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Grafik Tren Kategori Bencana Bulanan",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                }
+                Text(
+                    text = "Tahun 2026",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF64748B)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Categories tally
+            val categories = listOf(
+                Triple("Banjir", reports.count { it.disasterType.contains("Banjir", true) }, Color(0xFF2563EB)),
+                Triple("Badai", reports.count { it.disasterType.contains("Angin", true) || it.disasterType.contains("Badai", true) }, Color(0xFFD97706)),
+                Triple("Abrasi", reports.count { it.disasterType.contains("Gelombang", true) || it.disasterType.contains("Abrasi", true) }, Color(0xFF0284C7)),
+                Triple("Longsor", reports.count { it.disasterType.contains("Longsor", true) }, Color(0xFFB45309)),
+                Triple("Gempa", reports.count { it.disasterType.contains("Gempa", true) }, Color(0xFFDC2626)),
+                Triple("Lainnya", reports.count { !it.disasterType.contains("Banjir", true) && !it.disasterType.contains("Angin", true) && !it.disasterType.contains("Gelombang", true) && !it.disasterType.contains("Longsor", true) && !it.disasterType.contains("Gempa", true) }, Color(0xFF64748B))
+            )
+
+            val maxCount = (categories.maxOfOrNull { it.second } ?: 1).coerceAtLeast(1)
+
+            // Canvas Bar Chart
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+                    .padding(horizontal = 8.dp)
+            ) {
+                val barWidth = 24.dp.toPx()
+                val spacing = (size.width - (categories.size * barWidth)) / (categories.size + 1)
+                val chartHeight = size.height - 20f
+
+                categories.forEachIndexed { i, (_, count, color) ->
+                    val x = spacing + i * (barWidth + spacing)
+                    val barHeight = (count.toFloat() / maxCount) * chartHeight
+                    val y = size.height - barHeight
+
+                    // Draw bar
+                    drawRoundRect(
+                        color = color,
+                        topLeft = Offset(x, y),
+                        size = Size(barWidth, barHeight),
+                        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Legend labels
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                categories.forEach { (name, count, color) ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Surface(
+                            shape = CircleShape,
+                            color = color,
+                            modifier = Modifier.size(8.dp)
+                        ) {}
+                        Text(
+                            text = name,
+                            fontSize = 9.sp,
+                            color = Color(0xFF475569),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                        Text(
+                            text = "$count",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Mini Map Canvas with Pin and Pulsing Radar Circle
+ */
+@Composable
+private fun MiniMapWithPinCanvas(
+    latitude: Double,
+    longitude: Double,
+    disasterType: String
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pin_radar_anim")
+    val pulseRadius by infiniteTransition.animateFloat(
+        initialValue = 10f,
+        targetValue = 35f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_radius"
+    )
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val centerX = size.width / 2f
+        val centerY = size.height / 2f
+
+        // Grid lines (GIS Map aesthetic)
+        val gridStep = 30f
+        var gx = 0f
+        while (gx <= size.width) {
+            drawLine(
+                color = Color(0xFF334155).copy(alpha = 0.5f),
+                start = Offset(gx, 0f),
+                end = Offset(gx, size.height),
+                strokeWidth = 1f
+            )
+            gx += gridStep
+        }
+        var gy = 0f
+        while (gy <= size.height) {
+            drawLine(
+                color = Color(0xFF334155).copy(alpha = 0.5f),
+                start = Offset(0f, gy),
+                end = Offset(size.width, gy),
+                strokeWidth = 1f
+            )
+            gy += gridStep
+        }
+
+        // Pulsing radar circles
+        drawCircle(
+            color = Color(0xFFEF4444).copy(alpha = (1f - (pulseRadius / 35f)).coerceIn(0f, 0.7f)),
+            radius = pulseRadius,
+            center = Offset(centerX, centerY),
+            style = Stroke(width = 2f)
+        )
+
+        // Center Pin
+        drawCircle(
+            color = Color(0xFFDC2626),
+            radius = 7f,
+            center = Offset(centerX, centerY)
+        )
+        drawCircle(
+            color = Color.White,
+            radius = 3f,
+            center = Offset(centerX, centerY)
+        )
+    }
+}
+
+/**
  * KPI Metric Card Component
  */
 @Composable
@@ -906,19 +1274,14 @@ private fun KpiMetricCard(
 }
 
 /**
- * Incident Card specifically tailored for Authorized Duty Officers with:
- * - Direct Google Maps Dispatch
- * - Reporter Phone / WhatsApp dialing
- * - Visual photo zoom inspector
- * - Status transition buttons (Validasi TRC, Selesai)
- * - Official Follow-up Action Log
- * - Share Sitrep to WhatsApp Posko BPBD
+ * Kartu Insiden Petugas Responsif dengan Aksi Validasi & Auto-Pin
  */
 @Composable
 private fun OfficerIncidentReportCard(
     report: CitizenDisasterReport,
     isOfficerLoggedIn: Boolean,
     officerName: String,
+    onInspectMapPin: () -> Unit,
     onUpdateStatus: (String) -> Unit,
     onOpenNoteEditor: () -> Unit,
     onViewPhoto: (String) -> Unit,
@@ -948,7 +1311,7 @@ private fun OfficerIncidentReportCard(
             .testTag("officer_incident_card_${report.id}")
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header: ID, Badge, Timestamp
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -976,7 +1339,6 @@ private fun OfficerIncidentReportCard(
                     )
                 }
 
-                // Status chip
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = statusBg,
@@ -994,7 +1356,7 @@ private fun OfficerIncidentReportCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Location & GPS Badge
+            // Location & Date
             Row(verticalAlignment = Alignment.Top) {
                 Icon(
                     imageVector = Icons.Default.LocationOn,
@@ -1027,47 +1389,7 @@ private fun OfficerIncidentReportCard(
                 }
             }
 
-            // GPS Satelit Geotag Info
-            Spacer(modifier = Modifier.height(6.dp))
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = Color(0xFFF1F5F9),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "GPS Satelit",
-                            tint = Color(0xFF15803D),
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "GPS Terkunci: %.4f, %.4f (±%.0fm)".format(
-                                report.latitude,
-                                report.longitude,
-                                report.gpsAccuracyMeters ?: 5f
-                            ),
-                            fontSize = 10.sp,
-                            color = Color(0xFF334155),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    Text(
-                        text = "Satelit Valid",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF15803D)
-                    )
-                }
-            }
-
-            // Casualties banner
+            // Casualties banner if any
             if (report.casualtiesDead > 0 || report.casualtiesInjured > 0 || report.casualtiesMissing > 0) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Surface(
@@ -1088,7 +1410,7 @@ private fun OfficerIncidentReportCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Korban Jiwa: ${report.casualtiesDead} Meninggal • ${report.casualtiesInjured} Luka • ${report.casualtiesMissing} Hilang",
+                            text = "Korban: ${report.casualtiesDead} Meninggal • ${report.casualtiesInjured} Luka • ${report.casualtiesMissing} Hilang",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF991B1B)
@@ -1097,14 +1419,14 @@ private fun OfficerIncidentReportCard(
                 }
             }
 
-            // Photo Thumbnail & Visual Inspection
-            if (!report.photoUri.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+            // Photo thumbnail & Inspect map pin button
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (!report.photoUri.isNullOrBlank()) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { onViewPhoto(report.photoUri) }
@@ -1112,50 +1434,48 @@ private fun OfficerIncidentReportCard(
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color(0xFFE2E8F0),
-                            modifier = Modifier.size(54.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             AsyncImage(
                                 model = report.photoUri,
-                                contentDescription = "Foto Bukti Kejadian",
+                                contentDescription = "Foto Kejadian",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Column {
-                            Text(
-                                text = "Foto Bukti Kamera Langsung",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B)
-                            )
-                            Text(
-                                text = "Sentuh untuk inspeksi visual resolusi penuh",
-                                fontSize = 10.sp,
-                                color = Color(0xFF15803D),
-                                fontWeight = FontWeight.Medium
-                            )
+                            Text(text = "Foto Bukti Warga", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Sentuh untuk zoom", fontSize = 9.sp, color = Color(0xFF15803D))
                         }
                     }
+                } else {
+                    Text(
+                        text = "Laporan tanpa lampiran foto",
+                        fontSize = 10.sp,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
 
-                    OutlinedButton(
-                        onClick = { onViewPhoto(report.photoUri) },
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.height(30.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ZoomIn,
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text("Perbesar", fontSize = 10.sp)
-                    }
+                // Tap to pin on map
+                OutlinedButton(
+                    onClick = onInspectMapPin,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.height(30.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MyLocation,
+                        contentDescription = null,
+                        tint = Color(0xFF0284C7),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("Tinjau Peta", fontSize = 10.sp, color = Color(0xFF0284C7))
                 }
             }
 
-            // Official Follow-up notes log if present
+            // Official notes if any
             if (report.additionalNotes.isNotBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
@@ -1164,7 +1484,7 @@ private fun OfficerIncidentReportCard(
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(9.dp)) {
+                    Column(modifier = Modifier.padding(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Assignment,
@@ -1174,13 +1494,12 @@ private fun OfficerIncidentReportCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Catatan Tindak Lanjut TRC BPBD:",
+                                text = "Catatan Tindak Lanjut TRC:",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF166534)
                             )
                         }
-                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = report.additionalNotes,
                             fontSize = 11.sp,
@@ -1194,122 +1513,18 @@ private fun OfficerIncidentReportCard(
             HorizontalDivider(color = Color(0xFFF1F5F9))
             Spacer(modifier = Modifier.height(8.dp))
 
-            // REPORTER CONTACT & DISPATCH ROW
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Reporter details
-                Column {
-                    Text(
-                        text = "Pelapor: ${report.reporterName.ifBlank { "Warga Mukomuko" }}",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF334155)
-                    )
-                    if (report.reporterPhone.isNotBlank()) {
-                        Text(
-                            text = "Kontak: ${report.reporterPhone}",
-                            fontSize = 10.sp,
-                            color = Color(0xFF64748B)
-                        )
-                    }
-                }
-
-                // Quick dial/WhatsApp buttons
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (report.reporterPhone.isNotBlank()) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFF16A34A),
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clickable {
-                                    EmergencyDialer.dial(context, report.reporterPhone)
-                                }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Phone,
-                                    contentDescription = "Telepon Pelapor",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                            }
-                        }
-
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFF25D366),
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clickable {
-                                    val cleaned = report.reporterPhone.replace(Regex("[^0-9]"), "")
-                                    val waNumber = if (cleaned.startsWith("0")) "62" + cleaned.drop(1) else cleaned
-                                    val msg = "Halo Bpk/Ibu ${report.reporterName}, kami dari Pusdalops BPBD Kab. Mukomuko menindaklanjuti laporan bencana ${report.disasterType} di ${report.village}. Mohon konfirmasi kondisi terkini."
-                                    val waIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=$waNumber&text=${Uri.encode(msg)}")).apply {
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    try {
-                                        context.startActivity(waIntent)
-                                    } catch (_: Exception) {
-                                        EmergencyDialer.dial(context, report.reporterPhone)
-                                    }
-                                }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "WA",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
-
-                    // Google Maps Navigation Button
-                    Button(
-                        onClick = {
-                            GoogleMapsHelper.openNavigationRoute(
-                                context = context,
-                                destLat = report.latitude,
-                                destLon = report.longitude,
-                                destName = "Bencana ${report.disasterType} - ${report.village}"
-                            )
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.height(30.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Navigation,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "Rute Maps", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // OFFICER ACTIONS BUTTONS BAR
+            // Action Buttons: Validasi, Selesai, Tindak Lanjut, Rute Maps
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Status: Validasi / Terjunkan Tim
+                // Status buttons
                 if (!report.status.equals("Divalidasi", ignoreCase = true)) {
                     Button(
                         onClick = { onUpdateStatus("Divalidasi") },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                         modifier = Modifier
                             .weight(1f)
                             .height(34.dp)
@@ -1318,20 +1533,19 @@ private fun OfficerIncidentReportCard(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(13.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(text = "Validasi TRC", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                // Status: Selesai
                 if (!report.status.equals("Selesai", ignoreCase = true)) {
                     Button(
                         onClick = { onUpdateStatus("Selesai") },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                         modifier = Modifier
                             .weight(1f)
                             .height(34.dp)
@@ -1340,64 +1554,56 @@ private fun OfficerIncidentReportCard(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(13.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Tandai Selesai", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(text = "Selesai", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { onUpdateStatus("Diproses") },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(34.dp)
+                    ) {
+                        Text(text = "Buka Kembali", fontSize = 10.sp)
                     }
                 }
 
-                // Add follow-up note button
+                // Note editor
                 OutlinedButton(
                     onClick = onOpenNoteEditor,
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     modifier = Modifier.height(34.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = null,
-                        modifier = Modifier.size(13.dp)
-                    )
+                    Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(3.dp))
-                    Text(text = "Tindak Lanjut", fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    Text(text = "Catatan", fontSize = 10.sp)
                 }
 
-                // Share / Dispatch Sitrep to Posko WhatsApp
-                OutlinedButton(
+                // Google Maps route
+                Button(
                     onClick = {
-                        val sitrep = """
-                            *LAPORAN SITUASI (SITREP) PUSDALOPS BPBD MUKOMUKO*
-                            • No. Laporan: #${report.id.takeLast(7)}
-                            • Kejadian: *${report.disasterType}*
-                            • Status: *${report.status.uppercase()}*
-                            • Waktu: ${report.incidentTime}
-                            • Lokasi: ${report.village}, Kec. ${report.district}
-                            • Detail: ${report.incidentLocation.ifBlank { "Sesuai koordinat GPS" }}
-                            • Korban Jiwa: MD: ${report.casualtiesDead}, LK: ${report.casualtiesInjured}, HL: ${report.casualtiesMissing}
-                            • Koordinat GPS: ${report.latitude}, ${report.longitude}
-                            • Navigasi Google Maps: https://www.google.com/maps/dir/?api=1&destination=${report.latitude},${report.longitude}
-                            • Pelapor: ${report.reporterName} (${report.reporterPhone.ifBlank { "Nomor tidak dicantumkan" }})
-                            • Petugas Validasi: $officerName
-                            ${if (report.additionalNotes.isNotBlank()) "• Catatan TRC: " + report.additionalNotes else ""}
-                        """.trimIndent()
-
-                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "Sitrep Pusdalops #${report.id.takeLast(7)}")
-                            putExtra(Intent.EXTRA_TEXT, sitrep)
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                        context.startActivity(Intent.createChooser(sendIntent, "Disposisi Laporan ke Posko / WhatsApp"))
+                        GoogleMapsHelper.openNavigationRoute(
+                            context = context,
+                            destLat = report.latitude,
+                            destLon = report.longitude,
+                            destName = "Bencana ${report.disasterType} - ${report.village}"
+                        )
                     },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     modifier = Modifier.height(34.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Bagikan Sitrep",
-                        modifier = Modifier.size(14.dp)
+                        imageVector = Icons.Default.Navigation,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp)
                     )
                 }
             }

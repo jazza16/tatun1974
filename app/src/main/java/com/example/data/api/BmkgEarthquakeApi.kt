@@ -35,7 +35,19 @@ object BmkgNetworkClient {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
         }
+        val headerInterceptor = okhttp3.Interceptor { chain ->
+            val original = chain.request()
+            val request = original.newBuilder()
+                .header("User-Agent", "SIPAGAR-KITA-Mukomuko/1.6.1 (Android; BPBD-PUSDALOPS-MMK; BMKG-Disaster-Client)")
+                .header("Accept", "application/json, text/plain, */*")
+                .header("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
+                .header("Connection", "keep-alive")
+                .method(original.method, original.body)
+                .build()
+            chain.proceed(request)
+        }
         OkHttpClient.Builder()
+            .addInterceptor(headerInterceptor)
             .addInterceptor(logging)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)

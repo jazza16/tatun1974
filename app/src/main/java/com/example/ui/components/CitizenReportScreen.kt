@@ -391,6 +391,40 @@ fun CitizenReportScreen(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Officer BPBD Access Lock/Status Button
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isOfficerLoggedIn) Color(0xFF16A34A) else Color.White.copy(alpha = 0.20f),
+                    modifier = Modifier.clickable {
+                        if (isOfficerLoggedIn) {
+                            selectedTab = 4
+                        } else {
+                            showOfficerLoginDialog = true
+                        }
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isOfficerLoggedIn) Icons.Default.Shield else Icons.Default.Lock,
+                            contentDescription = "Akses Petugas",
+                            tint = if (isOfficerLoggedIn) Color.White else Color(0xFFFBBF24),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isOfficerLoggedIn) "TRC ON" else "Petugas",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
             }
         }
 
@@ -504,41 +538,43 @@ fun CitizenReportScreen(
                     }
                 )
 
-                // Tab 4: Konsol Petugas (Validasi & Tindak Lanjut TRC)
-                Tab(
-                    selected = selectedTab == 4,
-                    onClick = { selectedTab = 4 },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = null,
-                                tint = if (selectedTab == 4) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Konsol Petugas",
-                                fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 12.sp,
-                                color = if (selectedTab == 4) Color.White else Color.White.copy(alpha = 0.7f)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Surface(
-                                shape = CircleShape,
-                                color = if (selectedTab == 4) Color(0xFFFBBF24) else Color(0xFF16A34A)
-                            ) {
-                                Text(
-                                    text = if (isOfficerLoggedIn) "ON" else "PIN",
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (selectedTab == 4) Color.Black else Color.White,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                // Tab 4: Konsol Petugas (Validasi & Tindak Lanjut TRC) - Khusus Petugas BPBD Terautentikasi
+                if (isOfficerLoggedIn) {
+                    Tab(
+                        selected = selectedTab == 4,
+                        onClick = { selectedTab = 4 },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = null,
+                                    tint = if (selectedTab == 4) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(13.dp)
                                 )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Konsol Petugas",
+                                    fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 12.sp,
+                                    color = if (selectedTab == 4) Color.White else Color.White.copy(alpha = 0.7f)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFFBBF24)
+                                ) {
+                                    Text(
+                                        text = "AKTIF",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.Black,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
                             }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
 
@@ -1445,27 +1481,76 @@ fun CitizenReportScreen(
 
                 4 -> {
                     // TAB 4: KONSOL KHUSUS PETUGAS PUSDALOPS BPBD & TIM TRC
-                    OfficerDashboardConsoleView(
-                        reports = reports,
-                        currentDistrict = currentDistrict,
-                        isOfficerLoggedIn = isOfficerLoggedIn,
-                        officerName = officerName,
-                        officerBadgeId = officerBadgeId,
-                        officerShift = officerShift,
-                        onLoginClick = { showOfficerLoginDialog = true },
-                        onLogoutClick = {
-                            officerAuthManager.logoutOfficer()
-                            isOfficerLoggedIn = false
-                            Toast.makeText(context, "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)", Toast.LENGTH_SHORT).show()
-                        },
-                        onUpdateReportStatus = onUpdateReportStatus,
-                        onUpdateReportStatusAndNotes = onUpdateReportStatusAndNotes,
-                        onViewPhoto = { photoUri, rep ->
-                            previewPhotoUri = photoUri
-                            previewPhotoReport = rep
-                        },
-                        onSyncReports = onSyncReports
-                    )
+                    if (isOfficerLoggedIn) {
+                        OfficerDashboardConsoleView(
+                            reports = reports,
+                            currentDistrict = currentDistrict,
+                            isOfficerLoggedIn = isOfficerLoggedIn,
+                            officerName = officerName,
+                            officerBadgeId = officerBadgeId,
+                            officerShift = officerShift,
+                            onLoginClick = { showOfficerLoginDialog = true },
+                            onLogoutClick = {
+                                officerAuthManager.logoutOfficer()
+                                isOfficerLoggedIn = false
+                                selectedTab = 0
+                                Toast.makeText(context, "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)", Toast.LENGTH_SHORT).show()
+                            },
+                            onUpdateReportStatus = onUpdateReportStatus,
+                            onUpdateReportStatusAndNotes = onUpdateReportStatusAndNotes,
+                            onViewPhoto = { photoUri, rep ->
+                                previewPhotoUri = photoUri
+                                previewPhotoReport = rep
+                            },
+                            onSyncReports = onSyncReports
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFFEF2F2),
+                                modifier = Modifier.size(64.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Terkunci",
+                                        tint = Color(0xFFDC2626),
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = "Modul Khusus Petugas BPBD",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = Color(0xFF0F172A)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Konsol validasi status dan triage laporan hanya dapat diakses oleh petugas jaga resmi Pusdalops / TRC dengan PIN keamanan.",
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B),
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { showOfficerLoginDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+                            ) {
+                                Icon(imageVector = Icons.Default.Badge, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Masuk dengan PIN Petugas")
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1684,6 +1769,7 @@ fun CitizenReportScreen(
                             officerBadgeId = officerAuthManager.getOfficerBadgeId()
                             officerShift = officerAuthManager.getOfficerShift()
                             showOfficerLoginDialog = false
+                            selectedTab = 4 // Buka langsung Konsol Petugas yang telah terbuka
 
                             // If there was a pending report status change, execute it now!
                             val targetId = pendingStatusReportId

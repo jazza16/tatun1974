@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
@@ -31,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -203,42 +205,63 @@ fun HeroWeatherCard(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Quick 4-stat metrics grid with translucent cards
+                // Quick 4-stat metrics grid with rich visual indicators
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    StatPill(
+                    // Kelembaban with visual level bar
+                    StatPillWithIndicator(
                         icon = Icons.Default.WaterDrop,
-                        label = "Kelembaban",
+                        label = "Kelembapan",
                         value = "${current.humidity}%",
+                        subLabel = if (current.humidity >= 85) "Tinggi" else if (current.humidity >= 65) "Normal" else "Kering",
+                        indicatorRatio = (current.humidity / 100f).coerceIn(0f, 1f),
+                        indicatorColor = Color(0xFF67E8F9),
                         modifier = Modifier.weight(1f)
                     )
-                    StatPill(
+
+                    // Kecepatan Angin with intensity level
+                    val windRatio = (current.windSpeed.toFloat() / 50f).coerceIn(0f, 1f)
+                    val windStatus = when {
+                        current.windSpeed >= 35 -> "Kencang"
+                        current.windSpeed >= 18 -> "Sedang"
+                        else -> "Tenang"
+                    }
+                    StatPillWithIndicator(
                         icon = Icons.Default.Air,
-                        label = "Angin Pesisir",
+                        label = "Kecepatan",
                         value = "${current.windSpeed.toInt()} km/j",
+                        subLabel = windStatus,
+                        indicatorRatio = windRatio,
+                        indicatorColor = if (current.windSpeed >= 35) Color(0xFFEF4444) else if (current.windSpeed >= 18) Color(0xFFFBBF24) else Color(0xFF4ADE80),
                         modifier = Modifier.weight(1f)
                     )
-                    StatPill(
+
+                    // Arah Angin with Rotating Compass Arrow
+                    StatPillWindDirection(
+                        windDegree = current.windDirection,
+                        compassDirection = current.windDirectionCompass,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    // Gelombang Laut
+                    StatPillWithIndicator(
                         icon = Icons.Default.Surfing,
                         label = "Gelombang",
                         value = "${report.marine.waveHeight} m",
-                        modifier = Modifier.weight(1f)
-                    )
-                    StatPill(
-                        icon = Icons.Default.Compress,
-                        label = "Tekanan",
-                        value = "${current.surfacePressure.toInt()} hPa",
+                        subLabel = report.marine.seaCondition.take(6),
+                        indicatorRatio = (report.marine.waveHeight.toFloat() / 4.0f).coerceIn(0f, 1f),
+                        indicatorColor = if (report.marine.waveHeight >= 2.0f) Color(0xFFEF4444) else Color(0xFF38BDF8),
                         modifier = Modifier.weight(1f)
                     )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Short advisory banner
+                // Short advisory banner with dynamic compass needle
                 Surface(
-                    color = Color.Black.copy(alpha = 0.2f),
+                    color = Color.Black.copy(alpha = 0.22f),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -246,15 +269,25 @@ fun HeroWeatherCard(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Navigation,
-                            contentDescription = "Arah Angin",
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.25f),
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Navigation,
+                                    contentDescription = "Kompas Angin",
+                                    tint = Color.White,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .rotate(current.windDirection.toFloat())
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Angin bertiup dari ${current.windDirectionCompass} • ${weatherInfo.description}",
+                            text = "Arah Angin: ${current.windDirectionCompass} (${current.windDirection}°) • Kecepatan: ${current.windSpeed.toInt()} km/j • Kelembapan: ${current.humidity}%",
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.95f),
                             lineHeight = 14.sp
@@ -262,6 +295,123 @@ fun HeroWeatherCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun StatPillWithIndicator(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    subLabel: String,
+    indicatorRatio: Float,
+    indicatorColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = Color.White.copy(alpha = 0.2f),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = value,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = label,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.85f),
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            // Visual Mini Gauge / Progress Track
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White.copy(alpha = 0.25f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(indicatorRatio)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(indicatorColor)
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subLabel,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = indicatorColor,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatPillWindDirection(
+    windDegree: Int,
+    compassDirection: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = Color.White.copy(alpha = 0.2f),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.Navigation,
+                contentDescription = "Arah Angin",
+                tint = Color(0xFFFDE047),
+                modifier = Modifier
+                    .size(16.dp)
+                    .rotate(windDegree.toFloat())
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = compassDirection,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = "Arah Angin",
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.85f),
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "$windDegree°",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFFDE047)
+            )
         }
     }
 }

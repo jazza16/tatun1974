@@ -117,6 +117,7 @@ import com.example.ui.components.InteractiveDisasterMapSection
 import com.example.ui.components.InteractiveTemperatureMapCard
 import com.example.ui.components.MarinePesisirCard
 import com.example.ui.components.MarineWaveHistoryChart
+import com.example.ui.components.TidalInformationCard
 import com.example.ui.components.QuickActionsFab
 import com.example.ui.components.StartupSplashWallpaperScreen
 import com.example.ui.components.ThreeDayForecastCard
@@ -508,6 +509,11 @@ fun WeatherAppScreen(
                                             marine = report.marine
                                         )
                                     }
+
+                                    // Info Pasang Surut & Pasang Naik Dinamis Samudra Hindia Mukomuko
+                                    item {
+                                        TidalInformationCard(district = currentDistrict)
+                                    }
                                 }
                             }
                         }
@@ -692,6 +698,11 @@ fun WeatherAppScreen(
                                             marine = report.marine
                                         )
                                     }
+                                    // Info Pasang Surut & Pasang Naik Dinamis Samudra Hindia Mukomuko
+                                    item {
+                                        TidalInformationCard(district = currentDistrict)
+                                    }
+
                                     // Historical Marine Wave Height Chart
                                     item {
                                         MarineWaveHistoryChart(district = currentDistrict)

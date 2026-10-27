@@ -9,8 +9,8 @@ data class VersionChangelog(
 )
 
 data class AppUpdateState(
-    val currentVersion: String = "1.6.0",
-    val latestVersion: String = "1.6.0",
+    val currentVersion: String = "1.6.1",
+    val latestVersion: String = "1.6.1",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -22,18 +22,34 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "1.6.0",
+    val lastCheckedVersion: String = "1.6.1",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis resmi v1.6.0 terbaru secara permanen.",
-    val packageSizeMb: Float = 16.8f,
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis resmi v1.6.1 terbaru secara permanen.",
+    val packageSizeMb: Float = 17.1f,
     val isBannerDismissed: Boolean = false,
     val isSimulationActive: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
         VersionChangelog(
-            version = "1.6.0",
-            releaseDate = "26 Oktober 2026",
+            version = "1.6.1",
+            releaseDate = "27 Oktober 2026",
             isCurrent = true,
             isLatest = true,
+            highlights = listOf(
+                "Ekspor Digital Laporan Bencana (PDF & CSV): Ekspor arsip resmi dalam format dokumen PDF bertanda tangan Pusdalops BPBD serta berkas CSV untuk analisis data spreadsheet Excel.",
+                "Peta Mini Lokasi Kejadian (Auto-Pin): Peninjauan lokasi presisi laporan warga dengan penanda otomatis dan navigasi rute armada di Petugas Dashboard.",
+                "Penyaringan Multi-Kategori Bencana: Filter laporan berdasarkan kategori bencana spesifik (Banjir, Cuaca Ekstrem, Keamanan Pesisir, Longsor, Gempa, dll.).",
+                "Visualisasi Grafik Batang Tren Bulanan: Grafik statistik tren bulanan kejadian bencana di Kabupaten Mukomuko.",
+                "Modul Arsip Penanganan Tuntas: Pemisahan data laporan berstatus 'Selesai' untuk manajemen arsip tanggap darurat yang efisien.",
+                "Info Pasang Surut & Pasang Naik Dinamis: Integrasi data pasang surut maritim pesisir Mukomuko dengan animasi gelombang dinamis dan panduan interaktif nelayan.",
+                "Indikator Visual Cuaca Komprehensif: Indikator visual kelembapan udara, kecepatan angin, dan panah putar kompas arah angin di kartu cuaca utama.",
+                "Optimalisasi R8/ProGuard & Keamanan Jaringan: Pengurangan ukuran APK dan penguatan konfigurasi keamanan jaringan endpoint BMKG."
+            )
+        ),
+        VersionChangelog(
+            version = "1.6.0",
+            releaseDate = "26 Oktober 2026",
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "Konsol Khusus Petugas Pusdalops BPBD & TRC: Antarmuka terdedikasi bagi petugas jaga Pusdalops dan Tim Reaksi Cepat (TRC) untuk validasi, verifikasi, dan pengelolaan laporan bencana warga secara terpusat.",
                 "Dasbor KPI & Metrik Siaga Bencana Real-Time: Pemantauan statistik operasional interaktif (Total Masuk, Menunggu Validasi, Tim Lapangan Diterjunkan, Tuntas Ditangani, dan Akumulasi Korban Jiwa).",

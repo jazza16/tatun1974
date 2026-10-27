@@ -64,4 +64,14 @@ interface WeatherDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHistoricalCache(entity: HistoricalWeatherEntity)
+
+    // Hazard Risk Zones & Evacuation Waypoints (100% Offline Persistence)
+    @Query("SELECT * FROM hazard_risk_zones")
+    fun getAllHazardZones(): Flow<List<HazardRiskZoneEntity>>
+
+    @Query("SELECT * FROM hazard_risk_zones")
+    suspend fun getAllHazardZonesSync(): List<HazardRiskZoneEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllHazardZones(zones: List<HazardRiskZoneEntity>)
 }

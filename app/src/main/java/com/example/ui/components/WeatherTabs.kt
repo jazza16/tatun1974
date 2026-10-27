@@ -68,8 +68,7 @@ fun WeatherTabs(
         TabItem("inaRISK BNPB", Icons.Default.Security),
         TabItem("Cuaca Historis", Icons.Default.History),
         TabItem("Maritim & Pesisir", Icons.Default.Surfing),
-        TabItem("Kualitas Udara", Icons.Default.Air),
-        TabItem("15 Kecamatan", Icons.Default.LocationCity)
+        TabItem("Kualitas Udara", Icons.Default.Air)
     )
 
     Surface(

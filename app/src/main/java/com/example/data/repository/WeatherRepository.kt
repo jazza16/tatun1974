@@ -1116,5 +1116,91 @@ class WeatherRepository(
             )
         }
     }
+
+    // Hazard Risk Zones (Offline Room Persistence)
+    suspend fun ensureHazardZonesSeeded() {
+        withContext(Dispatchers.IO) {
+            val existing = weatherDao.getAllHazardZonesSync()
+            if (existing.isEmpty()) {
+                val seedList = listOf(
+                    com.example.data.local.HazardRiskZoneEntity(
+                        id = "hz_pesisir_mukomuko",
+                        name = "Zona Pesisir Pantai Mukomuko - Abrasi & Gelombang Pasang",
+                        type = "Gelombang & Abrasi",
+                        riskLevel = "TINGGI",
+                        centerLat = -2.5833,
+                        centerLon = 101.1167,
+                        radiusKm = 7.5f,
+                        colorHex = "#DC2626",
+                        description = "Garis pantai rawan abrasi & pasang air laut Samudra Hindia (Koto Jaya - Teramang Jaya).",
+                        evacuationSop = "Evakuasi ke arah timur menjauhi garis pantai menuju dataran tinggi SP3 / Gedung Daerah."
+                    ),
+                    com.example.data.local.HazardRiskZoneEntity(
+                        id = "hz_das_manjunto",
+                        name = "Daerah Aliran Sungai (DAS) Manjunto - Rawan Banjir Luapan",
+                        type = "Banjir DAS",
+                        riskLevel = "TINGGI",
+                        centerLat = -2.4833,
+                        centerLon = 101.1833,
+                        radiusKm = 8.0f,
+                        colorHex = "#2563EB",
+                        description = "Kawasan bantaran sungai dan irigasi primer Lubuk Pinang - XIV Koto.",
+                        evacuationSop = "Pantau tinggi muka air bendung Manjunto. Evakuasi segera jika status Siaga 1 ke balai desa terdekat."
+                    ),
+                    com.example.data.local.HazardRiskZoneEntity(
+                        id = "hz_das_selagan",
+                        name = "DAS Selagan - Dataran Rendah Rawan Genangan",
+                        type = "Banjir DAS",
+                        riskLevel = "SEDANG",
+                        centerLat = -2.6500,
+                        centerLon = 101.2500,
+                        radiusKm = 6.5f,
+                        colorHex = "#0284C7",
+                        description = "Kawasan luapan sungai Selagan Raya saat intensitas hujan tinggi di hulu perbukitan.",
+                        evacuationSop = "Amankan barang berharga dan ternak ke titik kumpul tanggul tinggi."
+                    ),
+                    com.example.data.local.HazardRiskZoneEntity(
+                        id = "hz_longsor_bukit",
+                        name = "Zona Tebing Perbukitan V Koto & Malin Deman - Rawan Longsor",
+                        type = "Tanah Longsor",
+                        riskLevel = "TINGGI",
+                        centerLat = -2.7500,
+                        centerLon = 101.5500,
+                        radiusKm = 9.0f,
+                        colorHex = "#B45309",
+                        description = "Kontur perbukitan curam rawan amblas dan guguran material saat curah hujan lebat berkelanjutan.",
+                        evacuationSop = "Hindari melintas di bawah tebing curam dan relokasi sementara ke posko balai kecamatan."
+                    ),
+                    com.example.data.local.HazardRiskZoneEntity(
+                        id = "hz_pesisir_ipuh",
+                        name = "Zona Pesisir Ipuh & Air Rami - Potensi Gelombang Ekstrem",
+                        type = "Gelombang & Abrasi",
+                        riskLevel = "TINGGI",
+                        centerLat = -3.0083,
+                        centerLon = 101.4912,
+                        radiusKm = 7.0f,
+                        colorHex = "#EA580C",
+                        description = "Pesisir dermaga dan sentra nelayan Ipuh langsung berhadapan dengan Samudra Hindia terbuka.",
+                        evacuationSop = "Tarik perahu ke daratan kering berjarak minimal 50 meter dari bibir pantai."
+                    ),
+                    com.example.data.local.HazardRiskZoneEntity(
+                        id = "hz_tes_gedung_daerah",
+                        name = "TES Gedung Daerah Mukomuko",
+                        type = "Titik Kumpul (TES)",
+                        riskLevel = "ZONA AMAN (TES)",
+                        centerLat = -2.5800,
+                        centerLon = 101.1250,
+                        radiusKm = 1.0f,
+                        colorHex = "#16A34A",
+                        description = "Tempat Evakuasi Sementara konstruksi beton bertingkat dengan logistik darurat BPBD.",
+                        evacuationSop = "Ikuti rambu jalur evakuasi hijau dan prioritaskan kelompok rentan."
+                    )
+                )
+                weatherDao.insertAllHazardZones(seedList)
+            }
+        }
+    }
+
+    fun getHazardZones(): Flow<List<com.example.data.local.HazardRiskZoneEntity>> = weatherDao.getAllHazardZones()
 }
 
