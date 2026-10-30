@@ -177,6 +177,46 @@ class WeatherRepository(
         }
     }
 
+    fun getCitizenReportsByStatus(status: String): Flow<List<CitizenDisasterReport>> {
+        return weatherDao.getCitizenReportsByStatus(status).map { entities ->
+            entities.map { entity ->
+                CitizenDisasterReport(
+                    id = entity.id,
+                    disasterType = entity.disasterType,
+                    incidentTime = entity.incidentTime,
+                    incidentLocation = entity.incidentLocation,
+                    district = entity.district,
+                    village = entity.village,
+                    latitude = entity.latitude,
+                    longitude = entity.longitude,
+                    gpsAccuracyMeters = entity.gpsAccuracyMeters,
+                    isGpsVerified = entity.isGpsVerified,
+                    casualtiesDead = entity.casualtiesDead,
+                    casualtiesInjured = entity.casualtiesInjured,
+                    casualtiesMissing = entity.casualtiesMissing,
+                    photoUri = entity.photoUri,
+                    reporterName = entity.reporterName,
+                    reporterPhone = entity.reporterPhone,
+                    additionalNotes = entity.additionalNotes,
+                    timestamp = entity.timestamp,
+                    status = entity.status
+                )
+            }
+        }
+    }
+
+    suspend fun getCitizenReportCount(): Int = withContext(Dispatchers.IO) {
+        weatherDao.getCitizenReportCount()
+    }
+
+    suspend fun getCitizenReportCountByStatus(status: String): Int = withContext(Dispatchers.IO) {
+        weatherDao.getCitizenReportCountByStatus(status)
+    }
+
+    suspend fun deleteReportsOlderThan(cutoffTimestamp: Long): Int = withContext(Dispatchers.IO) {
+        weatherDao.deleteReportsOlderThan(cutoffTimestamp)
+    }
+
     suspend fun submitCitizenDisasterReport(report: CitizenDisasterReport) = withContext(Dispatchers.IO) {
         val entity = CitizenDisasterReportEntity(
             id = report.id,
@@ -201,7 +241,10 @@ class WeatherRepository(
         )
         weatherDao.insertCitizenDisasterReport(entity)
 
-        // Push updated list to cloud container so all devices see the new report
+        // Push to Firestore and Cloud container so all devices see the new report
+        try {
+            com.example.data.local.FirestoreHelper.syncReportToCloud(report)
+        } catch (_: Exception) {}
         try {
             val allLocal = weatherDao.getAllCitizenDisasterReportsSync().map { e ->
                 CitizenDisasterReport(
@@ -232,7 +275,10 @@ class WeatherRepository(
 
     suspend fun updateCitizenReportStatus(reportId: String, newStatus: String) = withContext(Dispatchers.IO) {
         weatherDao.updateCitizenReportStatus(reportId, newStatus)
-        // Push status change to cloud container
+        // Push status change to Firestore & cloud container
+        try {
+            com.example.data.local.FirestoreHelper.updateReportStatusInCloud(reportId, newStatus)
+        } catch (_: Exception) {}
         try {
             val allLocal = weatherDao.getAllCitizenDisasterReportsSync().map { e ->
                 CitizenDisasterReport(
@@ -263,7 +309,10 @@ class WeatherRepository(
 
     suspend fun updateCitizenReportStatusAndNotes(reportId: String, newStatus: String, notes: String) = withContext(Dispatchers.IO) {
         weatherDao.updateCitizenReportStatusAndNotes(reportId, newStatus, notes)
-        // Push status & follow-up notes change to cloud container
+        // Push status & follow-up notes change to Firestore & cloud container
+        try {
+            com.example.data.local.FirestoreHelper.updateReportStatusInCloud(reportId, newStatus, notes)
+        } catch (_: Exception) {}
         try {
             val allLocal = weatherDao.getAllCitizenDisasterReportsSync().map { e ->
                 CitizenDisasterReport(
@@ -330,9 +379,9 @@ class WeatherRepository(
                     )
                 )
                 newCount++
-            } else if (local.status != cloudReport.status) {
-                // Status updated by BPBD officer on another device
-                weatherDao.updateCitizenReportStatus(cloudReport.id, cloudReport.status)
+            } else if (local.status != cloudReport.status || local.additionalNotes != cloudReport.additionalNotes) {
+                // Status or follow-up notes updated by BPBD officer on another device
+                weatherDao.updateCitizenReportStatusAndNotes(cloudReport.id, cloudReport.status, cloudReport.additionalNotes)
             }
         }
 

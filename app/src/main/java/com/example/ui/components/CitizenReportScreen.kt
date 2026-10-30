@@ -1,13 +1,16 @@
 package com.example.ui.components
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -22,15 +25,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -59,6 +65,13 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.HeadsetMic
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -108,10 +121,18 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.example.data.local.AppDatabase
+import com.example.data.local.OfficialAsnBpbdPersonnel
 import com.example.data.local.OfficerAuthManager
+import com.example.data.local.OfficerProfile
+import com.example.data.local.OfficerRoles
+import com.example.data.repository.PersonnelRepository
 import com.example.model.CitizenDisasterReport
 import com.example.model.District
 import com.example.model.MukomukoDistricts
@@ -186,6 +207,8 @@ fun CitizenReportScreen(
     onBackClick: () -> Unit,
     onSyncReports: (((Int) -> Unit) -> Unit)? = null,
     onUpdateReportStatusAndNotes: ((String, String, String) -> Unit)? = null,
+    initialShowOfficerLogin: Boolean = false,
+    onOfficerLoginDismissed: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -197,9 +220,22 @@ fun CitizenReportScreen(
     var officerName by remember { mutableStateOf(officerAuthManager.getOfficerName()) }
     var officerBadgeId by remember { mutableStateOf(officerAuthManager.getOfficerBadgeId()) }
     var officerShift by remember { mutableStateOf(officerAuthManager.getOfficerShift()) }
+    var officerRole by remember { mutableStateOf(officerAuthManager.getOfficerRole()) }
+
+    val coroutineScope = rememberCoroutineScope()
+    val database = remember { AppDatabase.getInstance(context) }
+    val personnelRepository = remember { PersonnelRepository(database.personnelDao()) }
+    LaunchedEffect(Unit) {
+        personnelRepository.seedDefaultAsnPersonnelIfNeeded()
+    }
 
     // Officer Login & Status Gating Modal State
-    var showOfficerLoginDialog by remember { mutableStateOf(false) }
+    var showOfficerLoginDialog by remember { mutableStateOf(initialShowOfficerLogin) }
+    LaunchedEffect(initialShowOfficerLogin) {
+        if (initialShowOfficerLogin) {
+            showOfficerLoginDialog = true
+        }
+    }
     var pendingStatusReportId by remember { mutableStateOf<String?>(null) }
     var pendingStatusTarget by remember { mutableStateOf<String?>(null) }
 
@@ -267,6 +303,10 @@ fun CitizenReportScreen(
     // Table Filter by Status: "Semua", "Diproses", "Divalidasi", "Selesai"
     var tableStatusFilter by remember { mutableStateOf("Semua") }
 
+    // Permission Rationale / Guidance Dialog state
+    var permissionDeniedDialogMessage by remember { mutableStateOf<String?>(null) }
+    var permissionDeniedDialogTitle by remember { mutableStateOf<String?>(null) }
+
     // Camera launcher (TakePicturePreview returns Bitmap thumbnail)
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
@@ -288,8 +328,21 @@ fun CitizenReportScreen(
         }
     }
 
-    // Location fetcher helper
-    val fetchGpsLocation = {
+    // Camera Runtime Permission Launcher
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            cameraLauncher.launch(null)
+        } else {
+            permissionDeniedDialogTitle = "Izin Kamera Diperlukan"
+            permissionDeniedDialogMessage = "Izin kamera diperlukan untuk mengambil foto bukti langsung kejadian bencana di lapangan dengan stempel digital anti-hoax Pusdalops BPBD."
+            Toast.makeText(context, "Izin kamera diperlukan untuk mengambil foto bukti", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Location fetcher internal helper
+    val fetchGpsLocationInternal: () -> Unit = {
         isFetchingGps = true
         gpsStatusMessage = "Mencari sinyal GPS satelit ponsel..."
         LocationHelper.fetchCurrentLocation(
@@ -314,6 +367,58 @@ fun CitizenReportScreen(
                 Toast.makeText(context, err, Toast.LENGTH_LONG).show()
             }
         )
+    }
+
+    // Location Runtime Permission Launcher
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fineGranted || coarseGranted) {
+            fetchGpsLocationInternal()
+        } else {
+            isFetchingGps = false
+            gpsStatusMessage = "Izin GPS ditolak. Sentuh tombol pin untuk mencoba lagi."
+            permissionDeniedDialogTitle = "Izin Lokasi GPS Diperlukan"
+            permissionDeniedDialogMessage = "Izin lokasi presisi (GPS) diperlukan untuk memvalidasi posisi akurat bencana warga dan mengarahkan armada penyelamat TRC BPBD."
+            Toast.makeText(context, "Izin lokasi diperlukan untuk mengunci koordinat bencana", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Function to trigger GPS with runtime permission check
+    val fetchGpsLocation = {
+        val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarseGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fineGranted || coarseGranted) {
+            fetchGpsLocationInternal()
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    // Function to trigger Camera with runtime permission check & auto-geotag
+    val launchCameraWithPermission = {
+        // Automatically request GPS locking if not yet locked to ensure geotagged photo
+        if (!isGpsLocked) {
+            val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarseGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (fineGranted || coarseGranted) {
+                fetchGpsLocationInternal()
+            }
+        }
+
+        val cameraGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        if (cameraGranted) {
+            cameraLauncher.launch(null)
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
 
     Column(
@@ -402,7 +507,7 @@ fun CitizenReportScreen(
                         if (isOfficerLoggedIn) {
                             selectedTab = 4
                         } else {
-                            showOfficerLoginDialog = true
+                            Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
                         }
                     }
                 ) {
@@ -538,43 +643,47 @@ fun CitizenReportScreen(
                     }
                 )
 
-                // Tab 4: Konsol Petugas (Validasi & Tindak Lanjut TRC) - Khusus Petugas BPBD Terautentikasi
-                if (isOfficerLoggedIn) {
-                    Tab(
-                        selected = selectedTab == 4,
-                        onClick = { selectedTab = 4 },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Shield,
-                                    contentDescription = null,
-                                    tint = if (selectedTab == 4) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
+                // Tab 4: Modul Khusus Petugas (Konsol Validasi TRC)
+                Tab(
+                    selected = selectedTab == 4,
+                    onClick = {
+                        if (isOfficerLoggedIn) {
+                            selectedTab = 4
+                        } else {
+                            Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isOfficerLoggedIn) Icons.Default.Shield else Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = if (selectedTab == 4) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Modul Petugas",
+                                fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 12.sp,
+                                color = if (selectedTab == 4) Color.White else Color.White.copy(alpha = 0.7f)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isOfficerLoggedIn) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.2f)
+                            ) {
                                 Text(
-                                    text = "Konsol Petugas",
-                                    fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 12.sp,
-                                    color = if (selectedTab == 4) Color.White else Color.White.copy(alpha = 0.7f)
+                                    text = if (isOfficerLoggedIn) "AKTIF" else "KHUSUS",
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isOfficerLoggedIn) Color.Black else Color.White,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Surface(
-                                    shape = CircleShape,
-                                    color = Color(0xFFFBBF24)
-                                ) {
-                                    Text(
-                                        text = "AKTIF",
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.Black,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                    )
-                                }
                             }
                         }
-                    )
-                }
+                    }
+                )
             }
         }
 
@@ -1001,12 +1110,7 @@ fun CitizenReportScreen(
 
                                     // Action Button: Buka Kamera Langsung Saja (Pilihan galeri dinonaktifkan demi integritas anti-palsu)
                                     Button(
-                                        onClick = {
-                                            if (!isGpsLocked) {
-                                                fetchGpsLocation()
-                                            }
-                                            cameraLauncher.launch(null)
-                                        },
+                                        onClick = { launchCameraWithPermission() },
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .testTag("btn_launch_camera"),
@@ -1059,6 +1163,98 @@ fun CitizenReportScreen(
                             }
                         }
 
+                        // Dedicated Card: Deskripsi Kejadian / Jenis Bencana Lainnya (Wajib Diisi)
+                        item {
+                            Card(
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFFFFFBEB)
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.2.dp,
+                                    if (additionalNotes.isBlank()) Color(0xFFF59E0B) else Color(0xFF10B981)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("card_deskripsi_kejadian_lainnya")
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = Color(0xFFD97706),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Deskripsi Kejadian / Bencana Lainnya",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF92400E)
+                                            )
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = if (additionalNotes.isBlank()) Color(0xFFDC2626) else Color(0xFF15803D)
+                                        ) {
+                                            Text(
+                                                text = if (additionalNotes.isBlank()) "Wajib Diisi *" else "Terisi ✓",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.White,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Text(
+                                        text = "Wajib diisi: Jelaskan kronologi kejadian, dampak kerusakan, kebutuhan mendesak, atau rincian jika jenis bencana tidak tercantum pada pilihan di atas.",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF78350F),
+                                        lineHeight = 14.sp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    OutlinedTextField(
+                                        value = additionalNotes,
+                                        onValueChange = { additionalNotes = it },
+                                        placeholder = {
+                                            Text(
+                                                "Tuliskan rincian kejadian, kondisi terkini, atau jenis bencana lainnya di sini...",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF9CA3AF)
+                                            )
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("input_deskripsi_kejadian_lainnya"),
+                                        minLines = 3,
+                                        maxLines = 6,
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.White,
+                                            unfocusedContainerColor = Color.White,
+                                            focusedIndicatorColor = Color(0xFFD97706),
+                                            unfocusedIndicatorColor = Color(0xFFE5E7EB)
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
                         // Optional Pelapor Info (Name & Notes)
                         item {
                             Column(modifier = Modifier.fillMaxWidth()) {
@@ -1085,6 +1281,10 @@ fun CitizenReportScreen(
                                 onClick = {
                                     if (incidentLocation.isBlank()) {
                                         Toast.makeText(context, "Mohon isi rincian Lokasi Kejadian", Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    }
+                                    if (additionalNotes.isBlank()) {
+                                        Toast.makeText(context, "Kolom deskripsi kejadian / jenis bencana lainnya wajib diisi!", Toast.LENGTH_LONG).show()
                                         return@Button
                                     }
                                     if (!isGpsLocked) {
@@ -1170,7 +1370,13 @@ fun CitizenReportScreen(
                                     1.dp,
                                     if (isOfficerLoggedIn) Color(0xFFBBF7D0) else Color(0xFFBFDBFE)
                                 ),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (!isOfficerLoggedIn) {
+                                            Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(12.dp),
@@ -1213,14 +1419,22 @@ fun CitizenReportScreen(
 
                                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Button(
-                                            onClick = { selectedTab = 4 },
+                                            onClick = {
+                                                if (isOfficerLoggedIn) {
+                                                    selectedTab = 4
+                                                } else {
+                                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
                                             shape = RoundedCornerShape(8.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (isOfficerLoggedIn) Color(0xFF15803D) else Color(0xFF475569)
+                                            ),
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                             modifier = Modifier.height(34.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Shield,
+                                                imageVector = if (isOfficerLoggedIn) Icons.Default.Shield else Icons.Default.Lock,
                                                 contentDescription = null,
                                                 tint = Color.White,
                                                 modifier = Modifier.size(13.dp)
@@ -1239,9 +1453,13 @@ fun CitizenReportScreen(
                                                 if (isOfficerLoggedIn) {
                                                     officerAuthManager.logoutOfficer()
                                                     isOfficerLoggedIn = false
+                                                    officerName = officerAuthManager.getOfficerName()
+                                                    officerBadgeId = officerAuthManager.getOfficerBadgeId()
+                                                    officerShift = officerAuthManager.getOfficerShift()
+                                                    officerRole = officerAuthManager.getOfficerRole()
                                                     Toast.makeText(context, "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)", Toast.LENGTH_SHORT).show()
                                                 } else {
-                                                    showOfficerLoginDialog = true
+                                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
                                                 }
                                             },
                                             shape = RoundedCornerShape(8.dp),
@@ -1455,9 +1673,11 @@ fun CitizenReportScreen(
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         } else {
-                                            pendingStatusReportId = report.id
-                                            pendingStatusTarget = newStatus
-                                            showOfficerLoginDialog = true
+                                            Toast.makeText(
+                                                context,
+                                                "Login dengan ID petugas untuk akses ini",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     },
                                     onViewPhoto = { photoUri ->
@@ -1489,10 +1709,15 @@ fun CitizenReportScreen(
                             officerName = officerName,
                             officerBadgeId = officerBadgeId,
                             officerShift = officerShift,
+                            officerRole = officerRole,
                             onLoginClick = { showOfficerLoginDialog = true },
                             onLogoutClick = {
                                 officerAuthManager.logoutOfficer()
                                 isOfficerLoggedIn = false
+                                officerName = officerAuthManager.getOfficerName()
+                                officerBadgeId = officerAuthManager.getOfficerBadgeId()
+                                officerShift = officerAuthManager.getOfficerShift()
+                                officerRole = officerAuthManager.getOfficerRole()
                                 selectedTab = 0
                                 Toast.makeText(context, "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)", Toast.LENGTH_SHORT).show()
                             },
@@ -1508,6 +1733,9 @@ fun CitizenReportScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .clickable {
+                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                                }
                                 .padding(28.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
@@ -1542,7 +1770,9 @@ fun CitizenReportScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
-                                onClick = { showOfficerLoginDialog = true },
+                                onClick = {
+                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
                             ) {
                                 Icon(imageVector = Icons.Default.Badge, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1554,6 +1784,63 @@ fun CitizenReportScreen(
                 }
             }
         }
+    }
+
+    // Permission Guidance Dialog for CAMERA & LOCATION
+    if (permissionDeniedDialogMessage != null) {
+        AlertDialog(
+            onDismissRequest = { permissionDeniedDialogMessage = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = Color(0xFFDC2626),
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = permissionDeniedDialogTitle ?: "Izin Akses Diperlukan",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    text = permissionDeniedDialogMessage.orEmpty(),
+                    fontSize = 12.sp,
+                    color = Color(0xFF374151),
+                    lineHeight = 16.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val isCamera = permissionDeniedDialogTitle?.contains("Kamera") == true
+                        permissionDeniedDialogMessage = null
+                        if (isCamera) {
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+                ) {
+                    Text("Beri Izin Sekarang")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { permissionDeniedDialogMessage = null }) {
+                    Text("Nanti Saja")
+                }
+            }
+        )
     }
 
     // Success Confirmation Dialog
@@ -1632,16 +1919,51 @@ fun CitizenReportScreen(
 
     // Officer Login & PIN Verification Dialog
     if (showOfficerLoginDialog) {
-        var inputName by remember { mutableStateOf(officerName) }
-        var inputBadge by remember { mutableStateOf(officerBadgeId) }
-        var inputShift by remember { mutableStateOf(officerShift) }
+        var roster by remember { mutableStateOf(officerAuthManager.getOfficerRoster()) }
+        var selectedRoleFilter by remember { mutableStateOf(OfficerRoles.OPERATOR) }
+        var selectedOfficer by remember {
+            mutableStateOf(
+                roster.firstOrNull { it.nip == officerBadgeId }
+                    ?: roster.firstOrNull { it.role == OfficerRoles.OPERATOR }
+                    ?: roster.firstOrNull()
+            )
+        }
+        var dialogMode by remember { mutableIntStateOf(0) } // 0 = Pilih dari Roster / Dropdown, 1 = Form Input Petugas Baru (Admin Only)
+        var isNameDropdownOpen by remember { mutableStateOf(false) }
+        var rosterSearchQuery by remember { mutableStateOf("") }
+
+        // PIN state
         var inputPin by remember { mutableStateOf("") }
         var isPinVisible by remember { mutableStateOf(false) }
         var isError by remember { mutableStateOf(false) }
+        var errorMessage by remember { mutableStateOf("") }
+
+        // Admin Security Prompt for manual input protection
+        var showAdminPromptForAdd by remember { mutableStateOf(false) }
+        var adminPinAttempt by remember { mutableStateOf("") }
+        var adminPinErrorMsg by remember { mutableStateOf("") }
+
+        // Form Input Petugas Baru (Format: Nama Petugas & NIP selaku ASN/TRC BPBD)
+        var inputFullName by remember { mutableStateOf("") }
+        var inputNip by remember { mutableStateOf("") }
+        var inputRole by remember { mutableStateOf(OfficerRoles.OPERATOR) }
+        var inputShift by remember { mutableStateOf("Shift Siaga 24 Jam") }
+        var inputUnit by remember { mutableStateOf("Pusdalops BPBD Kab. Mukomuko") }
+        var formValidationError by remember { mutableStateOf("") }
+
+        val filteredRoster = roster.filter { off ->
+            val matchesRole = if (selectedRoleFilter == "Semua") true else off.role == selectedRoleFilter
+            val matchesSearch = if (rosterSearchQuery.isBlank()) true else {
+                val q = rosterSearchQuery.trim().lowercase()
+                off.fullName.lowercase().contains(q) || off.nip.lowercase().contains(q) || off.unit.lowercase().contains(q)
+            }
+            matchesRole && matchesSearch
+        }
 
         AlertDialog(
             onDismissRequest = {
                 showOfficerLoginDialog = false
+                onOfficerLoginDismissed?.invoke()
                 pendingStatusReportId = null
                 pendingStatusTarget = null
             },
@@ -1649,150 +1971,816 @@ fun CitizenReportScreen(
                 Surface(
                     shape = CircleShape,
                     color = Color(0xFFEFF6FF),
-                    modifier = Modifier.size(50.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.Default.Badge,
+                            imageVector = if (dialogMode == 1) Icons.Default.PersonAdd else Icons.Default.Badge,
                             contentDescription = null,
                             tint = Color(0xFF2563EB),
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 }
             },
             title = {
-                Text(
-                    text = "Verifikasi Petugas Jaga BPBD",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (dialogMode == 1) "Input Petugas Baru (Admin)" else "Login Kredensial Petugas Pusdalops",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "BPBD Kabupaten Mukomuko",
+                        fontSize = 11.sp,
+                        color = Color(0xFF2563EB),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             },
             text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "Khusus Petugas Pusdalops / Tim Reaksi Cepat (TRC) BPBD Kabupaten Mukomuko yang berwenang memvalidasi dan mengubah status penanganan bencana.",
-                        fontSize = 11.sp,
-                        color = Color(0xFF4B5563),
-                        lineHeight = 15.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = inputName,
-                        onValueChange = { inputName = it },
-                        label = { Text("Nama Petugas Jaga", fontSize = 11.sp) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = inputBadge,
-                            onValueChange = { inputBadge = it },
-                            label = { Text("NIP / ID Petugas", fontSize = 11.sp) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 480.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    if (dialogMode == 0) {
+                        // MODE 0: PILIH DARI DATABASE RESMI PUSDALOPS (ANTI-SPOOFING)
+                        Text(
+                            text = "Pilih nama personil ASN BPBD dari daftar resmi kredensial. Nama dan NIP ditampilkan terpisah dan terkunci guna mencegah manipulasi identitas oleh pihak tidak berwenang.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF4B5563),
+                            lineHeight = 15.sp
                         )
-                        OutlinedTextField(
-                            value = inputShift,
-                            onValueChange = { inputShift = it },
-                            label = { Text("Regu / Shift", fontSize = 11.sp) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Category Tabs: Operator Pusdalops (Default), Petugas Jaga, Lapangan TRC, Semua
+                        Text(
+                            text = "PILIHAN TUGAS KEDINASAN:",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF64748B),
+                            letterSpacing = 0.5.sp
                         )
-                    }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
-                    OutlinedTextField(
-                        value = inputPin,
-                        onValueChange = {
-                            inputPin = it
-                            isError = false
-                        },
-                        label = { Text("PIN Keamanan Petugas", fontSize = 11.sp) },
-                        placeholder = { Text("PIN: 117 / BPBD117", fontSize = 11.sp) },
-                        visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        trailingIcon = {
-                            IconButton(onClick = { isPinVisible = !isPinVisible }) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            val roleFilters = listOf(
+                                OfficerRoles.OPERATOR to "🎧 Operator (${roster.count { it.role == OfficerRoles.OPERATOR }})",
+                                OfficerRoles.PETUGAS_JAGA to "🛡️ Petugas Jaga (${roster.count { it.role == OfficerRoles.PETUGAS_JAGA }})",
+                                OfficerRoles.PETUGAS_LAPANGAN to "🚜 TRC (${roster.count { it.role == OfficerRoles.PETUGAS_LAPANGAN }})",
+                                "Semua" to "Semua (${roster.size})"
+                            )
+                            items(roleFilters) { (roleKey, label) ->
+                                val isSelected = selectedRoleFilter == roleKey
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isSelected) Color(0xFF2563EB) else Color(0xFFF1F5F9),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isSelected) Color(0xFF1D4ED8) else Color(0xFFCBD5E1)
+                                    ),
+                                    modifier = Modifier.clickable {
+                                        selectedRoleFilter = roleKey
+                                        // Auto pick first officer in selected role
+                                        val firstInRole = roster.firstOrNull { if (roleKey == "Semua") true else it.role == roleKey }
+                                        if (firstInRole != null) {
+                                            selectedOfficer = firstInRole
+                                        }
+                                    }
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else Color(0xFF475569),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // DROPDOWN MENU PEMILIHAN NAMA PETUGAS ASN (OPERATOR PUSDALOPS)
+                        Text(
+                            text = "PILIH NAMA PETUGAS ASN (OPERATOR PUSDALOPS):",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1E40AF),
+                            letterSpacing = 0.5.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFEFF6FF),
+                                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF2563EB)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { isNameDropdownOpen = true }
+                                    .testTag("officer_name_dropdown_selector")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = Color(0xFF1D4ED8),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = selectedOfficer?.fullName ?: "Klik untuk memilih nama petugas...",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF0F172A),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "NIP: ${selectedOfficer?.nip ?: "-"} • ${selectedOfficer?.role ?: "-"}",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFF1E40AF)
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Buka Pilihan Nama",
+                                        tint = Color(0xFF1D4ED8),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = isNameDropdownOpen,
+                                onDismissRequest = { isNameDropdownOpen = false },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.9f)
+                                    .heightIn(max = 280.dp)
+                            ) {
+                                val availableInRole = filteredRoster.ifEmpty { roster }
+                                availableInRole.forEach { off ->
+                                    val isCurrent = selectedOfficer?.nip == off.nip
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    text = off.fullName,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
+                                                    color = if (isCurrent) Color(0xFF1D4ED8) else Color(0xFF0F172A)
+                                                )
+                                                Text(
+                                                    text = "NIP: ${off.nip} • ${off.role}",
+                                                    fontSize = 9.sp,
+                                                    color = Color(0xFF64748B)
+                                                )
+                                            }
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Badge,
+                                                contentDescription = null,
+                                                tint = if (isCurrent) Color(0xFF2563EB) else Color.Gray,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        },
+                                        trailingIcon = {
+                                            if (isCurrent) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF16A34A),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            selectedOfficer = off
+                                            isNameDropdownOpen = false
+                                            isError = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // KREDENSIAL TERPISAH: KOLOM NAMA & KOLOM NIP (TERKUNCI / ANTI MANUAL INPUT)
+                        Text(
+                            text = "KREDENSIAL RESMI DARI DATABASE BPBD (TERPISAH & TERPROTEKSI):",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF475569),
+                            letterSpacing = 0.5.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Kolom Terpisah 1: Nama Lengkap ASN BPBD (Read-Only)
+                        OutlinedTextField(
+                            value = selectedOfficer?.fullName ?: "",
+                            onValueChange = {}, // Read-only: mencegah input manual pihak tak berwenang
+                            readOnly = true,
+                            enabled = false,
+                            label = { Text("Kolom Nama Pegawai ASN BPBD", fontSize = 11.sp) },
+                            leadingIcon = {
                                 Icon(
-                                    imageVector = if (isPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    imageVector = Icons.Default.Person,
                                     contentDescription = null,
-                                    tint = Color.Gray,
+                                    tint = Color(0xFF1D4ED8),
                                     modifier = Modifier.size(18.dp)
                                 )
-                            }
-                        },
-                        isError = isError,
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Terkunci Aman",
+                                    tint = Color(0xFF059669),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = TextFieldDefaults.colors(
+                                disabledContainerColor = Color(0xFFF8FAFC),
+                                disabledTextColor = Color(0xFF0F172A),
+                                disabledLabelColor = Color(0xFF475569),
+                                disabledIndicatorColor = Color(0xFFCBD5E1)
+                            ),
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("officer_credential_name_field")
+                        )
 
-                    if (isError) {
-                        Text(
-                            text = "PIN salah. Gunakan PIN resmi BPBD (117 / BPBD117 / TRC2026).",
-                            color = Color(0xFFDC2626),
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(top = 4.dp)
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Kolom Terpisah 2: NIP Pegawai ASN (Read-Only)
+                        OutlinedTextField(
+                            value = selectedOfficer?.nip ?: "",
+                            onValueChange = {}, // Read-only: mencegah input manual pihak tak berwenang
+                            readOnly = true,
+                            enabled = false,
+                            label = { Text("Kolom NIP Pegawai ASN (18 Digit)", fontSize = 11.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Badge,
+                                    contentDescription = null,
+                                    tint = Color(0xFF1D4ED8),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Terkunci Aman",
+                                    tint = Color(0xFF059669),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = TextFieldDefaults.colors(
+                                disabledContainerColor = Color(0xFFF8FAFC),
+                                disabledTextColor = Color(0xFF0F172A),
+                                disabledLabelColor = Color(0xFF475569),
+                                disabledIndicatorColor = Color(0xFFCBD5E1)
+                            ),
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("officer_credential_nip_field")
                         )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Penugasan & Satuan Kerja Card
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFF0FDF4),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.HeadsetMic,
+                                    contentDescription = null,
+                                    tint = Color(0xFF15803D),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Tugas: ${selectedOfficer?.role ?: OfficerRoles.OPERATOR}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF166534)
+                                    )
+                                    Text(
+                                        text = "${selectedOfficer?.unit ?: "Pusdalops BPBD Kab. Mukomuko"} • ${selectedOfficer?.shift ?: "Shift Siaga 24 Jam"}",
+                                        fontSize = 9.sp,
+                                        color = Color(0xFF15803D)
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFFDCFCE7)
+                                ) {
+                                    Text(
+                                        text = "TERVERIFIKASI",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF166534),
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Anti-Spoofing & Security Indicator
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFFEF3C7),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = null,
+                                    tint = Color(0xFFB45309),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Proteksi Kredensial: Kolom Nama & NIP dikunci otomatis dari database resmi BPBD. Input manual dinonaktifkan guna menghindari pemalsuan identitas oleh pihak tidak berwenang.",
+                                    fontSize = 9.sp,
+                                    color = Color(0xFF92400E),
+                                    lineHeight = 12.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Tombol Tambah Petugas (Khusus Admin dengan PIN Master)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (officerAuthManager.isAdminLoggedIn()) {
+                                        dialogMode = 1
+                                        formValidationError = ""
+                                    } else {
+                                        showAdminPromptForAdd = true
+                                        adminPinAttempt = ""
+                                        adminPinErrorMsg = ""
+                                    }
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = Color(0xFF0F766E),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Kelola Personil (Admin)", fontSize = 10.sp, color = Color(0xFF0F766E))
+                            }
+                        }
+
+                        if (showAdminPromptForAdd) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFF1F5F9),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = "Verifikasi Hak Akses Administrator:",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF1E293B)
+                                    )
+                                    Text(
+                                        text = "Pendaftaran atau modifikasi personil baru hanya dapat dilakukan oleh Admin Pusdalops PB.",
+                                        fontSize = 9.sp,
+                                        color = Color(0xFF475569)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    OutlinedTextField(
+                                        value = adminPinAttempt,
+                                        onValueChange = { adminPinAttempt = it },
+                                        placeholder = { Text("Masukkan Sandi/PIN Admin...", fontSize = 10.sp) },
+                                        singleLine = true,
+                                        visualTransformation = PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    if (adminPinErrorMsg.isNotBlank()) {
+                                        Text(
+                                            text = adminPinErrorMsg,
+                                            fontSize = 9.sp,
+                                            color = Color.Red,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        OutlinedButton(
+                                            onClick = { showAdminPromptForAdd = false },
+                                            modifier = Modifier.weight(1f).height(32.dp),
+                                            contentPadding = PaddingValues(2.dp)
+                                        ) {
+                                            Text("Batal", fontSize = 10.sp)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                if (officerAuthManager.verifyPin(adminPinAttempt) || officerAuthManager.loginAdmin("admin", adminPinAttempt)) {
+                                                    showAdminPromptForAdd = false
+                                                    dialogMode = 1
+                                                    formValidationError = ""
+                                                } else {
+                                                    adminPinErrorMsg = "PIN/Sandi Admin salah. Akses ditolak demi keamanan."
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f).height(32.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                                            contentPadding = PaddingValues(2.dp)
+                                        ) {
+                                            Text("Verifikasi", fontSize = 10.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // PIN Input Field
+                        OutlinedTextField(
+                            value = inputPin,
+                            onValueChange = {
+                                inputPin = it
+                                isError = false
+                            },
+                            label = { Text("PIN Keamanan Petugas", fontSize = 11.sp) },
+                            placeholder = { Text("PIN Default: 117 / BPBD117 / TRC2026", fontSize = 11.sp) },
+                            visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            trailingIcon = {
+                                IconButton(onClick = { isPinVisible = !isPinVisible }) {
+                                    Icon(
+                                        imageVector = if (isPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            isError = isError,
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        if (isError) {
+                            Text(
+                                text = errorMessage.ifBlank { "PIN salah. Gunakan PIN resmi BPBD (117 / BPBD117 / TRC2026)." },
+                                color = Color(0xFFDC2626),
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        } else {
+                            Text(
+                                text = "Petunjuk: PIN standar Pusdalops adalah 117 atau BPBD117",
+                                color = Color(0xFF6B7280),
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+
                     } else {
+                        // MODE 1: FORM INPUT NAMA PETUGAS BESERTA NIP ASN/TRC BPBD
                         Text(
-                            text = "Petunjuk: PIN default Pusdalops adalah 117 atau BPBD117",
-                            color = Color(0xFF6B7280),
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(top = 4.dp)
+                            text = "Formulir pendaftaran nama personil Pusdalops BPBD Kabupaten Mukomuko (Operator, Petugas Jaga, dan Personil Lapangan TRC) dengan format identitas resmi ASN/TRC.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF4B5563),
+                            lineHeight = 15.sp
                         )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = inputFullName,
+                            onValueChange = {
+                                inputFullName = it
+                                formValidationError = ""
+                            },
+                            label = { Text("Nama Petugas & Gelar", fontSize = 11.sp) },
+                            placeholder = { Text("Contoh: Budi Santoso, S.Sos / Rian Hidayat", fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = inputNip,
+                            onValueChange = {
+                                inputNip = it
+                                formValidationError = ""
+                            },
+                            label = { Text("NIP Pegawai ASN / No. Reg TRC", fontSize = 11.sp) },
+                            placeholder = { Text("Contoh: 19850101 201001 1 001 atau TRC-MMK-2024-025", fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "Penugasan di Pusdalops BPBD:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF334155)
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // 3 Role choices: Operator, Petugas Jaga, Lapangan TRC
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            val roleChoices = listOf(
+                                Triple(OfficerRoles.OPERATOR, "🎧 Operator Pusdalops", "Pusat panggilan 117, radio HT, & data spasial"),
+                                Triple(OfficerRoles.PETUGAS_JAGA, "🛡️ Petugas Jaga Siaga", "Piket Posko Siaga Bencana 24 Jam Pusdalops"),
+                                Triple(OfficerRoles.PETUGAS_LAPANGAN, "🚜 Petugas Lapangan TRC", "Tim Reaksi Cepat evakuasi & kaji cepat darurat")
+                            )
+
+                            roleChoices.forEach { (roleVal, roleTitle, roleDesc) ->
+                                val isSelected = inputRole == roleVal
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) Color(0xFFEFF6FF) else Color(0xFFF8FAFC),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        width = if (isSelected) 1.5.dp else 1.dp,
+                                        color = if (isSelected) Color(0xFF2563EB) else Color(0xFFE2E8F0)
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { inputRole = roleVal }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = roleTitle,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSelected) Color(0xFF1D4ED8) else Color(0xFF1E293B)
+                                            )
+                                            Text(
+                                                text = roleDesc,
+                                                fontSize = 9.sp,
+                                                color = Color(0xFF64748B)
+                                            )
+                                        }
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.CheckCircle,
+                                                contentDescription = null,
+                                                tint = Color(0xFF2563EB),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = inputShift,
+                                onValueChange = { inputShift = it },
+                                label = { Text("Regu / Shift", fontSize = 11.sp) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = inputUnit,
+                                onValueChange = { inputUnit = it },
+                                label = { Text("Unit / Satuan", fontSize = 11.sp) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        if (formValidationError.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = formValidationError,
+                                color = Color(0xFFDC2626),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { dialogMode = 0 },
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Batal / Kembali", fontSize = 11.sp)
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (inputFullName.trim().length < 3) {
+                                        formValidationError = "Nama petugas minimal 3 karakter."
+                                        return@Button
+                                    }
+                                    if (inputNip.trim().length < 4) {
+                                        formValidationError = "NIP ASN / No. Reg TRC minimal 4 karakter."
+                                        return@Button
+                                    }
+                                    val addResult = officerAuthManager.addOfficer(
+                                        fullName = inputFullName,
+                                        nip = inputNip,
+                                        role = inputRole,
+                                        shift = inputShift,
+                                        unit = inputUnit
+                                    )
+                                    if (addResult.isSuccess) {
+                                        val newOff = addResult.getOrNull()
+                                        // Also persist to Room Database
+                                        coroutineScope.launch {
+                                            personnelRepository.insert(
+                                                com.example.data.local.Personnel(
+                                                    name = inputFullName.trim(),
+                                                    nip = inputNip.trim(),
+                                                    role = inputRole,
+                                                    shift = inputShift.trim(),
+                                                    unit = inputUnit.trim()
+                                                )
+                                            )
+                                        }
+                                        roster = officerAuthManager.getOfficerRoster()
+                                        selectedOfficer = newOff
+                                        dialogMode = 0
+                                        formValidationError = ""
+                                        Toast.makeText(
+                                            context,
+                                            "Petugas '${newOff?.fullName}' berhasil didaftarkan ke sistem Pusdalops!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        formValidationError = addResult.exceptionOrNull()?.message ?: "Gagal mendaftarkan petugas."
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                                modifier = Modifier.weight(1.3f)
+                            ) {
+                                Text("Simpan & Pilih Petugas", fontSize = 11.sp)
+                            }
+                        }
                     }
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val success = officerAuthManager.loginOfficer(
-                            name = inputName,
-                            badgeId = inputBadge,
-                            shift = inputShift,
-                            pin = inputPin
-                        )
-                        if (success) {
-                            isOfficerLoggedIn = true
-                            officerName = officerAuthManager.getOfficerName()
-                            officerBadgeId = officerAuthManager.getOfficerBadgeId()
-                            officerShift = officerAuthManager.getOfficerShift()
-                            showOfficerLoginDialog = false
-                            selectedTab = 4 // Buka langsung Konsol Petugas yang telah terbuka
-
-                            // If there was a pending report status change, execute it now!
-                            val targetId = pendingStatusReportId
-                            val targetStatus = pendingStatusTarget
-                            if (targetId != null && targetStatus != null) {
-                                onUpdateReportStatus(targetId, targetStatus)
-                                Toast.makeText(
-                                    context,
-                                    "Terverifikasi sebagai $officerName. Status laporan diperbarui menjadi '$targetStatus'",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            } else {
-                                Toast.makeText(context, "Selamat bertugas, $officerName!", Toast.LENGTH_SHORT).show()
+                if (dialogMode == 0) {
+                    Button(
+                        onClick = {
+                            val officer = selectedOfficer
+                            if (officer == null) {
+                                if (inputPin.isNotBlank() && officerAuthManager.verifyPin(inputPin)) {
+                                    val success = officerAuthManager.loginOfficer(
+                                        name = "Admin Pusdalops PB",
+                                        badgeId = "ADMIN-BPBD-MMK-117",
+                                        shift = "Komando Utama (24 Jam)",
+                                        pin = inputPin,
+                                        role = OfficerRoles.MANAJER
+                                    )
+                                    if (success) {
+                                        isOfficerLoggedIn = true
+                                        officerName = officerAuthManager.getOfficerName()
+                                        officerBadgeId = officerAuthManager.getOfficerBadgeId()
+                                        officerShift = officerAuthManager.getOfficerShift()
+                                        officerRole = officerAuthManager.getOfficerRole()
+                                        showOfficerLoginDialog = false
+                                        selectedTab = 4 // Direct to Konsol Petugas
+                                        Toast.makeText(
+                                            context,
+                                            "Masuk sebagai Administrator Pusdalops PB. Silakan kelola personil di Konsol Petugas.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        return@Button
+                                    } else {
+                                        isError = true
+                                        errorMessage = "PIN Master tidak valid."
+                                        return@Button
+                                    }
+                                } else {
+                                    isError = true
+                                    errorMessage = if (officerAuthManager.getOfficerRoster().isEmpty()) {
+                                        "Masukkan PIN Master (117 / BPBD117 / ADMIN117) untuk masuk sebagai Administrator."
+                                    } else {
+                                        "Pilih petugas dari daftar terlebih dahulu atau masukkan PIN Master Admin."
+                                    }
+                                    return@Button
+                                }
                             }
-                            pendingStatusReportId = null
-                            pendingStatusTarget = null
-                        } else {
-                            isError = true
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
-                ) {
-                    Text("Verifikasi & Masuk")
+
+                            val nonNullOfficer = officer
+                            if (inputPin.isBlank()) {
+                                isError = true
+                                errorMessage = "Masukkan PIN keamanan petugas dinas."
+                                return@Button
+                            }
+
+                            val success = officerAuthManager.loginOfficer(
+                                name = nonNullOfficer.fullName,
+                                badgeId = nonNullOfficer.nip,
+                                shift = nonNullOfficer.shift,
+                                pin = inputPin,
+                                role = nonNullOfficer.role
+                            )
+
+                            if (success) {
+                                isOfficerLoggedIn = true
+                                officerName = officerAuthManager.getOfficerName()
+                                officerBadgeId = officerAuthManager.getOfficerBadgeId()
+                                officerShift = officerAuthManager.getOfficerShift()
+                                officerRole = officerAuthManager.getOfficerRole()
+                                showOfficerLoginDialog = false
+                                onOfficerLoginDismissed?.invoke()
+                                selectedTab = 4 // Direct to Konsol Petugas
+
+                                val targetId = pendingStatusReportId
+                                val targetStatus = pendingStatusTarget
+                                if (targetId != null && targetStatus != null) {
+                                    onUpdateReportStatus(targetId, targetStatus)
+                                    Toast.makeText(
+                                        context,
+                                        "Terverifikasi sebagai ${nonNullOfficer.formattedLabel()}. Status laporan diperbarui menjadi '$targetStatus'",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Selamat bertugas, ${nonNullOfficer.formattedLabel()}!",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                                pendingStatusReportId = null
+                                pendingStatusTarget = null
+                            } else {
+                                isError = true
+                                errorMessage = "PIN salah. Gunakan PIN resmi Pusdalops (117 / BPBD117 / TRC2026) atau PIN baru yang telah diubah."
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+                    ) {
+                        Text("Verifikasi & Masuk")
+                    }
                 }
             },
             dismissButton = {
@@ -1803,7 +2791,7 @@ fun CitizenReportScreen(
                         pendingStatusTarget = null
                     }
                 ) {
-                    Text("Batal")
+                    Text("Tutup")
                 }
             }
         )

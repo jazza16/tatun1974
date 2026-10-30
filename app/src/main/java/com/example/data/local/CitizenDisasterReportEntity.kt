@@ -1,9 +1,25 @@
 package com.example.data.local
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "citizen_disaster_reports")
+/**
+ * Room Database Entity for Citizen Disaster Reports.
+ * Optimized with high-performance indices for timestamp, status, district, and composite queries.
+ */
+@Entity(
+    tableName = "citizen_disaster_reports",
+    indices = [
+        Index(value = ["timestamp"]),
+        Index(value = ["status"]),
+        Index(value = ["district"]),
+        Index(value = ["disasterType"]),
+        Index(value = ["status", "timestamp"]),
+        Index(value = ["district", "timestamp"]),
+        Index(value = ["district", "status"])
+    ]
+)
 data class CitizenDisasterReportEntity(
     @PrimaryKey
     val id: String,

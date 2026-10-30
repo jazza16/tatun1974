@@ -1,6 +1,7 @@
 package com.example.data.local
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "weather_cache")
@@ -25,7 +26,14 @@ data class FavoriteDistrictEntity(
     val isFavorite: Boolean = true
 )
 
-@Entity(tableName = "community_reports")
+@Entity(
+    tableName = "community_reports",
+    indices = [
+        Index(value = ["timestamp"]),
+        Index(value = ["districtId"]),
+        Index(value = ["districtId", "timestamp"])
+    ]
+)
 data class CommunityReportEntity(
     @PrimaryKey
     val id: String,

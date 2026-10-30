@@ -1,5 +1,9 @@
 package com.example.ui.components
 
+import android.app.WallpaperManager
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -27,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,11 +42,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDamage
 import androidx.compose.material.icons.filled.Waves
@@ -50,6 +57,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -63,6 +71,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +80,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -80,7 +90,10 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Wallpaper Awal & Analisis Alam-Kebencanaan Kabupaten Mukomuko
@@ -93,10 +106,14 @@ fun StartupSplashWallpaperScreen(
     isVisible: Boolean,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    autoDismissDelayMs: Long = 3200L
+    onLoginAsOfficer: () -> Unit = {},
+    onEnterAsGuest: () -> Unit = onDismiss
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var showExplanationSheet by remember { mutableStateOf(false) }
     var isPureWallpaperMode by remember { mutableStateOf(false) }
+    var isSettingWallpaper by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
         visible = isVisible,
@@ -129,7 +146,7 @@ fun StartupSplashWallpaperScreen(
             label = "glowAlpha"
         )
 
-        // Drive entry animation; pause auto-dismiss if user opened the explanation sheet or pure wallpaper mode
+        // Drive entry animation
         LaunchedEffect(showExplanationSheet, isPureWallpaperMode) {
             if (!showExplanationSheet && !isPureWallpaperMode) {
                 logoScale.animateTo(
@@ -142,12 +159,8 @@ fun StartupSplashWallpaperScreen(
                 )
                 progress.animateTo(
                     targetValue = 1f,
-                    animationSpec = tween((autoDismissDelayMs - 600).toInt(), easing = LinearEasing)
+                    animationSpec = tween(1200, easing = LinearEasing)
                 )
-                delay(200)
-                if (!showExplanationSheet && !isPureWallpaperMode) {
-                    onDismiss()
-                }
             }
         }
 
@@ -165,17 +178,15 @@ fun StartupSplashWallpaperScreen(
                 )
                 .testTag("startup_splash_wallpaper_screen")
         ) {
-            // 1. High-Resolution Background Wallpaper
+            // 1. High-Resolution Wallpaper Photo Background
             Image(
                 painter = painterResource(id = R.drawable.img_mukomuko_wallpaper),
-                contentDescription = "Foto Latar HD Kondisi Alam, Potensi Bencana, & Penanganan BPBD Mukomuko",
+                contentDescription = "Foto Lanskap Alam & Mitigasi Bencana Mukomuko",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .testTag("startup_wallpaper_photo")
+                modifier = Modifier.fillMaxSize()
             )
 
-            // 2. High-contrast Vignette Overlay (lighter in pure wallpaper mode)
+            // Scrim Overlay to maintain perfect contrast and readability
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -183,15 +194,14 @@ fun StartupSplashWallpaperScreen(
                         Brush.verticalGradient(
                             if (isPureWallpaperMode) {
                                 listOf(
-                                    Color.Black.copy(alpha = 0.40f),
+                                    Color.Black.copy(alpha = 0.25f),
                                     Color.Transparent,
-                                    Color.Black.copy(alpha = 0.60f)
+                                    Color.Black.copy(alpha = 0.70f)
                                 )
                             } else {
                                 listOf(
-                                    Color.Black.copy(alpha = 0.70f),
-                                    Color.Black.copy(alpha = 0.35f),
-                                    Color.Black.copy(alpha = 0.65f),
+                                    Color.Black.copy(alpha = 0.52f),
+                                    Color(0xFF0F172A).copy(alpha = 0.78f),
                                     Color(0xFF0F172A).copy(alpha = 0.94f)
                                 )
                             }
@@ -199,55 +209,193 @@ fun StartupSplashWallpaperScreen(
                     )
             )
 
-            // Top action bar in pure wallpaper mode
+            // 2. Pure Wallpaper Mode Controls (when user views full photo without distractions)
             if (isPureWallpaperMode) {
+                // Top control bar
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 36.dp),
+                        .padding(top = 44.dp, start = 16.dp, end = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        color = Color.Black.copy(alpha = 0.6f),
+                        color = Color.Black.copy(alpha = 0.70f),
                         shape = RoundedCornerShape(20.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.7f))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary)
                     ) {
-                        Text(
-                            text = "Mode Wallpaper Penuh (Ketuk layar untuk kembali)",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .clickable { isPureWallpaperMode = false }
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Tutup",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Kembali ke Menu",
+                                fontSize = 12.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
-                    IconButton(
-                        onClick = { isPureWallpaperMode = false },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                    Surface(
+                        color = OrangePrimary,
+                        shape = RoundedCornerShape(20.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Kembali",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .clickable(enabled = !isSettingWallpaper) {
+                                    coroutineScope.launch {
+                                        isSettingWallpaper = true
+                                        applyWallpaperDirectly(context)
+                                        isSettingWallpaper = false
+                                    }
+                                }
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (isSettingWallpaper) {
+                                CircularProgressIndicator(color = OrangeOnPrimary, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Memasang...", fontSize = 12.sp, color = OrangeOnPrimary, fontWeight = FontWeight.Bold)
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Wallpaper,
+                                    contentDescription = null,
+                                    tint = OrangeOnPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Pasang di HP", fontSize = 12.sp, color = OrangeOnPrimary, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
-            }
 
-            // 3. Main Center Content: Logo, Titles, Context Card & Navigation (hidden in pure mode)
-            if (!isPureWallpaperMode) {
+                // Bottom hint overlay
+                Surface(
+                    color = Color.Black.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 36.dp)
+                ) {
+                    Text(
+                        text = "Ketuk layar di mana saja untuk kembali ke menu login",
+                        fontSize = 11.sp,
+                        color = Color(0xFFE2E8F0),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            } else {
+                // 3. Main Center Content: Wallpaper Controls, Logo, Titles, Disaster Card & Login Menu
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 22.dp, vertical = 30.dp),
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    // Top Bar: Wallpaper Mode & Quick Wallpaper Actions
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = OrangePrimary.copy(alpha = 0.20f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary)
+                        ) {
+                            Text(
+                                text = "WALLPAPER HD 9:16",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = OrangePrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Surface(
+                                color = Color.White.copy(alpha = 0.16f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.clickable { isPureWallpaperMode = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Lihat Foto Penuh",
+                                        fontSize = 10.sp,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                color = Color(0xFF1E293B).copy(alpha = 0.85f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.6f)),
+                                modifier = Modifier.clickable(enabled = !isSettingWallpaper) {
+                                    coroutineScope.launch {
+                                        isSettingWallpaper = true
+                                        applyWallpaperDirectly(context)
+                                        isSettingWallpaper = false
+                                    }
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (isSettingWallpaper) {
+                                        CircularProgressIndicator(
+                                            color = OrangePrimary,
+                                            modifier = Modifier.size(12.dp),
+                                            strokeWidth = 1.5.dp
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Wallpaper,
+                                            contentDescription = null,
+                                            tint = OrangePrimary,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Pasang di HP",
+                                        fontSize = 10.sp,
+                                        color = OrangePrimary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Top spacer
+                    Spacer(modifier = Modifier.weight(0.6f))
 
                     // Middle Section: Logo with Pulsing Halo and App Branding
                     Column(
@@ -257,12 +405,12 @@ fun StartupSplashWallpaperScreen(
                         // Pulsing Glow & Logo Container
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.size(124.dp)
+                            modifier = Modifier.size(116.dp)
                         ) {
                             // Outer Pulsing Glow Circle
                             Box(
                                 modifier = Modifier
-                                    .size(118.dp)
+                                    .size(110.dp)
                                     .scale(glowScale)
                                     .clip(CircleShape)
                                     .background(OrangePrimary.copy(alpha = glowAlpha))
@@ -271,7 +419,7 @@ fun StartupSplashWallpaperScreen(
                             // Outer Border Ring
                             Box(
                                 modifier = Modifier
-                                    .size(106.dp)
+                                    .size(98.dp)
                                     .clip(CircleShape)
                                     .background(Color.White.copy(alpha = 0.15f))
                                     .border(2.dp, OrangePrimary, CircleShape)
@@ -283,7 +431,7 @@ fun StartupSplashWallpaperScreen(
                                 contentDescription = "Logo BPBD Mukomuko",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .size(92.dp)
+                                    .size(86.dp)
                                     .scale(logoScale.value)
                                     .clip(CircleShape)
                                     .border(2.dp, Color.White, CircleShape)
@@ -291,7 +439,7 @@ fun StartupSplashWallpaperScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         // Title & Department Branding
                         Text(
@@ -312,140 +460,83 @@ fun StartupSplashWallpaperScreen(
                             letterSpacing = 1.2.sp
                         )
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
-                            text = "Kondisi Alam, Potensi Kebencanaan\n& Kesiapsiagaan Mitigasi Pesisir",
-                            fontSize = 12.sp,
+                            text = "Sistem Informasi Penanggulangan Bencana\n& Kesiapsiagaan Mitigasi Daerah",
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFFE2E8F0),
+                            color = Color(0xFFCBD5E1),
                             textAlign = TextAlign.Center,
-                            lineHeight = 16.sp
+                            lineHeight = 15.sp
                         )
+                    }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                        // Disaster & Natural Landscape Context Card (Clickable to open detailed sheet)
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = Color(0xFF1E293B).copy(alpha = 0.85f),
-                            border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFFEA580C)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .clickable { showExplanationSheet = true }
-                                .testTag("card_wallpaper_disaster_context")
-                        ) {
+                    // Card Lanskap Alam & Potensi Bencana Mukomuko (with Analisis Bencana trigger)
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A).copy(alpha = 0.82f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.45f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 380.dp)
+                            .clickable { showExplanationSheet = true }
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFFEA580C).copy(alpha = 0.3f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Default.Waves,
+                                        imageVector = Icons.Default.Terrain,
                                         contentDescription = null,
-                                        tint = Color(0xFFFB923C),
-                                        modifier = Modifier.size(20.dp)
+                                        tint = OrangePrimary,
+                                        modifier = Modifier.size(15.dp)
                                     )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "Lanskap Alam & Potensi Bencana",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFFFB923C)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Surface(
-                                            color = OrangePrimary,
-                                            shape = RoundedCornerShape(4.dp)
-                                        ) {
-                                            Text(
-                                                text = "Detail",
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color.White,
-                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                            )
-                                        }
-                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Samudra Hindia, Abrasi Pantai, Jalur Evakuasi Tsunami & Siaga TRC BPBD",
-                                        fontSize = 10.sp,
-                                        color = Color(0xFFCBD5E1),
-                                        lineHeight = 13.sp
+                                        text = "Lanskap Alam & Potensi Bencana",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
                                     )
                                 }
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Detail Penjelasan",
-                                    tint = OrangePrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                Surface(
+                                    color = OrangePrimary,
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "Analisis",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = OrangeOnPrimary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Samudra Hindia • Tanggul Abrasi Tetrapod • Rambu Tsunami • Armada TRC BPBD",
+                                fontSize = 9.5.sp,
+                                color = Color(0xFFCBD5E1),
+                                lineHeight = 13.sp
+                            )
                         }
                     }
 
-                    // Bottom Section: Action buttons (View Clean Wallpaper, Read Detail, Enter Dashboard)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Section: Telemetry Status & Clean Login Options
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 380.dp)
                     ) {
-                        // Quick Action Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = { isPureWallpaperMode = true },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(40.dp)
-                                    .testTag("btn_view_pure_wallpaper"),
-                                shape = RoundedCornerShape(10.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Visibility,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Lihat Foto Penuh", fontSize = 11.sp, color = Color.White)
-                            }
-
-                            Button(
-                                onClick = { showExplanationSheet = true },
-                                modifier = Modifier
-                                    .weight(1.2f)
-                                    .height(40.dp)
-                                    .testTag("btn_read_disaster_analysis"),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC2410C)),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Explore,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Analisis Bencana", fontSize = 11.sp, color = Color.White)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Progress Bar & Telemetry Text
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
@@ -480,33 +571,76 @@ fun StartupSplashWallpaperScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Enter App Button
-                        Button(
-                            onClick = onDismiss,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(46.dp)
-                                .testTag("btn_enter_app"),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = OrangePrimary,
-                                contentColor = OrangeOnPrimary
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                        // Dual Entry Portal Options
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = "Buka Dashboard Aplikasi",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
+                            Button(
+                                onClick = onEnterAsGuest,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
+                                    .testTag("btn_enter_guest"),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = OrangePrimary,
+                                    contentColor = OrangeOnPrimary
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.WbSunny,
+                                    contentDescription = null,
+                                    tint = OrangeOnPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Masuk Sebagai Tamu / Warga",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = OrangeOnPrimary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+
+                            Button(
+                                onClick = onLoginAsOfficer,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp)
+                                    .testTag("btn_enter_officer"),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF15803D),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Login Petugas Pusdalops",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
+
+                    // Bottom spacer
+                    Spacer(modifier = Modifier.weight(1.1f))
                 }
             }
 
@@ -749,6 +883,36 @@ private fun DisasterInfoSectionCard(
                         lineHeight = 15.sp
                     )
                 }
+            }
+        }
+    }
+}
+
+private suspend fun applyWallpaperDirectly(context: Context) {
+    withContext(Dispatchers.IO) {
+        try {
+            val wallpaperManager = WallpaperManager.getInstance(context)
+            val bitmap = BitmapFactory.decodeResource(
+                context.resources,
+                R.drawable.img_mukomuko_wallpaper
+            )
+            if (bitmap != null) {
+                wallpaperManager.setBitmap(bitmap)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        "Wallpaper Resmi BPBD Mukomuko berhasil dipasang di layar HP!",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Gagal memuat file wallpaper.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Info: ${e.localizedMessage ?: "Tidak dapat memasang wallpaper"}", Toast.LENGTH_SHORT).show()
             }
         }
     }

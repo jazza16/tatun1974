@@ -153,12 +153,19 @@ class MainActivity : ComponentActivity() {
             val aiViewModel: AiWeatherViewModel = viewModel()
             val uiState by weatherViewModel.uiState.collectAsStateWithLifecycle()
             val isDark = uiState.isDarkMode ?: false
-
-            MyApplicationTheme(darkTheme = isDark) {
-                WeatherAppScreen(
-                    viewModel = weatherViewModel,
-                    aiViewModel = aiViewModel
+            val currentDensity = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(
+                    density = currentDensity.density,
+                    fontScale = 1.0f
                 )
+            ) {
+                MyApplicationTheme(darkTheme = isDark) {
+                    WeatherAppScreen(
+                        viewModel = weatherViewModel,
+                        aiViewModel = aiViewModel
+                    )
+                }
             }
         }
     }
@@ -181,6 +188,8 @@ fun WeatherAppScreen(
     var isCallCenter117SheetOpen by remember { mutableStateOf(false) }
     var isQuickActionsFabExpanded by remember { mutableStateOf(false) }
     var isEmergencyPopupDismissed by remember { mutableStateOf(false) }
+    var isSipagarKitaDismissed by remember { mutableStateOf(false) }
+    var pendingOfficerLoginPrompt by remember { mutableStateOf(false) }
 
     val currentDistrict = uiState.selectedDistrict
     val isFavorite = favorites.contains(currentDistrict.id)
@@ -241,7 +250,11 @@ fun WeatherAppScreen(
                 isDetectingLocation = uiState.isDetectingLocation,
                 onDistrictClick = { viewModel.setDistrictSheetOpen(true) },
                 onFavoriteToggle = { viewModel.toggleFavorite(currentDistrict.id) },
-                onRefreshClick = { viewModel.refresh() },
+                onRefreshClick = {
+                    viewModel.syncAllDataOnline(context) { _, msg ->
+                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onThemeToggle = { viewModel.toggleDarkMode(isActuallyDark) },
                 onOpenAppMenu = { viewModel.setAppUpdateSheetOpen(true) },
                 onCallCenter117Click = { isCallCenter117SheetOpen = true },
@@ -446,14 +459,83 @@ fun WeatherAppScreen(
                                         }
                                     }
 
+                                    // Fitur Manual Sinkronisasi: Cuaca BMKG & Laporan Warga Offline
+                                    item {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (isActuallyDark) Color(0xFF1E293B) else Color(0xFFEFF6FF),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                1.dp,
+                                                if (isActuallyDark) Color(0xFF334155) else Color(0xFFBFDBFE)
+                                            ),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    viewModel.syncAllDataOnline(context) { _, msg ->
+                                                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                                .testTag("btn_manual_sync_weather_offline_reports")
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.weight(1f),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Refresh,
+                                                        contentDescription = "Sinkronisasi",
+                                                        tint = OrangePrimary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Column {
+                                                        Text(
+                                                            text = "Sinkronisasi Manual Cuaca & Laporan",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                        Text(
+                                                            text = "Segarkan data BMKG & unggah laporan offline ke server",
+                                                            fontSize = 9.sp,
+                                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                                                        )
+                                                    }
+                                                }
+                                                Surface(
+                                                    color = OrangePrimary,
+                                                    shape = RoundedCornerShape(6.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "Sinkron",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     // Hero Weather Overview Card with Dynamic Animated Weather Icon
                                     item {
                                         HeroWeatherCard(report = report)
                                     }
 
-                                    // Feature: Edukasi & Makna Akronim SIPAGAR KITA (SIMAK, PAGAR, KITA)
-                                    item {
-                                        SipagarKitaAcronymCard(isDark = isActuallyDark)
+                                    // Feature: Edukasi & Makna Akronim SIPAGAR KITA (Otomatis disembunyikan bila sudah dibaca/ditutup, tersimpan di Menu Info)
+                                    if (!isSipagarKitaDismissed) {
+                                        item {
+                                            SipagarKitaAcronymCard(
+                                                isDark = isActuallyDark,
+                                                onDismissCard = { isSipagarKitaDismissed = true }
+                                            )
+                                        }
                                     }
 
                                     // Feature: Prakiraan Cuaca 3 Hari (Mukomuko)
@@ -569,6 +651,10 @@ fun WeatherAppScreen(
                                 },
                                 onSyncReports = { onComplete ->
                                     viewModel.syncCitizenDisasterReportsOnline(onComplete)
+                                },
+                                initialShowOfficerLogin = pendingOfficerLoginPrompt,
+                                onOfficerLoginDismissed = {
+                                    pendingOfficerLoginPrompt = false
                                 },
                                 onBackClick = {
                                     viewModel.selectTab(0)
@@ -995,10 +1081,16 @@ fun WeatherAppScreen(
         )
     }
 
-    // High-Resolution Wallpaper & Mukomuko Disaster Mitigation Screen
+    // High-Resolution Wallpaper & Mukomuko Disaster Mitigation Screen (Dual Entry Portal)
     StartupSplashWallpaperScreen(
         isVisible = uiState.isStartupWallpaperVisible,
-        onDismiss = { viewModel.dismissStartupWallpaper() }
+        onDismiss = { viewModel.dismissStartupWallpaper() },
+        onEnterAsGuest = { viewModel.dismissStartupWallpaper() },
+        onLoginAsOfficer = {
+            viewModel.dismissStartupWallpaper()
+            pendingOfficerLoginPrompt = true
+            viewModel.selectTab(2) // Jump directly to Laporan Warga & Portal Konsol Petugas Pusdalops
+        }
     )
 }
 

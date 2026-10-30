@@ -12,13 +12,15 @@ import androidx.room.RoomDatabase
         CommunityReportEntity::class,
         HistoricalWeatherEntity::class,
         CitizenDisasterReportEntity::class,
-        HazardRiskZoneEntity::class
+        HazardRiskZoneEntity::class,
+        Personnel::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
+    abstract fun personnelDao(): PersonnelDao
 
     companion object {
         @Volatile
@@ -30,7 +32,18 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "cuaca_mukomuko.db"
-                ).fallbackToDestructiveMigration().build()
+                ).fallbackToDestructiveMigration()
+                .addCallback(object : RoomDatabase.Callback() {
+                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        // Pre-populate the 8 official ASN BPBD operators with separate name and NIP columns
+                        for (op in OfficialAsnBpbdPersonnel.OPERATORS) {
+                            val sql = "INSERT OR IGNORE INTO personnel (name, nip, role, unit, shift, phone) VALUES (?, ?, ?, ?, ?, ?)"
+                            db.execSQL(sql, arrayOf(op.name, op.nip, op.role, op.unit, op.shift, op.phone))
+                        }
+                    }
+                })
+                .build()
                 INSTANCE = instance
                 instance
             }

@@ -99,7 +99,7 @@ private val MUKOMUKO_EMERGENCY_CONTACTS = listOf(
         category = "Kepolisian",
         phoneNumber = "110",
         displayPhone = "110 / (0737) 71110",
-        description = "Sentra Pelayanan Kepolisian Terpadu (SPKT) keamanan warga, laka lantas, dan blokade jalan darurat.",
+        description = "POLISI BERSAMA MASYARAKAT • Sentra Pelayanan Kepolisian Terpadu (SPKT) keamanan warga, laka lantas, dan blokade jalan darurat.",
         address = "Jl. Lintas Barat Sumatera Km. 5, Mukomuko",
         icon = Icons.Default.LocalPolice,
         themeColor = Color(0xFF1D4ED8),
@@ -156,26 +156,6 @@ private val MUKOMUKO_EMERGENCY_CONTACTS = listOf(
         address = "Jl. Soekarno-Hatta, Mukomuko",
         icon = Icons.Default.Power,
         themeColor = Color(0xFF0284C7)
-    ),
-    EmergencyContactItem(
-        name = "Polsek Mukomuko Selatan (Ipuh)",
-        category = "Kepolisian",
-        phoneNumber = "073771201",
-        displayPhone = "(0737) 71201",
-        description = "Pos kepolisian wilayah pesisir selatan Ipuh dan Air Rami.",
-        address = "Jl. Lintas Bengkulu-Padang, Pasar Ipuh",
-        icon = Icons.Default.LocalPolice,
-        themeColor = Color(0xFF1E3A8A)
-    ),
-    EmergencyContactItem(
-        name = "Polsek Lubuk Pinang",
-        category = "Kepolisian",
-        phoneNumber = "073771220",
-        displayPhone = "(0737) 71220",
-        description = "Pos kepolisian perbatasan utara (Lubuk Pinang & XIV Koto).",
-        address = "Jl. Lintas Padang, Lubuk Pinang",
-        icon = Icons.Default.LocalPolice,
-        themeColor = Color(0xFF1E3A8A)
     ),
     EmergencyContactItem(
         name = "Puskesmas Perawatan Ipuh (IGD Rawat Inap)",
@@ -350,18 +330,37 @@ private fun EmergencyContactCard(
                             )
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = contact.themeColor.copy(alpha = 0.10f),
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                             modifier = Modifier.padding(top = 2.dp)
                         ) {
-                            Text(
-                                text = contact.category,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = contact.themeColor,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = contact.themeColor.copy(alpha = 0.10f)
+                            ) {
+                                Text(
+                                    text = contact.category,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = contact.themeColor,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                )
+                            }
+                            if (contact.name.contains("Polres Mukomuko", ignoreCase = true)) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF1E3A8A)
+                                ) {
+                                    Text(
+                                        text = "POLISI BERSAMA MASYARAKAT",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }

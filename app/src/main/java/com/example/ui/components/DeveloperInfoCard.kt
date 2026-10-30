@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -256,15 +258,93 @@ fun DeveloperInfoCard(
                 TechPill(icon = Icons.Default.Security, label = "WRS-NTWC BMKG", isDark = isDark, modifier = Modifier.weight(1f))
             }
 
-            if (onOpenWallpaper != null) {
-                Spacer(modifier = Modifier.height(6.dp))
-                TechPill(
-                    icon = Icons.Default.Terrain,
-                    label = "Lihat Wallpaper HD & Mitigasi Alam Mukomuko",
-                    isDark = isDark,
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = onOpenWallpaper
-                )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Official Contributors Section
+            Surface(
+                color = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = OrangePrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Kontributor Aplikasi:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDark) Color(0xFFFDBA74) else Color(0xFF9A3412)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    val contributors = listOf(
+                        "M@mi",
+                        "Afid_Reborn",
+                        "Ran_NAM",
+                        "Erick P",
+                        "Bg-Fir",
+                        "Manda_apak",
+                        "Rigan",
+                        "David",
+                        "Noky D Luffy"
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        contributors.chunked(3).forEach { rowGroup ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                rowGroup.forEach { name ->
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (isDark) Color(0xFF334155) else Color(0xFFFFFFFF),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            0.8.dp,
+                                            if (isDark) Color(0xFF475569) else Color(0xFFE2E8F0)
+                                        ),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(4.dp)
+                                                    .clip(CircleShape)
+                                                    .background(OrangePrimary)
+                                            )
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text(
+                                                text = name,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (isDark) Color(0xFFF1F5F9) else Color(0xFF1E293B),
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                                repeat(3 - rowGroup.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -315,7 +395,61 @@ fun DeveloperInfoCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Dedicated Wallpaper HD Feature Trigger Card
+            if (onOpenWallpaper != null) {
+                Surface(
+                    color = OrangePrimary.copy(alpha = if (isDark) 0.18f else 0.08f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onOpenWallpaper() }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(OrangePrimary, RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Wallpaper,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Lihat Wallpaper & Infografis Bencana HD",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF7C2D12)
+                            )
+                            Text(
+                                text = "Kondisi Alam & Mitigasi Bencana Kab. Mukomuko",
+                                fontSize = 10.sp,
+                                color = if (isDark) Color(0xFFFDBA74) else Color(0xFF9A3412)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Buka",
+                            tint = OrangePrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
             // Dedication & Message Box
             Surface(

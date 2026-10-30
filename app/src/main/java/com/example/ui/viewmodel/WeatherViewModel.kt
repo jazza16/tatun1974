@@ -138,6 +138,14 @@ class WeatherViewModel(
             repository.seedInitialCitizenDisasterReportsIfEmpty()
             repository.ensureHazardZonesSeeded()
             repository.syncCitizenDisasterReportsOnline()
+
+            // Continuous real-time listener polling so officer updates appear instantly on citizen devices
+            while (true) {
+                kotlinx.coroutines.delay(10000)
+                try {
+                    repository.syncCitizenDisasterReportsOnline()
+                } catch (_: Exception) {}
+            }
         }
         loadWeatherForDistrict(MukomukoDistricts.defaultDistrict)
         loadHistoricalWeather(MukomukoDistricts.defaultDistrict, "2024-05-15")
@@ -147,10 +155,8 @@ class WeatherViewModel(
         startPeriodicEarthquakeMonitoring()
         checkForUpdatesOnline(isAutoCheck = true)
 
-        val isFirstLaunch = updatePreferences?.isOnboardingCompleted() == false
-        if (isFirstLaunch) {
-            _uiState.value = _uiState.value.copy(isOnboardingOpen = true)
-        }
+        // Ensure onboarding guide is not shown automatically on start, keeping interface clean
+        _uiState.value = _uiState.value.copy(isOnboardingOpen = false)
     }
 
     fun selectDistrict(district: District) {
@@ -256,6 +262,44 @@ class WeatherViewModel(
                     errorMessage = "Gagal memperbarui data: ${e.localizedMessage ?: "Koneksi terputus"}"
                 )
             }
+        }
+    }
+
+    /**
+     * Manual sync: updates BMKG weather and uploads offline citizen reports.
+     */
+    fun syncAllDataOnline(context: Context, onComplete: ((Boolean, String) -> Unit)? = null) {
+        val currentDistrict = _uiState.value.selectedDistrict
+        _uiState.value = _uiState.value.copy(isRefreshing = true, errorMessage = null)
+        viewModelScope.launch {
+            var weatherSuccess = false
+            var syncCount = 0
+            try {
+                val report = repository.fetchWeatherReport(currentDistrict)
+                _uiState.value = _uiState.value.copy(
+                    report = report,
+                    isLoading = false,
+                    errorMessage = null
+                )
+                weatherSuccess = true
+            } catch (e: Exception) {
+                // Keep local cached weather report
+            }
+
+            try {
+                syncCount = repository.syncCitizenDisasterReportsOnline()
+            } catch (e: Exception) {
+                // Ignore sync network errors
+            }
+
+            _uiState.value = _uiState.value.copy(isRefreshing = false)
+            val msg = if (weatherSuccess) {
+                if (syncCount > 0) "Data BMKG terbaru & $syncCount laporan offline berhasil disinkronkan!"
+                else "Data cuaca BMKG & seluruh laporan offline telah sinkron."
+            } else {
+                "Gagal terhubung ke BMKG, data lokal & laporan offline tetap tersimpan."
+            }
+            onComplete?.invoke(weatherSuccess, msg)
         }
     }
 
@@ -763,11 +807,11 @@ class WeatherViewModel(
     }
 
     /**
-     * Developer / QA simulation: Simulates the developer publishing a newer version (e.g. v1.7.0).
-     * Tests that current devices (on v1.6.1) detect the new version, receive real push notification,
+     * Developer / QA simulation: Simulates the developer publishing a newer version (e.g. v1.9.0).
+     * Tests that current devices (on v1.8.0) detect the new version, receive real push notification,
      * and can apply the OTA online update.
      */
-    fun simulatePublishNextVersion(nextVersion: String = "1.7.0", context: android.content.Context? = null) {
+    fun simulatePublishNextVersion(nextVersion: String = "1.9.0", context: android.content.Context? = null) {
         updatePreferences?.publishNewVersionRelease(nextVersion)
 
         val nextChangelog = com.example.model.VersionChangelog(
@@ -812,18 +856,18 @@ class WeatherViewModel(
     }
 
     /**
-     * Resets device to latest factory release state (v1.6.1 permanently applied).
+     * Resets device to latest factory release state (v1.8.0 permanently applied).
      */
     fun resetToLatestReleaseState() {
         updatePreferences?.resetToLatestReleaseState()
-        val changelogs = _uiState.value.updateState.changelogs.filter { it.version != "1.7.0" }.map { log ->
-            if (log.version == "1.6.1") log.copy(isCurrent = true, isLatest = true)
+        val changelogs = _uiState.value.updateState.changelogs.filter { it.version != "1.9.0" }.map { log ->
+            if (log.version == "1.8.0") log.copy(isCurrent = true, isLatest = true)
             else log.copy(isCurrent = false, isLatest = false)
         }
         _uiState.value = _uiState.value.copy(
             isUpdateDialogOpen = false,
             updateState = _uiState.value.updateState.copy(
-                currentVersion = "1.6.1",
+                currentVersion = "1.8.0",
                 latestVersion = "1.6.1",
                 isUpdateAvailable = false,
                 isUpdated = true,

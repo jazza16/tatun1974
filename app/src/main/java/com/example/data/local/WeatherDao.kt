@@ -58,6 +58,27 @@ interface WeatherDao {
     @Query("UPDATE citizen_disaster_reports SET status = :newStatus, additionalNotes = :newNotes WHERE id = :reportId")
     suspend fun updateCitizenReportStatusAndNotes(reportId: String, newStatus: String, newNotes: String)
 
+    @Query("SELECT * FROM citizen_disaster_reports WHERE status = :status ORDER BY timestamp DESC")
+    fun getCitizenReportsByStatus(status: String): Flow<List<CitizenDisasterReportEntity>>
+
+    @Query("SELECT * FROM citizen_disaster_reports WHERE district = :district ORDER BY timestamp DESC")
+    fun getCitizenReportsByDistrict(district: String): Flow<List<CitizenDisasterReportEntity>>
+
+    @Query("SELECT * FROM citizen_disaster_reports WHERE disasterType = :disasterType ORDER BY timestamp DESC")
+    fun getCitizenReportsByType(disasterType: String): Flow<List<CitizenDisasterReportEntity>>
+
+    @Query("SELECT * FROM citizen_disaster_reports WHERE district = :district AND status = :status ORDER BY timestamp DESC")
+    fun getCitizenReportsByDistrictAndStatus(district: String, status: String): Flow<List<CitizenDisasterReportEntity>>
+
+    @Query("SELECT COUNT(*) FROM citizen_disaster_reports")
+    suspend fun getCitizenReportCount(): Int
+
+    @Query("SELECT COUNT(*) FROM citizen_disaster_reports WHERE status = :status")
+    suspend fun getCitizenReportCountByStatus(status: String): Int
+
+    @Query("DELETE FROM citizen_disaster_reports WHERE timestamp < :cutoffTimestamp")
+    suspend fun deleteReportsOlderThan(cutoffTimestamp: Long): Int
+
     // Historical Cache
     @Query("SELECT * FROM historical_cache WHERE districtId = :districtId AND date = :date LIMIT 1")
     suspend fun getHistoricalCache(districtId: String, date: String): HistoricalWeatherEntity?

@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -36,6 +37,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,7 +68,8 @@ import com.example.ui.theme.OrangePrimary
 @Composable
 fun SipagarKitaAcronymCard(
     isDark: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDismissCard: (() -> Unit)? = null
 ) {
     var isExpanded by remember { mutableStateOf(true) }
 
@@ -230,6 +233,33 @@ fun SipagarKitaAcronymCard(
                         badgeColor = Color(0xFFC2410C),
                         isDark = isDark
                     )
+
+                    // Optional dismiss button to auto-hide and move card to info menu
+                    if (onDismissCard != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = onDismissCard,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_dismiss_sipagar_kita"),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, if (isDark) OrangePrimary.copy(alpha = 0.5f) else Color(0xFFFDBA74))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = OrangePrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Sudah Paham (Sembunyikan & Simpan di Info)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = OrangePrimary
+                            )
+                        }
+                    }
                 }
             }
         }

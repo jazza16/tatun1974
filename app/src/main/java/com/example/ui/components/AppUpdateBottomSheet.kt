@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NewReleases
@@ -38,6 +40,8 @@ import androidx.compose.material.icons.filled.SettingsBrightness
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,6 +60,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -238,30 +245,98 @@ fun AppUpdateBottomSheet(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Button(
-                        onClick = {
-                            onDismiss()
-                            onShowStartupWallpaper()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("btn_show_startup_wallpaper"),
-                        colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
-                        shape = RoundedCornerShape(10.dp)
+                    // Preserved Wallpaper HD Badges (migrated from Login Screen)
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Terrain,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = OrangeOnPrimary
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Wallpaper HD & Mitigasi Bencana Mukomuko",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = OrangeOnPrimary
-                        )
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    color = OrangePrimary.copy(alpha = 0.18f),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = androidx.compose.foundation.BorderStroke(0.8.dp, OrangePrimary)
+                                ) {
+                                    Text(
+                                        text = "WALLPAPER HD 9:16",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = OrangePrimary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "Lanskap Alam & Mitigasi",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        onDismiss()
+                                        onShowStartupWallpaper()
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("btn_view_full_photo_info"),
+                                    colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = OrangeOnPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Lihat Foto Penuh", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = OrangeOnPrimary)
+                                }
+
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                OutlinedButton(
+                                    onClick = {
+                                        try {
+                                            val wm = android.app.WallpaperManager.getInstance(context)
+                                            val bmp = android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.img_mukomuko_wallpaper)
+                                            if (bmp != null) {
+                                                wm.setBitmap(bmp)
+                                                android.widget.Toast.makeText(context, "Wallpaper HD berhasil dipasang di layar HP!", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        } catch (e: Exception) {
+                                            android.widget.Toast.makeText(context, "Gagal memasang: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("btn_set_wallpaper_info"),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Wallpaper,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = OrangePrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Pasang di HP", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = OrangePrimary)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -302,7 +377,12 @@ fun AppUpdateBottomSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- 6. VERSION CHANGELOG HISTORY ---
+            // --- 6. IDENTITAS & MAKNA AKRONIM RESMI SIPAGAR KITA ---
+            SipagarKitaAcronymCard(isDark = isActuallyDark)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- 7. VERSION CHANGELOG HISTORY ---
             VersionChangelogSection(updateState = updateState, isDark = isActuallyDark)
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -869,124 +949,124 @@ private fun OnlineUpdateCard(
 
 @Composable
 private fun NewFeaturesExplanationSection(isDark: Boolean) {
+    var isExpanded by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { isExpanded = !isExpanded }
             .testTag("new_features_explanation_card"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isDark) Color(0xFF2B1D16) else Color(0xFFFFFBEB)
         ),
         border = androidx.compose.foundation.BorderStroke(
-            1.5.dp,
+            1.dp,
             if (isDark) OrangePrimary.copy(alpha = 0.5f) else Color(0xFFFDE68A)
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(OrangePrimary, RoundedCornerShape(10.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "Fitur Baru",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(OrangePrimary, RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Fitur Baru",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Column {
+                        Text(
+                            text = "Ringkasan Rilis v1.5.0",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF78350F)
+                        )
+                        Text(
+                            text = "Tab Laporan, GIS Spasial & Room Database",
+                            fontSize = 10.sp,
+                            color = if (isDark) Color(0xFFFDC5A2) else Color(0xFF92400E)
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(10.dp))
-
-                Column {
+                Surface(
+                    color = OrangePrimary.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
                     Text(
-                        text = "Penjelasan Fitur Update Baru",
-                        fontSize = 16.sp,
+                        text = if (isExpanded) "Tutup" else "Detail",
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF78350F)
-                    )
-                    Text(
-                        text = "Peningkatan sistem visual, performa, dan keselamatan warga",
-                        fontSize = 11.sp,
-                        color = if (isDark) Color(0xFFFDC5A2) else Color(0xFF92400E)
+                        color = OrangePrimary,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Detailed Explanations for v1.5.0
-            FeatureDetailItem(
-                emoji = "📋",
-                title = "Tab Laporan Warga Bersebelahan dengan Prakiraan Cuaca",
-                desc = "Navigasi cepat pelaporan insiden darurat dan bencana tepat di samping tab Prakiraan Cuaca (Index 2). Memudahkan warga Mukomuko melaporkan kejadian secara instan tanpa mencari ke tab tersembunyi.",
-                isDark = isDark
-            )
+            // Concise Bullet Points (Narrowed explanations)
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                listOf(
+                    "• Tab Laporan Warga berdampingan dengan Prakiraan Cuaca",
+                    "• Peluncur kamera langsung dengan GPS watermark",
+                    "• Peta sebaran GIS & layer risiko bencana Mukomuko",
+                    "• Offline Caching Room Database & Tombol Aksi Speed Dial FAB"
+                ).forEach { summaryPoint ->
+                    Text(
+                        text = summaryPoint,
+                        fontSize = 11.sp,
+                        color = if (isDark) Color(0xFFFED7AA) else Color(0xFF78350F),
+                        lineHeight = 15.sp
+                    )
+                }
+            }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            FeatureDetailItem(
-                emoji = "📷",
-                title = "Peluncur Kamera Langsung (Live Camera Launcher)",
-                desc = "Ambil foto bukti kejadian bencana langsung dari lokasi secara real-time dengan stempel digital watermark koordinat GPS satelit resmi Pusdalops BPBD Mukomuko.",
-                isDark = isDark
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            FeatureDetailItem(
-                emoji = "🗺️",
-                title = "Peta Spasial GIS Laporan Warga & Filter Kategori",
-                desc = "Pemetaan sebaran titik laporan warga interaktif dengan filter kategori kejadian (Banjir, Angin Kencang, Gelombang/Abrasi, Tanah Longsor, Kerusakan Infrastruktur) dan tombol navigasi langsung ke Google Maps.",
-                isDark = isDark
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            FeatureDetailItem(
-                emoji = "⚡",
-                title = "Layer Overlay Titik Rawan Bencana BPBD Mukomuko",
-                desc = "Korelasi visual aduan masyarakat dengan zona bahaya tinggi Mukomuko (Zona Abrasi Koto Jaya - Teramang Jaya, DAS Manjunto & Selagan, Daerah Rawan Longsor V Koto & Malin Deman, Pesisir Ipuh & Air Rami).",
-                isDark = isDark
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            FeatureDetailItem(
-                emoji = "🟢",
-                title = "Sistem Pelacakan Status Laporan & Notifikasi Toast",
-                desc = "Indikator status berwarna (Diproses, Divalidasi, Selesai) pada riwayat laporan warga lengkap dengan aksi pembaruan status interaktif dan notifikasi toast konfirmasi seketika.",
-                isDark = isDark
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            FeatureDetailItem(
-                emoji = "📞",
-                title = "Direktori Kontak Darurat Mukomuko & Dial Cepat",
-                desc = "Akses panggilan cepat satu sentuhan ke Call Center Bebas Pulsa 117 BPBD, Pusdalops BPBD (0737-71112), Polres 110, RSUD Mukomuko IGD 24 Jam, Damkar 113, dan Basarnas 115.",
-                isDark = isDark
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            FeatureDetailItem(
-                emoji = "🔘",
-                title = "Optimalisasi Tombol Aksi Cepat (Speed Dial FAB)",
-                desc = "Floating Action Button Material 3 yang 100% responsif terhadap sentuhan tanpa konflik gestur, dilengkapi tombol pemindah posisi jempol (kiri/kanan) dan pintasan ke Laporan Warga.",
-                isDark = isDark
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            FeatureDetailItem(
-                emoji = "💾",
-                title = "Caching Offline Room Database",
-                desc = "Penyimpanan lokal prakiraan cuaca dan riwayat aduan warga agar data tetap dapat diakses dengan lancar saat berada di kawasan pesisir Mukomuko dengan konektivitas minim.",
-                isDark = isDark
-            )
+            // Expanded Full Details (shown only if tapped)
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier.padding(top = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FeatureDetailItem(
+                        emoji = "📋",
+                        title = "Tab Laporan Warga Cepat",
+                        desc = "Navigasi cepat pelaporan insiden darurat di tab index 2 memudahkan warga melapor secara langsung.",
+                        isDark = isDark
+                    )
+                    FeatureDetailItem(
+                        emoji = "📷",
+                        title = "Kamera Langsung & Watermark",
+                        desc = "Dokumentasi foto kejadian real-time dengan koordinat satelit GPS akurat.",
+                        isDark = isDark
+                    )
+                    FeatureDetailItem(
+                        emoji = "🗺️",
+                        title = "Peta Spasial GIS & Rawan Bencana",
+                        desc = "Pemetaan sebaran kejadian dan layer zona bahaya tinggi Mukomuko.",
+                        isDark = isDark
+                    )
+                    FeatureDetailItem(
+                        emoji = "📞",
+                        title = "Kontak Darurat Terpadu 117",
+                        desc = "Panggilan cepat ke Call Center 117, Posko BPBD, RSUD, dan Kepolisian.",
+                        isDark = isDark
+                    )
+                }
+            }
         }
     }
 }
@@ -1035,7 +1115,7 @@ private fun VersionChangelogSection(
 ) {
     Column {
         Text(
-            text = "Riwayat Versi Sebelumnya",
+            text = "Riwayat Catatan Rilis Versi",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -1044,68 +1124,104 @@ private fun VersionChangelogSection(
         Spacer(modifier = Modifier.height(8.dp))
 
         updateState.changelogs.forEach { log ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                )
+            CollapsibleVersionCard(log = log, isDark = isDark)
+        }
+    }
+}
+
+@Composable
+private fun CollapsibleVersionCard(
+    log: com.example.model.VersionChangelog,
+    isDark: Boolean
+) {
+    var isExpanded by remember { mutableStateOf(log.isLatest) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { isExpanded = !isExpanded },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            0.8.dp,
+            if (isExpanded) OrangePrimary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Versi ${log.version}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (log.isLatest) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = OrangePrimary,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
                             Text(
-                                text = "Versi ${log.version}",
-                                fontSize = 13.sp,
+                                text = "TERBARU",
+                                fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
-                            if (log.isLatest) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Surface(
-                                    color = OrangePrimary,
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = "TERBARU",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                    )
-                                }
-                            } else if (log.isCurrent) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Surface(
-                                    color = Color(0xFF16A34A),
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = "TERPASANG",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
                         }
-
-                        Text(
-                            text = log.releaseDate,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
+                    } else if (log.isCurrent) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = Color(0xFF16A34A),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "TERPASANG",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = log.releaseDate,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (isExpanded) "Persempit" else "Buka",
+                        tint = OrangePrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
 
+            if (!isExpanded) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${log.highlights.size} catatan pembaruan • Ketuk untuk rincian",
+                    fontSize = 10.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+
+            AnimatedVisibility(visible = isExpanded) {
+                Column(modifier = Modifier.padding(top = 8.dp)) {
                     log.highlights.forEach { item ->
                         Row(
                             modifier = Modifier.padding(vertical = 2.dp),
@@ -1120,7 +1236,7 @@ private fun VersionChangelogSection(
                             Text(
                                 text = item,
                                 fontSize = 11.sp,
-                                lineHeight = 16.sp,
+                                lineHeight = 15.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }

@@ -93,8 +93,9 @@ class ExampleRobolectricTest {
     assertTrue(prefs.isDialogDismissedForVersion("1.5.0"))
 
     // Testing permanent installation of latest version
-    prefs.setUpdateInstalledPermanently("1.5.0")
-    assertEquals("1.5.0", prefs.getInstalledVersion())
+    val latestVer = com.example.data.local.AppUpdatePreferences.DEFAULT_LATEST_VERSION
+    prefs.setUpdateInstalledPermanently(latestVer)
+    assertEquals(latestVer, prefs.getInstalledVersion())
     assertTrue(prefs.isUpdatePermanentlyInstalled())
   }
 
@@ -225,5 +226,117 @@ class ExampleRobolectricTest {
     val successTrc = officerAuth.loginOfficer("Tim Reaksi Cepat", "TRC-MMK-117", "Regu Siaga", "TRC2026")
     assertTrue(successTrc)
     assertTrue(officerAuth.isOfficerLoggedIn())
+  }
+
+  @Test
+  fun `verify room indexing and fast querying for personnel and citizen disaster reports`() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val database = com.example.data.local.AppDatabase.getInstance(context)
+    val personnelDao = database.personnelDao()
+    val weatherDao = database.weatherDao()
+
+    // Test Personnel indexed operations
+    personnelDao.clearAll()
+    val person1 = com.example.data.local.Personnel(
+      name = "Agus TRC Pusdalops",
+      nip = "TRC-MMK-9901",
+      role = "Petugas Lapangan TRC",
+      unit = "Pusdalops BPBD Kab. Mukomuko",
+      shift = "Shift Siaga 24 Jam",
+      phone = "081234567890"
+    )
+    personnelDao.insertPersonnel(person1)
+
+    val fetched = personnelDao.getPersonnelByNip("TRC-MMK-9901")
+    assertNotNull(fetched)
+    assertEquals("Agus TRC Pusdalops", fetched?.name)
+
+    val count = personnelDao.getPersonnelCount()
+    assertTrue(count >= 1)
+
+    // Test Reports indexed operations
+    val reportEntity = com.example.data.local.CitizenDisasterReportEntity(
+      id = "TEST-IDX-001",
+      disasterType = "Banjir",
+      incidentTime = "30 Okt 2026",
+      incidentLocation = "Kota Mukomuko",
+      district = "Kota Mukomuko",
+      village = "Pasar Mukomuko",
+      latitude = -2.58,
+      longitude = 101.12,
+      gpsAccuracyMeters = 3.5f,
+      isGpsVerified = true,
+      casualtiesDead = 0,
+      casualtiesInjured = 0,
+      casualtiesMissing = 0,
+      photoUri = null,
+      reporterName = "Uji Index",
+      reporterPhone = "081111111",
+      additionalNotes = "Data uji indexing ribuan record",
+      timestamp = System.currentTimeMillis(),
+      status = "Diproses"
+    )
+    weatherDao.insertCitizenDisasterReport(reportEntity)
+
+    val reportCount = weatherDao.getCitizenReportCount()
+    assertTrue(reportCount >= 1)
+
+    val countDiproses = weatherDao.getCitizenReportCountByStatus("Diproses")
+    assertTrue(countDiproses >= 1)
+  }
+
+  @Test
+  fun `verify 8 ASN BPBD Pusdalops operators seeded with separate name and NIP columns`() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val database = com.example.data.local.AppDatabase.getInstance(context)
+    val personnelDao = database.personnelDao()
+    val repo = com.example.data.repository.PersonnelRepository(personnelDao)
+
+    // Seed official ASN BPBD personnel
+    repo.seedDefaultAsnPersonnelIfNeeded()
+
+    // Expected 8 ASN Pusdalops Operators
+    val expectedAsnList = listOf(
+      "YUDHA SOFRIANTO,S.A.P" to "199807202025061002",
+      "ERI YANTO" to "198912102025211038",
+      "MUHAMMAD RIGAN JASWARI" to "200201252025211014",
+      "AINUN MARDIATI.S.Pd.SD" to "198812302025212141",
+      "SATRIA AMANDA PUTRA" to "200003112025211067",
+      "FIRMANSYAH" to "199305102025211171",
+      "ARIF WIJOYO" to "198606282025211024",
+      "DAVID HARIANTO" to "199303302025211135"
+    )
+
+    for ((expectedName, expectedNip) in expectedAsnList) {
+      val found = personnelDao.getPersonnelByNip(expectedNip)
+      assertNotNull("Operator with NIP $expectedNip must exist in Room Database", found)
+      assertEquals("Name column must match separately", expectedName, found?.name)
+      assertEquals("NIP column must match separately", expectedNip, found?.nip)
+      assertEquals("Role must be Operator Pusdalops", "Operator Pusdalops", found?.role)
+    }
+
+    // Verify in OfficerAuthManager credentials roster
+    val officerAuth = com.example.data.local.OfficerAuthManager(context)
+    val roster = officerAuth.getOfficerRoster()
+    assertTrue(roster.size >= 8)
+
+    val yudha = roster.find { it.nip == "199807202025061002" }
+    assertNotNull(yudha)
+    assertEquals("YUDHA SOFRIANTO,S.A.P", yudha?.fullName)
+    assertEquals("Operator Pusdalops", yudha?.role)
+
+    // Verify login with selected ASN credential
+    val loginSuccess = officerAuth.loginOfficer(
+      name = yudha!!.fullName,
+      badgeId = yudha.nip,
+      shift = yudha.shift,
+      pin = "117",
+      role = yudha.role
+    )
+    assertTrue(loginSuccess)
+    assertTrue(officerAuth.isOfficerLoggedIn())
+    assertEquals("YUDHA SOFRIANTO,S.A.P", officerAuth.getOfficerName())
+    assertEquals("199807202025061002", officerAuth.getOfficerBadgeId())
+    assertEquals("Operator Pusdalops", officerAuth.getOfficerRole())
   }
 }

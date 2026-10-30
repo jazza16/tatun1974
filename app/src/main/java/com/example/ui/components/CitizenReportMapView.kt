@@ -647,8 +647,8 @@ fun CitizenReportMapView(
                     } else {
                         Toast.makeText(
                             context,
-                            "Khusus Petugas Jaga BPBD: Silakan masuk sebagai petugas jaga di Tab 'Tabel Riwayat' untuk memvalidasi laporan.",
-                            Toast.LENGTH_LONG
+                            "Login dengan ID petugas untuk akses ini",
+                            Toast.LENGTH_SHORT
                         ).show()
                     }
                 },

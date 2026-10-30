@@ -9,8 +9,8 @@ data class VersionChangelog(
 )
 
 data class AppUpdateState(
-    val currentVersion: String = "1.6.1",
-    val latestVersion: String = "1.6.1",
+    val currentVersion: String = "1.8.0",
+    val latestVersion: String = "1.8.0",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -22,18 +22,48 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "1.6.1",
+    val lastCheckedVersion: String = "1.8.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis resmi v1.6.1 terbaru secara permanen.",
-    val packageSizeMb: Float = 17.1f,
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis resmi v1.8.0 terbaru secara permanen.",
+    val packageSizeMb: Float = 17.5f,
     val isBannerDismissed: Boolean = false,
     val isSimulationActive: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
         VersionChangelog(
-            version = "1.6.1",
-            releaseDate = "27 Oktober 2026",
+            version = "1.8.0",
+            releaseDate = "29 Oktober 2026",
             isCurrent = true,
             isLatest = true,
+            highlights = listOf(
+                "Penguncian Skala Font Universal: Penerapan fontScale = 1.0f pada seluruh komponen antarmuka aplikasi, mencegah distorsi dan tumpang tindih teks akibat pengaturan skala font sistem ponsel.",
+                "Sinkronisasi Basis Data Real-Time Antar-Ponsel: Pembaruan status dan tindak lanjut petugas BPBD langsung tampil secara instan di layar warga tanpa perlu refresh manual.",
+                "Kartu Wajib Formulir Laporan: Penambahan kartu terdedikasi 'Deskripsi Kejadian / Jenis Bencana Lainnya' dengan validasi wajib diisi sebelum mengirim laporan.",
+                "Proteksi Mode Tamu & Toast Notifikasi: Kartu dan modul khusus petugas membatasi akses pada mode tamu dengan pemberitahuan 'Login dengan ID petugas untuk akses ini'.",
+                "Semboyan Polres Mukomuko: Penambahan semboyan resmi 'POLISI BERSAMA MASYARAKAT' pada daftar kontak darurat kepolisian.",
+                "Penyederhanaan Layar Login: Tampilan login warga dan petugas dibuat bersih, ringkas, dan fokus tanpa wallpaper berat atau kartu analisis berlebih.",
+                "Daftar Kontributor Resmi: Penambahan daftar kontributor aplikasi (M@mi, Afid, Ran_NAM, Erhy, Erick P, Bg-Fir) pada kartu info pengembang.",
+                "Peran Resmi Staff Logistik TRC: Pembaruan label peran personil menjadi 'Staff Logistik TRC' dan optimasi presisi badge pada seluruh kartu."
+            )
+        ),
+        VersionChangelog(
+            version = "1.7.0",
+            releaseDate = "28 Oktober 2026",
+            isCurrent = false,
+            isLatest = false,
+            highlights = listOf(
+                "Akses Langsung Tab Konsol Admin BPBD: Penambahan tab terdedikasi 'Konsol Admin' di bilah navigasi utama dan tombol pintasan di bilah atas aplikasi untuk akses tanpa hambatan.",
+                "Penyimpanan Permanen Room Database: Perbaikan menyeluruh persistensi personil sehingga seluruh data pendaftaran nama petugas tersimpan secara permanen di Room Database SQLite lokal.",
+                "Sinkronisasi Roster Dua Arah Real-time: Integrasi pendaftaran personil baik dari dialog login maupun dashboard konsol dengan pembaruan otomatis tanpa perlu refresh aplikasi.",
+                "Login Administrator Master PIN: Akses cepat login administrator menggunakan PIN Master resmi (117 / BPBD117 / ADMIN117) untuk manajemen personil dan penanganan kedaruratan.",
+                "Badge Warna Peran Resmi: Tampilan lencana berkode warna untuk Operator (Biru), Piket Posko (Kuning Amber), Staff Logistik TRC (Hijau), dan Manajer Pusdalops PB (Ungu).",
+                "Timer Keamanan Auto-Logout 30 Menit: Pemutusan sesi dinas petugas otomatis saat tidak aktif selama 30 menit untuk perlindungan data kedaruratan daerah."
+            )
+        ),
+        VersionChangelog(
+            version = "1.6.1",
+            releaseDate = "27 Oktober 2026",
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "Ekspor Digital Laporan Bencana (PDF & CSV): Ekspor arsip resmi dalam format dokumen PDF bertanda tangan Pusdalops BPBD serta berkas CSV untuk analisis data spreadsheet Excel.",
                 "Peta Mini Lokasi Kejadian (Auto-Pin): Peninjauan lokasi presisi laporan warga dengan penanda otomatis dan navigasi rute armada di Petugas Dashboard.",

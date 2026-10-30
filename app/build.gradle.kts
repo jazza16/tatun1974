@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.cuacamukomuko.wmzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 7
-    versionName = "1.6.1"
+    versionCode = 9
+    versionName = "1.8.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -109,7 +109,7 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
-  // implementation(libs.firebase.firestore)
+  implementation(libs.firebase.firestore)
   // implementation(libs.firebase.auth)
   // implementation(libs.androidx.credentials)
   // implementation(libs.androidx.credentials.play.services)
