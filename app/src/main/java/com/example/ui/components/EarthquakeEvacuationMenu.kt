@@ -54,7 +54,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -990,7 +990,7 @@ private fun EmergencyBagChecklistCard() {
                     }
                 }
                 if (index < items.size - 1) {
-                    Divider(
+                    HorizontalDivider(
                         modifier = Modifier.padding(vertical = 2.dp),
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)

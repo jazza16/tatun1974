@@ -212,6 +212,30 @@ fun WeatherAppScreen(
         viewModel.checkForUpdatesOnline(isAutoCheck = true, context = context)
     }
 
+    val database = remember { AppDatabase.getInstance(context) }
+    val syncController = remember { com.example.data.sync.SyncController.getInstance(context, database) }
+    val syncState by syncController.syncState.collectAsStateWithLifecycle()
+    val isRetrying by syncController.isRetrying.collectAsStateWithLifecycle()
+    val retryProgress by syncController.retryProgress.collectAsStateWithLifecycle()
+    val isSlowNetwork by syncController.isSlowNetwork.collectAsStateWithLifecycle()
+    val latencyMs by syncController.latencyMs.collectAsStateWithLifecycle()
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
+    LaunchedEffect(Unit) {
+        viewModel.runAutomatedCleanup90Days()
+        com.example.data.sync.IntegrityCheckWorker.performCheck(context, database)
+
+        // Request notification permission for Android 13+ so simultaneous disaster alerts are delivered
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
     val isActuallyDark = uiState.isDarkMode ?: false
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -272,6 +296,75 @@ fun WeatherAppScreen(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
             ) {
+            // AUTOMATED RETRY PROGRESS BAR IN STATUS STRIP
+            if (isRetrying) {
+                Surface(
+                    color = Color(0xFF0F172A),
+                    modifier = Modifier.fillMaxWidth().testTag("sync_retry_progress_strip")
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(12.dp),
+                                    strokeWidth = 2.dp,
+                                    color = OrangePrimary
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Memulihkan koneksi & sinkronisasi multi-perangkat...",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                            Text(
+                                text = "${(retryProgress * 100).toInt()}%",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = OrangePrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { retryProgress },
+                            color = OrangePrimary,
+                            trackColor = Color(0xFF334155),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                        )
+                    }
+                }
+            } else if (isSlowNetwork) {
+                Surface(
+                    color = Color(0xFFFEF3C7),
+                    modifier = Modifier.fillMaxWidth().testTag("sync_slow_network_strip")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFB45309), modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Jaringan Lambat (${latencyMs}ms) - Antrean retry otomatis diaktifkan",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF92400E)
+                            )
+                        }
+                    }
+                }
+            }
+
             // Horizontal Tab Navigation
             WeatherTabs(
                 selectedTabIndex = uiState.selectedTab,

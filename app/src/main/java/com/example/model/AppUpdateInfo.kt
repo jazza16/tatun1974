@@ -9,8 +9,8 @@ data class VersionChangelog(
 )
 
 data class AppUpdateState(
-    val currentVersion: String = "1.8.0",
-    val latestVersion: String = "1.8.0",
+    val currentVersion: String = "2.0.0",
+    val latestVersion: String = "2.0.0",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -22,18 +22,34 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "1.8.0",
+    val lastCheckedVersion: String = "2.0.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis resmi v1.8.0 terbaru secara permanen.",
-    val packageSizeMb: Float = 17.5f,
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis resmi v2.0.0 Enterprise Multi-Device Edition terbaru secara permanen.",
+    val packageSizeMb: Float = 18.2f,
     val isBannerDismissed: Boolean = false,
     val isSimulationActive: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
         VersionChangelog(
-            version = "1.8.0",
-            releaseDate = "29 Oktober 2026",
+            version = "2.0.0",
+            releaseDate = "31 Oktober 2026",
             isCurrent = true,
             isLatest = true,
+            highlights = listOf(
+                "Enterprise Multi-Device Synchronization: Integrasi SyncController terpusat yang menghubungkan hingga 5 perangkat ponsel piket Pusdalops serentak menerima notifikasi audio-alarm dan getaran seketika saat laporan bencana masuk.",
+                "Presisi Desain Badge & Status: Standardisasi geometri pill mikro-presisi, kontras optimal, border stroke halus, dan indikator status sinkronisasi (Synced vs Pending) pada seluruh kartu laporan bencana.",
+                "Lencana Peran Resmi ASN & Personil: Kode warna peran resmi (Pengawas, Supervisor, Koord. Administrasi, Manajer Pusdalops PB, Operator, Staff Logistik TRC, Piket Posko) lengkap dengan manajemen personil (Tambah, Ubah, Hapus) dan ganti PIN terenkripsi.",
+                "Pemantauan Latensi Firestore Real-time: Pengukuran roundtrip latensi dengan ambang batas peringatan jaringan lambat (>3000ms) di dashboard konsol dan status strip.",
+                "Antrean Otomatis & Progress Bar Retry: Pemulihan koneksi otomatis dengan exponential backoff dan progress bar visual saat sinkronisasi tertunda.",
+                "Pemeriksaan Integritas SHA-256 Harian: Worker verifikasi checksum otomatis antara Room SQLite lokal dan Cloud Firestore untuk mendeteksi serta menyelesaikan inkonsistensi data secara instan.",
+                "Database Explorer Room SQLite: Modul inspeksi data tabel Room (personnel, citizen_disaster_reports, personnel_audit_logs, sync_conflict_logs) untuk troubleshooting mandiri administrator BPBD.",
+                "Kompatibilitas Lintas Versi Android: Dukungan penuh Android 7.0 hingga Android 16 (API 24 - API 36) dengan pengelolaan saluran notifikasi darurat, izin dinamis POST_NOTIFICATIONS, dan WakeLock siaga."
+            )
+        ),
+        VersionChangelog(
+            version = "1.8.0",
+            releaseDate = "29 Oktober 2026",
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "Penguncian Skala Font Universal: Penerapan fontScale = 1.0f pada seluruh komponen antarmuka aplikasi, mencegah distorsi dan tumpang tindih teks akibat pengaturan skala font sistem ponsel.",
                 "Sinkronisasi Basis Data Real-Time Antar-Ponsel: Pembaruan status dan tindak lanjut petugas BPBD langsung tampil secara instan di layar warga tanpa perlu refresh manual.",

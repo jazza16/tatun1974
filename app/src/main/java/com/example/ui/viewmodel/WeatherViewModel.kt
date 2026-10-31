@@ -383,6 +383,12 @@ class WeatherViewModel(
         }
     }
 
+    fun runAutomatedCleanup90Days() {
+        viewModelScope.launch {
+            repository.runAutomatedCleanup90Days()
+        }
+    }
+
     fun syncCitizenDisasterReportsOnline(onComplete: ((Int) -> Unit)? = null) {
         viewModelScope.launch {
             try {

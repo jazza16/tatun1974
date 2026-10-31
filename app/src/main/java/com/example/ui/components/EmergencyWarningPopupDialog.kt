@@ -437,15 +437,16 @@ private fun WarningCardItem(
                         letterSpacing = 0.5.sp
                     )
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = iconTint
+                        shape = RoundedCornerShape(20.dp),
+                        color = iconTint,
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, Color.White.copy(alpha = 0.4f))
                     ) {
                         Text(
                             text = badgeText,
                             fontSize = 8.5.sp,
                             fontWeight = FontWeight.Black,
                             color = Color.White,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                         )
                     }
                 }

@@ -3123,22 +3123,58 @@ private fun CitizenReportItemCard(
                     )
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = statusContainer
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Sync Status Indicator: Green check = Synced Cloud, Amber sync = Pending
+                    val isPending = report.additionalNotes.contains("Tertunda", ignoreCase = true) || !report.isGpsVerified
+                    val syncIcon = if (isPending) Icons.Default.CloudSync else Icons.Default.CloudDone
+                    val syncColor = if (isPending) Color(0xFFD97706) else Color(0xFF16A34A)
+                    val syncText = if (isPending) "Pending" else "Synced"
+
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = syncColor.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, syncColor.copy(alpha = 0.35f)),
+                        modifier = Modifier.padding(end = 6.dp)
                     ) {
-                        Box(modifier = Modifier.size(6.dp).background(statusContent, CircleShape))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = statusLabel,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = statusContent
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp)
+                        ) {
+                            Icon(
+                                imageVector = syncIcon,
+                                contentDescription = syncText,
+                                tint = syncColor,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = syncText,
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = syncColor
+                            )
+                        }
+                    }
+
+                    // Main Status Badge
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = statusContainer,
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, statusContent.copy(alpha = 0.35f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.size(6.dp).background(statusContent, CircleShape))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = statusLabel.uppercase(),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = statusContent
+                            )
+                        }
                     }
                 }
             }

@@ -46,6 +46,9 @@ interface WeatherDao {
     @Query("SELECT * FROM citizen_disaster_reports ORDER BY timestamp DESC")
     suspend fun getAllCitizenDisasterReportsSync(): List<CitizenDisasterReportEntity>
 
+    @Query("SELECT * FROM citizen_disaster_reports WHERE id = :id LIMIT 1")
+    suspend fun getCitizenReportById(id: String): CitizenDisasterReportEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCitizenDisasterReport(report: CitizenDisasterReportEntity)
 

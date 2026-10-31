@@ -205,6 +205,18 @@ class OfficerAuthManager(context: Context) {
      * Updates an existing officer profile (name, nip, role/classification, shift, etc.)
      * and synchronizes to Firestore in real-time.
      */
+    fun updateOfficer(profile: OfficerProfile): Result<OfficerProfile> {
+        return updateOfficer(
+            id = profile.id,
+            fullName = profile.fullName,
+            nip = profile.nip,
+            role = profile.role,
+            shift = profile.shift,
+            unit = profile.unit,
+            phone = profile.phone
+        )
+    }
+
     fun updateOfficer(
         id: String,
         fullName: String,

@@ -33,6 +33,9 @@ import java.util.UUID
 class WeatherRepository(
     private val weatherDao: WeatherDao
 ) {
+    // Serialized Dispatcher for all database write operations to prevent write-ahead logging (WAL) collisions
+    val databaseWriteDispatcher = Dispatchers.IO.limitedParallelism(1)
+
     private val forecastApi = NetworkClient.weatherApi
     private val airQualityApi = NetworkClient.airQualityApi
     private val archiveApi = NetworkClient.archiveApi
@@ -217,7 +220,54 @@ class WeatherRepository(
         weatherDao.deleteReportsOlderThan(cutoffTimestamp)
     }
 
-    suspend fun submitCitizenDisasterReport(report: CitizenDisasterReport) = withContext(Dispatchers.IO) {
+    /**
+     * Automated report database cleanup service:
+     * Purges disaster reports older than 90 days from the local Room database
+     * to maintain high query efficiency and avoid storage bloat while keeping
+     * recent records and cloud backups intact.
+     */
+    suspend fun runAutomatedCleanup90Days(): Int = withContext(databaseWriteDispatcher) {
+        val ninetyDaysMs = 90L * 24 * 60 * 60 * 1000L
+        val cutoff = System.currentTimeMillis() - ninetyDaysMs
+        val deletedCount = weatherDao.deleteReportsOlderThan(cutoff)
+        if (deletedCount > 0) {
+            android.util.Log.i("WeatherRepository", "Automated cleanup: Deleted $deletedCount expired disaster reports (>90 days).")
+        }
+        deletedCount
+    }
+
+    /**
+     * Restores a list of disaster reports into the local Room database,
+     * merging with existing records using OnConflictStrategy.REPLACE.
+     */
+    suspend fun restoreReportsToRoom(reports: List<CitizenDisasterReport>) = withContext(databaseWriteDispatcher) {
+        val entities = reports.map { report ->
+            CitizenDisasterReportEntity(
+                id = report.id,
+                disasterType = report.disasterType,
+                incidentTime = report.incidentTime,
+                incidentLocation = report.incidentLocation,
+                district = report.district,
+                village = report.village,
+                latitude = report.latitude,
+                longitude = report.longitude,
+                gpsAccuracyMeters = report.gpsAccuracyMeters,
+                isGpsVerified = report.isGpsVerified,
+                casualtiesDead = report.casualtiesDead,
+                casualtiesInjured = report.casualtiesInjured,
+                casualtiesMissing = report.casualtiesMissing,
+                photoUri = report.photoUri,
+                reporterName = report.reporterName,
+                reporterPhone = report.reporterPhone,
+                additionalNotes = report.additionalNotes,
+                timestamp = report.timestamp,
+                status = report.status
+            )
+        }
+        weatherDao.insertAllCitizenDisasterReports(entities)
+    }
+
+    suspend fun submitCitizenDisasterReport(report: CitizenDisasterReport) = withContext(databaseWriteDispatcher) {
         val entity = CitizenDisasterReportEntity(
             id = report.id,
             disasterType = report.disasterType,
@@ -273,7 +323,7 @@ class WeatherRepository(
         } catch (_: Exception) {}
     }
 
-    suspend fun updateCitizenReportStatus(reportId: String, newStatus: String) = withContext(Dispatchers.IO) {
+    suspend fun updateCitizenReportStatus(reportId: String, newStatus: String) = withContext(databaseWriteDispatcher) {
         weatherDao.updateCitizenReportStatus(reportId, newStatus)
         // Push status change to Firestore & cloud container
         try {
@@ -307,7 +357,7 @@ class WeatherRepository(
         } catch (_: Exception) {}
     }
 
-    suspend fun updateCitizenReportStatusAndNotes(reportId: String, newStatus: String, notes: String) = withContext(Dispatchers.IO) {
+    suspend fun updateCitizenReportStatusAndNotes(reportId: String, newStatus: String, notes: String) = withContext(databaseWriteDispatcher) {
         weatherDao.updateCitizenReportStatusAndNotes(reportId, newStatus, notes)
         // Push status & follow-up notes change to Firestore & cloud container
         try {

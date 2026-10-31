@@ -46,6 +46,8 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
@@ -56,13 +58,19 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.SyncProblem
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Visibility
@@ -115,6 +123,8 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.OrangeOnPrimary
+import com.example.ui.theme.OrangePrimary
 import com.example.data.local.AppDatabase
 import com.example.data.local.Personnel
 import com.example.data.local.OfficerAuthManager
@@ -196,6 +206,19 @@ fun OfficerDashboardConsoleView(
     val database = remember { AppDatabase.getInstance(context) }
     val personnelRepository = remember { PersonnelRepository(database.personnelDao()) }
     val dbPersonnelList by personnelRepository.allPersonnel.collectAsStateWithLifecycle(initialValue = emptyList())
+
+    // Central SyncController across 5 devices
+    val syncController = remember { com.example.data.sync.SyncController.getInstance(context, database) }
+    val latencyMs by syncController.latencyMs.collectAsStateWithLifecycle()
+    val isSlowNetwork by syncController.isSlowNetwork.collectAsStateWithLifecycle()
+    val activeDevices by syncController.activeDevices.collectAsStateWithLifecycle()
+    val syncState by syncController.syncState.collectAsStateWithLifecycle()
+    val conflictLogs by database.syncConflictLogDao().getAllConflictLogs().collectAsStateWithLifecycle(initialValue = emptyList())
+
+    var showDatabaseExplorer by remember { mutableStateOf(false) }
+    var integrityCheckResult by remember { mutableStateOf<com.example.data.sync.IntegrityCheckResult?>(null) }
+    var isCheckingIntegrity by remember { mutableStateOf(false) }
+    var editingPersonnel by remember { mutableStateOf<com.example.data.local.Personnel?>(null) }
 
     LaunchedEffect(Unit) {
         personnelRepository.seedDefaultAsnPersonnelIfNeeded()
@@ -593,7 +616,47 @@ fun OfficerDashboardConsoleView(
             }
         }
 
-        // 2. SUB-TABS: ANTREAN AKTIF vs MODUL ARSIP vs STATISTIK
+        // SLOW NETWORK WARNING BANNER
+        if (isSlowNetwork) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFFEF3C7),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("alert_slow_network")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = Color(0xFFB45309),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "⚠️ PERINGATAN: JARINGAN LAMBAT (${latencyMs}ms)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFF92400E)
+                            )
+                            Text(
+                                text = "Waktu respon API Firestore melebihi batas 3000ms. Sinkronisasi antar 5 perangkat dialihkan ke antrean retry otomatis berlatar belakang.",
+                                fontSize = 10.5.sp,
+                                color = Color(0xFFB45309)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. SUB-TABS: ANTREAN AKTIF vs MODUL ARSIP vs STATISTIK vs DIAGNOSTIK SYNC
         item {
             Row(
                 modifier = Modifier
@@ -603,9 +666,10 @@ fun OfficerDashboardConsoleView(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 listOf(
-                    0 to "🚨 Antrean Aktif (${pendingCount + validatedCount})",
-                    1 to "🗄️ Modul Arsip ($resolvedCount)",
-                    2 to "📊 Tren Bulanan"
+                    0 to "🚨 Antrean (${pendingCount + validatedCount})",
+                    1 to "🗄️ Arsip ($resolvedCount)",
+                    2 to "📊 Tren",
+                    3 to "📡 Sync (${activeDevices.size} HP)"
                 ).forEach { (idx, label) ->
                     val isSel = dashboardSubTab == idx
                     Surface(
@@ -617,7 +681,7 @@ fun OfficerDashboardConsoleView(
                     ) {
                         Text(
                             text = label,
-                            fontSize = 10.sp,
+                            fontSize = 9.5.sp,
                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSel) Color(0xFF0F172A) else Color(0xFF64748B),
                             textAlign = TextAlign.Center,
@@ -632,6 +696,49 @@ fun OfficerDashboardConsoleView(
         if (dashboardSubTab == 2) {
             item {
                 DisasterMonthlyBarChartCard(reports = reports)
+            }
+        }
+
+        // 3B. DIAGNOSTIK SINKRONISASI VIEW (IF SELECTED)
+        if (dashboardSubTab == 3) {
+            item {
+                SyncDiagnosticsSection(
+                    latencyMs = latencyMs,
+                    isSlowNetwork = isSlowNetwork,
+                    activeDevices = activeDevices,
+                    conflictLogs = conflictLogs,
+                    integrityResult = integrityCheckResult,
+                    isCheckingIntegrity = isCheckingIntegrity,
+                    onRunIntegrityCheck = {
+                        isCheckingIntegrity = true
+                        coroutineScope.launch {
+                            val res = com.example.data.sync.IntegrityCheckWorker.performCheck(context, database)
+                            integrityCheckResult = res
+                            isCheckingIntegrity = false
+                            Toast.makeText(context, "Pengecekan Integritas selesai. Konsisten: ${res.isConsistent}", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onTestPing = {
+                        coroutineScope.launch {
+                            val lat = syncController.measureLatency()
+                            Toast.makeText(context, "Latensi saat ini: ${lat}ms", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onExportConflictLogsCsv = {
+                        coroutineScope.launch {
+                            val csv = com.example.data.sync.SyncConflictHandler(context, database).exportConflictLogsToCsv()
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Log_Konflik_Sync_BPBD.csv")
+                                putExtra(Intent.EXTRA_TEXT, csv)
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Bagikan Log Konflik CSV"))
+                        }
+                    },
+                    onOpenDatabaseExplorer = {
+                        showDatabaseExplorer = true
+                    }
+                )
             }
         }
 
@@ -1489,47 +1596,18 @@ fun OfficerDashboardConsoleView(
                                 }
                             } else {
                                 filteredList.forEach { off ->
-                                    val isOperator = off.role.contains("Operator", ignoreCase = true)
-                                    val isPiket = off.role.contains("Piket", ignoreCase = true) || off.role.contains("Jaga", ignoreCase = true)
-                                    val isFieldLogistik = off.role.contains("Lapangan", ignoreCase = true) || off.role.contains("Logistik", ignoreCase = true)
-                                    val isManager = off.role.contains("Manajer", ignoreCase = true)
-
-                                    // Color-coded role badge styling
-                                    val roleColor = when {
-                                        isOperator -> Color(0xFF1D4ED8) // Blue
-                                        isPiket -> Color(0xFFB45309) // Amber
-                                        isFieldLogistik -> Color(0xFF047857) // Emerald
-                                        isManager -> Color(0xFF6D28D9) // Purple
-                                        else -> Color(0xFF334155)
-                                    }
-                                    val roleBg = when {
-                                        isOperator -> Color(0xFFDBEAFE)
-                                        isPiket -> Color(0xFFFEF3C7)
-                                        isFieldLogistik -> Color(0xFFD1FAE5)
-                                        isManager -> Color(0xFFF3E8FF)
-                                        else -> Color(0xFFF1F5F9)
-                                    }
-                                    val roleBorder = when {
-                                        isOperator -> Color(0xFF93C5FD)
-                                        isPiket -> Color(0xFFFCD34D)
-                                        isFieldLogistik -> Color(0xFF6EE7B7)
-                                        isManager -> Color(0xFFC4B5FD)
-                                        else -> Color(0xFFCBD5E1)
-                                    }
+                                    val (roleBg, roleColor) = com.example.data.local.OfficialAsnBpbdPersonnel.getRoleBadgeColor(off.role)
+                                    val roleBorder = roleColor.copy(alpha = 0.35f)
                                     val roleIcon = when {
-                                        isOperator -> Icons.Default.HeadsetMic
-                                        isPiket -> Icons.Default.Shield
-                                        isFieldLogistik -> Icons.Default.DirectionsCar
-                                        isManager -> Icons.Default.AdminPanelSettings
+                                        off.role.contains("Pengawas", ignoreCase = true) || off.role.contains("Kalaksa", ignoreCase = true) -> Icons.Default.AdminPanelSettings
+                                        off.role.contains("Supervisor", ignoreCase = true) || off.role.contains("Kabid", ignoreCase = true) -> Icons.Default.Shield
+                                        off.role.contains("Koord", ignoreCase = true) || off.role.contains("Administrasi", ignoreCase = true) -> Icons.Default.Badge
+                                        off.role.contains("Manajer", ignoreCase = true) -> Icons.Default.AdminPanelSettings
+                                        off.role.contains("Operator", ignoreCase = true) -> Icons.Default.HeadsetMic
+                                        off.role.contains("Logistik", ignoreCase = true) || off.role.contains("TRC", ignoreCase = true) -> Icons.Default.DirectionsCar
                                         else -> Icons.Default.Badge
                                     }
-                                    val roleBadgeLabel = when {
-                                        isOperator -> "Operator Pusdalops"
-                                        isPiket -> "Piket Posko Siaga 24 Jam"
-                                        isFieldLogistik -> "Staff Logistik TRC"
-                                        isManager -> "Manajer Pusdalops PB"
-                                        else -> off.role
-                                    }
+                                    val roleBadgeLabel = off.role
 
                                     Surface(
                                         shape = RoundedCornerShape(10.dp),
@@ -1583,16 +1661,16 @@ fun OfficerDashboardConsoleView(
                                                     modifier = Modifier.padding(top = 3.dp)
                                                 ) {
                                                     Surface(
-                                                        shape = RoundedCornerShape(4.dp),
+                                                        shape = RoundedCornerShape(20.dp),
                                                         color = roleBg,
-                                                        border = androidx.compose.foundation.BorderStroke(1.dp, roleBorder)
+                                                        border = androidx.compose.foundation.BorderStroke(0.8.dp, roleBorder)
                                                     ) {
                                                         Text(
-                                                            text = roleBadgeLabel,
+                                                            text = roleBadgeLabel.uppercase(),
                                                             fontSize = 8.5.sp,
-                                                            fontWeight = FontWeight.Bold,
+                                                            fontWeight = FontWeight.ExtraBold,
                                                             color = roleColor,
-                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
                                                         )
                                                     }
                                                     if (off.phone.isNotBlank()) {
@@ -1604,6 +1682,31 @@ fun OfficerDashboardConsoleView(
                                                         )
                                                     }
                                                 }
+                                            }
+
+                                            // Edit button for Admin: allows editing personnel details
+                                            IconButton(
+                                                onClick = {
+                                                    val matchInDb = dbPersonnelList.firstOrNull { it.nip.equals(off.nip, ignoreCase = true) }
+                                                    editingPersonnel = matchInDb ?: com.example.data.local.Personnel(
+                                                        name = off.fullName,
+                                                        nip = off.nip,
+                                                        role = off.role,
+                                                        unit = off.unit,
+                                                        shift = off.shift,
+                                                        phone = off.phone
+                                                    )
+                                                },
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .testTag("edit_officer_btn")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Edit,
+                                                    contentDescription = "Edit Personil",
+                                                    tint = Color(0xFF0284C7),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
                                             }
 
                                             // Delete button for Admin: allows removing any personnel from Room & session cache
@@ -1893,6 +1996,111 @@ fun OfficerDashboardConsoleView(
                 }
             }
         )
+    }
+
+    // DIALOG EDIT PERSONIL OLEH ADMIN
+    if (editingPersonnel != null) {
+        val p = editingPersonnel!!
+        var editName by remember(p) { mutableStateOf(p.name) }
+        var editNip by remember(p) { mutableStateOf(p.nip) }
+        var editRole by remember(p) { mutableStateOf(p.role) }
+        var editShift by remember(p) { mutableStateOf(p.shift) }
+        var editPhone by remember(p) { mutableStateOf(p.phone) }
+
+        AlertDialog(
+            onDismissRequest = { editingPersonnel = null },
+            title = { Text("Edit Data Personil BPBD", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = { Text("Nama Lengkap") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("input_edit_personnel_name")
+                    )
+                    OutlinedTextField(
+                        value = editNip,
+                        onValueChange = { editNip = it },
+                        label = { Text("NIP / Reg TRC") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("input_edit_personnel_nip")
+                    )
+                    OutlinedTextField(
+                        value = editRole,
+                        onValueChange = { editRole = it },
+                        label = { Text("Jabatan / Peran") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("input_edit_personnel_role")
+                    )
+                    OutlinedTextField(
+                        value = editShift,
+                        onValueChange = { editShift = it },
+                        label = { Text("Shift Penugasan") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("input_edit_personnel_shift")
+                    )
+                    OutlinedTextField(
+                        value = editPhone,
+                        onValueChange = { editPhone = it },
+                        label = { Text("Nomor HP / WhatsApp") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("input_edit_personnel_phone")
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            val updated = p.copy(
+                                name = editName.trim(),
+                                nip = editNip.trim(),
+                                role = editRole.trim(),
+                                shift = editShift.trim(),
+                                phone = editPhone.trim()
+                            )
+                            personnelRepository.update(updated)
+                            officerAuthManager.updateOfficer(
+                                OfficerProfile(
+                                    id = "asn-${updated.nip}",
+                                    fullName = updated.name,
+                                    nip = updated.nip,
+                                    role = updated.role,
+                                    unit = updated.unit,
+                                    shift = updated.shift,
+                                    phone = updated.phone
+                                )
+                            )
+                            editingPersonnel = null
+                            Toast.makeText(context, "Data personil '${updated.name}' berhasil diperbarui.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                    modifier = Modifier.testTag("btn_save_edit_personnel")
+                ) {
+                    Text("Simpan Perubahan")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { editingPersonnel = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // FULL SCREEN DIALOG DATABASE EXPLORER
+    if (showDatabaseExplorer) {
+        Dialog(
+            onDismissRequest = { showDatabaseExplorer = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            DatabaseExplorerScreen(
+                database = database,
+                onClose = { showDatabaseExplorer = false }
+            )
+        }
     }
 
     // 8. OFFICIAL OFFICER FOLLOW-UP NOTE EDITOR DIALOG
@@ -2333,18 +2541,52 @@ private fun OfficerIncidentReportCard(
                     )
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = statusBg,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.4f))
-                ) {
-                    Text(
-                        text = report.status.uppercase(),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = statusColor,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Sync Status Indicator: Green check = Synced, Yellow clock = Pending
+                    val isPending = report.additionalNotes.contains("Tertunda", ignoreCase = true) || !report.isGpsVerified
+                    val syncIcon = if (isPending) Icons.Default.Schedule else Icons.Default.CheckCircle
+                    val syncColor = if (isPending) Color(0xFFD97706) else Color(0xFF16A34A)
+                    val syncText = if (isPending) "Pending" else "Synced"
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = syncColor.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(0.5.dp, syncColor.copy(alpha = 0.35f)),
+                        modifier = Modifier.padding(end = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = syncIcon,
+                                contentDescription = syncText,
+                                tint = syncColor,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = syncText,
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = syncColor
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = statusBg,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.4f))
+                    ) {
+                        Text(
+                            text = report.status.uppercase(),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = statusColor,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
                 }
             }
 
@@ -2604,3 +2846,385 @@ private fun OfficerIncidentReportCard(
         }
     }
 }
+
+/**
+ * Diagnostik Sinkronisasi Multi-Perangkat BPBD:
+ * Memantau latensi API Firestore, status detak jantung (heartbeat) 5 unit HP pengujian,
+ * pemeriksaan integritas checksum (SHA-256), log resolusi konflik, dan akses Database Explorer.
+ */
+@Composable
+private fun SyncDiagnosticsSection(
+    latencyMs: Long,
+    isSlowNetwork: Boolean,
+    activeDevices: List<com.example.data.sync.DeviceHeartbeat>,
+    conflictLogs: List<com.example.data.local.SyncConflictLogEntity>,
+    integrityResult: com.example.data.sync.IntegrityCheckResult?,
+    isCheckingIntegrity: Boolean,
+    onRunIntegrityCheck: () -> Unit,
+    onTestPing: () -> Unit,
+    onExportConflictLogsCsv: () -> Unit,
+    onOpenDatabaseExplorer: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // 1. LATENCY METRIC CARD
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+            modifier = Modifier.fillMaxWidth().testTag("card_sync_latency")
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = (if (isSlowNetwork) Color(0xFFEF4444) else Color(0xFF10B981)).copy(alpha = 0.2f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.NetworkCheck,
+                                    contentDescription = null,
+                                    tint = if (isSlowNetwork) Color(0xFFEF4444) else Color(0xFF10B981),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("Pemantauan Latensi Firestore", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Waktu bolak-balik respon API cloud", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSlowNetwork) Color(0xFFDC2626) else Color(0xFF059669)
+                    ) {
+                        Text(
+                            text = if (isSlowNetwork) "JARINGAN LAMBAT" else "NORMAL",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Response Time", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                text = if (latencyMs > 0) "$latencyMs" else "-",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isSlowNetwork) Color(0xFFEF4444) else Color(0xFF10B981)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "ms",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF94A3B8),
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = onTestPing,
+                        colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.height(36.dp).testTag("btn_test_latency_ping")
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Uji Ping Sekarang", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // 2. ACTIVE CONNECTED DEVICES (HEARTBEAT TIMELINE)
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier.fillMaxWidth().testTag("card_active_devices_heartbeat")
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Devices, contentDescription = null, tint = OrangePrimary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Detak Jantung Perangkat (${activeDevices.size} HP Aktif)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Text(
+                        text = "5 HP Pengujian",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF64748B)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                if (activeDevices.isEmpty()) {
+                    Text(
+                        text = "Belum ada heartbeat perangkat lain terdeteksi dalam 5 menit terakhir.",
+                        fontSize = 11.sp,
+                        color = Color(0xFF94A3B8)
+                    )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        activeDevices.forEach { dev ->
+                            val isMe = dev.deviceId.length > 5 && dev.status == "ONLINE"
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFF8FAFC),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = dev.deviceModel,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF0F172A)
+                                        )
+                                        Text(
+                                            text = "Petugas: ${dev.officerName} • ID: ${dev.deviceId.take(8)}",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFF64748B)
+                                        )
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = if (dev.status == "SLOW_NET") Color(0xFFFEF3C7) else Color(0xFFDCFCE7)
+                                        ) {
+                                            Text(
+                                                text = if (dev.status == "SLOW_NET") "SLOW NET" else "ONLINE",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (dev.status == "SLOW_NET") Color(0xFFB45309) else Color(0xFF15803D),
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                        Text(
+                                            text = "${dev.latencyMs} ms",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF334155)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. INTEGRITY CHECK (SHA-256 CHECKSUM COMPARISON)
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier.fillMaxWidth().testTag("card_checksum_integrity")
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Shield, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Pemeriksaan Integritas Data (Checksum)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Bandingkan hashing SHA-256 antara Room Database SQLite lokal dan Cloud Firestore untuk mendeteksi rekaman yang terlewat atau tidak konsisten.",
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                if (integrityResult != null) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (integrityResult.isConsistent) Color(0xFFF0FDF4) else Color(0xFFFFFBEB),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (integrityResult.isConsistent) Color(0xFF86EFAC) else Color(0xFFFDE68A)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = if (integrityResult.isConsistent) "✅ KONSISTEN (100% SINKRON)" else "⚠️ DITEMUKAN PERBEDAAN",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (integrityResult.isConsistent) Color(0xFF15803D) else Color(0xFFB45309)
+                                )
+                                Text(
+                                    text = "Lokal: ${integrityResult.localCount} | Cloud: ${integrityResult.remoteCount}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF334155)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Checksum Lokal: ${integrityResult.localChecksum}\nChecksum Cloud: ${integrityResult.remoteChecksum}",
+                                fontSize = 9.5.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                color = Color(0xFF475569)
+                            )
+                            if (integrityResult.discrepancies.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Tindakan Resolusi Otomatis (${integrityResult.resolvedDiscrepancyCount} laporan diselaraskan):",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFB45309)
+                                )
+                                integrityResult.discrepancies.take(3).forEach { d ->
+                                    Text("• $d", fontSize = 9.sp, color = Color(0xFF78350F))
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                Button(
+                    onClick = onRunIntegrityCheck,
+                    enabled = !isCheckingIntegrity,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("btn_run_integrity_check")
+                ) {
+                    if (isCheckingIntegrity) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Memeriksa Checksum...", fontSize = 11.sp)
+                    } else {
+                        Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Jalankan Pengecekan Integritas (Checksum)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // 4. CONFLICT RESOLUTION LOGS & TOOLS
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier.fillMaxWidth().testTag("card_conflict_logs_section")
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.SyncProblem, contentDescription = null, tint = Color(0xFFEA580C), modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Log Resolusi Konflik (${conflictLogs.size})",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Riwayat resolusi otomatis saat dua perangkat petugas mengubah laporan yang sama secara bersamaan.",
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onExportConflictLogsCsv,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f).testTag("btn_export_conflict_csv")
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Ekspor CSV Log", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = onOpenDatabaseExplorer,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f).testTag("btn_open_database_explorer")
+                    ) {
+                        Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Database Explorer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
