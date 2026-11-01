@@ -33,12 +33,30 @@ data class OfficerProfile(
 }
 
 object OfficerRoles {
+    const val PENGAWAS = "Pengawas BPBD"
+    const val MANAJER = "Manajer Pusdalops-PB"
+    const val SUPERVISOR = "Supervisor BPBD"
+    const val KOORD_ADMINISTRASI = "Koord. Administrasi"
     const val OPERATOR = "Operator Pusdalops"
     const val PETUGAS_JAGA = "Petugas Jaga Siaga / Piket"
     const val PETUGAS_LAPANGAN = "Petugas Lapangan TRC / Logistik"
-    const val MANAJER = "Manajer Pusdalops-PB"
 
-    val ALL_ROLES = listOf(OPERATOR, PETUGAS_JAGA, PETUGAS_LAPANGAN, MANAJER)
+    val ALL_ROLES = listOf(PENGAWAS, MANAJER, SUPERVISOR, KOORD_ADMINISTRASI, OPERATOR, PETUGAS_JAGA, PETUGAS_LAPANGAN)
+
+    /**
+     * Official hierarchy rank for duty personnel list.
+     * Manajer Pusdalops is positioned immediately below Pengawas.
+     */
+    fun getRoleRank(role: String): Int = when {
+        role.contains("Pengawas", ignoreCase = true) -> 1
+        role.contains("Manajer", ignoreCase = true) || role.contains("Manager", ignoreCase = true) -> 2
+        role.contains("Supervisor", ignoreCase = true) -> 3
+        role.contains("Koord", ignoreCase = true) || role.contains("Administrasi", ignoreCase = true) -> 4
+        role.contains("Operator", ignoreCase = true) -> 5
+        role.contains("Piket", ignoreCase = true) || role.contains("Jaga", ignoreCase = true) -> 6
+        role.contains("Lapangan", ignoreCase = true) || role.contains("Logistik", ignoreCase = true) || role.contains("TRC", ignoreCase = true) -> 7
+        else -> 8
+    }
 }
 
 /**

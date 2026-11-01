@@ -18,22 +18,6 @@
           "type": "boolean",
           "description": "Whether severe weather push notifications are active"
         },
-        "alertThunderstorm": {
-          "type": "boolean",
-          "description": "Receive thunderstorm alerts"
-        },
-        "alertStrongWind": {
-          "type": "boolean",
-          "description": "Receive strong wind alerts"
-        },
-        "alertFloodHeavyRain": {
-          "type": "boolean",
-          "description": "Receive flood & heavy rain alerts"
-        },
-        "alertHighWaves": {
-          "type": "boolean",
-          "description": "Receive coastal high wave alerts"
-        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -91,7 +75,203 @@
           "format": "date-time"
         }
       },
-      "required": ["userId", "districtId", "districtName", "reporterName", "weatherCondition"]
+      "required": ["districtName", "reporterName", "weatherCondition"]
+    },
+    "CitizenDisasterReport": {
+      "title": "CitizenDisasterReport",
+      "description": "Verified citizen disaster report for BPBD Mukomuko",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique report ID"
+        },
+        "disasterType": {
+          "type": "string",
+          "description": "Type of disaster (Banjir, Longsor, Cuaca Ekstrem, etc.)"
+        },
+        "incidentTime": {
+          "type": "string",
+          "description": "Time of incident"
+        },
+        "incidentLocation": {
+          "type": "string",
+          "description": "Incident location address/landmark"
+        },
+        "district": {
+          "type": "string",
+          "description": "District in Mukomuko"
+        },
+        "village": {
+          "type": "string",
+          "description": "Village name"
+        },
+        "latitude": {
+          "type": "number",
+          "description": "GPS Latitude"
+        },
+        "longitude": {
+          "type": "number",
+          "description": "GPS Longitude"
+        },
+        "gpsAccuracyMeters": {
+          "type": "number",
+          "description": "GPS accuracy in meters"
+        },
+        "isGpsVerified": {
+          "type": "boolean",
+          "description": "Whether coordinates are GPS-verified"
+        },
+        "casualtiesDead": {
+          "type": "integer",
+          "description": "Count of dead casualties"
+        },
+        "casualtiesInjured": {
+          "type": "integer",
+          "description": "Count of injured casualties"
+        },
+        "casualtiesMissing": {
+          "type": "integer",
+          "description": "Count of missing persons"
+        },
+        "photoUri": {
+          "type": "string",
+          "description": "Evidence photo URL or URI"
+        },
+        "reporterName": {
+          "type": "string",
+          "description": "Name of citizen reporter"
+        },
+        "reporterPhone": {
+          "type": "string",
+          "description": "Contact phone number"
+        },
+        "additionalNotes": {
+          "type": "string",
+          "description": "Additional notes and officer log"
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix timestamp in milliseconds"
+        },
+        "status": {
+          "type": "string",
+          "description": "Verification status (Diterima PUSDALOPS, Tim TRC Meluncur, etc.)"
+        }
+      },
+      "required": ["id", "disasterType", "district", "status"]
+    },
+    "OfficerProfile": {
+      "title": "OfficerProfile",
+      "description": "Pusdalops & TRC officer profile in duty roster",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Officer ID or NIP"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Full name with official academic / ASN title"
+        },
+        "nip": {
+          "type": "string",
+          "description": "NIP or TRC registration number"
+        },
+        "role": {
+          "type": "string",
+          "description": "Assigned role (Pengawas, Manajer, Operator, etc.)"
+        },
+        "unit": {
+          "type": "string",
+          "description": "Operating unit"
+        },
+        "shift": {
+          "type": "string",
+          "description": "Assigned duty shift"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone or radio channel"
+        },
+        "updatedAt": {
+          "type": "integer",
+          "description": "Last updated timestamp"
+        }
+      },
+      "required": ["fullName", "nip", "role"]
+    },
+    "DatabaseBackup": {
+      "title": "DatabaseBackup",
+      "description": "Full snapshot backup of disaster reports database",
+      "type": "object",
+      "properties": {
+        "backupId": {
+          "type": "string",
+          "description": "Backup identifier"
+        },
+        "backupDate": {
+          "type": "integer",
+          "description": "Timestamp of backup creation"
+        },
+        "officerName": {
+          "type": "string",
+          "description": "Name of officer triggering backup"
+        },
+        "totalReports": {
+          "type": "integer",
+          "description": "Total report records count"
+        }
+      },
+      "required": ["backupId", "backupDate", "officerName"]
+    },
+    "DeviceHeartbeat": {
+      "title": "DeviceHeartbeat",
+      "description": "Real-time heartbeat of active Pusdalops duty device",
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "description": "Hardware device identifier"
+        },
+        "deviceModel": {
+          "type": "string",
+          "description": "Device manufacturer and model"
+        },
+        "officerName": {
+          "type": "string",
+          "description": "Current logged-in officer"
+        },
+        "lastSeen": {
+          "type": "integer",
+          "description": "Last heartbeat timestamp"
+        },
+        "latencyMs": {
+          "type": "integer",
+          "description": "Firestore round-trip ping latency"
+        },
+        "status": {
+          "type": "string",
+          "description": "Online status"
+        }
+      },
+      "required": ["deviceId", "status"]
+    },
+    "NetworkPing": {
+      "title": "NetworkPing",
+      "description": "Network latency measurement document",
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "description": "Pinging device ID"
+        },
+        "pingTimestamp": {
+          "type": "integer",
+          "description": "Client timestamp of ping"
+        }
+      },
+      "required": ["deviceId", "pingTimestamp"]
     }
   },
   "firestore": {
@@ -101,7 +281,27 @@
     },
     "/community_reports/{reportId}": {
       "schema": "CommunityReport",
-      "description": "Public community citizen weather reports"
+      "description": "Public crowd-sourced citizen weather reports"
+    },
+    "/citizen_disaster_reports/{reportId}": {
+      "schema": "CitizenDisasterReport",
+      "description": "Official citizen disaster reports synced between Room and Firestore"
+    },
+    "/officers/{officerId}": {
+      "schema": "OfficerProfile",
+      "description": "BPBD Pusdalops & TRC duty personnel roster"
+    },
+    "/database_backups/{backupId}": {
+      "schema": "DatabaseBackup",
+      "description": "Disaster reports database cloud archives"
+    },
+    "/device_heartbeats/{deviceId}": {
+      "schema": "DeviceHeartbeat",
+      "description": "Active duty device heartbeats"
+    },
+    "/network_pings/{deviceId}": {
+      "schema": "NetworkPing",
+      "description": "Firestore latency measurement pings"
     }
   }
 }

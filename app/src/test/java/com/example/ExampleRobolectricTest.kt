@@ -339,4 +339,22 @@ class ExampleRobolectricTest {
     assertEquals("199807202025061002", officerAuth.getOfficerBadgeId())
     assertEquals("Operator Pusdalops", officerAuth.getOfficerRole())
   }
+
+  @Test
+  fun `verify Manager Pusdalops is positioned directly below Pengawas in leadership and role rank`() {
+    val leadership = com.example.data.local.OfficialAsnBpbdPersonnel.LEADERSHIP
+    assertEquals("Pengawas must be first in leadership", com.example.data.local.OfficialAsnBpbdPersonnel.ROLE_PENGAWAS, leadership[0].role)
+    assertEquals("Manajer Pusdalops must be directly below Pengawas (index 1)", com.example.data.local.OfficialAsnBpbdPersonnel.ROLE_MANAJER, leadership[1].role)
+
+    // Role rank priority checks
+    val rankPengawas = com.example.data.local.OfficerRoles.getRoleRank(com.example.data.local.OfficerRoles.PENGAWAS)
+    val rankManajer = com.example.data.local.OfficerRoles.getRoleRank(com.example.data.local.OfficerRoles.MANAJER)
+    val rankSupervisor = com.example.data.local.OfficerRoles.getRoleRank(com.example.data.local.OfficerRoles.SUPERVISOR)
+
+    assertEquals(1, rankPengawas)
+    assertEquals(2, rankManajer)
+    assertTrue(rankManajer > rankPengawas)
+    assertTrue(rankManajer < rankSupervisor)
+  }
 }
+

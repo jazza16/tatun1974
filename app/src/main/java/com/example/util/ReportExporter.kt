@@ -2,8 +2,10 @@ package com.example.util
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.widget.Toast
@@ -81,6 +83,23 @@ object ReportExporter {
             val printDate = sdf.format(Date())
 
             var y = 45f
+
+            // Dual Agency Logos (Left: Pemkab Mukomuko / BPBD, Right: Logo BPBD)
+            try {
+                val leftLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_bpbd_mukomuko)
+                if (leftLogo != null) {
+                    val dstLeft = RectF(36f, 30f, 76f, 70f)
+                    canvas.drawBitmap(leftLogo, null, dstLeft, null)
+                }
+            } catch (_: Exception) {}
+
+            try {
+                val rightLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_bpbd_logo)
+                if (rightLogo != null) {
+                    val dstRight = RectF((pageWidth - 76).toFloat(), 30f, (pageWidth - 36).toFloat(), 70f)
+                    canvas.drawBitmap(rightLogo, null, dstRight, null)
+                }
+            } catch (_: Exception) {}
 
             // Official Header
             canvas.drawText("PEMERINTAH KABUPATEN MUKOMUKO", (pageWidth / 2).toFloat(), y, titlePaint)
@@ -302,6 +321,23 @@ object ReportExporter {
         var y = 35f
         val margin = 30f
 
+        // Top Header Dual Logos (Left: Pemkab / BPBD Mukomuko, Right: Logo BPBD)
+        try {
+            val leftLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_bpbd_mukomuko)
+            if (leftLogo != null) {
+                val dstLeft = RectF(margin, 22f, margin + 42f, 64f)
+                canvas.drawBitmap(leftLogo, null, dstLeft, null)
+            }
+        } catch (_: Exception) {}
+
+        try {
+            val rightLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_bpbd_logo)
+            if (rightLogo != null) {
+                val dstRight = RectF(pageWidth - margin - 42f, 22f, pageWidth - margin, 64f)
+                canvas.drawBitmap(rightLogo, null, dstRight, null)
+            }
+        } catch (_: Exception) {}
+
         // Kop Lembaga
         canvas.drawText("PEMERINTAH KABUPATEN MUKOMUKO", pageWidth / 2f, y, titlePaint)
         y += 14f
@@ -338,21 +374,21 @@ object ReportExporter {
         canvas.drawText("Waktu Penerbitan: $currentTimeStr | Mode Overlay Aktif: $activeLayerName", pageWidth / 2f, y, metaPaint)
         y += 18f
 
-        // Kotak Ringkasan Ekstrem Cuaca
+        // Kotak Ringkasan Ekstrem Cuaca (Presisi dalam batas margin halaman A4)
         val maxRain = items.maxByOrNull { it.precipitation }
         val maxTemp = items.maxByOrNull { it.temperature }
         val minTemp = items.minByOrNull { it.temperature }
         val maxWind = items.maxByOrNull { it.windSpeed }
 
-        val summaryRect = android.graphics.RectF(margin, y, pageWidth - margin, y + 42f)
+        val summaryRect = RectF(margin, y, pageWidth - margin, y + 42f)
         canvas.drawRoundRect(summaryRect, 6f, 6f, Paint().apply { color = Color.rgb(254, 242, 242) })
         canvas.drawRoundRect(summaryRect, 6f, 6f, Paint().apply { color = Color.rgb(252, 165, 165); style = Paint.Style.STROKE; strokeWidth = 1f })
 
         canvas.drawText("RINGKASAN PARAMETER METEOROLOGI KABUPATEN MUKOMUKO", margin + 10f, y + 13f, boldTextPaint.apply { color = Color.rgb(153, 27, 27) })
         canvas.drawText("• Curah Hujan Tertinggi: ${maxRain?.districtName ?: "-"} (${maxRain?.precipitation ?: 0.0} mm/j)", margin + 10f, y + 25f, textPaint)
-        canvas.drawText("• Suhu Ekstrem: Tertinggi ${maxTemp?.districtName} (${maxTemp?.temperature ?: 0.0}°C) | Tersejuk ${minTemp?.districtName} (${minTemp?.temperature ?: 0.0}°C)", margin + 10f, y + 36f, textPaint)
-        canvas.drawText("• Kecepatan Angin Maksimal: ${maxWind?.districtName} (${maxWind?.windSpeed?.toInt() ?: 0} km/j - ${maxWind?.windDirection})", margin + 280f, y + 25f, textPaint)
-        canvas.drawText("• Sumber Data: Radar BMKG Fatmawati Bengkulu & Jaringan Sensor Telemetri", margin + 280f, y + 36f, textPaint)
+        canvas.drawText("• Suhu Ekstrem: Max ${maxTemp?.districtName} (${maxTemp?.temperature ?: 0.0}°C) | Min ${minTemp?.districtName} (${minTemp?.temperature ?: 0.0}°C)", margin + 10f, y + 36f, textPaint)
+        canvas.drawText("• Kecepatan Angin Maksimal: ${maxWind?.districtName} (${maxWind?.windSpeed?.toInt() ?: 0} km/j - ${maxWind?.windDirection})", margin + 270f, y + 25f, textPaint)
+        canvas.drawText("• Pemantauan: Siaga Sensor Telemetri & Stasiun BMKG", margin + 270f, y + 36f, textPaint)
 
         y += 54f
 
@@ -425,7 +461,11 @@ object ReportExporter {
         canvas.drawText("1. Wilayah pesisir (Kota Mukomuko, Teramang Jaya, Ipuh, Air Rami) mewaspadai pasang surut air laut dan angin kencang.", margin + 10f, y + 24f, textPaint.apply { color = Color.rgb(120, 53, 15) })
         canvas.drawText("2. Wilayah perbukitan (V Koto, Malin Deman, Selagan Raya) mewaspadai potensi longsor bila curah hujan >15 mm/jam berturut-turut.", margin + 10f, y + 35f, textPaint)
 
-        y += 56f
+        y += 50f
+
+        // Sumber Informasi di bagian bawah konten laporan
+        canvas.drawText("Sumber Data & Informasi: Stasiun Meteorologi BMKG Fatmawati Bengkulu & Jaringan Sensor Telemetri BPBD Mukomuko", margin, y, textPaint.apply { color = Color.rgb(100, 116, 139) })
+        y += 16f
 
         // Tanda tangan Pengesahan Petugas Pusdalops
         val sigX = pageWidth - margin - 180f

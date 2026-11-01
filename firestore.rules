@@ -10,33 +10,52 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // User Preferences
+    // User Preferences & Notification Settings
     match /users/{userId}/preferences/{prefId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
-                    && request.resource.data.userId == userId
-                    && request.resource.data.notificationsEnabled is bool;
+                    && request.resource.data.userId == userId;
       allow update: if isOwner(userId)
                     && request.resource.data.userId == userId;
       allow delete: if isOwner(userId);
     }
 
-    // Community Citizen Weather Reports
+    // Citizen Community Weather Reports
     match /community_reports/{reportId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated()
-                    && request.resource.data.userId == request.auth.uid
-                    && request.resource.data.districtId is string
-                    && request.resource.data.districtName is string
-                    && request.resource.data.weatherCondition is string
-                    && request.resource.data.reporterName is string;
-      allow update: if isAuthenticated() && (
-        // Author updating their own report
-        resource.data.userId == request.auth.uid ||
-        // Other authenticated users upvoting
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes', 'updatedAt'])
-      );
+      allow read: if true;
+      allow create: if request.resource.data.districtName is string
+                    && request.resource.data.weatherCondition is string;
+      allow update: if true;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // Citizen Disaster Reports (SIPAGAR KITA BPBD Mukomuko)
+    match /citizen_disaster_reports/{reportId} {
+      allow read: if true;
+      allow create: if request.resource.data.disasterType is string;
+      allow update: if true;
+      allow delete: if true;
+    }
+
+    // Pusdalops & TRC Official Officers Directory
+    match /officers/{officerId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Cloud Disaster Reports Database Backups
+    match /database_backups/{backupId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Multi-Device Heartbeats & Pings for Real-Time Sync
+    match /device_heartbeats/{deviceId} {
+      allow read, write: if true;
+    }
+
+    match /network_pings/{deviceId} {
+      allow read, write: if true;
     }
   }
 }

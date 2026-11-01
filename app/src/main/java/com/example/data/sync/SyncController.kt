@@ -82,7 +82,14 @@ class SyncController(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val firestore: FirebaseFirestore? by lazy {
-        try { FirebaseFirestore.getInstance() } catch (_: Exception) { null }
+        try {
+            val dbId = "ai-studio-android-cuacamuk-a1e6cb6f-11e7-41ba-90f4-82c9adb67961"
+            try {
+                FirebaseFirestore.getInstance(dbId)
+            } catch (_: Exception) {
+                FirebaseFirestore.getInstance()
+            }
+        } catch (_: Exception) { null }
     }
 
     private val conflictHandler = SyncConflictHandler(context, database)

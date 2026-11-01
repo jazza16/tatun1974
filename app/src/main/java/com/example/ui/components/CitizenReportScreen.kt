@@ -214,11 +214,12 @@ fun CitizenReportScreen(
     val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Formulir, 1 = Peta Sebaran, 2 = Tabel Riwayat, 3 = Kontak Penting, 4 = Konsol Petugas
 
-    // Officer Authentication State (BPBD Mukomuko Petugas Jaga)
+    // Officer & Firebase Authentication Manager (SIPAGAR KITA)
+    val authManager = remember { com.example.data.auth.AuthManager.getInstance(context) }
     val officerAuthManager = remember { OfficerAuthManager(context) }
-    var isOfficerLoggedIn by remember { mutableStateOf(officerAuthManager.isOfficerLoggedIn()) }
-    var officerName by remember { mutableStateOf(officerAuthManager.getOfficerName()) }
-    var officerBadgeId by remember { mutableStateOf(officerAuthManager.getOfficerBadgeId()) }
+    var isOfficerLoggedIn by remember { mutableStateOf(authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn()) }
+    var officerName by remember { mutableStateOf(officerAuthManager.getOfficerName().ifBlank { authManager.getDisplayName() }) }
+    var officerBadgeId by remember { mutableStateOf(officerAuthManager.getOfficerBadgeId().ifBlank { authManager.getBadgeOrUid() }) }
     var officerShift by remember { mutableStateOf(officerAuthManager.getOfficerShift()) }
     var officerRole by remember { mutableStateOf(officerAuthManager.getOfficerRole()) }
 
@@ -427,9 +428,9 @@ fun CitizenReportScreen(
             .background(Color(0xFF15803D)) // Signature Mukomuko green
             .testTag("citizen_report_screen")
     ) {
-        // 1. Top Bar Header (Orange, matching screenshot)
+        // 1. Top Bar Header (Signature Mukomuko Green, clean)
         Surface(
-            color = Color(0xFFEA580C),
+            color = Color(0xFF15803D),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("citizen_report_header")
@@ -455,7 +456,7 @@ fun CitizenReportScreen(
 
                 Column {
                     Text(
-                        text = "Laporan warga",
+                        text = "Laporan Warga",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -465,70 +466,6 @@ fun CitizenReportScreen(
                         fontSize = 10.sp,
                         color = Color.White.copy(alpha = 0.85f)
                     )
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Fast Call 117 Header Button
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color.White.copy(alpha = 0.20f),
-                    modifier = Modifier.clickable {
-                        EmergencyDialer.dial(context, "117")
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhoneInTalk,
-                            contentDescription = "Call 117",
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "117 BPBD",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                // Officer BPBD Access Lock/Status Button
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (isOfficerLoggedIn) Color(0xFF16A34A) else Color.White.copy(alpha = 0.20f),
-                    modifier = Modifier.clickable {
-                        if (isOfficerLoggedIn) {
-                            selectedTab = 4
-                        } else {
-                            Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (isOfficerLoggedIn) Icons.Default.Shield else Icons.Default.Lock,
-                            contentDescription = "Akses Petugas",
-                            tint = if (isOfficerLoggedIn) Color.White else Color(0xFFFBBF24),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (isOfficerLoggedIn) "TRC ON" else "Petugas",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
                 }
             }
         }
@@ -643,14 +580,15 @@ fun CitizenReportScreen(
                     }
                 )
 
-                // Tab 4: Modul Khusus Petugas (Konsol Validasi TRC)
+                // Tab 4: Modul Khusus Petugas (Ruang Kerja Pusdalops & TRC)
                 Tab(
                     selected = selectedTab == 4,
                     onClick = {
-                        if (isOfficerLoggedIn) {
+                        if (authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn()) {
+                            isOfficerLoggedIn = true
                             selectedTab = 4
                         } else {
-                            Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                            showOfficerLoginDialog = true
                         }
                     },
                     text = {
@@ -663,7 +601,7 @@ fun CitizenReportScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Modul Petugas",
+                                text = "Ruang Kerja",
                                 fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 12.sp,
                                 color = if (selectedTab == 4) Color.White else Color.White.copy(alpha = 0.7f)
@@ -1488,94 +1426,6 @@ fun CitizenReportScreen(
                             }
                         }
 
-                        // 2. Cloud Synchronization Card across Android phones
-                        item {
-                            Surface(
-                                color = Color(0xFFFFFBEB),
-                                shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(
-                                        modifier = Modifier.weight(1f),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CloudSync,
-                                            contentDescription = null,
-                                            tint = Color(0xFFD97706),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
-                                            Text(
-                                                text = "Sinkronisasi Cloud Antar-Ponsel",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF92400E)
-                                            )
-                                            Text(
-                                                text = lastSyncStatusMessage ?: "Sinkronkan agar laporan warga dari ponsel lain tampil otomatis.",
-                                                fontSize = 9.sp,
-                                                color = Color(0xFFB45309)
-                                            )
-                                        }
-                                    }
-
-                                    Button(
-                                        onClick = {
-                                            if (!isSyncingOnline) {
-                                                isSyncingOnline = true
-                                                onSyncReports?.invoke { count ->
-                                                    isSyncingOnline = false
-                                                    lastSyncStatusMessage = "Tersinkron: $count laporan diperbarui dari server"
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Sinkronisasi selesai! $count laporan warga terunduh dari server Pusdalops.",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                } ?: run {
-                                                    isSyncingOnline = false
-                                                }
-                                            }
-                                        },
-                                        enabled = !isSyncingOnline,
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                                        modifier = Modifier.height(34.dp)
-                                    ) {
-                                        if (isSyncingOnline) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(14.dp),
-                                                strokeWidth = 2.dp,
-                                                color = Color.White
-                                            )
-                                        } else {
-                                            Icon(
-                                                imageVector = Icons.Default.Sync,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = if (isSyncingOnline) "Menyinkronkan..." else "Sinkronkan",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
                         // 3. Filter by status chips
                         item {
                             Surface(
@@ -1700,26 +1550,26 @@ fun CitizenReportScreen(
                 }
 
                 4 -> {
-                    // TAB 4: KONSOL KHUSUS PETUGAS PUSDALOPS BPBD & TIM TRC
-                    if (isOfficerLoggedIn) {
+                    // TAB 4: RUANG KERJA PETUGAS PUSDALOPS BPBD & TIM TRC
+                    val hasActiveSession = authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn()
+                    if (hasActiveSession) {
                         OfficerDashboardConsoleView(
                             reports = reports,
                             currentDistrict = currentDistrict,
-                            isOfficerLoggedIn = isOfficerLoggedIn,
-                            officerName = officerName,
-                            officerBadgeId = officerBadgeId,
+                            isOfficerLoggedIn = true,
+                            officerName = officerName.ifBlank { authManager.getDisplayName() },
+                            officerBadgeId = officerBadgeId.ifBlank { authManager.getBadgeOrUid() },
                             officerShift = officerShift,
                             officerRole = officerRole,
                             onLoginClick = { showOfficerLoginDialog = true },
                             onLogoutClick = {
+                                authManager.signOut()
                                 officerAuthManager.logoutOfficer()
                                 isOfficerLoggedIn = false
-                                officerName = officerAuthManager.getOfficerName()
-                                officerBadgeId = officerAuthManager.getOfficerBadgeId()
-                                officerShift = officerAuthManager.getOfficerShift()
-                                officerRole = officerAuthManager.getOfficerRole()
+                                officerName = ""
+                                officerBadgeId = ""
                                 selectedTab = 0
-                                Toast.makeText(context, "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Sesi Petugas Ruang Kerja diakhiri", Toast.LENGTH_SHORT).show()
                             },
                             onUpdateReportStatus = onUpdateReportStatus,
                             onUpdateReportStatusAndNotes = onUpdateReportStatusAndNotes,
@@ -1734,7 +1584,7 @@ fun CitizenReportScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clickable {
-                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                                    showOfficerLoginDialog = true
                                 }
                                 .padding(28.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1756,14 +1606,14 @@ fun CitizenReportScreen(
                             }
                             Spacer(modifier = Modifier.height(14.dp))
                             Text(
-                                text = "Modul Khusus Petugas BPBD",
+                                text = "Ruang Kerja Petugas Pusdalops",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 color = Color(0xFF0F172A)
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Konsol validasi status dan triage laporan hanya dapat diakses oleh petugas jaga resmi Pusdalops / TRC dengan PIN keamanan.",
+                                text = "Konsol validasi status dan penanganan bencana hanya dapat diakses oleh petugas resmi yang terautentikasi.",
                                 fontSize = 12.sp,
                                 color = Color(0xFF64748B),
                                 textAlign = TextAlign.Center
@@ -1771,13 +1621,13 @@ fun CitizenReportScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = {
-                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                                    showOfficerLoginDialog = true
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
                             ) {
                                 Icon(imageVector = Icons.Default.Badge, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Masuk dengan PIN Petugas")
+                                Text("Masuk Ruang Kerja")
                             }
                         }
                     }
@@ -1952,13 +1802,16 @@ fun CitizenReportScreen(
         var formValidationError by remember { mutableStateOf("") }
 
         val filteredRoster = roster.filter { off ->
-            val matchesRole = if (selectedRoleFilter == "Semua") true else off.role == selectedRoleFilter
+            val matchesRole = if (selectedRoleFilter == "Semua") true else off.role.contains(selectedRoleFilter, ignoreCase = true)
             val matchesSearch = if (rosterSearchQuery.isBlank()) true else {
                 val q = rosterSearchQuery.trim().lowercase()
                 off.fullName.lowercase().contains(q) || off.nip.lowercase().contains(q) || off.unit.lowercase().contains(q)
             }
             matchesRole && matchesSearch
-        }
+        }.sortedWith(
+            compareBy<OfficerProfile> { OfficerRoles.getRoleRank(it.role) }
+                .thenBy { it.fullName }
+        )
 
         AlertDialog(
             onDismissRequest = {
@@ -2033,10 +1886,13 @@ fun CitizenReportScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             val roleFilters = listOf(
-                                OfficerRoles.OPERATOR to "🎧 Operator (${roster.count { it.role == OfficerRoles.OPERATOR }})",
-                                OfficerRoles.PETUGAS_JAGA to "🛡️ Petugas Jaga (${roster.count { it.role == OfficerRoles.PETUGAS_JAGA }})",
-                                OfficerRoles.PETUGAS_LAPANGAN to "🚜 TRC (${roster.count { it.role == OfficerRoles.PETUGAS_LAPANGAN }})",
-                                "Semua" to "Semua (${roster.size})"
+                                "Semua" to "Semua (${roster.size})",
+                                "Pengawas" to "🏛️ Pengawas (${roster.count { it.role.contains("Pengawas", ignoreCase = true) }})",
+                                "Manajer" to "⭐ Manajer Pusdalops (${roster.count { it.role.contains("Manajer", ignoreCase = true) }})",
+                                "Supervisor" to "🛡️ Supervisor (${roster.count { it.role.contains("Supervisor", ignoreCase = true) }})",
+                                OfficerRoles.OPERATOR to "🎧 Operator (${roster.count { it.role.contains("Operator", ignoreCase = true) }})",
+                                OfficerRoles.PETUGAS_JAGA to "🛡️ Petugas Jaga (${roster.count { it.role.contains("Piket", ignoreCase = true) || it.role.contains("Jaga", ignoreCase = true) }})",
+                                OfficerRoles.PETUGAS_LAPANGAN to "🚜 TRC (${roster.count { it.role.contains("Lapangan", ignoreCase = true) || it.role.contains("Logistik", ignoreCase = true) || it.role.contains("TRC", ignoreCase = true) }})"
                             )
                             items(roleFilters) { (roleKey, label) ->
                                 val isSelected = selectedRoleFilter == roleKey
@@ -2537,6 +2393,10 @@ fun CitizenReportScreen(
                         // 3 Role choices: Operator, Petugas Jaga, Lapangan TRC
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             val roleChoices = listOf(
+                                Triple(OfficerRoles.PENGAWAS, "🏛️ Pengawas BPBD", "Pimpinan pengawasan siaga & koordinasi komando kebijakan bencana"),
+                                Triple(OfficerRoles.MANAJER, "⭐ Manajer Pusdalops PB", "Penanggung jawab koordinasi operasional komando penanggulangan bencana"),
+                                Triple(OfficerRoles.SUPERVISOR, "🛡️ Supervisor BPBD", "Supervisi kesiapsiagaan posko darurat dan pemantauan personil"),
+                                Triple(OfficerRoles.KOORD_ADMINISTRASI, "📋 Koord. Administrasi", "Pengelolaan administrasi data posko dan logistik kebencanaan"),
                                 Triple(OfficerRoles.OPERATOR, "🎧 Operator Pusdalops", "Pusat panggilan 117, radio HT, & data spasial"),
                                 Triple(OfficerRoles.PETUGAS_JAGA, "🛡️ Petugas Jaga Siaga", "Piket Posko Siaga Bencana 24 Jam Pusdalops"),
                                 Triple(OfficerRoles.PETUGAS_LAPANGAN, "🚜 Petugas Lapangan TRC", "Tim Reaksi Cepat evakuasi & kaji cepat darurat")

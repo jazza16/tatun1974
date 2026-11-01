@@ -350,14 +350,14 @@ private fun EmergencyContactCard(
                             if (contact.name.contains("Polres Mukomuko", ignoreCase = true)) {
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFF1E3A8A)
+                                    color = Color(0xFF4A3525)
                                 ) {
                                     Text(
                                         text = "POLISI BERSAMA MASYARAKAT",
                                         fontSize = 8.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                        color = Color(0xFFFFD700),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
                             }

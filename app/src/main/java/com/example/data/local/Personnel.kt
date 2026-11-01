@@ -56,6 +56,13 @@ object OfficialAsnBpbdPersonnel {
             shift = "Pimpinan Siaga"
         ),
         Personnel(
+            name = "HITATUN ARAZAK",
+            nip = "197401282006041006",
+            role = ROLE_MANAJER,
+            unit = "Pusdalops BPBD Kab. Mukomuko",
+            shift = "Manajerial 24 Jam"
+        ),
+        Personnel(
             name = "DESTRI GANDALIA, S.STP.M.AP",
             nip = "198812242010102001",
             role = ROLE_SUPERVISOR,
@@ -68,13 +75,6 @@ object OfficialAsnBpbdPersonnel {
             role = ROLE_KOORD_ADMINISTRASI,
             unit = "BPBD Kab. Mukomuko",
             shift = "Administrasi & Logistik"
-        ),
-        Personnel(
-            name = "HITATUN ARAZAK",
-            nip = "197401282006041006",
-            role = ROLE_MANAJER,
-            unit = "Pusdalops BPBD Kab. Mukomuko",
-            shift = "Manajerial 24 Jam"
         )
     )
 

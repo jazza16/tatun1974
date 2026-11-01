@@ -227,6 +227,7 @@ fun WeatherAppScreen(
     LaunchedEffect(Unit) {
         viewModel.runAutomatedCleanup90Days()
         com.example.data.sync.IntegrityCheckWorker.performCheck(context, database)
+        com.example.service.WeatherReportAggregator.schedulePeriodic(context)
 
         // Request notification permission for Android 13+ so simultaneous disaster alerts are delivered
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -552,70 +553,6 @@ fun WeatherAppScreen(
                                         }
                                     }
 
-                                    // Fitur Manual Sinkronisasi: Cuaca BMKG & Laporan Warga Offline
-                                    item {
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = if (isActuallyDark) Color(0xFF1E293B) else Color(0xFFEFF6FF),
-                                            border = androidx.compose.foundation.BorderStroke(
-                                                1.dp,
-                                                if (isActuallyDark) Color(0xFF334155) else Color(0xFFBFDBFE)
-                                            ),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable {
-                                                    viewModel.syncAllDataOnline(context) { _, msg ->
-                                                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                                .testTag("btn_manual_sync_weather_offline_reports")
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.weight(1f),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Refresh,
-                                                        contentDescription = "Sinkronisasi",
-                                                        tint = OrangePrimary,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Column {
-                                                        Text(
-                                                            text = "Sinkronisasi Manual Cuaca & Laporan",
-                                                            fontSize = 11.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = MaterialTheme.colorScheme.onSurface
-                                                        )
-                                                        Text(
-                                                            text = "Segarkan data BMKG & unggah laporan offline ke server",
-                                                            fontSize = 9.sp,
-                                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
-                                                        )
-                                                    }
-                                                }
-                                                Surface(
-                                                    color = OrangePrimary,
-                                                    shape = RoundedCornerShape(6.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "Sinkron",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = Color.White,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-
                                     // Hero Weather Overview Card with Dynamic Animated Weather Icon
                                     item {
                                         HeroWeatherCard(report = report)
@@ -669,6 +606,14 @@ fun WeatherAppScreen(
                                         WeeklyRainfallBarChartCard(
                                             currentDistrict = currentDistrict,
                                             dailyList = report.daily
+                                        )
+                                    }
+
+                                    // Parameter Meteorologi Harian: Native Compose Canvas Temperature & Rainfall Trend Chart
+                                    item {
+                                        com.example.ui.components.MeteorologySummaryCard(
+                                            report = report,
+                                            isDark = isActuallyDark
                                         )
                                     }
 

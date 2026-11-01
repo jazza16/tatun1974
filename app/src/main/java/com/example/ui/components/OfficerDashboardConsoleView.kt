@@ -391,26 +391,57 @@ fun OfficerDashboardConsoleView(
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     Text(
-                                        text = "PETUGAS DASHBOARD PUSDALOPS",
+                                        text = "RUANG KERJA",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFFBBF24),
                                         letterSpacing = 0.5.sp
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
                                         color = if (isOfficerLoggedIn) Color(0xFF166534) else Color(0xFF7C2D12)
                                     ) {
                                         Text(
-                                            text = if (isOfficerLoggedIn) "SESI RESMI AKTIF" else "TERKUNCI",
-                                            fontSize = 9.sp,
+                                            text = if (isOfficerLoggedIn) "SESI RESMI" else "TERKUNCI",
+                                            fontSize = 8.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
                                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                         )
+                                    }
+                                    if (isOfficerLoggedIn) {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = Color(0xFF1E3A8A),
+                                            modifier = Modifier.clickable {
+                                                rosterList = officerAuthManager.getOfficerRoster()
+                                                showRosterDialog = true
+                                            }
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Badge,
+                                                    contentDescription = "Direktori Personil",
+                                                    tint = Color(0xFF93C5FD),
+                                                    modifier = Modifier.size(10.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(3.dp))
+                                                Text(
+                                                    text = "Direktori Personil Pusdalops & TRC",
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                                 Text(
@@ -1427,13 +1458,16 @@ fun OfficerDashboardConsoleView(
         var formError by remember { mutableStateOf<String?>(null) }
 
         val filteredList = rosterList.filter { off ->
-            val matchesRole = if (selectedRoleTab == "Semua") true else off.role == selectedRoleTab
+            val matchesRole = if (selectedRoleTab == "Semua") true else off.role.contains(selectedRoleTab, ignoreCase = true)
             val matchesSearch = if (rosterSearchQuery.isBlank()) true else {
                 val q = rosterSearchQuery.trim().lowercase()
                 off.fullName.lowercase().contains(q) || off.nip.lowercase().contains(q) || off.unit.lowercase().contains(q)
             }
             matchesRole && matchesSearch
-        }
+        }.sortedWith(
+            compareBy<OfficerProfile> { OfficerRoles.getRoleRank(it.role) }
+                .thenBy { it.fullName }
+        )
 
         AlertDialog(
             onDismissRequest = { showRosterDialog = false },
@@ -1533,10 +1567,12 @@ fun OfficerDashboardConsoleView(
                         ) {
                             val roleTabs = listOf(
                                 "Semua" to "Semua (${rosterList.size})",
+                                "Pengawas" to "Pengawas (${rosterList.count { it.role.contains("Pengawas", ignoreCase = true) }})",
+                                "Manajer" to "Manajer Pusdalops (${rosterList.count { it.role.contains("Manajer", ignoreCase = true) }})",
+                                "Supervisor" to "Supervisor (${rosterList.count { it.role.contains("Supervisor", ignoreCase = true) }})",
                                 OfficerRoles.OPERATOR to "Operator (${rosterList.count { it.role.contains("Operator", ignoreCase = true) }})",
                                 OfficerRoles.PETUGAS_JAGA to "Piket (${rosterList.count { it.role.contains("Piket", ignoreCase = true) || it.role.contains("Jaga", ignoreCase = true) }})",
-                                OfficerRoles.PETUGAS_LAPANGAN to "Staff Logistik (${rosterList.count { it.role.contains("Lapangan", ignoreCase = true) || it.role.contains("Logistik", ignoreCase = true) }})",
-                                OfficerRoles.MANAJER to "Manajer (${rosterList.count { it.role.contains("Manajer", ignoreCase = true) }})"
+                                OfficerRoles.PETUGAS_LAPANGAN to "Staff Logistik (${rosterList.count { it.role.contains("Lapangan", ignoreCase = true) || it.role.contains("Logistik", ignoreCase = true) || it.role.contains("TRC", ignoreCase = true) }})"
                             )
                             items(roleTabs) { (roleKey, label) ->
                                 val isSelected = selectedRoleTab == roleKey
@@ -1821,10 +1857,13 @@ fun OfficerDashboardConsoleView(
 
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             val roleChoices = listOf(
+                                Triple(OfficerRoles.PENGAWAS, "🏛️ Pengawas BPBD", "Pimpinan pengawasan siaga & koordinasi komando kebijakan bencana"),
+                                Triple(OfficerRoles.MANAJER, "⭐ Manajer Pusdalops PB", "Penanggung jawab koordinasi operasional komando penanggulangan bencana"),
+                                Triple(OfficerRoles.SUPERVISOR, "🛡️ Supervisor BPBD", "Supervisi kesiapsiagaan posko darurat dan pemantauan personil"),
+                                Triple(OfficerRoles.KOORD_ADMINISTRASI, "📋 Koord. Administrasi", "Pengelolaan administrasi data posko dan logistik kebencanaan"),
                                 Triple(OfficerRoles.OPERATOR, "🎧 Operator Pusdalops", "Pusat panggilan darurat 117, radio komunikasi, & data spasial"),
                                 Triple(OfficerRoles.PETUGAS_JAGA, "🛡️ Petugas Jaga Siaga / Piket", "Piket Posko Tanggap Darurat Bencana 24 Jam"),
-                                Triple(OfficerRoles.PETUGAS_LAPANGAN, "🚜 Staff Logistik / TRC", "Tim Reaksi Cepat evakuasi, penanganan lapangan & logistik"),
-                                Triple(OfficerRoles.MANAJER, "⭐ Manajer Pusdalops PB", "Penanggung jawab koordinasi komando operasi penanggulangan bencana")
+                                Triple(OfficerRoles.PETUGAS_LAPANGAN, "🚜 Staff Logistik / TRC", "Tim Reaksi Cepat evakuasi, penanganan lapangan & logistik")
                             )
 
                             roleChoices.forEach { (roleVal, roleTitle, roleDesc) ->
@@ -2513,20 +2552,19 @@ private fun OfficerIncidentReportCard(
             .testTag("officer_incident_card_${report.id}")
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            // Header: Title with Badges in a single horizontal line below
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Surface(
                         shape = RoundedCornerShape(4.dp),
                         color = Color(0xFF0F172A)
                     ) {
                         Text(
                             text = "#${report.id.takeLast(7)}",
-                            fontSize = 10.sp,
+                            fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -2537,11 +2575,35 @@ private fun OfficerIncidentReportCard(
                         text = report.disasterType,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = Color(0xFF1E293B),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Badges in a single horizontal row below the title
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = statusBg,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.4f))
+                    ) {
+                        Text(
+                            text = report.status.uppercase(),
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = statusColor,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+
                     // Sync Status Indicator: Green check = Synced, Yellow clock = Pending
                     val isPending = report.additionalNotes.contains("Tertunda", ignoreCase = true) || !report.isGpsVerified
                     val syncIcon = if (isPending) Icons.Default.Schedule else Icons.Default.CheckCircle
@@ -2551,8 +2613,7 @@ private fun OfficerIncidentReportCard(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = syncColor.copy(alpha = 0.12f),
-                        border = androidx.compose.foundation.BorderStroke(0.5.dp, syncColor.copy(alpha = 0.35f)),
-                        modifier = Modifier.padding(end = 6.dp)
+                        border = androidx.compose.foundation.BorderStroke(0.5.dp, syncColor.copy(alpha = 0.35f))
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -2562,12 +2623,12 @@ private fun OfficerIncidentReportCard(
                                 imageVector = syncIcon,
                                 contentDescription = syncText,
                                 tint = syncColor,
-                                modifier = Modifier.size(11.dp)
+                                modifier = Modifier.size(10.dp)
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = syncText,
-                                fontSize = 8.5.sp,
+                                fontSize = 8.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = syncColor
                             )
@@ -2575,16 +2636,15 @@ private fun OfficerIncidentReportCard(
                     }
 
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = statusBg,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.4f))
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFF1F5F9)
                     ) {
                         Text(
-                            text = report.status.uppercase(),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = statusColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            text = report.district,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }

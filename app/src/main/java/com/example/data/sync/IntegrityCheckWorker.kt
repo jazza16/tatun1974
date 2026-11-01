@@ -36,7 +36,14 @@ object IntegrityCheckWorker {
     ): IntegrityCheckResult = withContext(Dispatchers.IO) {
         val weatherDao = database.weatherDao()
         val conflictHandler = SyncConflictHandler(context, database)
-        val firestore = try { FirebaseFirestore.getInstance() } catch (_: Exception) { null }
+        val firestore = try {
+            val dbId = "ai-studio-android-cuacamuk-a1e6cb6f-11e7-41ba-90f4-82c9adb67961"
+            try {
+                FirebaseFirestore.getInstance(dbId)
+            } catch (_: Exception) {
+                FirebaseFirestore.getInstance()
+            }
+        } catch (_: Exception) { null }
 
         val localEntities = weatherDao.getAllCitizenDisasterReportsSync()
         val localChecksum = computeChecksum(localEntities.map { "${it.id}:${it.status}:${it.timestamp}" })
