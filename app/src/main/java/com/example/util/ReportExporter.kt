@@ -30,7 +30,8 @@ object ReportExporter {
     fun exportToPdf(
         context: Context,
         reports: List<CitizenDisasterReport>,
-        officerName: String
+        officerName: String,
+        officerNip: String = ""
     ) {
         if (reports.isEmpty()) {
             Toast.makeText(context, "Tidak ada data laporan untuk diekspor ke PDF", Toast.LENGTH_SHORT).show()
@@ -165,7 +166,8 @@ object ReportExporter {
             y += 36f
             canvas.drawText(officerName, (pageWidth - 190).toFloat(), y, boldPaint)
             y += 10f
-            canvas.drawText("NIP/ID: TRC-MMK-117", (pageWidth - 190).toFloat(), y, textPaint)
+            val nipText = if (officerNip.isNotBlank()) "NIP: $officerNip" else "NIP: 197401282006041006"
+            canvas.drawText(nipText, (pageWidth - 190).toFloat(), y, textPaint)
 
             pdfDoc.finishPage(page)
 

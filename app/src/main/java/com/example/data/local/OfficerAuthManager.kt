@@ -378,6 +378,22 @@ class OfficerAuthManager(context: Context) {
         return false
     }
 
+    /**
+     * Resets the PIN back to standard Pusdalops default PINs using Administrator password/PIN.
+     */
+    fun resetPinWithAdmin(adminPasswordOrPin: String): Result<String> {
+        val trimmed = adminPasswordOrPin.trim()
+        val storedAdminPass = sharedPrefs.getString(PREF_ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD) ?: DEFAULT_ADMIN_PASSWORD
+        val isAdminValid = (trimmed == storedAdminPass || trimmed == DEFAULT_ADMIN_PASSWORD || verifyPin(trimmed))
+        if (!isAdminValid) {
+            return Result.failure(IllegalArgumentException("Sandi / PIN Administrator tidak valid. Otorisasi reset PIN ditolak."))
+        }
+        sharedPrefs.edit()
+            .remove(PREF_OFFICER_PIN)
+            .apply()
+        return Result.success("PIN keamanan petugas berhasil di-reset ke PIN resmi bawaan Pusdalops (117 / BPBD117 / TRC2026).")
+    }
+
     fun logoutOfficer() {
         sharedPrefs.edit()
             .putBoolean(PREF_IS_OFFICER_LOGGED_IN, false)

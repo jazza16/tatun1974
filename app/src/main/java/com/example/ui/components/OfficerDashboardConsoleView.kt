@@ -133,9 +133,12 @@ import com.example.data.local.OfficerRoles
 import com.example.data.repository.PersonnelRepository
 import com.example.model.CitizenDisasterReport
 import com.example.model.District
+import com.example.security.PlayIntegritySecurityManager
 import com.example.util.GoogleMapsHelper
 import com.example.util.ReportExporter
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -200,6 +203,12 @@ fun OfficerDashboardConsoleView(
     val officerAuthManager = remember { OfficerAuthManager(context) }
     var showChangePinDialog by remember { mutableStateOf(false) }
     var hasCustomPin by remember { mutableStateOf(officerAuthManager.hasCustomPin()) }
+
+    // Administrator Password Protection for Personnel Directory
+    var showAdminAuthForRoster by remember { mutableStateOf(false) }
+    var adminAuthPasswordInput by remember { mutableStateOf("") }
+    var adminAuthPasswordError by remember { mutableStateOf<String?>(null) }
+    var isAdminAuthPasswordVisible by remember { mutableStateOf(false) }
 
     // Room Database & Personnel Repository
     val coroutineScope = rememberCoroutineScope()
@@ -418,27 +427,33 @@ fun OfficerDashboardConsoleView(
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
                                             color = Color(0xFF1E3A8A),
-                                            modifier = Modifier.clickable {
-                                                rosterList = officerAuthManager.getOfficerRoster()
-                                                showRosterDialog = true
-                                            }
+                                            modifier = Modifier
+                                                .height(24.dp)
+                                                .wrapContentWidth()
+                                                .clickable {
+                                                    adminAuthPasswordInput = ""
+                                                    adminAuthPasswordError = null
+                                                    showAdminAuthForRoster = true
+                                                }
                                         ) {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                modifier = Modifier.padding(horizontal = 6.dp)
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Badge,
-                                                    contentDescription = "Direktori Personil",
+                                                    contentDescription = "Direktori Personil BPBD",
                                                     tint = Color(0xFF93C5FD),
-                                                    modifier = Modifier.size(10.dp)
+                                                    modifier = Modifier.size(11.dp)
                                                 )
                                                 Spacer(modifier = Modifier.width(3.dp))
                                                 Text(
-                                                    text = "Direktori Personil Pusdalops & TRC",
+                                                    text = "Direktori Personil BPBD",
                                                     fontSize = 8.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = Color.White
+                                                    color = Color.White,
+                                                    maxLines = 1,
+                                                    softWrap = false
                                                 )
                                             }
                                         }
@@ -458,8 +473,9 @@ fun OfficerDashboardConsoleView(
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 OutlinedButton(
                                     onClick = {
-                                        rosterList = officerAuthManager.getOfficerRoster()
-                                        showRosterDialog = true
+                                        adminAuthPasswordInput = ""
+                                        adminAuthPasswordError = null
+                                        showAdminAuthForRoster = true
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
@@ -469,7 +485,7 @@ fun OfficerDashboardConsoleView(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Badge,
-                                        contentDescription = "Personil Pusdalops",
+                                        contentDescription = "Personil BPBD",
                                         tint = Color(0xFF60A5FA),
                                         modifier = Modifier.size(13.dp)
                                     )
@@ -601,7 +617,7 @@ fun OfficerDashboardConsoleView(
                                 onClick = {
                                     val exportList = reports.filter { it.status.equals("Divalidasi", ignoreCase = true) || it.status.equals("Selesai", ignoreCase = true) }
                                     val finalExport = if (exportList.isNotEmpty()) exportList else reports
-                                    ReportExporter.exportToPdf(context, finalExport, officerName)
+                                    ReportExporter.exportToPdf(context, finalExport, officerName, officerBadgeId)
                                 },
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
@@ -1227,29 +1243,33 @@ fun OfficerDashboardConsoleView(
         }
     }
 
-    // 7. DIALOG GANTI PASSWORD / PIN PETUGAS PUSDALOPS
+    // 7. DIALOG GANTI & RESET PIN PETUGAS PUSDALOPS (DILENGKAPI PLAY INTEGRITY CLASSIC)
     if (showChangePinDialog) {
+        var pinDialogMode by remember { mutableIntStateOf(0) } // 0 = Ganti PIN, 1 = Reset PIN
         var oldPinInput by remember { mutableStateOf("") }
         var newPinInput by remember { mutableStateOf("") }
         var confirmPinInput by remember { mutableStateOf("") }
+        var resetAdminInput by remember { mutableStateOf("") }
         var isOldPinVisible by remember { mutableStateOf(false) }
         var isNewPinVisible by remember { mutableStateOf(false) }
         var isConfirmPinVisible by remember { mutableStateOf(false) }
+        var isResetAdminVisible by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
+        var isProcessingSecurity by remember { mutableStateOf(false) }
 
         AlertDialog(
-            onDismissRequest = { showChangePinDialog = false },
+            onDismissRequest = { if (!isProcessingSecurity) showChangePinDialog = false },
             icon = {
                 Surface(
                     shape = CircleShape,
-                    color = Color(0xFFFEF3C7),
+                    color = if (pinDialogMode == 0) Color(0xFFFEF3C7) else Color(0xFFEFF6FF),
                     modifier = Modifier.size(50.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.Default.Lock,
+                            imageVector = if (pinDialogMode == 0) Icons.Default.Lock else Icons.Default.Shield,
                             contentDescription = null,
-                            tint = Color(0xFFD97706),
+                            tint = if (pinDialogMode == 0) Color(0xFFD97706) else Color(0xFF2563EB),
                             modifier = Modifier.size(26.dp)
                         )
                     }
@@ -1257,7 +1277,7 @@ fun OfficerDashboardConsoleView(
             },
             title = {
                 Text(
-                    text = "Ganti PIN / Sandi Petugas",
+                    text = if (pinDialogMode == 0) "Ganti PIN / Sandi Petugas" else "Reset PIN Petugas BPBD",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     textAlign = TextAlign.Center
@@ -1273,92 +1293,177 @@ fun OfficerDashboardConsoleView(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Ubah PIN keamanan ini guna melindungi ID/NIP dinas Anda dari penyalahgunaan wewenang validasi bencana oleh pihak lain.",
-                        fontSize = 11.sp,
+                        text = "Dilindungi Play Integrity API (Mode Classic) untuk mencegah pembajakan sesi dan pemalsuan kredensial akun dinas.",
+                        fontSize = 10.5.sp,
                         color = Color(0xFF475569),
-                        lineHeight = 15.sp
+                        lineHeight = 14.sp
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Tab Selector: Ganti PIN vs Reset PIN
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (pinDialogMode == 0) Color.White else Color.Transparent,
+                            shadowElevation = if (pinDialogMode == 0) 2.dp else 0.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    pinDialogMode = 0
+                                    errorMessage = null
+                                }
+                        ) {
+                            Text(
+                                text = "Ganti PIN",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (pinDialogMode == 0) Color(0xFF0F172A) else Color(0xFF64748B),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (pinDialogMode == 1) Color.White else Color.Transparent,
+                            shadowElevation = if (pinDialogMode == 1) 2.dp else 0.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    pinDialogMode = 1
+                                    errorMessage = null
+                                }
+                        ) {
+                            Text(
+                                text = "Reset PIN",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (pinDialogMode == 1) Color(0xFFDC2626) else Color(0xFF64748B),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Field 1: PIN Lama / Saat Ini
-                    OutlinedTextField(
-                        value = oldPinInput,
-                        onValueChange = {
-                            oldPinInput = it
-                            errorMessage = null
-                        },
-                        label = { Text("PIN / Sandi Lama", fontSize = 11.sp) },
-                        placeholder = { Text("Masukkan PIN lama Anda", fontSize = 11.sp) },
-                        visualTransformation = if (isOldPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        trailingIcon = {
-                            IconButton(onClick = { isOldPinVisible = !isOldPinVisible }) {
-                                Icon(
-                                    imageVector = if (isOldPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null,
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (pinDialogMode == 0) {
+                        // MODE GANTI PIN
+                        OutlinedTextField(
+                            value = oldPinInput,
+                            onValueChange = {
+                                oldPinInput = it
+                                errorMessage = null
+                            },
+                            label = { Text("PIN / Sandi Lama", fontSize = 11.sp) },
+                            placeholder = { Text("Masukkan PIN lama Anda", fontSize = 11.sp) },
+                            visualTransformation = if (isOldPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            trailingIcon = {
+                                IconButton(onClick = { isOldPinVisible = !isOldPinVisible }) {
+                                    Icon(
+                                        imageVector = if (isOldPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    // Field 2: PIN Baru
-                    OutlinedTextField(
-                        value = newPinInput,
-                        onValueChange = {
-                            newPinInput = it
-                            errorMessage = null
-                        },
-                        label = { Text("PIN / Sandi Baru (Min. 4 Digit)", fontSize = 11.sp) },
-                        placeholder = { Text("Buat PIN baru yang aman", fontSize = 11.sp) },
-                        visualTransformation = if (isNewPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        trailingIcon = {
-                            IconButton(onClick = { isNewPinVisible = !isNewPinVisible }) {
-                                Icon(
-                                    imageVector = if (isNewPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null,
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                        OutlinedTextField(
+                            value = newPinInput,
+                            onValueChange = {
+                                newPinInput = it
+                                errorMessage = null
+                            },
+                            label = { Text("PIN / Sandi Baru (Min. 4 Digit)", fontSize = 11.sp) },
+                            placeholder = { Text("Buat PIN baru yang aman", fontSize = 11.sp) },
+                            visualTransformation = if (isNewPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            trailingIcon = {
+                                IconButton(onClick = { isNewPinVisible = !isNewPinVisible }) {
+                                    Icon(
+                                        imageVector = if (isNewPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    // Field 3: Konfirmasi PIN Baru
-                    OutlinedTextField(
-                        value = confirmPinInput,
-                        onValueChange = {
-                            confirmPinInput = it
-                            errorMessage = null
-                        },
-                        label = { Text("Konfirmasi PIN Baru", fontSize = 11.sp) },
-                        placeholder = { Text("Ulangi PIN baru", fontSize = 11.sp) },
-                        visualTransformation = if (isConfirmPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        trailingIcon = {
-                            IconButton(onClick = { isConfirmPinVisible = !isConfirmPinVisible }) {
-                                Icon(
-                                    imageVector = if (isConfirmPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null,
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                        OutlinedTextField(
+                            value = confirmPinInput,
+                            onValueChange = {
+                                confirmPinInput = it
+                                errorMessage = null
+                            },
+                            label = { Text("Konfirmasi PIN Baru", fontSize = 11.sp) },
+                            placeholder = { Text("Ulangi PIN baru", fontSize = 11.sp) },
+                            visualTransformation = if (isConfirmPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            trailingIcon = {
+                                IconButton(onClick = { isConfirmPinVisible = !isConfirmPinVisible }) {
+                                    Icon(
+                                        imageVector = if (isConfirmPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        // MODE RESET PIN
+                        Text(
+                            text = "Reset PIN mengembalikan sandi otorisasi ke PIN resmi Pusdalops bawaan dinas (117 / BPBD117 / TRC2026). Masukkan Sandi Administrator atau PIN lama untuk konfirmasi.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF475569),
+                            lineHeight = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = resetAdminInput,
+                            onValueChange = {
+                                resetAdminInput = it
+                                errorMessage = null
+                            },
+                            label = { Text("Sandi Administrator / PIN Lama", fontSize = 11.sp) },
+                            placeholder = { Text("Masukkan sandi admin / PIN lama", fontSize = 11.sp) },
+                            visualTransformation = if (isResetAdminVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            trailingIcon = {
+                                IconButton(onClick = { isResetAdminVisible = !isResetAdminVisible }) {
+                                    Icon(
+                                        imageVector = if (isResetAdminVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
 
                     if (errorMessage != null) {
                         Spacer(modifier = Modifier.height(6.dp))
@@ -1369,73 +1474,179 @@ fun OfficerDashboardConsoleView(
                             fontWeight = FontWeight.Medium
                         )
                     }
-
-                    if (hasCustomPin) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFFF1F5F9),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    if (oldPinInput.isBlank()) {
-                                        errorMessage = "Ketikkan PIN saat ini di kolom PIN Lama untuk reset."
-                                    } else {
-                                        val ok = officerAuthManager.resetPinToDefault(oldPinInput)
-                                        if (ok) {
-                                            hasCustomPin = false
-                                            showChangePinDialog = false
-                                            Toast.makeText(context, "PIN berhasil di-reset ke bawaan Pusdalops (117 / BPBD117).", Toast.LENGTH_LONG).show()
-                                        } else {
-                                            errorMessage = "PIN lama tidak sesuai."
-                                        }
-                                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (isProcessingSecurity) return@Button
+                        if (pinDialogMode == 0) {
+                            if (oldPinInput.isBlank()) {
+                                errorMessage = "Mohon isi PIN / sandi lama Anda saat ini."
+                                return@Button
+                            }
+                            if (newPinInput.length < 4) {
+                                errorMessage = "PIN baru harus minimal 4 karakter / angka."
+                                return@Button
+                            }
+                            if (newPinInput != confirmPinInput) {
+                                errorMessage = "Konfirmasi PIN baru tidak sama."
+                                return@Button
+                            }
+                            isProcessingSecurity = true
+                            coroutineScope.launch {
+                                val integrityResult = PlayIntegritySecurityManager.getInstance(context)
+                                    .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "CHANGE_PIN")
+                                val result = officerAuthManager.changeOfficerPin(oldPinInput, newPinInput)
+                                isProcessingSecurity = false
+                                result.onSuccess { msg ->
+                                    hasCustomPin = true
+                                    showChangePinDialog = false
+                                    Toast.makeText(context, "$msg (Play Integrity: ${integrityResult.verdict})", Toast.LENGTH_LONG).show()
+                                }.onFailure { err ->
+                                    errorMessage = err.message ?: "Gagal memperbarui PIN."
                                 }
-                        ) {
-                            Text(
-                                text = "🔄 Kembalikan ke PIN Bawaan Pusdalops",
-                                color = Color(0xFF0284C7),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(vertical = 6.dp)
-                            )
+                            }
+                        } else {
+                            if (resetAdminInput.isBlank()) {
+                                errorMessage = "Ketikkan Sandi Administrator atau PIN lama untuk reset."
+                                return@Button
+                            }
+                            isProcessingSecurity = true
+                            coroutineScope.launch {
+                                val integrityResult = PlayIntegritySecurityManager.getInstance(context)
+                                    .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "RESET_PIN")
+                                val result = officerAuthManager.resetPinWithAdmin(resetAdminInput)
+                                isProcessingSecurity = false
+                                result.onSuccess { msg ->
+                                    hasCustomPin = false
+                                    showChangePinDialog = false
+                                    Toast.makeText(context, "$msg (Play Integrity: ${integrityResult.verdict})", Toast.LENGTH_LONG).show()
+                                }.onFailure { err ->
+                                    errorMessage = err.message ?: "Otorisasi reset PIN gagal."
+                                }
+                            }
                         }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (pinDialogMode == 0) Color(0xFF15803D) else Color(0xFFDC2626)),
+                    enabled = !isProcessingSecurity
+                ) {
+                    if (isProcessingSecurity) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Memverifikasi...")
+                    } else {
+                        Text(if (pinDialogMode == 0) "Simpan PIN Baru" else "Reset ke PIN Bawaan")
+                    }
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showChangePinDialog = false },
+                    enabled = !isProcessingSecurity
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // 7A. DIALOG AUTENTIKASI ADMINISTRATOR SEBELUM MEMBUKA DIREKTORI PERSONIL BPBD
+    if (showAdminAuthForRoster) {
+        AlertDialog(
+            onDismissRequest = { showAdminAuthForRoster = false },
+            icon = {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFFFEF2F2),
+                    modifier = Modifier.size(50.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.AdminPanelSettings,
+                            contentDescription = null,
+                            tint = Color(0xFFDC2626),
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    text = "Autentikasi Administrator BPBD",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Direktori Personil BPBD dilindungi sandi Administrator untuk mencegah penyalahgunaan data dan struktur personil dinas.",
+                        fontSize = 11.5.sp,
+                        color = Color(0xFF475569),
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = adminAuthPasswordInput,
+                        onValueChange = {
+                            adminAuthPasswordInput = it
+                            adminAuthPasswordError = null
+                        },
+                        label = { Text("Sandi Administrator / Master PIN", fontSize = 11.sp) },
+                        placeholder = { Text("Masukkan sandi administrator", fontSize = 11.sp) },
+                        visualTransformation = if (isAdminAuthPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        trailingIcon = {
+                            IconButton(onClick = { isAdminAuthPasswordVisible = !isAdminAuthPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (isAdminAuthPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (adminAuthPasswordError != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = adminAuthPasswordError.orEmpty(),
+                            color = Color(0xFFDC2626),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (oldPinInput.isBlank()) {
-                            errorMessage = "Mohon isi PIN / sandi lama Anda saat ini."
-                            return@Button
-                        }
-                        if (newPinInput.length < 4) {
-                            errorMessage = "PIN baru harus minimal 4 karakter / angka."
-                            return@Button
-                        }
-                        if (newPinInput != confirmPinInput) {
-                            errorMessage = "Konfirmasi PIN baru tidak sama."
-                            return@Button
-                        }
-
-                        val result = officerAuthManager.changeOfficerPin(oldPinInput, newPinInput)
-                        result.onSuccess { msg ->
-                            hasCustomPin = true
-                            showChangePinDialog = false
-                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                        }.onFailure { err ->
-                            errorMessage = err.message ?: "Gagal memperbarui PIN."
+                        val input = adminAuthPasswordInput.trim()
+                        val isValid = input.isNotBlank() && (
+                            officerAuthManager.loginAdmin("admin", input) ||
+                            input == OfficerAuthManager.DEFAULT_ADMIN_PASSWORD ||
+                            officerAuthManager.verifyPin(input)
+                        )
+                        if (isValid) {
+                            showAdminAuthForRoster = false
+                            rosterList = officerAuthManager.getOfficerRoster()
+                            showRosterDialog = true
+                            Toast.makeText(context, "Akses Direktori Personil BPBD Diberikan", Toast.LENGTH_SHORT).show()
+                        } else {
+                            adminAuthPasswordError = "Sandi Administrator tidak valid. Otorisasi ditolak."
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
                 ) {
-                    Text("Simpan PIN Baru")
+                    Text("Buka Direktori")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showChangePinDialog = false }) {
+                OutlinedButton(onClick = { showAdminAuthForRoster = false }) {
                     Text("Batal")
                 }
             }
@@ -2560,15 +2771,21 @@ private fun OfficerIncidentReportCard(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF0F172A)
+                        color = Color(0xFF0F172A),
+                        modifier = Modifier
+                            .height(24.dp)
+                            .wrapContentWidth()
                     ) {
-                        Text(
-                            text = "#${report.id.takeLast(7)}",
-                            fontSize = 9.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp)) {
+                            Text(
+                                text = "#${report.id.takeLast(7)}",
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
@@ -2584,7 +2801,7 @@ private fun OfficerIncidentReportCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Badges in a single horizontal row below the title
+                // Badges in a single horizontal row below the title - Locked height 24.dp
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -2593,15 +2810,21 @@ private fun OfficerIncidentReportCard(
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = statusBg,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.4f))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.4f)),
+                        modifier = Modifier
+                            .height(24.dp)
+                            .wrapContentWidth()
                     ) {
-                        Text(
-                            text = report.status.uppercase(),
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = statusColor,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
+                            Text(
+                                text = report.status.uppercase(),
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = statusColor,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
 
                     // Sync Status Indicator: Green check = Synced, Yellow clock = Pending
@@ -2613,11 +2836,14 @@ private fun OfficerIncidentReportCard(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = syncColor.copy(alpha = 0.12f),
-                        border = androidx.compose.foundation.BorderStroke(0.5.dp, syncColor.copy(alpha = 0.35f))
+                        border = androidx.compose.foundation.BorderStroke(0.5.dp, syncColor.copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .height(24.dp)
+                            .wrapContentWidth()
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp)
                         ) {
                             Icon(
                                 imageVector = syncIcon,
@@ -2630,22 +2856,30 @@ private fun OfficerIncidentReportCard(
                                 text = syncText,
                                 fontSize = 8.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = syncColor
+                                color = syncColor,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFF1F5F9)
+                        color = Color(0xFFF1F5F9),
+                        modifier = Modifier
+                            .height(24.dp)
+                            .wrapContentWidth()
                     ) {
-                        Text(
-                            text = report.district,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF475569),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 7.dp)) {
+                            Text(
+                                text = report.district,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF475569),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
             }

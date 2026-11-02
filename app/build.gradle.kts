@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.cuacamukomuko.wmzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 10
-    versionName = "2.0.0"
+    versionCode = 11
+    versionName = "3.4.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -114,6 +114,7 @@ dependencies {
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)
+  implementation(libs.play.integrity)
   implementation(libs.androidx.work.runtime.ktx)
   // implementation(libs.firebase.appcheck.recaptcha)
   // implementation(libs.firebase.appcheck.debug)

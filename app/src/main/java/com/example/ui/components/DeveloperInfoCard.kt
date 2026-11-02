@@ -293,6 +293,9 @@ fun DeveloperInfoCard(
                         "M@mi",
                         "Afid_Reborn",
                         "Ran_NAM",
+                        "Erhy",
+                        "Ande_@inun",
+                        "maz_Mei",
                         "Erick P",
                         "Bg-Fir",
                         "Manda_apak",
@@ -304,7 +307,7 @@ fun DeveloperInfoCard(
                         contributors.chunked(3).forEach { rowGroup ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 rowGroup.forEach { name ->
                                     Surface(
@@ -317,20 +320,20 @@ fun DeveloperInfoCard(
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 3.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.Center
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .size(4.dp)
+                                                    .size(3.5.dp)
                                                     .clip(CircleShape)
                                                     .background(OrangePrimary)
                                             )
                                             Spacer(modifier = Modifier.width(3.dp))
                                             Text(
                                                 text = name,
-                                                fontSize = 9.sp,
+                                                fontSize = 7.8.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = if (isDark) Color(0xFFF1F5F9) else Color(0xFF1E293B),
                                                 maxLines = 1

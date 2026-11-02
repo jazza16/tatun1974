@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.AppDatabase
@@ -444,7 +445,7 @@ fun DatabaseExplorerScreen(
                                 contentPadding = PaddingValues(vertical = 8.dp)
                             ) {
                                 items(filtered, key = { it.id }) { c ->
-                                    val dateStr = SimpleDateFormat("dd/MM HH:mm:ss", Locale.getDefault()).format(Date(c.timestamp))
+                                    val dateStr = SimpleDateFormat("HH:mm:ss • dd MMM yyyy", Locale.getDefault()).format(Date(c.timestamp))
                                     Card(
                                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                         shape = RoundedCornerShape(10.dp),
@@ -454,10 +455,26 @@ fun DatabaseExplorerScreen(
                                         Column(modifier = Modifier.padding(12.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Text(text = "${c.reportId} • ${c.conflictType}", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFDC2626))
-                                                Text(text = dateStr, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                                Text(
+                                                    text = "${c.reportId} • ${c.conflictType.replace('_', ' ')}",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 11.sp,
+                                                    color = Color(0xFFDC2626),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f, fill = false)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = dateStr,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                                    maxLines = 1
+                                                )
                                             }
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(text = "Resolusi: ${c.resolution}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF10B981))

@@ -118,11 +118,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.text.style.TextOverflow
+import com.example.security.PlayIntegritySecurityManager
 import kotlinx.coroutines.launch
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -313,19 +315,20 @@ fun CitizenReportScreen(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap: Bitmap? ->
         if (bitmap != null) {
-            cameraCapturedBitmap = bitmap
+            val optimizedBitmap = com.example.util.ImageUtils.optimizeReportBitmap(bitmap)
+            cameraCapturedBitmap = optimizedBitmap
             photoUriString = null
-            // Save bitmap to cache directory for persistent URI
+            // Save optimized bitmap to cache directory for persistent URI
             try {
                 val file = File(context.cacheDir, "report_photo_${System.currentTimeMillis()}.jpg")
                 FileOutputStream(file).use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                    optimizedBitmap.compress(Bitmap.CompressFormat.JPEG, com.example.util.ImageUtils.OPTIMAL_JPEG_QUALITY, out)
                 }
                 photoUriString = Uri.fromFile(file).toString()
             } catch (_: Exception) {
                 // Keep bitmap in memory
             }
-            Toast.makeText(context, "Foto kamera langsung berhasil diambil dengan stempel GPS!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Foto resolusi optimal tersimpan siap verifikasi Pusdalops!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1316,52 +1319,49 @@ fun CitizenReportScreen(
                                         }
                                     }
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    // Baris Sejajar: Petugas Jaga Aktif, Nama Petugas, Akses Respon
                                     Row(
-                                        modifier = Modifier.weight(1f),
+                                        modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
                                             imageVector = if (isOfficerLoggedIn) Icons.Default.Badge else Icons.Default.Shield,
                                             contentDescription = null,
                                             tint = if (isOfficerLoggedIn) Color(0xFF15803D) else Color(0xFF2563EB),
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column {
-                                            Text(
-                                                text = if (isOfficerLoggedIn) {
-                                                    "PETUGAS JAGA AKTIF: $officerName"
-                                                } else {
-                                                    "Akses Respon: Khusus Petugas BPBD"
-                                                },
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isOfficerLoggedIn) Color(0xFF14532D) else Color(0xFF1E40AF)
-                                            )
-                                            Text(
-                                                text = if (isOfficerLoggedIn) {
-                                                    "ID/NIP: $officerBadgeId • $officerShift"
-                                                } else {
-                                                    "Hanya Petugas Jaga terdaftar yang dapat memvalidasi & mengubah status laporan"
-                                                },
-                                                fontSize = 10.sp,
-                                                color = if (isOfficerLoggedIn) Color(0xFF166534) else Color(0xFF3B82F6)
-                                            )
-                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isOfficerLoggedIn) {
+                                                "Petugas Jaga Aktif: $officerName • Akses Respon: Khusus Petugas BPBD"
+                                            } else {
+                                                "Petugas Jaga: Mode Warga • Akses Respon: Khusus Petugas BPBD"
+                                            },
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isOfficerLoggedIn) Color(0xFF14532D) else Color(0xFF1E40AF),
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
                                     }
 
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // Tombol Konsol Petugas dan PIN berada di bawah tulisan di atas
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
                                         Button(
                                             onClick = {
                                                 if (isOfficerLoggedIn) {
                                                     selectedTab = 4
                                                 } else {
                                                     Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                                                    showOfficerLoginDialog = true
                                                 }
                                             },
                                             shape = RoundedCornerShape(8.dp),
@@ -1369,7 +1369,9 @@ fun CitizenReportScreen(
                                                 containerColor = if (isOfficerLoggedIn) Color(0xFF15803D) else Color(0xFF475569)
                                             ),
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                                            modifier = Modifier.height(34.dp)
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(34.dp)
                                         ) {
                                             Icon(
                                                 imageVector = if (isOfficerLoggedIn) Icons.Default.Shield else Icons.Default.Lock,
@@ -1377,12 +1379,13 @@ fun CitizenReportScreen(
                                                 tint = Color.White,
                                                 modifier = Modifier.size(13.dp)
                                             )
-                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
                                             Text(
                                                 text = "Konsol Petugas",
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color.White
+                                                color = Color.White,
+                                                maxLines = 1
                                             )
                                         }
 
@@ -1397,7 +1400,7 @@ fun CitizenReportScreen(
                                                     officerRole = officerAuthManager.getOfficerRole()
                                                     Toast.makeText(context, "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)", Toast.LENGTH_SHORT).show()
                                                 } else {
-                                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                                                    showOfficerLoginDialog = true
                                                 }
                                             },
                                             shape = RoundedCornerShape(8.dp),
@@ -1405,7 +1408,9 @@ fun CitizenReportScreen(
                                                 containerColor = if (isOfficerLoggedIn) Color(0xFFDC2626) else Color(0xFF2563EB)
                                             ),
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                                            modifier = Modifier.height(34.dp)
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(34.dp)
                                         ) {
                                             Icon(
                                                 imageVector = if (isOfficerLoggedIn) Icons.Default.LockOpen else Icons.Default.Lock,
@@ -1418,7 +1423,8 @@ fun CitizenReportScreen(
                                                 text = if (isOfficerLoggedIn) "Keluar" else "PIN",
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color.White
+                                                color = Color.White,
+                                                maxLines = 1
                                             )
                                         }
                                     }
@@ -2567,6 +2573,10 @@ fun CitizenReportScreen(
                                         officerRole = officerAuthManager.getOfficerRole()
                                         showOfficerLoginDialog = false
                                         selectedTab = 4 // Direct to Konsol Petugas
+                                        coroutineScope.launch {
+                                            PlayIntegritySecurityManager.getInstance(context)
+                                                .verifyCriticalAction("ADMIN-BPBD-MMK-117", "LOGIN_ADMIN")
+                                        }
                                         Toast.makeText(
                                             context,
                                             "Masuk sebagai Administrator Pusdalops PB. Silakan kelola personil di Konsol Petugas.",
@@ -2613,6 +2623,10 @@ fun CitizenReportScreen(
                                 showOfficerLoginDialog = false
                                 onOfficerLoginDismissed?.invoke()
                                 selectedTab = 4 // Direct to Konsol Petugas
+                                coroutineScope.launch {
+                                    PlayIntegritySecurityManager.getInstance(context)
+                                        .verifyCriticalAction(nonNullOfficer.nip, "LOGIN_OFFICER")
+                                }
 
                                 val targetId = pendingStatusReportId
                                 val targetStatus = pendingStatusTarget
@@ -2994,11 +3008,14 @@ private fun CitizenReportItemCard(
                         shape = RoundedCornerShape(20.dp),
                         color = syncColor.copy(alpha = 0.12f),
                         border = androidx.compose.foundation.BorderStroke(0.8.dp, syncColor.copy(alpha = 0.35f)),
-                        modifier = Modifier.padding(end = 6.dp)
+                        modifier = Modifier
+                            .padding(end = 6.dp)
+                            .height(24.dp)
+                            .wrapContentWidth()
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp)
+                            modifier = Modifier.padding(horizontal = 7.dp)
                         ) {
                             Icon(
                                 imageVector = syncIcon,
@@ -3011,7 +3028,9 @@ private fun CitizenReportItemCard(
                                 text = syncText,
                                 fontSize = 8.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = syncColor
+                                color = syncColor,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -3020,10 +3039,13 @@ private fun CitizenReportItemCard(
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = statusContainer,
-                        border = androidx.compose.foundation.BorderStroke(0.8.dp, statusContent.copy(alpha = 0.35f))
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, statusContent.copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .height(24.dp)
+                            .wrapContentWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(modifier = Modifier.size(6.dp).background(statusContent, CircleShape))
@@ -3032,7 +3054,9 @@ private fun CitizenReportItemCard(
                                 text = statusLabel.uppercase(),
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = statusContent
+                                color = statusContent,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }

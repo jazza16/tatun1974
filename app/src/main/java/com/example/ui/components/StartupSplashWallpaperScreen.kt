@@ -438,7 +438,23 @@ fun StartupSplashWallpaperScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Semboyan Penanganan Bencana Indonesia
+                    Text(
+                        text = "BENCANA URUSAN BERSAMA",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 380.dp)
+                            .testTag("text_motto_bencana_urusan_bersama")
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // Section: Telemetry Status & Clean Login Options
                     Column(
@@ -481,7 +497,7 @@ fun StartupSplashWallpaperScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Dual Entry Portal Options
+                        // Dual Entry Portal Options: Locked & Unified GUI
                         Column(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -490,7 +506,7 @@ fun StartupSplashWallpaperScreen(
                                 onClick = onEnterAsGuest,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(44.dp)
+                                    .height(46.dp)
                                     .testTag("btn_enter_guest"),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = OrangePrimary,
@@ -524,14 +540,14 @@ fun StartupSplashWallpaperScreen(
                                 onClick = onLoginAsOfficer,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(42.dp)
+                                    .height(46.dp)
                                     .testTag("btn_enter_officer"),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF15803D),
                                     contentColor = Color.White
                                 ),
                                 shape = RoundedCornerShape(12.dp),
-                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp)
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Shield,
@@ -544,6 +560,13 @@ fun StartupSplashWallpaperScreen(
                                     text = "Login Petugas Pusdalops",
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
                         }

@@ -9,8 +9,8 @@ data class VersionChangelog(
 )
 
 data class AppUpdateState(
-    val currentVersion: String = "2.0.0",
-    val latestVersion: String = "2.0.0",
+    val currentVersion: String = "3.4.0",
+    val latestVersion: String = "3.4.0",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -22,18 +22,36 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "2.0.0",
+    val lastCheckedVersion: String = "3.4.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis resmi v2.0.0 Enterprise Multi-Device Edition terbaru secara permanen.",
-    val packageSizeMb: Float = 18.2f,
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis stabil v3.4.0 Enterprise Security Edition terbaru secara permanen.",
+    val packageSizeMb: Float = 18.6f,
     val isBannerDismissed: Boolean = false,
     val isSimulationActive: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
         VersionChangelog(
-            version = "2.0.0",
-            releaseDate = "31 Oktober 2026",
+            version = "3.4.0",
+            releaseDate = "1 November 2026",
             isCurrent = true,
             isLatest = true,
+            highlights = listOf(
+                "Proteksi Password Administrator Direktori Personil: Pengamanan ganda tombol dan badge 'Direktori Personil BPBD' dengan verifikasi Sandi Administrator sebelum akses struktur personil dinas diberikan.",
+                "Play Integrity API Mode Classic: Menerapkan verifikasi keamanan hardware dan validasi cryptographic nonce anti-replay pada alur login petugas dinas dan penggantian/reset PIN.",
+                "Fitur Terdedikasi Ganti PIN & Reset PIN: Antarmuka tab ganti sandi dinas mandiri dan reset PIN ke konfigurasi bawaan resmi Pusdalops BPBD Mukomuko.",
+                "Semboyan Nasional 'BENCANA URUSAN BERSAMA': Penempatan semboyan penanggulangan bencana nasional dengan tipografi kapital serasi di antara kartu lanskap dan menu login warga/petugas.",
+                "Standardisasi & Penguncian Dimensi Badge: Seluruh badge kartu insiden dan status dikunci dengan tinggi seragam 24dp, lebar dinamis proporsional, dan susunan teks satu baris tanpa terpotong.",
+                "Lampiran NIP Petugas pada Dokumen PDF: Dokumen resmi berita acara ekspor PDF Pusdalops secara otomatis mencantumkan NIP resmi ASN/TRC petugas verifikator.",
+                "Penjajaran Satu Baris Log Konflik Database Explorer: Informasi detail waktu, tanggal, dan bulan pada log konflik sinkronisasi diselaraskan presisi satu baris sejajar dengan judul laporan.",
+                "Optimalisasi Cerdas Resolusi Foto Laporan: Kompresi bitmap presisi 1280px dan JPEG 82% untuk mempercepat sinkronisasi dokumen kelengkapan laporan warga ke petugas.",
+                "Pembaruan Jajaran Kontributor: Penambahan Erhy, Ande_@inun, dan maz_Mei pada daftar kontributor resmi aplikasi SIPAGAR KITA.",
+                "Proteksi Tab Ruang Kerja Khusus Mode Warga: Pengamanan ketat tab Ruang Kerja 'Khusus' pada mode warga guna menghindari penyalahgunaan kredensial dinas."
+            )
+        ),
+        VersionChangelog(
+            version = "2.0.0",
+            releaseDate = "31 Oktober 2026",
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "Enterprise Multi-Device Synchronization: Integrasi SyncController terpusat yang menghubungkan hingga 5 perangkat ponsel piket Pusdalops serentak menerima notifikasi audio-alarm dan getaran seketika saat laporan bencana masuk.",
                 "Presisi Desain Badge & Status: Standardisasi geometri pill mikro-presisi, kontras optimal, border stroke halus, dan indikator status sinkronisasi (Synced vs Pending) pada seluruh kartu laporan bencana.",
