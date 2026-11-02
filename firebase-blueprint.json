@@ -272,6 +272,31 @@
         }
       },
       "required": ["deviceId", "pingTimestamp"]
+    },
+    "DeviceSecuritySession": {
+      "title": "DeviceSecuritySession",
+      "description": "Cryptographically verified Play Integrity session and device trust record for officer login and Ruang Kerja access gating",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "officerNip": { "type": "string" },
+        "officerName": { "type": "string" },
+        "officerRole": { "type": "string" },
+        "integrityToken": { "type": "string" },
+        "tokenHash": { "type": "string" },
+        "classicNonce": { "type": "string" },
+        "verdict": { "type": "string" },
+        "deviceVerdict": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "deviceModel": { "type": "string" },
+        "osVersion": { "type": "string" },
+        "sdkInt": { "type": "integer" },
+        "isVerified": { "type": "boolean" },
+        "accessGranted": { "type": "boolean" },
+        "targetModule": { "type": "string" },
+        "timestamp": { "type": "integer" }
+      },
+      "required": ["sessionId", "officerNip", "accessGranted", "timestamp"]
     }
   },
   "firestore": {
@@ -302,6 +327,10 @@
     "/network_pings/{deviceId}": {
       "schema": "NetworkPing",
       "description": "Firestore latency measurement pings"
+    },
+    "/device_security_sessions/{officerNip}": {
+      "schema": "DeviceSecuritySession",
+      "description": "Play Integrity verified device sessions authorizing access to Ruang Kerja"
     }
   }
 }

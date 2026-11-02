@@ -125,6 +125,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.rememberCoroutineScope
 import com.example.security.PlayIntegritySecurityManager
+import com.example.security.SecurityManager
+import com.example.security.SecurityAccessResult
 import kotlinx.coroutines.launch
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -228,6 +230,24 @@ fun CitizenReportScreen(
     val coroutineScope = rememberCoroutineScope()
     val database = remember { AppDatabase.getInstance(context) }
     val personnelRepository = remember { PersonnelRepository(database.personnelDao()) }
+
+    // Enterprise Play Integrity SecurityManager
+    val securityManager = remember { SecurityManager.getInstance(context) }
+    var securityAccessResult by remember { mutableStateOf<SecurityAccessResult?>(null) }
+    var isVerifyingSecurity by remember { mutableStateOf(false) }
+
+    LaunchedEffect(selectedTab, isOfficerLoggedIn, officerBadgeId) {
+        if (selectedTab == 4 && (authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn())) {
+            val targetNip = officerBadgeId.ifBlank { authManager.getBadgeOrUid() }
+            if (targetNip.isNotBlank()) {
+                isVerifyingSecurity = true
+                val result = securityManager.verifySessionBeforeGrantingRuangKerja(targetNip)
+                securityAccessResult = result
+                isVerifyingSecurity = false
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         personnelRepository.seedDefaultAsnPersonnelIfNeeded()
     }
@@ -591,7 +611,7 @@ fun CitizenReportScreen(
                             isOfficerLoggedIn = true
                             selectedTab = 4
                         } else {
-                            showOfficerLoginDialog = true
+                            Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
                         }
                     },
                     text = {
@@ -1320,37 +1340,53 @@ fun CitizenReportScreen(
                                     }
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
-                                    // Baris Sejajar: Petugas Jaga Aktif, Nama Petugas, Akses Respon
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isOfficerLoggedIn) Icons.Default.Badge else Icons.Default.Shield,
-                                            contentDescription = null,
-                                            tint = if (isOfficerLoggedIn) Color(0xFF15803D) else Color(0xFF2563EB),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = if (isOfficerLoggedIn) {
-                                                "Petugas Jaga Aktif: $officerName • Akses Respon: Khusus Petugas BPBD"
-                                            } else {
-                                                "Petugas Jaga: Mode Warga • Akses Respon: Khusus Petugas BPBD"
-                                            },
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isOfficerLoggedIn) Color(0xFF14532D) else Color(0xFF1E40AF),
-                                            maxLines = 1,
-                                            softWrap = false,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f)
-                                        )
+                                    // Dua Tampilan Berbeda: Sesi Petugas Resmi vs Mode Warga/Tamu
+                                    if (isOfficerLoggedIn) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Badge,
+                                                contentDescription = null,
+                                                tint = Color(0xFF15803D),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Petugas Jaga Aktif: $officerName",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF14532D),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    } else {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = null,
+                                                tint = Color(0xFF2563EB),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Mode Warga / Tamu",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF1E40AF),
+                                                maxLines = 1
+                                            )
+                                        }
                                     }
 
                                     Spacer(modifier = Modifier.height(10.dp))
 
-                                    // Tombol Konsol Petugas dan PIN berada di bawah tulisan di atas
+                                    // Tombol Konsol Petugas dan Tombol Keluar / PIN
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1361,7 +1397,6 @@ fun CitizenReportScreen(
                                                     selectedTab = 4
                                                 } else {
                                                     Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
-                                                    showOfficerLoginDialog = true
                                                 }
                                             },
                                             shape = RoundedCornerShape(8.dp),
@@ -1400,7 +1435,7 @@ fun CitizenReportScreen(
                                                     officerRole = officerAuthManager.getOfficerRole()
                                                     Toast.makeText(context, "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)", Toast.LENGTH_SHORT).show()
                                                 } else {
-                                                    showOfficerLoginDialog = true
+                                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
                                                 }
                                             },
                                             shape = RoundedCornerShape(8.dp),
@@ -1427,6 +1462,30 @@ fun CitizenReportScreen(
                                                 maxLines = 1
                                             )
                                         }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    // Tulisan Akses Respon : Khusus Petugas BPBD berada di bawah tombol
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Shield,
+                                            contentDescription = null,
+                                            tint = Color(0xFF64748B),
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Akses Respon : Khusus Petugas BPBD",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color(0xFF64748B),
+                                            textAlign = TextAlign.Center
+                                        )
                                     }
                                 }
                             }
@@ -1559,38 +1618,129 @@ fun CitizenReportScreen(
                     // TAB 4: RUANG KERJA PETUGAS PUSDALOPS BPBD & TIM TRC
                     val hasActiveSession = authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn()
                     if (hasActiveSession) {
-                        OfficerDashboardConsoleView(
-                            reports = reports,
-                            currentDistrict = currentDistrict,
-                            isOfficerLoggedIn = true,
-                            officerName = officerName.ifBlank { authManager.getDisplayName() },
-                            officerBadgeId = officerBadgeId.ifBlank { authManager.getBadgeOrUid() },
-                            officerShift = officerShift,
-                            officerRole = officerRole,
-                            onLoginClick = { showOfficerLoginDialog = true },
-                            onLogoutClick = {
-                                authManager.signOut()
-                                officerAuthManager.logoutOfficer()
-                                isOfficerLoggedIn = false
-                                officerName = ""
-                                officerBadgeId = ""
-                                selectedTab = 0
-                                Toast.makeText(context, "Sesi Petugas Ruang Kerja diakhiri", Toast.LENGTH_SHORT).show()
-                            },
-                            onUpdateReportStatus = onUpdateReportStatus,
-                            onUpdateReportStatusAndNotes = onUpdateReportStatusAndNotes,
-                            onViewPhoto = { photoUri, rep ->
-                                previewPhotoUri = photoUri
-                                previewPhotoReport = rep
-                            },
-                            onSyncReports = onSyncReports
-                        )
+                        if (isVerifyingSecurity) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(color = Color(0xFF15803D), modifier = Modifier.size(44.dp))
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "Memverifikasi Keamanan Perangkat & Sesi",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = Color(0xFF0F172A)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Memeriksa token Play Integrity Classic dan otorisasi Cloud Firestore backend...",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF64748B),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        } else if (securityAccessResult != null && !securityAccessResult!!.isAuthorized) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(28.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFFEF2F2),
+                                    modifier = Modifier.size(64.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Shield,
+                                            contentDescription = "Akses Dibatasi",
+                                            tint = Color(0xFFDC2626),
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Text(
+                                    text = "Otorisasi Ruang Kerja Ditolak",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = Color(0xFF991B1B)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = securityAccessResult?.message ?: "Perangkat atau sesi tidak memenuhi standar Play Integrity Classic.",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF475569),
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                val targetNip = officerBadgeId.ifBlank { authManager.getBadgeOrUid() }
+                                                isVerifyingSecurity = true
+                                                securityAccessResult = securityManager.verifySessionBeforeGrantingRuangKerja(targetNip)
+                                                isVerifyingSecurity = false
+                                            }
+                                        }
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Cek Ulang")
+                                    }
+                                    Button(
+                                        onClick = {
+                                            showOfficerLoginDialog = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Badge, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Login Ulang")
+                                    }
+                                }
+                            }
+                        } else {
+                            OfficerDashboardConsoleView(
+                                reports = reports,
+                                currentDistrict = currentDistrict,
+                                isOfficerLoggedIn = true,
+                                officerName = officerName.ifBlank { authManager.getDisplayName() },
+                                officerBadgeId = officerBadgeId.ifBlank { authManager.getBadgeOrUid() },
+                                officerShift = officerShift,
+                                officerRole = officerRole,
+                                onLoginClick = { showOfficerLoginDialog = true },
+                                onLogoutClick = {
+                                    authManager.signOut()
+                                    officerAuthManager.logoutOfficer()
+                                    isOfficerLoggedIn = false
+                                    officerName = ""
+                                    officerBadgeId = ""
+                                    securityAccessResult = null
+                                    selectedTab = 0
+                                    Toast.makeText(context, "Sesi Petugas Ruang Kerja diakhiri", Toast.LENGTH_SHORT).show()
+                                },
+                                onUpdateReportStatus = onUpdateReportStatus,
+                                onUpdateReportStatusAndNotes = onUpdateReportStatusAndNotes,
+                                onViewPhoto = { photoUri, rep ->
+                                    previewPhotoUri = photoUri
+                                    previewPhotoReport = rep
+                                },
+                                onSyncReports = onSyncReports
+                            )
+                        }
                     } else {
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clickable {
-                                    showOfficerLoginDialog = true
+                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
                                 }
                                 .padding(28.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1627,7 +1777,7 @@ fun CitizenReportScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = {
-                                    showOfficerLoginDialog = true
+                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
                             ) {
@@ -2574,8 +2724,11 @@ fun CitizenReportScreen(
                                         showOfficerLoginDialog = false
                                         selectedTab = 4 // Direct to Konsol Petugas
                                         coroutineScope.launch {
-                                            PlayIntegritySecurityManager.getInstance(context)
-                                                .verifyCriticalAction("ADMIN-BPBD-MMK-117", "LOGIN_ADMIN")
+                                            securityManager.verifyDeviceAuthenticityDuringLogin(
+                                                officerNip = "ADMIN-BPBD-MMK-117",
+                                                officerName = "Admin Pusdalops PB",
+                                                officerRole = OfficerRoles.MANAJER
+                                            )
                                         }
                                         Toast.makeText(
                                             context,
@@ -2624,8 +2777,11 @@ fun CitizenReportScreen(
                                 onOfficerLoginDismissed?.invoke()
                                 selectedTab = 4 // Direct to Konsol Petugas
                                 coroutineScope.launch {
-                                    PlayIntegritySecurityManager.getInstance(context)
-                                        .verifyCriticalAction(nonNullOfficer.nip, "LOGIN_OFFICER")
+                                    securityManager.verifyDeviceAuthenticityDuringLogin(
+                                        officerNip = nonNullOfficer.nip,
+                                        officerName = nonNullOfficer.fullName,
+                                        officerRole = nonNullOfficer.role
+                                    )
                                 }
 
                                 val targetId = pendingStatusReportId

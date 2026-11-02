@@ -42,6 +42,7 @@ work = "2.10.0"
 credentials = "1.3.0"
 googleid = "1.1.1"
 playIntegrity = "1.4.0"
+playAppUpdate = "2.1.0"
 
 
 [libraries]
@@ -98,6 +99,8 @@ androidx-credentials-play-services = { group = "androidx.credentials", name = "c
 googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 play-integrity = { group = "com.google.android.play", name = "integrity", version.ref = "playIntegrity" }
+play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
+play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }
 
 
 [plugins]

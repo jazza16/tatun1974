@@ -989,13 +989,13 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
 
                     Column {
                         Text(
-                            text = "Ringkasan Rilis v1.5.0",
+                            text = "Panduan Fitur & Rilis v3.4.0",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF78350F)
                         )
                         Text(
-                            text = "Tab Laporan, GIS Spasial & Room Database",
+                            text = "Enterprise Security, Play Integrity & In-App Update",
                             fontSize = 10.sp,
                             color = if (isDark) Color(0xFFFDC5A2) else Color(0xFF92400E)
                         )
@@ -1018,13 +1018,13 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Concise Bullet Points (Narrowed explanations)
+            // Concise Bullet Points
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 listOf(
-                    "• Tab Laporan Warga berdampingan dengan Prakiraan Cuaca",
-                    "• Peluncur kamera langsung dengan GPS watermark",
-                    "• Peta sebaran GIS & layer risiko bencana Mukomuko",
-                    "• Offline Caching Room Database & Tombol Aksi Speed Dial FAB"
+                    "• Play Integrity API Classic: Evaluasi keaslian hardware dan token anti-tamper",
+                    "• Google Play In-App Update: Pustaka pembaruan versi resmi otomatis dalam aplikasi",
+                    "• Multi-Device Sync & Latensi: Deteksi latensi jaringan dan sinkronisasi real-time",
+                    "• Ruang Kerja Terproteksi: Validasi sesi backend Firestore sebelum akses diberikan"
                 ).forEach { summaryPoint ->
                     Text(
                         text = summaryPoint,
@@ -1035,34 +1035,46 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
                 }
             }
 
-            // Expanded Full Details (shown only if tapped)
+            // Expanded Full Details
             AnimatedVisibility(visible = isExpanded) {
                 Column(
                     modifier = Modifier.padding(top = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     FeatureDetailItem(
-                        emoji = "📋",
-                        title = "Tab Laporan Warga Cepat",
-                        desc = "Navigasi cepat pelaporan insiden darurat di tab index 2 memudahkan warga melapor secara langsung.",
+                        emoji = "🛡️",
+                        title = "Keamanan Hardware Play Integrity Classic",
+                        desc = "Memverifikasi integritas fisik perangkat ponsel petugas dengan cryptographic nonce unik guna mencegah pembajakan akun dan rekayasa perangkat lunak.",
                         isDark = isDark
                     )
                     FeatureDetailItem(
-                        emoji = "📷",
-                        title = "Kamera Langsung & Watermark",
-                        desc = "Dokumentasi foto kejadian real-time dengan koordinat satelit GPS akurat.",
+                        emoji = "🔄",
+                        title = "Pembaruan In-App Google Play",
+                        desc = "Mendukung instalasi pembaruan aplikasi secara resmi dan aman langsung dari Google Play Store tanpa memerlukan berkas eksternal.",
+                        isDark = isDark
+                    )
+                    FeatureDetailItem(
+                        emoji = "👥",
+                        title = "Proteksi Data Personil BPBD",
+                        desc = "Struktur personil dan penugasan dinas diamankan oleh verifikasi sandi resmi bertingkat untuk menjaga kerahasiaan identitas operasional.",
+                        isDark = isDark
+                    )
+                    FeatureDetailItem(
+                        emoji = "⚡",
+                        title = "Sinkronisasi Multi-Ponsel & Alarm Siaga",
+                        desc = "Seluruh unit piket posko dan personil TRC lapangan terhubung serempak dengan audio-alarm otomatis saat ada aduan kedaruratan masuk.",
                         isDark = isDark
                     )
                     FeatureDetailItem(
                         emoji = "🗺️",
-                        title = "Peta Spasial GIS & Rawan Bencana",
-                        desc = "Pemetaan sebaran kejadian dan layer zona bahaya tinggi Mukomuko.",
+                        title = "Peta Geospasial GIS & Megathrust WRS-NTWC",
+                        desc = "Pemantauan zona kerentanan bencana pesisir Samudra Hindia Mukomuko dan visualisasi sebaran laporan warga dengan koordinat GPS presisi.",
                         isDark = isDark
                     )
                     FeatureDetailItem(
                         emoji = "📞",
-                        title = "Kontak Darurat Terpadu 117",
-                        desc = "Panggilan cepat ke Call Center 117, Posko BPBD, RSUD, dan Kepolisian.",
+                        title = "Pusat Bantuan & Kontak Penting 117",
+                        desc = "Akses terpadu satu ketukan ke Call Center Bebas Pulsa 117 BPBD, Posko Pusdalops, IGD Rumah Sakit, dan jajaran Polsek se-Mukomuko.",
                         isDark = isDark
                     )
                 }

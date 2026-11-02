@@ -34,9 +34,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.ui.input.pointer.pointerInput
@@ -134,9 +136,12 @@ import com.example.data.repository.PersonnelRepository
 import com.example.model.CitizenDisasterReport
 import com.example.model.District
 import com.example.security.PlayIntegritySecurityManager
+import com.example.security.SecurityManager
+import com.example.security.DeviceSecuritySession
 import com.example.util.GoogleMapsHelper
 import com.example.util.ReportExporter
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -228,6 +233,20 @@ fun OfficerDashboardConsoleView(
     var integrityCheckResult by remember { mutableStateOf<com.example.data.sync.IntegrityCheckResult?>(null) }
     var isCheckingIntegrity by remember { mutableStateOf(false) }
     var editingPersonnel by remember { mutableStateOf<com.example.data.local.Personnel?>(null) }
+
+    // Enterprise Play Integrity SecurityManager & Backend Firestore Sessions
+    val securityManager = remember { SecurityManager.getInstance(context) }
+    var securitySessionsList by remember { mutableStateOf<List<DeviceSecuritySession>>(emptyList()) }
+    var showSecuritySessionsDialog by remember { mutableStateOf(false) }
+
+    DisposableEffect(Unit) {
+        val listener = securityManager.listenSecuritySessionsRealtime { list ->
+            securitySessionsList = list
+        }
+        onDispose {
+            listener?.remove()
+        }
+    }
 
     LaunchedEffect(Unit) {
         personnelRepository.seedDefaultAsnPersonnelIfNeeded()
@@ -383,94 +402,62 @@ fun OfficerDashboardConsoleView(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = CircleShape,
-                                color = if (isOfficerLoggedIn) Color(0xFF16A34A) else Color(0xFFEA580C),
-                                modifier = Modifier.size(38.dp)
+                        Column {
+                            Text(
+                                text = "RUANG KERJA",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFFBBF24),
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = "KONSOL PUSDALOPS",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF94A3B8),
+                                letterSpacing = 0.3.sp
+                            )
+                        }
+
+                        // Badges & Actions: Sesi Resmi sejajar dengan Personil, Ubah PIN, dan Keluar
+                        if (isOfficerLoggedIn) {
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = if (isOfficerLoggedIn) Icons.Default.Shield else Icons.Default.Lock,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                // Badge Sesi Resmi (dikunci tinggi 32.dp sejajar dengan badge Personil)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFF166534).copy(alpha = 0.85f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22C55E)),
+                                    modifier = Modifier.height(32.dp)
                                 ) {
-                                    Text(
-                                        text = "RUANG KERJA",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFFBBF24),
-                                        letterSpacing = 0.5.sp
-                                    )
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = if (isOfficerLoggedIn) Color(0xFF166534) else Color(0xFF7C2D12)
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(horizontal = 8.dp)
                                     ) {
-                                        Text(
-                                            text = if (isOfficerLoggedIn) "SESI RESMI" else "TERKUNCI",
-                                            fontSize = 8.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                    if (isOfficerLoggedIn) {
-                                        Surface(
-                                            shape = RoundedCornerShape(4.dp),
-                                            color = Color(0xFF1E3A8A),
-                                            modifier = Modifier
-                                                .height(24.dp)
-                                                .wrapContentWidth()
-                                                .clickable {
-                                                    adminAuthPasswordInput = ""
-                                                    adminAuthPasswordError = null
-                                                    showAdminAuthForRoster = true
-                                                }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.padding(horizontal = 6.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Badge,
-                                                    contentDescription = "Direktori Personil BPBD",
-                                                    tint = Color(0xFF93C5FD),
-                                                    modifier = Modifier.size(11.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(3.dp))
-                                                Text(
-                                                    text = "Direktori Personil BPBD",
-                                                    fontSize = 8.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color.White,
-                                                    maxLines = 1,
-                                                    softWrap = false
-                                                )
-                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .background(Color(0xFF4ADE80), CircleShape)
+                                            )
+                                            Text(
+                                                text = "Sesi Resmi",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                maxLines = 1
+                                            )
                                         }
                                     }
                                 }
-                                Text(
-                                    text = if (isOfficerLoggedIn) officerName else "Autentikasi Petugas Diperlukan",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White
-                                )
-                            }
-                        }
 
-                        // Actions when logged in: Personil, Ubah PIN & Keluar
-                        if (isOfficerLoggedIn) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                // Badge Personil
                                 OutlinedButton(
                                     onClick = {
                                         adminAuthPasswordInput = ""
@@ -490,9 +477,10 @@ fun OfficerDashboardConsoleView(
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Spacer(modifier = Modifier.width(3.dp))
-                                    Text(text = "Personil", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = "Personil", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
 
+                                // Ubah PIN
                                 OutlinedButton(
                                     onClick = { showChangePinDialog = true },
                                     shape = RoundedCornerShape(8.dp),
@@ -508,9 +496,10 @@ fun OfficerDashboardConsoleView(
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Spacer(modifier = Modifier.width(3.dp))
-                                    Text(text = "Ubah PIN", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = "Ubah PIN", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
 
+                                // Keluar
                                 OutlinedButton(
                                     onClick = onLogoutClick,
                                     shape = RoundedCornerShape(8.dp),
@@ -525,38 +514,135 @@ fun OfficerDashboardConsoleView(
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Spacer(modifier = Modifier.width(3.dp))
-                                    Text(text = "Keluar", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = "Keluar", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
                         } else {
-                            Button(
-                                onClick = onLoginClick,
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.height(34.dp)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Badge,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Verifikasi PIN", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFF7C2D12).copy(alpha = 0.85f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(horizontal = 8.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .background(Color(0xFFEF4444), CircleShape)
+                                            )
+                                            Text(
+                                                text = "Terkunci",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Button(
+                                    onClick = onLoginClick,
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Badge,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(text = "Verifikasi PIN", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                }
                             }
                         }
                     }
 
+                    // Posisi Nama Petugas sejajar di bawah badge dalam card ruang kerja
                     if (isOfficerLoggedIn) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF0F172A).copy(alpha = 0.55f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFF0284C7).copy(alpha = 0.2f),
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = null,
+                                            tint = Color(0xFF38BDF8),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Petugas Jaga Aktif:",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color(0xFF94A3B8)
+                                        )
+                                        Text(
+                                            text = officerName,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    val nipPrefix = if (officerBadgeId.startsWith("TRC", ignoreCase = true)) "Reg TRC" else "NIP"
+                                    Text(
+                                        text = "$nipPrefix: $officerBadgeId • $officerRole • $officerShift • BPBD Kab. Mukomuko",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF64748B),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    } else {
                         Spacer(modifier = Modifier.height(8.dp))
-                        val nipPrefix = if (officerBadgeId.startsWith("TRC", ignoreCase = true)) "Reg TRC" else "NIP"
                         Text(
-                            text = "$nipPrefix: $officerBadgeId • $officerRole • $officerShift • BPBD Kab. Mukomuko",
+                            text = "Autentikasi Petugas Diperlukan • Akses Konsol Khusus Petugas BPBD",
                             fontSize = 10.sp,
                             color = Color(0xFF94A3B8)
                         )
+                    }
 
+                    if (isOfficerLoggedIn) {
                         // Security banner if officer is still using default shared PIN (117 / BPBD117)
                         if (!hasCustomPin) {
                             Spacer(modifier = Modifier.height(8.dp))
@@ -756,6 +842,19 @@ fun OfficerDashboardConsoleView(
                     conflictLogs = conflictLogs,
                     integrityResult = integrityCheckResult,
                     isCheckingIntegrity = isCheckingIntegrity,
+                    securitySessions = securitySessionsList,
+                    onToggleSecurityAccess = { nip, granted ->
+                        coroutineScope.launch {
+                            val ok = securityManager.updateAccessPermission(nip, granted)
+                            if (ok) {
+                                Toast.makeText(
+                                    context,
+                                    "Otorisasi Ruang Kerja NIP $nip ${if (granted) "diaktifkan" else "dinonaktifkan"}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    },
                     onRunIntegrityCheck = {
                         isCheckingIntegrity = true
                         coroutineScope.launch {
@@ -1582,7 +1681,7 @@ fun OfficerDashboardConsoleView(
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Direktori Personil BPBD dilindungi sandi Administrator untuk mencegah penyalahgunaan data dan struktur personil dinas.",
+                        text = "Data Personil BPBD dilindungi sandi Administrator untuk mencegah penyalahgunaan data dan struktur personil dinas.",
                         fontSize = 11.5.sp,
                         color = Color(0xFF475569),
                         lineHeight = 16.sp
@@ -1635,14 +1734,14 @@ fun OfficerDashboardConsoleView(
                             showAdminAuthForRoster = false
                             rosterList = officerAuthManager.getOfficerRoster()
                             showRosterDialog = true
-                            Toast.makeText(context, "Akses Direktori Personil BPBD Diberikan", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Akses Data Personil BPBD Diberikan", Toast.LENGTH_SHORT).show()
                         } else {
                             adminAuthPasswordError = "Sandi Administrator tidak valid. Otorisasi ditolak."
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
                 ) {
-                    Text("Buka Direktori")
+                    Text("Buka Data Personil")
                 }
             },
             dismissButton = {
@@ -3154,6 +3253,8 @@ private fun SyncDiagnosticsSection(
     conflictLogs: List<com.example.data.local.SyncConflictLogEntity>,
     integrityResult: com.example.data.sync.IntegrityCheckResult?,
     isCheckingIntegrity: Boolean,
+    securitySessions: List<DeviceSecuritySession> = emptyList(),
+    onToggleSecurityAccess: (String, Boolean) -> Unit = { _, _ -> },
     onRunIntegrityCheck: () -> Unit,
     onTestPing: () -> Unit,
     onExportConflictLogsCsv: () -> Unit,
@@ -3165,6 +3266,221 @@ private fun SyncDiagnosticsSection(
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // 0. PLAY INTEGRITY CLASSIC BACKEND SECURITY SESSIONS CARD
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier.fillMaxWidth().testTag("card_play_integrity_sessions")
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF15803D).copy(alpha = 0.15f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = null,
+                                    tint = Color(0xFF15803D),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Keamanan Perangkat & Sesi (Play Integrity Classic)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Otorisasi Firestore backend untuk modul Ruang Kerja",
+                                fontSize = 10.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFDCFCE7)
+                    ) {
+                        Text(
+                            text = "${securitySessions.size} Sesi Aktif",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF15803D),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Admin Pusdalops dapat memverifikasi keaslian hardware perangkat dan token integritas kriptografis sebelum memberikan akses modul Ruang Kerja.",
+                    fontSize = 11.sp,
+                    color = Color(0xFF475569)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                if (securitySessions.isEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFF8FAFC),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LockOpen,
+                                contentDescription = null,
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Belum ada sesi Play Integrity tersimpan di backend Firestore.\nPetugas akan divalidasi dan dicatat otomatis saat login.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF64748B),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        securitySessions.forEach { session ->
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (session.accessGranted) Color(0xFFF8FAFC) else Color(0xFFFEF2F2),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (session.accessGranted) Color(0xFFE2E8F0) else Color(0xFFFECACA)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "${session.officerName} (${session.officerRole})",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF0F172A)
+                                            )
+                                            Text(
+                                                text = "NIP: ${session.officerNip} • ${session.deviceModel}",
+                                                fontSize = 10.sp,
+                                                color = Color(0xFF64748B)
+                                            )
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (session.accessGranted) Color(0xFFDCFCE7) else Color(0xFFFEE2E2)
+                                        ) {
+                                            Text(
+                                                text = if (session.accessGranted) "AKSES DIIZINKAN" else "AKSES DICABUT",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (session.accessGranted) Color(0xFF15803D) else Color(0xFFDC2626),
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFFEFF6FF),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "Verdict: ${session.verdict}",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(0xFF1D4ED8)
+                                            )
+                                            Text(
+                                                text = "Nonce: ${session.classicNonce.take(12)}...",
+                                                fontSize = 9.sp,
+                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                color = Color(0xFF475569)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "OS: ${session.osVersion} • Token: ${session.tokenHash.take(16)}...",
+                                            fontSize = 9.sp,
+                                            color = Color(0xFF64748B),
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        Button(
+                                            onClick = {
+                                                onToggleSecurityAccess(session.officerNip, !session.accessGranted)
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (session.accessGranted) Color(0xFFDC2626) else Color(0xFF15803D)
+                                            ),
+                                            shape = RoundedCornerShape(6.dp),
+                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (session.accessGranted) Icons.Default.Lock else Icons.Default.LockOpen,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = if (session.accessGranted) "Cabut Akses" else "Beri Akses",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // 1. LATENCY METRIC CARD
         Card(
             shape = RoundedCornerShape(16.dp),

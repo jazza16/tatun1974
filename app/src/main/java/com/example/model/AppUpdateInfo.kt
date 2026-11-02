@@ -35,12 +35,17 @@ data class AppUpdateState(
             isCurrent = true,
             isLatest = true,
             highlights = listOf(
-                "Proteksi Password Administrator Direktori Personil: Pengamanan ganda tombol dan badge 'Direktori Personil BPBD' dengan verifikasi Sandi Administrator sebelum akses struktur personil dinas diberikan.",
-                "Play Integrity API Mode Classic: Menerapkan verifikasi keamanan hardware dan validasi cryptographic nonce anti-replay pada alur login petugas dinas dan penggantian/reset PIN.",
-                "Fitur Terdedikasi Ganti PIN & Reset PIN: Antarmuka tab ganti sandi dinas mandiri dan reset PIN ke konfigurasi bawaan resmi Pusdalops BPBD Mukomuko.",
+                "Proteksi Password Administrator Data Personil: Pengamanan ganda tombol dan badge 'Data Personil' dengan verifikasi Sandi Administrator resmi sebelum akses struktur personil dinas diberikan.",
+                "Google Play In-App Update Engine: Pustaka resmi Google Play App Update untuk mendeteksi dan menginstal rilis mutakhir secara daring langsung di dalam aplikasi.",
+                "Play Integrity API Mode Classic: Menerapkan verifikasi keamanan hardware dan validasi cryptographic nonce anti-replay pada alur login petugas dinas dan penggantian PIN.",
+                "Transmisi Sesi Keamanan ke Cloud Firestore: Entitas sesi keamanan perangkat dikirimkan ke backend Firestore untuk validasi berlapis sebelum hak akses Ruang Kerja diberikan.",
+                "Pemantauan Real-time Sesi & Hardware Token: Dasbor administrator yang memantau keaslian perangkat petugas yang sedang bertugas secara langsung dengan tombol kontrol akses.",
+                "Tampilan Adaptif Mode Warga & Sesi Petugas: Pemisahan tampilan kartu status menjadi 'Mode Warga / Tamu' saat mode publik aktif dan 'Petugas Jaga Aktif' saat sesi dinas resmi aktif.",
+                "Tata Letak Ergonomis Tombol & Status: Penataan ulang posisi badge 'Sesi Resmi' di bawah judul Ruang Kerja dan pemindahan keterangan akses respon ke bawah tombol konsol.",
+                "Fitur Terdedikasi Ganti PIN & Reset PIN: Antarmuka tab ganti sandi dinas mandiri dan reset PIN ke konfigurasi bawaan resmi terenkripsi Pusdalops BPBD Mukomuko.",
                 "Semboyan Nasional 'BENCANA URUSAN BERSAMA': Penempatan semboyan penanggulangan bencana nasional dengan tipografi kapital serasi di antara kartu lanskap dan menu login warga/petugas.",
                 "Standardisasi & Penguncian Dimensi Badge: Seluruh badge kartu insiden dan status dikunci dengan tinggi seragam 24dp, lebar dinamis proporsional, dan susunan teks satu baris tanpa terpotong.",
-                "Lampiran NIP Petugas pada Dokumen PDF: Dokumen resmi berita acara ekspor PDF Pusdalops secara otomatis mencantumkan NIP resmi ASN/TRC petugas verifikator.",
+                "Lampiran NIP Petugas pada Dokumen PDF: Dokumen resmi berita acara ekspor PDF Pusdalops secara otomatis mencantumkan NIP resmi ASN/TRC petugas verifikator menggantikan ID lama.",
                 "Penjajaran Satu Baris Log Konflik Database Explorer: Informasi detail waktu, tanggal, dan bulan pada log konflik sinkronisasi diselaraskan presisi satu baris sejajar dengan judul laporan.",
                 "Optimalisasi Cerdas Resolusi Foto Laporan: Kompresi bitmap presisi 1280px dan JPEG 82% untuk mempercepat sinkronisasi dokumen kelengkapan laporan warga ke petugas.",
                 "Pembaruan Jajaran Kontributor: Penambahan Erhy, Ande_@inun, dan maz_Mei pada daftar kontributor resmi aplikasi SIPAGAR KITA.",
@@ -88,7 +93,7 @@ data class AppUpdateState(
                 "Akses Langsung Tab Konsol Admin BPBD: Penambahan tab terdedikasi 'Konsol Admin' di bilah navigasi utama dan tombol pintasan di bilah atas aplikasi untuk akses tanpa hambatan.",
                 "Penyimpanan Permanen Room Database: Perbaikan menyeluruh persistensi personil sehingga seluruh data pendaftaran nama petugas tersimpan secara permanen di Room Database SQLite lokal.",
                 "Sinkronisasi Roster Dua Arah Real-time: Integrasi pendaftaran personil baik dari dialog login maupun dashboard konsol dengan pembaruan otomatis tanpa perlu refresh aplikasi.",
-                "Login Administrator Master PIN: Akses cepat login administrator menggunakan PIN Master resmi (117 / BPBD117 / ADMIN117) untuk manajemen personil dan penanganan kedaruratan.",
+                "Login Administrator Master PIN: Akses cepat otorisasi administrator menggunakan verifikasi PIN Master resmi terenkripsi untuk manajemen personil dan penanganan kedaruratan daerah.",
                 "Badge Warna Peran Resmi: Tampilan lencana berkode warna untuk Operator (Biru), Piket Posko (Kuning Amber), Staff Logistik TRC (Hijau), dan Manajer Pusdalops PB (Ungu).",
                 "Timer Keamanan Auto-Logout 30 Menit: Pemutusan sesi dinas petugas otomatis saat tidak aktif selama 30 menit untuk perlindungan data kedaruratan daerah."
             )
@@ -121,7 +126,7 @@ data class AppUpdateState(
                 "Pemanduan Langsung Google Maps & Kontak Pelapor Cepat: Satu ketukan untuk rute navigasi armada darurat ke koordinat satelit GPS pelapor, disertai panggilan telepon dan WhatsApp instan.",
                 "Disposisi Laporan Format Resmi Pusdalops BPBD: Ekspor dan bagikan laporan situasi (Sitrep) lengkap dengan koordinat dan tautan Google Maps langsung ke posko siaga atau grup WhatsApp komando.",
                 "Sinkronisasi Multi-Device Cloud Real-Time: Sinkronisasi instan status laporan (Diproses -> Divalidasi -> Selesai) antar perangkat ponsel warga, relawan, dan posko induk BPBD Kabupaten Mukomuko.",
-                "Autentikasi Keamanan PIN Petugas Jaga: Perlindungan akses perubahan status dan log TRC menggunakan PIN resmi terverifikasi (117 / BPBD117 / TRC2026)."
+                "Autentikasi Keamanan PIN Petugas Jaga: Perlindungan akses perubahan status dan log TRC menggunakan PIN resmi terverifikasi dan terenkripsi dinas."
             )
         ),
         VersionChangelog(

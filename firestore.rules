@@ -57,5 +57,15 @@ service cloud.firestore {
     match /network_pings/{deviceId} {
       allow read, write: if true;
     }
+
+    // Play Integrity Classic Device Security Sessions (Ruang Kerja Access Gating)
+    match /device_security_sessions/{officerNip} {
+      allow read, write: if true;
+    }
+
+    // Play Integrity Security Audit & Validation Failures Logging
+    match /device_security_failures/{failureId} {
+      allow read, write: if true;
+    }
   }
 }

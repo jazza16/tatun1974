@@ -296,16 +296,79 @@ fun StartupSplashWallpaperScreen(
                     )
                 }
             } else {
-                // 3. Main Center Content: Wallpaper Controls, Logo, Titles, Disaster Card & Login Menu
+                // Top Action Bar: Mode Wallpaper HD & Menu Info Lanskap/Bencana
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 44.dp, start = 20.dp, end = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.55f),
+                        shape = RoundedCornerShape(20.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .clickable { isPureWallpaperMode = true }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = "Lihat Wallpaper HD",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Wallpaper HD",
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.55f),
+                        shape = RoundedCornerShape(20.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .clickable { showExplanationSheet = true }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Info Lanskap & Bencana",
+                                tint = OrangePrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Info Lanskap & Bencana",
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // 3. Main Center Content: Symmetrical Proportional Spacing, Logo, Titles, Slogan & Login Menu
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    // Top spacer
-                    Spacer(modifier = Modifier.weight(0.3f))
+                    // Top proportional spacer: berbanding lurus dengan jarak bawah display ponsel
+                    Spacer(modifier = Modifier.weight(1f))
 
                     // Middle Section: Logo with Pulsing Halo and App Branding
                     Column(
@@ -382,63 +445,7 @@ fun StartupSplashWallpaperScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Card Lanskap Alam & Potensi Bencana Mukomuko (with Analisis Bencana trigger)
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A).copy(alpha = 0.82f)),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.45f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .widthIn(max = 380.dp)
-                            .clickable { showExplanationSheet = true }
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Terrain,
-                                        contentDescription = null,
-                                        tint = OrangePrimary,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Lanskap Alam & Potensi Bencana",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                }
-                                Surface(
-                                    color = OrangePrimary,
-                                    shape = RoundedCornerShape(6.dp)
-                                ) {
-                                    Text(
-                                        text = "Analisis",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = OrangeOnPrimary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Samudra Hindia • Tanggul Abrasi Tetrapod • Rambu Tsunami • Armada TRC BPBD",
-                                fontSize = 9.5.sp,
-                                color = Color(0xFFCBD5E1),
-                                lineHeight = 13.sp
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Semboyan Penanganan Bencana Indonesia
                     Text(
@@ -454,7 +461,7 @@ fun StartupSplashWallpaperScreen(
                             .testTag("text_motto_bencana_urusan_bersama")
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Section: Telemetry Status & Clean Login Options
                     Column(
@@ -495,18 +502,18 @@ fun StartupSplashWallpaperScreen(
                             trackColor = Color.White.copy(alpha = 0.2f)
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
                         // Dual Entry Portal Options: Locked & Unified GUI
                         Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Button(
                                 onClick = onEnterAsGuest,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(46.dp)
+                                    .height(48.dp)
                                     .testTag("btn_enter_guest"),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = OrangePrimary,
@@ -524,7 +531,7 @@ fun StartupSplashWallpaperScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Masuk Sebagai Tamu / Warga",
-                                    fontSize = 12.5.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -540,7 +547,7 @@ fun StartupSplashWallpaperScreen(
                                 onClick = onLoginAsOfficer,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(46.dp)
+                                    .height(48.dp)
                                     .testTag("btn_enter_officer"),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF15803D),
@@ -558,7 +565,7 @@ fun StartupSplashWallpaperScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Login Petugas Pusdalops",
-                                    fontSize = 12.5.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -572,8 +579,8 @@ fun StartupSplashWallpaperScreen(
                         }
                     }
 
-                    // Bottom spacer
-                    Spacer(modifier = Modifier.weight(1.1f))
+                    // Bottom proportional spacer: seimbang dengan jarak atas
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
 
