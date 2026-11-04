@@ -33,10 +33,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocationOn
@@ -391,13 +391,13 @@ fun InteractiveDisasterMapSection(
                         // 1. Draw Stylized Coastline (Samudera Hindia on Left, Mukomuko Mainland on Right)
                         val coastlinePath = Path().apply {
                             moveTo(cx - (mapWidth * 0.45f * zoomScale), cy - (mapHeight * 0.55f * zoomScale))
-                            quadraticBezierTo(
+                            quadraticTo(
                                 cx - (mapWidth * 0.35f * zoomScale),
                                 cy - (mapHeight * 0.1f * zoomScale),
                                 cx - (mapWidth * 0.28f * zoomScale),
                                 cy + (mapHeight * 0.15f * zoomScale)
                             )
-                            quadraticBezierTo(
+                            quadraticTo(
                                 cx - (mapWidth * 0.22f * zoomScale),
                                 cy + (mapHeight * 0.35f * zoomScale),
                                 cx - (mapWidth * 0.15f * zoomScale),
@@ -439,7 +439,7 @@ fun InteractiveDisasterMapSection(
                         // 3. Draw River Basin (Air Manjuto)
                         val riverPath = Path().apply {
                             moveTo(cx + (mapWidth * 0.35f * zoomScale), cy - (mapHeight * 0.30f * zoomScale))
-                            quadraticBezierTo(
+                            quadraticTo(
                                 cx + (mapWidth * 0.10f * zoomScale),
                                 cy - (mapHeight * 0.25f * zoomScale),
                                 cx - (mapWidth * 0.32f * zoomScale),
@@ -520,7 +520,7 @@ fun InteractiveDisasterMapSection(
                                             imageVector = when (point.category) {
                                                 DisasterCategory.TSUNAMI -> Icons.Default.Warning
                                                 DisasterCategory.SHELTER -> Icons.Default.Shield
-                                                DisasterCategory.EVACUATION_ROUTE -> Icons.Default.DirectionsRun
+                                                DisasterCategory.EVACUATION_ROUTE -> Icons.AutoMirrored.Filled.DirectionsRun
                                                 DisasterCategory.FLOOD_LANDSLIDE -> Icons.Default.Layers
                                                 else -> Icons.Default.LocationOn
                                             },
@@ -733,7 +733,7 @@ fun InteractiveDisasterMapSection(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.DirectionsRun,
+                                        imageVector = Icons.AutoMirrored.Filled.DirectionsRun,
                                         contentDescription = null,
                                         tint = OrangePrimary,
                                         modifier = Modifier.size(14.dp)

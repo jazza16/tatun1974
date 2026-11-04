@@ -358,6 +358,7 @@ object FirestoreHelper {
                 .get()
                 .addOnSuccessListener { doc ->
                     if (doc != null && doc.exists()) {
+                        @Suppress("UNCHECKED_CAST")
                         val rawList = doc.get("reports") as? List<Map<String, Any?>> ?: emptyList()
                         val restoredReports = rawList.mapNotNull { map ->
                             val id = map["id"] as? String ?: return@mapNotNull null

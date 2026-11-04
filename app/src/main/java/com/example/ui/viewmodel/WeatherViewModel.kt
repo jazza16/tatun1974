@@ -617,7 +617,7 @@ class WeatherViewModel(
             // Check real remote endpoint over HTTP with multi-tier failover
             val remoteInfo = com.example.data.api.AppUpdateRemoteService.fetchLatestRelease()
 
-            val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale("id", "ID"))
+            val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.forLanguageTag("id-ID"))
             val nowTime = sdf.format(java.util.Date())
 
             val installedVer = updatePreferences?.getInstalledVersion() ?: _uiState.value.updateState.currentVersion

@@ -215,6 +215,12 @@ fun OfficerDashboardConsoleView(
     var adminAuthPasswordError by remember { mutableStateOf<String?>(null) }
     var isAdminAuthPasswordVisible by remember { mutableStateOf(false) }
 
+    // Administrator Password Protection for Sync(xHP) Multi-Device Feature
+    var showAdminAuthForSync by remember { mutableStateOf(false) }
+    var adminAuthSyncPasswordInput by remember { mutableStateOf("") }
+    var adminAuthSyncPasswordError by remember { mutableStateOf<String?>(null) }
+    var isAdminAuthSyncPasswordVisible by remember { mutableStateOf(false) }
+
     // Room Database & Personnel Repository
     val coroutineScope = rememberCoroutineScope()
     val database = remember { AppDatabase.getInstance(context) }
@@ -396,178 +402,184 @@ fun OfficerDashboardConsoleView(
                     .testTag("officer_command_bar")
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    // Profile Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    // Profile Header: Title RUANG KERJA persis diatas tengah semua badge
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp)
                     ) {
-                        Column {
-                            Text(
-                                text = "RUANG KERJA",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFFBBF24),
-                                letterSpacing = 0.5.sp
-                            )
-                            Text(
-                                text = "KONSOL PUSDALOPS",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF94A3B8),
-                                letterSpacing = 0.3.sp
-                            )
-                        }
+                        Text(
+                            text = "RUANG KERJA",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFFBBF24),
+                            letterSpacing = 0.5.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "KONSOL PUSDALOPS",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF94A3B8),
+                            letterSpacing = 0.3.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
 
-                        // Badges & Actions: Sesi Resmi sejajar dengan Personil, Ubah PIN, dan Keluar
+                    // Badges & Actions Row (Centered directly below title)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         if (isOfficerLoggedIn) {
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            // Badge Sesi Resmi (dikunci tinggi 32.dp sejajar dengan badge Personil)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF166534).copy(alpha = 0.85f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22C55E)),
+                                modifier = Modifier.height(32.dp)
                             ) {
-                                // Badge Sesi Resmi (dikunci tinggi 32.dp sejajar dengan badge Personil)
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFF166534).copy(alpha = 0.85f),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22C55E)),
-                                    modifier = Modifier.height(32.dp)
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
                                 ) {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier.padding(horizontal = 8.dp)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(6.dp)
-                                                    .background(Color(0xFF4ADE80), CircleShape)
-                                            )
-                                            Text(
-                                                text = "Sesi Resmi",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color.White,
-                                                maxLines = 1
-                                            )
-                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .background(Color(0xFF4ADE80), CircleShape)
+                                        )
+                                        Text(
+                                            text = "Sesi Resmi",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            maxLines = 1
+                                        )
                                     }
-                                }
-
-                                // Badge Personil
-                                OutlinedButton(
-                                    onClick = {
-                                        adminAuthPasswordInput = ""
-                                        adminAuthPasswordError = null
-                                        showAdminAuthForRoster = true
-                                    },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB)),
-                                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Badge,
-                                        contentDescription = "Personil BPBD",
-                                        tint = Color(0xFF60A5FA),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(text = "Personil", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                }
-
-                                // Ubah PIN
-                                OutlinedButton(
-                                    onClick = { showChangePinDialog = true },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFBBF24)),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD97706)),
-                                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = "Ganti PIN",
-                                        tint = Color(0xFFFBBF24),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(text = "Ubah PIN", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                }
-
-                                // Keluar
-                                OutlinedButton(
-                                    onClick = onLogoutClick,
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFCA5A5)),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF991B1B)),
-                                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.LockOpen,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(text = "Keluar", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
-                        } else {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            // Badge Personil
+                            OutlinedButton(
+                                onClick = {
+                                    adminAuthPasswordInput = ""
+                                    adminAuthPasswordError = null
+                                    showAdminAuthForRoster = true
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB)),
+                                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
                             ) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFF7C2D12).copy(alpha = 0.85f),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
-                                    modifier = Modifier.height(32.dp)
+                                Icon(
+                                    imageVector = Icons.Default.Badge,
+                                    contentDescription = "Personil BPBD",
+                                    tint = Color(0xFF60A5FA),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(text = "Personil", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            // Ubah PIN
+                            OutlinedButton(
+                                onClick = { showChangePinDialog = true },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFBBF24)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD97706)),
+                                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Ganti PIN",
+                                    tint = Color(0xFFFBBF24),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(text = "Ubah PIN", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            // Keluar
+                            OutlinedButton(
+                                onClick = onLogoutClick,
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFCA5A5)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF991B1B)),
+                                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LockOpen,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(text = "Keluar", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF7C2D12).copy(alpha = 0.85f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
                                 ) {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier.padding(horizontal = 8.dp)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(6.dp)
-                                                    .background(Color(0xFFEF4444), CircleShape)
-                                            )
-                                            Text(
-                                                text = "Terkunci",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color.White,
-                                                maxLines = 1
-                                            )
-                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .background(Color(0xFFEF4444), CircleShape)
+                                        )
+                                        Text(
+                                            text = "Terkunci",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            maxLines = 1
+                                        )
                                     }
                                 }
+                            }
 
-                                Button(
-                                    onClick = onLoginClick,
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Badge,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = "Verifikasi PIN", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                }
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            Button(
+                                onClick = onLoginClick,
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Badge,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "Verifikasi PIN", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                             }
                         }
                     }
@@ -688,60 +700,68 @@ fun OfficerDashboardConsoleView(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
-                        Spacer(modifier = Modifier.height(8.dp))
-
                         // EXPORT DIGITAL ARCHIVE (PDF & CSV) ACTIONS
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // PDF Export Button
-                            Button(
-                                onClick = {
-                                    val exportList = reports.filter { it.status.equals("Divalidasi", ignoreCase = true) || it.status.equals("Selesai", ignoreCase = true) }
-                                    val finalExport = if (exportList.isNotEmpty()) exportList else reports
-                                    ReportExporter.exportToPdf(context, finalExport, officerName, officerBadgeId)
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(34.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PictureAsPdf,
-                                    contentDescription = "Ekspor PDF",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Ekspor PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
+                        // Hanya bisa muncul dan diakses oleh Manajer, Koord. Administrasi, dan Operator
+                        val isExportAuthorized = isOfficerLoggedIn && (
+                            officerRole.contains("Manajer", ignoreCase = true) ||
+                            officerRole.contains("Administrasi", ignoreCase = true) ||
+                            officerRole.contains("Operator", ignoreCase = true)
+                        )
+                        if (isExportAuthorized) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                            // CSV Export Button
-                            Button(
-                                onClick = {
-                                    ReportExporter.exportToCsv(context, reports)
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(34.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.TableChart,
-                                    contentDescription = "Ekspor CSV",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Ekspor CSV (Excel)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                // PDF Export Button
+                                Button(
+                                    onClick = {
+                                        val exportList = reports.filter { it.status.equals("Divalidasi", ignoreCase = true) || it.status.equals("Selesai", ignoreCase = true) }
+                                        val finalExport = if (exportList.isNotEmpty()) exportList else reports
+                                        ReportExporter.exportToPdf(context, finalExport, officerName, officerBadgeId)
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(34.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PictureAsPdf,
+                                        contentDescription = "Ekspor PDF",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(text = "Ekspor PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                // CSV Export Button
+                                Button(
+                                    onClick = {
+                                        ReportExporter.exportToCsv(context, reports)
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(34.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.TableChart,
+                                        contentDescription = "Ekspor CSV",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(text = "Ekspor CSV (Excel)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -810,7 +830,17 @@ fun OfficerDashboardConsoleView(
                         color = if (isSel) Color.White else Color.Transparent,
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { dashboardSubTab = idx }
+                            .clickable {
+                                if (idx == 3) {
+                                    if (dashboardSubTab != 3) {
+                                        adminAuthSyncPasswordInput = ""
+                                        adminAuthSyncPasswordError = null
+                                        showAdminAuthForSync = true
+                                    }
+                                } else {
+                                    dashboardSubTab = idx
+                                }
+                            }
                     ) {
                         Text(
                             text = label,
@@ -1746,6 +1776,107 @@ fun OfficerDashboardConsoleView(
             },
             dismissButton = {
                 OutlinedButton(onClick = { showAdminAuthForRoster = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // 7A-SYNC. DIALOG AUTENTIKASI ADMINISTRATOR SEBELUM MEMBUKA FITUR SYNC (xHP)
+    if (showAdminAuthForSync) {
+        AlertDialog(
+            onDismissRequest = { showAdminAuthForSync = false },
+            icon = {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFFFEF2F2),
+                    modifier = Modifier.size(50.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.AdminPanelSettings,
+                            contentDescription = null,
+                            tint = Color(0xFFDC2626),
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    text = "Autentikasi Administrator Sync (xHP)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Fitur Sinkronisasi Multi-Perangkat (Sync xHP) dilindungi sandi Administrator agar tidak disalahgunakan atau memicu konflik sinkronisasi yang tidak bertanggung jawab.",
+                        fontSize = 11.5.sp,
+                        color = Color(0xFF475569),
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = adminAuthSyncPasswordInput,
+                        onValueChange = {
+                            adminAuthSyncPasswordInput = it
+                            adminAuthSyncPasswordError = null
+                        },
+                        label = { Text("Sandi Administrator / Master PIN", fontSize = 11.sp) },
+                        placeholder = { Text("Masukkan sandi administrator", fontSize = 11.sp) },
+                        visualTransformation = if (isAdminAuthSyncPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        trailingIcon = {
+                            IconButton(onClick = { isAdminAuthSyncPasswordVisible = !isAdminAuthSyncPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (isAdminAuthSyncPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (adminAuthSyncPasswordError != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = adminAuthSyncPasswordError.orEmpty(),
+                            color = Color(0xFFDC2626),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val input = adminAuthSyncPasswordInput.trim()
+                        val isValid = input.isNotBlank() && (
+                            officerAuthManager.loginAdmin("admin", input) ||
+                            input == OfficerAuthManager.DEFAULT_ADMIN_PASSWORD ||
+                            officerAuthManager.verifyPin(input)
+                        )
+                        if (isValid) {
+                            showAdminAuthForSync = false
+                            dashboardSubTab = 3
+                            Toast.makeText(context, "Akses Sinkronisasi Administrator Diberikan", Toast.LENGTH_SHORT).show()
+                        } else {
+                            adminAuthSyncPasswordError = "Sandi Administrator salah! Akses ditolak."
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+                ) {
+                    Text("Buka Fitur Sync")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showAdminAuthForSync = false }) {
                     Text("Batal")
                 }
             }
@@ -3268,12 +3399,12 @@ private fun SyncDiagnosticsSection(
     ) {
         // 0. PLAY INTEGRITY CLASSIC BACKEND SECURITY SESSIONS CARD
         Card(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
             modifier = Modifier.fillMaxWidth().testTag("card_play_integrity_sessions")
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -3283,55 +3414,56 @@ private fun SyncDiagnosticsSection(
                         Surface(
                             shape = CircleShape,
                             color = Color(0xFF15803D).copy(alpha = 0.15f),
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Shield,
                                     contentDescription = null,
                                     tint = Color(0xFF15803D),
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
                                 text = "Keamanan Perangkat & Sesi (Play Integrity Classic)",
-                                fontSize = 13.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = "Otorisasi Firestore backend untuk modul Ruang Kerja",
-                                fontSize = 10.sp,
+                                fontSize = 9.5.sp,
                                 color = Color(0xFF64748B)
                             )
                         }
                     }
 
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(6.dp),
                         color = Color(0xFFDCFCE7)
                     ) {
                         Text(
                             text = "${securitySessions.size} Sesi Aktif",
-                            fontSize = 9.sp,
+                            fontSize = 8.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF15803D),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Admin Pusdalops dapat memverifikasi keaslian hardware perangkat dan token integritas kriptografis sebelum memberikan akses modul Ruang Kerja.",
-                    fontSize = 11.sp,
-                    color = Color(0xFF475569)
+                    fontSize = 10.sp,
+                    color = Color(0xFF475569),
+                    lineHeight = 14.sp
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 if (securitySessions.isEmpty()) {
                     Surface(

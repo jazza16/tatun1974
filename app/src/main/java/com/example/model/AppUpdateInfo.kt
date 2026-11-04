@@ -9,8 +9,8 @@ data class VersionChangelog(
 )
 
 data class AppUpdateState(
-    val currentVersion: String = "3.4.0",
-    val latestVersion: String = "3.4.0",
+    val currentVersion: String = "3.5.0",
+    val latestVersion: String = "3.5.0",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -22,18 +22,35 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "3.4.0",
+    val lastCheckedVersion: String = "3.5.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis stabil v3.4.0 Enterprise Security Edition terbaru secara permanen.",
-    val packageSizeMb: Float = 18.6f,
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis stabil v3.5.0 Enterprise Edition terbaru secara permanen.",
+    val packageSizeMb: Float = 19.2f,
     val isBannerDismissed: Boolean = false,
     val isSimulationActive: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
         VersionChangelog(
-            version = "3.4.0",
-            releaseDate = "1 November 2026",
+            version = "3.5.0",
+            releaseDate = "3 November 2026",
             isCurrent = true,
             isLatest = true,
+            highlights = listOf(
+                "Proteksi Password Administrator pada Tombol Sync (xHP): Mengamankan sinkronisasi lintas perangkat dengan dialog verifikasi sandi administrator resmi agar tidak disalahgunakan personil yang tidak berwenang.",
+                "Otorisasi Khusus Ekspor PDF & CSV: Tombol Ekspor PDF dan CSV pada Ruang Kerja kini hanya dapat dilihat dan dioperasikan oleh pejabat berwenang (Manajer, Koord. Administrasi, dan Operator).",
+                "Tata Letak Presisi Ruang Kerja: Judul 'RUANG KERJA' dan 'KONSOL PUSDALOPS' dipindahkan persis di atas tengah seluruh badge identitas personil dan status.",
+                "Navigasi Cepat Tab Laporan Warga: Tab 'Laporan Warga' dipindahkan persis di sebelah tab utama 'Hari Ini' untuk kecepatan respon penanganan bencana di lapangan.",
+                "Modul Peta Interaktif 15 Kecamatan (MapActivity): Peta GIS interaktif seluruh 15 kecamatan Kabupaten Mukomuko dengan navigasi zoom, pan, stasiun BMKG, posko siaga TRC, dan integrasi Google Maps.",
+                "Automated Database Index Manager & Maintenance Worker: Pengoptimalan performa Room SQLite melalui penambahan indeks otomatis dan WorkManager berkala untuk operasi SQLite VACUUM & ANALYZE.",
+                "Perapihan Kartu Keamanan Perangkat & Sesi: Pemangkasan ruang kosong berlebih pada kartu Play Integrity Classic untuk tampilan yang jauh lebih ringkas dan estetik.",
+                "Optimalisasi Badge Peringatan Dini Aktif: Dimensi dan ukuran font badge peringatan dini diatur proporsional di sisi kartu judul tanpa bertumpuk atau melebar.",
+                "Integrasi Nama Aplikasi SIPAGAR KITA & Info Lanskap: Penempatan nama aplikasi resmi SIPAGAR KITA di atas judul Pusdalops halaman login utama, serta pemindahan Wallpaper HD & Info Lanskap ke info aplikasi pasca-login."
+            )
+        ),
+        VersionChangelog(
+            version = "3.4.0",
+            releaseDate = "1 November 2026",
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "Proteksi Password Administrator Data Personil: Pengamanan ganda tombol dan badge 'Data Personil' dengan verifikasi Sandi Administrator resmi sebelum akses struktur personil dinas diberikan.",
                 "Google Play In-App Update Engine: Pustaka resmi Google Play App Update untuk mendeteksi dan menginstal rilis mutakhir secara daring langsung di dalam aplikasi.",

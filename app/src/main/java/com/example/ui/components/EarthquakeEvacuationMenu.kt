@@ -45,8 +45,8 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Surfing
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -326,7 +326,7 @@ private fun EvacuationHeaderCard(
                             .testTag("btn_toggle_emergency_whistle")
                     ) {
                         Icon(
-                            imageVector = if (isWhistleActive) Icons.Default.VolumeUp else Icons.Default.Campaign,
+                            imageVector = if (isWhistleActive) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.Campaign,
                             contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(16.dp)

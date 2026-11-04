@@ -30,8 +30,8 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.DirectionsBoat
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Surfing
 import androidx.compose.material.icons.filled.Waves
@@ -156,7 +156,7 @@ fun TidalInformationCard(
                     modifier = Modifier.height(32.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.MenuBook,
+                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
                         contentDescription = "Panduan",
                         tint = Color(0xFFFBBF24),
                         modifier = Modifier.size(13.dp)

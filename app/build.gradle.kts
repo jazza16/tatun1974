@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.cuacamukomuko.wmzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 11
-    versionName = "3.4.0"
+    versionCode = 12
+    versionName = "3.5.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

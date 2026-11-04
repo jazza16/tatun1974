@@ -228,6 +228,8 @@ fun WeatherAppScreen(
         viewModel.runAutomatedCleanup90Days()
         com.example.data.sync.IntegrityCheckWorker.performCheck(context, database)
         com.example.service.WeatherReportAggregator.schedulePeriodic(context)
+        com.example.data.sync.DatabaseMaintenanceWorker.schedule(context)
+        com.example.data.local.DatabaseIndexManager.ensureIndexes(database)
 
         // Request notification permission for Android 13+ so simultaneous disaster alerts are delivered
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -639,7 +641,34 @@ fun WeatherAppScreen(
                         }
 
                         1 -> {
-                            // Tab 1: Prakiraan Cuaca
+                            // Tab 1: Laporan Warga Bencana (Formulir, Peta GIS Spasial, Tabel Riwayat, Kontak Penting) - Moved directly next to Hari Ini!
+                            CitizenReportScreen(
+                                reports = citizenDisasterReports,
+                                currentDistrict = currentDistrict,
+                                onSubmitReport = { report ->
+                                    viewModel.submitCitizenDisasterReport(report)
+                                },
+                                onUpdateReportStatus = { id, status ->
+                                    viewModel.updateCitizenReportStatus(id, status)
+                                },
+                                onUpdateReportStatusAndNotes = { id, status, notes ->
+                                    viewModel.updateCitizenReportStatusAndNotes(id, status, notes)
+                                },
+                                onSyncReports = { onComplete ->
+                                    viewModel.syncCitizenDisasterReportsOnline(onComplete)
+                                },
+                                initialShowOfficerLogin = pendingOfficerLoginPrompt,
+                                onOfficerLoginDismissed = {
+                                    pendingOfficerLoginPrompt = false
+                                },
+                                onBackClick = {
+                                    viewModel.selectTab(0)
+                                }
+                            )
+                        }
+
+                        2 -> {
+                            // Tab 2: Prakiraan Cuaca
                             val report = uiState.report
                             if (report != null) {
                                 LazyColumn(
@@ -671,33 +700,6 @@ fun WeatherAppScreen(
                                     }
                                 }
                             }
-                        }
-
-                        2 -> {
-                            // Tab 2: Laporan Warga Bencana (Formulir, Peta GIS Spasial, Tabel Riwayat, Kontak Penting) - Moved next to Prakiraan Cuaca!
-                            CitizenReportScreen(
-                                reports = citizenDisasterReports,
-                                currentDistrict = currentDistrict,
-                                onSubmitReport = { report ->
-                                    viewModel.submitCitizenDisasterReport(report)
-                                },
-                                onUpdateReportStatus = { id, status ->
-                                    viewModel.updateCitizenReportStatus(id, status)
-                                },
-                                onUpdateReportStatusAndNotes = { id, status, notes ->
-                                    viewModel.updateCitizenReportStatusAndNotes(id, status, notes)
-                                },
-                                onSyncReports = { onComplete ->
-                                    viewModel.syncCitizenDisasterReportsOnline(onComplete)
-                                },
-                                initialShowOfficerLogin = pendingOfficerLoginPrompt,
-                                onOfficerLoginDismissed = {
-                                    pendingOfficerLoginPrompt = false
-                                },
-                                onBackClick = {
-                                    viewModel.selectTab(0)
-                                }
-                            )
                         }
 
                         3 -> {
@@ -891,11 +893,11 @@ fun WeatherAppScreen(
             onToggleExpand = { isQuickActionsFabExpanded = !isQuickActionsFabExpanded },
             onSelectCitizenReport = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(2)
+                viewModel.selectTab(1)
             },
             onSelectForecast = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(1)
+                viewModel.selectTab(2)
             },
             onSelectMaritimeGuide = {
                 isQuickActionsFabExpanded = false
@@ -1127,7 +1129,7 @@ fun WeatherAppScreen(
         onLoginAsOfficer = {
             viewModel.dismissStartupWallpaper()
             pendingOfficerLoginPrompt = true
-            viewModel.selectTab(2) // Jump directly to Laporan Warga & Portal Konsol Petugas Pusdalops
+            viewModel.selectTab(1) // Jump directly to Laporan Warga & Portal Konsol Petugas Pusdalops
         }
     )
 }

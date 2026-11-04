@@ -11,53 +11,53 @@ import kotlin.math.sqrt
 
 @JsonClass(generateAdapter = true)
 data class BmkgAutoGempaResponse(
-    @Json(name = "Infogempa")
+    @param:Json(name = "Infogempa")
     val infoGempa: BmkgInfoGempaContainer?
 )
 
 @JsonClass(generateAdapter = true)
 data class BmkgRecentGempaResponse(
-    @Json(name = "Infogempa")
+    @param:Json(name = "Infogempa")
     val infoGempa: BmkgRecentGempaContainer?
 )
 
 @JsonClass(generateAdapter = true)
 data class BmkgInfoGempaContainer(
-    @Json(name = "gempa")
+    @param:Json(name = "gempa")
     val gempa: BmkgGempaRaw?
 )
 
 @JsonClass(generateAdapter = true)
 data class BmkgRecentGempaContainer(
-    @Json(name = "gempa")
+    @param:Json(name = "gempa")
     val gempaList: List<BmkgGempaRaw>?
 )
 
 @JsonClass(generateAdapter = true)
 data class BmkgGempaRaw(
-    @Json(name = "Tanggal")
+    @param:Json(name = "Tanggal")
     val tanggal: String? = null,
-    @Json(name = "Jam")
+    @param:Json(name = "Jam")
     val jam: String? = null,
-    @Json(name = "DateTime")
+    @param:Json(name = "DateTime")
     val dateTime: String? = null,
-    @Json(name = "Coordinates")
+    @param:Json(name = "Coordinates")
     val coordinates: String? = null,
-    @Json(name = "Lintang")
+    @param:Json(name = "Lintang")
     val lintang: String? = null,
-    @Json(name = "Bujur")
+    @param:Json(name = "Bujur")
     val bujur: String? = null,
-    @Json(name = "Magnitude")
+    @param:Json(name = "Magnitude")
     val magnitude: String? = null,
-    @Json(name = "Kedalaman")
+    @param:Json(name = "Kedalaman")
     val kedalaman: String? = null,
-    @Json(name = "Wilayah")
+    @param:Json(name = "Wilayah")
     val wilayah: String? = null,
-    @Json(name = "Potensi")
+    @param:Json(name = "Potensi")
     val potensi: String? = null,
-    @Json(name = "Dirasakan")
+    @param:Json(name = "Dirasakan")
     val dirasakan: String? = null,
-    @Json(name = "Shakemap")
+    @param:Json(name = "Shakemap")
     val shakemap: String? = null
 )
 

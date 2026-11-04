@@ -178,18 +178,20 @@ fun EmergencyWarningPopupDialog(
                             ) {
                                 Text(
                                     text = "PERINGATAN DINI AKTIF",
-                                    fontSize = 10.sp,
+                                    fontSize = 8.5.sp,
                                     fontWeight = FontWeight.Black,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "SIPAGAR KITA • BPBD MUKOMUKO",
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = OrangePrimary
+                                color = OrangePrimary,
+                                maxLines = 1
                             )
                         }
                     }
@@ -227,17 +229,19 @@ fun EmergencyWarningPopupDialog(
                 )
 
                 // 1. Gempa Bumi BMKG Section (if present & significant)
-                if (isCriticalEq && latestEarthquake != null) {
-                    WarningCardItem(
-                        icon = Icons.Default.Vibration,
-                        iconTint = Color(0xFFDC2626),
-                        category = "GEMPA BUMI WRS-NTWC BMKG",
-                        headline = "M ${latestEarthquake.magnitude} • Kedalaman ${latestEarthquake.depth}",
-                        detail = "${latestEarthquake.region} (${latestEarthquake.timeWib} WIB). ${latestEarthquake.potentialTsunami}",
-                        badgeText = if (latestEarthquake.isNearMukomuko) "DEKAT MUKOMUKO" else "BMKG TERKINI",
-                        isDark = isDark
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
+                if (isCriticalEq) {
+                    latestEarthquake?.let { eq ->
+                        WarningCardItem(
+                            icon = Icons.Default.Vibration,
+                            iconTint = Color(0xFFDC2626),
+                            category = "GEMPA BUMI WRS-NTWC BMKG",
+                            headline = "M ${eq.magnitude} • Kedalaman ${eq.depth}",
+                            detail = "${eq.region} (${eq.timeWib} WIB). ${eq.potentialTsunami}",
+                            badgeText = if (eq.isNearMukomuko) "DEKAT MUKOMUKO" else "BMKG TERKINI",
+                            isDark = isDark
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
                 }
 
                 // 2. Cuaca Buruk / Ekstrem Section
@@ -255,17 +259,19 @@ fun EmergencyWarningPopupDialog(
                 }
 
                 // 3. Gelombang Tinggi Samudra Hindia Section
-                if (isHighWave && marineWeather != null) {
-                    WarningCardItem(
-                        icon = Icons.Default.Surfing,
-                        iconTint = Color(0xFF0284C7),
-                        category = "MARITIM & PESISIR PANTAI",
-                        headline = "Tinggi Gelombang ${marineWeather.waveHeight} Meter (${marineWeather.seaCondition})",
-                        detail = "${marineWeather.fishermanSafety}. Himbauan nelayan: ${marineWeather.fishermanAdvice}",
-                        badgeText = "WASPADA GELOMBANG",
-                        isDark = isDark
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
+                if (isHighWave) {
+                    marineWeather?.let { wave ->
+                        WarningCardItem(
+                            icon = Icons.Default.Surfing,
+                            iconTint = Color(0xFF0284C7),
+                            category = "MARITIM & PESISIR PANTAI",
+                            headline = "Tinggi Gelombang ${wave.waveHeight} Meter (${wave.seaCondition})",
+                            detail = "${wave.fishermanSafety}. Himbauan nelayan: ${wave.fishermanAdvice}",
+                            badgeText = "WASPADA GELOMBANG",
+                            isDark = isDark
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
                 }
 
                 // 4. Detailed Early Warnings list
@@ -431,22 +437,27 @@ private fun WarningCardItem(
                 ) {
                     Text(
                         text = category,
-                        fontSize = 10.sp,
+                        fontSize = 9.5.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = iconTint,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.4.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = iconTint,
-                        border = androidx.compose.foundation.BorderStroke(0.8.dp, Color.White.copy(alpha = 0.4f))
+                        border = androidx.compose.foundation.BorderStroke(0.6.dp, Color.White.copy(alpha = 0.4f))
                     ) {
                         Text(
                             text = badgeText,
-                            fontSize = 8.5.sp,
+                            fontSize = 7.5.sp,
                             fontWeight = FontWeight.Black,
                             color = Color.White,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                         )
                     }
                 }

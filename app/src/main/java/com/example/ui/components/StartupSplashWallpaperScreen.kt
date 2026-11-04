@@ -296,69 +296,6 @@ fun StartupSplashWallpaperScreen(
                     )
                 }
             } else {
-                // Top Action Bar: Mode Wallpaper HD & Menu Info Lanskap/Bencana
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 44.dp, start = 20.dp, end = 20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        color = Color.Black.copy(alpha = 0.55f),
-                        shape = RoundedCornerShape(20.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .clickable { isPureWallpaperMode = true }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Visibility,
-                                contentDescription = "Lihat Wallpaper HD",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Wallpaper HD",
-                                fontSize = 11.sp,
-                                color = Color.White,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-
-                    Surface(
-                        color = Color.Black.copy(alpha = 0.55f),
-                        shape = RoundedCornerShape(20.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.6f))
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .clickable { showExplanationSheet = true }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Info Lanskap & Bencana",
-                                tint = OrangePrimary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Info Lanskap & Bencana",
-                                fontSize = 11.sp,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
                 // 3. Main Center Content: Symmetrical Proportional Spacing, Logo, Titles, Slogan & Login Menu
                 Column(
                     modifier = Modifier
@@ -412,12 +349,24 @@ fun StartupSplashWallpaperScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // App Name Title SIPAGAR KITA
+                        Text(
+                            text = "SIPAGAR KITA",
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Black,
+                            color = OrangePrimary,
+                            textAlign = TextAlign.Center,
+                            letterSpacing = 2.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
 
                         // Title & Department Branding
                         Text(
                             text = "PUSDALOPS-PB BPBD",
-                            fontSize = 20.sp,
+                            fontSize = 19.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White,
                             textAlign = TextAlign.Center,

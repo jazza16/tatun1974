@@ -80,7 +80,7 @@ object ReportExporter {
                 color = Color.rgb(241, 245, 249)
             }
 
-            val sdf = SimpleDateFormat("dd MMMM yyyy, HH:mm 'WIB'", Locale("id", "ID"))
+            val sdf = SimpleDateFormat("dd MMMM yyyy, HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
             val printDate = sdf.format(Date())
 
             var y = 45f
@@ -366,7 +366,7 @@ object ReportExporter {
         canvas.drawText("BULETIN PETA CUACA & PERINGATAN DINI 15 KECAMATAN", pageWidth / 2f, y, docTitlePaint)
         y += 14f
 
-        val sdf = SimpleDateFormat("EEEE, dd MMMM yyyy - HH:mm 'WIB'", Locale("id", "ID"))
+        val sdf = SimpleDateFormat("EEEE, dd MMMM yyyy - HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
         val currentTimeStr = sdf.format(Date())
         val metaPaint = Paint().apply {
             color = Color.rgb(71, 85, 105)
@@ -471,7 +471,7 @@ object ReportExporter {
 
         // Tanda tangan Pengesahan Petugas Pusdalops
         val sigX = pageWidth - margin - 180f
-        canvas.drawText("Mukomuko, ${SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID")).format(Date())}", sigX, y, textPaint.apply { color = Color.rgb(15, 23, 42) })
+        canvas.drawText("Mukomuko, ${SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("id-ID")).format(Date())}", sigX, y, textPaint.apply { color = Color.rgb(15, 23, 42) })
         y += 12f
         canvas.drawText("Petugas Operator Siaga Pusdalops-PB,", sigX, y, boldTextPaint)
         y += 42f

@@ -108,7 +108,7 @@ class WeatherReportAggregator(
 
             // Dispatch notification if an anomaly was detected
             if (anomalyDetected) {
-                val timeStr = SimpleDateFormat("HH:mm 'WIB'", Locale("id", "ID")).format(Date(System.currentTimeMillis() + 3 * 3600 * 1000L))
+                val timeStr = SimpleDateFormat("HH:mm 'WIB'", Locale.forLanguageTag("id-ID")).format(Date(System.currentTimeMillis() + 3 * 3600 * 1000L))
                 val warning = DetailedEarlyWarning(
                     id = "ANOMALY-${System.currentTimeMillis()}",
                     title = anomalyTitle,

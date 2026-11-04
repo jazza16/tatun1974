@@ -22,8 +22,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Surfing
 import androidx.compose.material.icons.filled.Water
 import androidx.compose.material.icons.filled.Waves
@@ -150,7 +150,7 @@ fun MarineWaveHistoryChart(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ShowChart,
+                            imageVector = Icons.AutoMirrored.Filled.ShowChart,
                             contentDescription = "Grafik Gelombang",
                             tint = WeatherSeaCyan,
                             modifier = Modifier.size(20.dp)

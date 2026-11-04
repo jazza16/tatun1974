@@ -38,8 +38,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CameraAlt
@@ -254,6 +255,7 @@ fun CitizenReportScreen(
 
     // Officer Login & Status Gating Modal State
     var showOfficerLoginDialog by remember { mutableStateOf(initialShowOfficerLogin) }
+    var showDisasterWallpaperDialog by remember { mutableStateOf(false) }
     LaunchedEffect(initialShowOfficerLogin) {
         if (initialShowOfficerLogin) {
             showOfficerLoginDialog = true
@@ -284,7 +286,7 @@ fun CitizenReportScreen(
     var isDisasterDropdownExpanded by remember { mutableStateOf(false) }
 
     val initialTime = remember {
-        val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm 'WIB'", Locale("id", "ID"))
+        val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
         sdf.format(Date())
     }
     var incidentTime by remember { mutableStateOf(initialTime) }
@@ -469,7 +471,7 @@ fun CitizenReportScreen(
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Kembali",
                         tint = Color.White
                     )
@@ -477,7 +479,7 @@ fun CitizenReportScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Laporan Warga",
                         fontSize = 18.sp,
@@ -488,6 +490,17 @@ fun CitizenReportScreen(
                         text = "PUSDALOPS BPBD Kab. Mukomuko",
                         fontSize = 10.sp,
                         color = Color.White.copy(alpha = 0.85f)
+                    )
+                }
+
+                IconButton(
+                    onClick = { showDisasterWallpaperDialog = true },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Info Lanskap & Wallpaper HD",
+                        tint = Color.White
                     )
                 }
             }
@@ -727,7 +740,7 @@ fun CitizenReportScreen(
                                         shape = RoundedCornerShape(8.dp),
                                         color = Color(0xFFF3F4F6),
                                         modifier = Modifier.clickable {
-                                            val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm 'WIB'", Locale("id", "ID"))
+                                            val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
                                             incidentTime = sdf.format(Date())
                                             Toast.makeText(context, "Waktu disinkronkan ke jam sekarang", Toast.LENGTH_SHORT).show()
                                         }
@@ -1288,7 +1301,7 @@ fun CitizenReportScreen(
                                     .testTag("btn_submit_citizen_report")
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Send,
+                                    imageVector = Icons.AutoMirrored.Filled.Send,
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(18.dp)
@@ -2824,6 +2837,13 @@ fun CitizenReportScreen(
                     Text("Tutup")
                 }
             }
+        )
+    }
+
+    // Dialog Info Lanskap & Wallpaper HD (diakses dari info aplikasi setelah login)
+    if (showDisasterWallpaperDialog) {
+        MukomukoDisasterWallpaperDialog(
+            onDismiss = { showDisasterWallpaperDialog = false }
         )
     }
 

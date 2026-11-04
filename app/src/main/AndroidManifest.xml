@@ -39,6 +39,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.MapActivity"
+            android:exported="false"
+            android:label="Peta Sebaran Mukomuko"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MyApplication" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
