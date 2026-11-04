@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
@@ -111,15 +112,20 @@ fun AirQualityAndUvCard(
                             )
                             Surface(
                                 color = aqiStatusColor.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(6.dp)
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier
+                                    .height(24.dp)
+                                    .wrapContentWidth()
                             ) {
-                                Text(
-                                    text = airQuality.status,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = aqiStatusColor,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
+                                    Text(
+                                        text = airQuality.status,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = aqiStatusColor,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
 
@@ -163,15 +169,20 @@ fun AirQualityAndUvCard(
                             )
                             Surface(
                                 color = uvStatus.second.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(6.dp)
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier
+                                    .height(24.dp)
+                                    .wrapContentWidth()
                             ) {
-                                Text(
-                                    text = uvStatus.first,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = uvStatus.second,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
+                                    Text(
+                                        text = uvStatus.first,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = uvStatus.second,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
 

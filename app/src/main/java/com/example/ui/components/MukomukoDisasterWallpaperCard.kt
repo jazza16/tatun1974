@@ -139,7 +139,7 @@ fun MukomukoDisasterWallpaperCard(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "HD 9:16",
+                        text = "Kearifan Lokal",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = OrangePrimary,
@@ -202,7 +202,7 @@ fun MukomukoDisasterWallpaperCard(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Geografi, Zona Megathrust & SOP 20-20-20",
+                        text = "Kearifan Budaya & Mitigasi Gempa-Tsunami",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -224,8 +224,8 @@ fun MukomukoDisasterWallpaperCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 TagPill(label = "180 Km Pesisir", isDark = isDark, modifier = Modifier.weight(1f))
-                TagPill(label = "Megathrust Sunda", isDark = isDark, modifier = Modifier.weight(1f))
-                TagPill(label = "Banjir DAS Manjunto", isDark = isDark, modifier = Modifier.weight(1f))
+                TagPill(label = "Megathrust Mentawai", isDark = isDark, modifier = Modifier.weight(1f))
+                TagPill(label = "Kearifan Budaya", isDark = isDark, modifier = Modifier.weight(1f))
             }
 
             Spacer(modifier = Modifier.height(12.dp))

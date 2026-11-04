@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fluid match constraint dimension (0dp) for responsive layouts and ConstraintLayout / SlidingPaneLayout -->
+    <dimen name="match_constraint">0dp</dimen>
+    <dimen name="fluid_pane_width">0dp</dimen>
+    <dimen name="fluid_editor_width">0dp</dimen>
+    <dimen name="detail_pane_weight_width">0dp</dimen>
+
+    <!-- Fixed badge height for uniform horizontal alignment across all screen sizes -->
+    <dimen name="badge_height_fixed">24dp</dimen>
+    <dimen name="badge_padding_horizontal">8dp</dimen>
+    <dimen name="badge_corner_radius">6dp</dimen>
+
+    <!-- Adaptive List-Detail Pane Widths -->
+    <dimen name="list_pane_preferred_width">340dp</dimen>
+    <dimen name="tablet_breakpoint_width">600dp</dimen>
+    <dimen name="expanded_max_content_width">960dp</dimen>
+
+    <!-- Standard Spacing & Density Grid (8dp system) -->
+    <dimen name="spacing_xxsmall">2dp</dimen>
+    <dimen name="spacing_xsmall">4dp</dimen>
+    <dimen name="spacing_small">8dp</dimen>
+    <dimen name="spacing_medium">12dp</dimen>
+    <dimen name="spacing_standard">14dp</dimen>
+    <dimen name="spacing_large">16dp</dimen>
+    <dimen name="spacing_xlarge">20dp</dimen>
+    <dimen name="spacing_xxlarge">24dp</dimen>
+
+    <!-- Touch Targets & Cards -->
+    <dimen name="min_touch_target_size">48dp</dimen>
+    <dimen name="card_corner_radius">14dp</dimen>
+    <dimen name="card_elevation">2dp</dimen>
+</resources>

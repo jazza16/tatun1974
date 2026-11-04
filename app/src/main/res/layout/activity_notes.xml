@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Responsive List-Detail Layout using SlidingPaneLayout for Phone, Tablet, and Foldable.
+    - On tablets / large screens (width >= 600dp): Both panes fit side-by-side.
+    - On phones / compact screens: List pane is visible by default; sliding or selecting an item opens Detail pane.
+-->
+<androidx.slidingpanelayout.widget.SlidingPaneLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/sliding_pane_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F8FAFC">
+
+    <!-- PANE 1: LIST PANE (Notes List with Search, Filter & Pinned items) -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/list_pane_container"
+        android:layout_width="@dimen/list_pane_preferred_width"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:background="#FFFFFF">
+
+        <!-- Top Header Bar -->
+        <LinearLayout
+            android:id="@+id/list_header_bar"
+            android:layout_width="@dimen/match_constraint"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="@dimen/spacing_large"
+            android:paddingVertical="@dimen/spacing_medium"
+            android:background="#0F172A"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/notes_title"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/notes_subtitle"
+                android:textColor="#94A3B8"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Search Bar -->
+        <EditText
+            android:id="@+id/note_search_input"
+            android:layout_width="@dimen/match_constraint"
+            android:layout_height="@dimen/min_touch_target_size"
+            android:layout_marginHorizontal="@dimen/spacing_medium"
+            android:layout_marginTop="@dimen/spacing_small"
+            android:background="@android:drawable/editbox_background_normal"
+            android:hint="@string/note_search_hint"
+            android:paddingHorizontal="@dimen/spacing_medium"
+            android:textSize="13sp"
+            android:inputType="text"
+            android:maxLines="1"
+            app:layout_constraintTop_toBottomOf="@id/list_header_bar"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Notes RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/notes_recycler_view"
+            android:layout_width="@dimen/match_constraint"
+            android:layout_height="@dimen/match_constraint"
+            android:layout_marginTop="@dimen/spacing_small"
+            android:paddingHorizontal="@dimen/spacing_small"
+            android:clipToPadding="false"
+            app:layout_constraintTop_toBottomOf="@id/note_search_input"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:listitem="@android:layout/simple_list_item_2" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- PANE 2: DETAIL PANE (Note Editor & Gemini AI Action Bar) -->
+    <!-- Uses match_constraint (0dp) and layout_weight for fluid resizing across tablets -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/detail_pane_container"
+        android:layout_width="@dimen/fluid_editor_width"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:background="#F8FAFC">
+
+        <!-- Detail Toolbar / Action Header -->
+        <LinearLayout
+            android:id="@+id/editor_action_bar"
+            android:layout_width="@dimen/match_constraint"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="@dimen/spacing_large"
+            android:paddingVertical="@dimen/spacing_medium"
+            android:background="#FFFFFF"
+            android:elevation="@dimen/card_elevation"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/editor_pane_title"
+                android:layout_width="@dimen/match_constraint"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Editor Catatan Lapangan"
+                android:textColor="#0F172A"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <!-- Fixed Height 24dp Badge for Uniform Horizontal Alignment -->
+            <TextView
+                android:id="@+id/editor_priority_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/badge_height_fixed"
+                android:gravity="center"
+                android:paddingHorizontal="@dimen/badge_padding_horizontal"
+                android:background="#DCFCE7"
+                android:textColor="#15803D"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:text="@string/note_priority_medium" />
+
+            <Button
+                android:id="@+id/btn_save_note"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/spacing_small"
+                android:text="@string/note_action_save"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Title Editor -->
+        <EditText
+            android:id="@+id/note_title_input"
+            android:layout_width="@dimen/match_constraint"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="@dimen/spacing_large"
+            android:layout_marginTop="@dimen/spacing_large"
+            android:background="@null"
+            android:hint="@string/note_title_hint"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#0F172A"
+            android:maxLines="2"
+            app:layout_constraintTop_toBottomOf="@id/editor_action_bar"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Content Editor -->
+        <EditText
+            android:id="@+id/note_content_input"
+            android:layout_width="@dimen/match_constraint"
+            android:layout_height="@dimen/match_constraint"
+            android:layout_marginHorizontal="@dimen/spacing_large"
+            android:layout_marginTop="@dimen/spacing_medium"
+            android:layout_marginBottom="@dimen/spacing_large"
+            android:background="@null"
+            android:gravity="top|start"
+            android:hint="@string/note_content_hint"
+            android:textSize="14sp"
+            android:textColor="#334155"
+            app:layout_constraintTop_toBottomOf="@id/note_title_input"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.slidingpanelayout.widget.SlidingPaneLayout>

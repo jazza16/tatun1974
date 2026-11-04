@@ -9,8 +9,8 @@ data class VersionChangelog(
 )
 
 data class AppUpdateState(
-    val currentVersion: String = "3.5.0",
-    val latestVersion: String = "3.5.0",
+    val currentVersion: String = "3.6.0",
+    val latestVersion: String = "3.6.0",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -22,18 +22,33 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "3.5.0",
+    val lastCheckedVersion: String = "3.6.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis stabil v3.5.0 Enterprise Edition terbaru secara permanen.",
-    val packageSizeMb: Float = 19.2f,
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis stabil v3.6.0 Enterprise Edition terbaru secara permanen.",
+    val packageSizeMb: Float = 19.5f,
     val isBannerDismissed: Boolean = false,
     val isSimulationActive: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
         VersionChangelog(
-            version = "3.5.0",
-            releaseDate = "3 November 2026",
+            version = "3.6.0",
+            releaseDate = "4 November 2026",
             isCurrent = true,
             isLatest = true,
+            highlights = listOf(
+                "Pembaruan Wallpaper & Infografis Bencana Mukomuko: Mengintegrasikan Lambang Resmi Kabupaten Mukomuko ('Kapuang Sakti Ratau Batuah') dan Cap Resmi BPBD Kabupaten Mukomuko kualitas tinggi, menampilkan kearifan lokal Rumah Adat panggung dan budaya Sirih Carano yang adaptif terhadap gempa bumi pesisir.",
+                "Penyelarasan Zona Kegempaan Megathrust: Memperbarui penamaan seismik menjadi Zona Subduksi & Megathrust Mentawai - Bengkulu dan edukasi rumus evakuasi mandiri tsunami 20-20-20.",
+                "Pembersihan Banner & Elemen Visual: Menghapus spanduk oranye kontak darurat di bawah foto, nomor telepon, teks 'high resolution (9:16)', serta referensi teks 'air rami/air manjuto/sungai manjuto' dari infografis wallpaper.",
+                "Standardisasi Spacing Seragam 8dp Ruang Kerja: Menerapkan tata letak LazyColumn dengan Arrangement.spacedBy(8.dp) di seluruh konsol Ruang Kerja untuk konsistensi kartu UI lintas ukuran layar.",
+                "Validasi Token Play Integrity API (Mode Classic): Integrasi verifikasi token Play Integrity API Classic pada AuthManager sebelum finalisasi sesi pengguna di Ruang Kerja, dengan pencatatan otomatis kegagalan pada log audit keamanan lokal (Room database).",
+                "Otomatisasi Simpan & Sinkronisasi Petugas Antar-Perangkat: Penambahan data Nama dan NIP petugas baru oleh Administrator otomatis tersimpan di Room database dan langsung tersinkronisasi via Cloud Firestore ke semua perangkat baru yang terpasang aplikasi.",
+                "Catatan Operasional Lapangan & Asisten Gemini AI: Modul catatan List-Detail adaptif (SlidingPaneLayout & Dual-Pane) terintegrasi Room Database v9 dengan asisten AI Gemini untuk peringkasan insiden dan pembuatan draf SOP rekomendasi penanganan."
+            )
+        ),
+        VersionChangelog(
+            version = "3.5.0",
+            releaseDate = "3 November 2026",
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "Proteksi Password Administrator pada Tombol Sync (xHP): Mengamankan sinkronisasi lintas perangkat dengan dialog verifikasi sandi administrator resmi agar tidak disalahgunakan personil yang tidak berwenang.",
                 "Otorisasi Khusus Ekspor PDF & CSV: Tombol Ekspor PDF dan CSV pada Ruang Kerja kini hanya dapat dilihat dan dioperasikan oleh pejabat berwenang (Manajer, Koord. Administrasi, dan Operator).",

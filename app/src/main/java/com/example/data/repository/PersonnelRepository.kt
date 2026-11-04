@@ -1,12 +1,14 @@
 package com.example.data.repository
 
 import com.example.data.local.Personnel
-import com.example.data.local.PersonnelDao
-import kotlinx.coroutines.flow.Flow
-
 import com.example.data.local.PersonnelAuditLogDao
 import com.example.data.local.PersonnelAuditLogEntity
+import com.example.data.local.PersonnelDao
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 
 /**
  * Repository for Personnel entity, abstracting Room DAO operations from ViewModels & UI.
@@ -122,5 +124,91 @@ class PersonnelRepository(
      */
     fun getAllAsnPersonnel(): Flow<List<Personnel>> {
         return personnelDao.getAllPersonnel()
+    }
+
+    /**
+     * Automatically saves personnel data when an Administrator enters a new officer Name and NIP,
+     * and synchronizes directly to Cloud Firestore so newly installed devices receive it immediately.
+     */
+    suspend fun autoSaveAndSyncNewPersonnel(
+        name: String,
+        nip: String,
+        role: String = "Anggota TRC",
+        unit: String = "Pusdalops BPBD Mukomuko",
+        shift: String = "Siaga 24 Jam",
+        phone: String = ""
+    ): Long {
+        val cleanName = name.trim()
+        val cleanNip = nip.trim()
+        if (cleanName.isBlank() || cleanNip.isBlank()) return -1L
+
+        val existing = personnelDao.getPersonnelByNip(cleanNip)
+        val id = if (existing != null) {
+            val updated = existing.copy(
+                name = cleanName,
+                role = role,
+                unit = unit,
+                shift = shift,
+                phone = phone
+            )
+            personnelDao.updatePersonnel(updated)
+            existing.id
+        } else {
+            val newPersonnel = Personnel(
+                name = cleanName,
+                nip = cleanNip,
+                role = role,
+                unit = unit,
+                shift = shift,
+                phone = phone
+            )
+            personnelDao.insertPersonnel(newPersonnel)
+        }
+
+        // Auto-sync to Cloud Firestore for cross-device & new device installation sync
+        try {
+            val cloudProfile = com.example.data.local.OfficerProfile(
+                id = "officer_$cleanNip",
+                fullName = cleanName,
+                nip = cleanNip,
+                role = role,
+                unit = unit,
+                shift = shift,
+                phone = phone
+            )
+            com.example.data.local.FirestoreHelper.syncOfficerToCloud(cloudProfile)
+        } catch (_: Exception) {}
+
+        return id
+    }
+
+    /**
+     * Starts background real-time sync from Cloud Firestore into local Room database.
+     * Ensures newly installed devices or other devices instantly receive newly registered officers.
+     */
+    fun startAutoSyncFromCloud(scope: kotlinx.coroutines.CoroutineScope) {
+        com.example.data.local.FirestoreHelper.listenOfficersRealtime(
+            onUpdate = { remoteList ->
+                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    for (officer in remoteList) {
+                        if (officer.nip.isNotBlank()) {
+                            val local = personnelDao.getPersonnelByNip(officer.nip)
+                            if (local == null) {
+                                personnelDao.insertPersonnel(
+                                    Personnel(
+                                        name = officer.fullName,
+                                        nip = officer.nip,
+                                        role = officer.role,
+                                        unit = officer.unit,
+                                        shift = officer.shift,
+                                        phone = officer.phone
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        )
     }
 }

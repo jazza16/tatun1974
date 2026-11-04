@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Flood
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Public
@@ -393,7 +394,7 @@ fun MukomukoDisasterWallpaperDialog(
                                             )
                                             Spacer(modifier = Modifier.width(5.dp))
                                             Text(
-                                                text = "Resolusi Tinggi 9:16 (HD Mobile)",
+                                                text = "Kearifan Budaya & Mitigasi Bencana",
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White
@@ -600,19 +601,19 @@ fun MukomukoDisasterWallpaperDialog(
 private fun NaturalConditionsSection(isDark: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         InfoDetailCard(
-            icon = Icons.Default.Landscape,
-            title = "Bentang Alam Pesisir Samudra Hindia",
-            description = "Kabupaten Mukomuko memiliki garis pantai sepanjang ~180 kilometer yang menghadap langsung ke Samudra Hindia. Morfologi daratan pesisir tergolong landai dengan pantai berpasir yang dipengaruhi oleh dinamika pasang surut laut dan angin barat.",
-            tag = "Geografi Pesisir",
+            icon = Icons.Default.Home,
+            title = "Kearifan Budaya Rumah Adat & Sirih Carano",
+            description = "Kabupaten Mukomuko memiliki semboyan sakral 'Kapuang Sakti Ratau Batuah' dan kearifan Rumah Adat Mukomuko dengan arsitektur tiang tinggi berpasak kayu lentur. Tradisi ini telah terbukti secara turun-temurun meredam guncangan gempa tektonik pesisir, dipadukan dengan penghormatan tradisi Sirih Carano yang mempererat gotong royong antar warga saat tanggap darurat.",
+            tag = "Kearifan Budaya",
             tagColor = OrangePrimary,
             isDark = isDark
         )
 
         InfoDetailCard(
-            icon = Icons.Default.WaterDamage,
-            title = "Jaringan Sungai Besar (DAS Manjunto & Selagan)",
-            description = "Memiliki daerah aliran sungai (DAS) besar seperti Sungai Manjunto (dengan bendungan irigasi terbesar di Bengkulu), Sungai Selagan, Sungai Bantal, Sungai Air Dikit, dan Sungai Teramang. Aliran sungai ini mengalir dari gugusan Bukit Barisan menuju muara Samudra Hindia.",
-            tag = "Hidrologi",
+            icon = Icons.Default.Landscape,
+            title = "Bentang Alam Pesisir Samudra Hindia",
+            description = "Kabupaten Mukomuko memiliki bentang garis pantai sepanjang ~180 kilometer yang berhadapan langsung dengan samudra luas. Lanskap pesisir berpadu dengan vegetasi kelapa dan pohon cemara udang alami yang berfungsi sebagai sabuk hijau pemecah energi angin dan ombak laut.",
+            tag = "Geografi Pesisir",
             tagColor = Color(0xFF0284C7),
             isDark = isDark
         )
@@ -620,7 +621,7 @@ private fun NaturalConditionsSection(isDark: Boolean) {
         InfoDetailCard(
             icon = Icons.Default.Public,
             title = "Gugusan Pegunungan Bukit Barisan & TNKS",
-            description = "Bagian timur wilayah Mukomuko berbatasan langsung dengan kawasan konservasi hutan hujan tropis Taman Nasional Kerinci Seblat (TNKS). Wilayah ini bertindak sebagai tangkapan air alami (catchment area) utama yang menstabilkan iklim mikro kabupaten.",
+            description = "Wilayah timur Mukomuko dibentengi pegunungan hutan tropis Taman Nasional Kerinci Seblat (TNKS). Hutan primer ini menjadi kawasan tangkapan air dan penyangga ekologis utama yang menjaga keseimbangan tanah dari ancaman longsor di daerah perbukitan.",
             tag = "Topografi Hulu",
             tagColor = WeatherGoodGreen,
             isDark = isDark
@@ -636,8 +637,8 @@ private fun DisasterPotentialsSection(isDark: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         InfoDetailCard(
             icon = Icons.Default.Warning,
-            title = "Megathrust Mentawai-Sunda & Gempa Tektonik",
-            description = "Mukomuko berada di dekat zona subduksi lempeng Indo-Australia yang menunjam ke bawah lempeng Eurasia (Megathrust Mentawai-Sunda). Berpotensi memicu gempa tektonik dangkal berkekuatan besar (M 7.5 - 8.5+) yang dirasakan sangat kuat di daratan.",
+            title = "Zona Subduksi Megathrust Mentawai - Bengkulu",
+            description = "Mukomuko berada di dekat zona tumbukan lempeng tektonik aktif (Megathrust Mentawai - Bengkulu). Potensi seismik ini menuntut kesiapsiagaan warga terhadap getaran gempa bumi dangkal serta kepatuhan evakuasi mandiri.",
             tag = "Ancaman Tinggi",
             tagColor = Color(0xFFDC2626),
             isDark = isDark
@@ -645,8 +646,8 @@ private fun DisasterPotentialsSection(isDark: Boolean) {
 
         InfoDetailCard(
             icon = Icons.Default.Tsunami,
-            title = "Potensi Tsunami Pesisir Pantai",
-            description = "Karena pantai Mukomuko landai dan tidak memiliki gugusan pulau pelindung di lepas pantai luarnya, gempa dangkal bawah laut berpotensi menimbulkan gelombang tsunami yang dapat tiba di pesisir dalam tempo 20 sampai 30 menit pasca guncangan.",
+            title = "Potensi Gelombang Tsunami Pesisir",
+            description = "Karakteristik pesisir terbuka tanpa pulau penghalang memerlukan kewaspadaan tinggi. Jika gempa terasa kuat lebih dari 20 detik, seluruh warga pesisir diarahkan segera bergerak menuju tempat evakuasi sementara (TES) atau dataran tinggi terdekat.",
             tag = "Prioritas Evakuasi",
             tagColor = Color(0xFFE11D48),
             isDark = isDark
@@ -654,8 +655,8 @@ private fun DisasterPotentialsSection(isDark: Boolean) {
 
         InfoDetailCard(
             icon = Icons.Default.Flood,
-            title = "Banjir Luapan Sungai & Genangan",
-            description = "Saat musim penghujan dengan intensitas curah hujan ekstrem di hulu TNKS, volume air melimpah menyebabkan Sungai Manjunto, Selagan, dan Teramang meluap merendam pemukiman, sentra pertanian sawah, serta jalan lintas barat Sumatera.",
+            title = "Banjir Luapan Debit Aliran Sungai",
+            description = "Saat musim hujan lebat berdurasi lama di hulu Bukit Barisan, peningkatan debit air pada daerah aliran sungai berpotensi menyebabkan genangan di area bantaran rendah dan pemukiman pinggir sungai.",
             tag = "Musiman",
             tagColor = Color(0xFF0284C7),
             isDark = isDark
@@ -839,19 +840,19 @@ private fun shareDisasterInfo(context: Context) {
             *PANDUAN ALAM & MITIGASI BENCANA KABUPATEN MUKOMUKO*
             _PUSDALOPS-PB BPBD Kabupaten Mukomuko_
             
-            📍 *Kondisi Geografis*: Garis pantai 180 km berhadapan Samudra Hindia, DAS Manjunto & Selagan, dan pegunungan TNKS Bukit Barisan.
+            📍 *Kondisi Wilayah & Kearifan Budaya*: Semboyan 'Kapuang Sakti Ratau Batuah', Rumah Adat panggung tahan gempa, garis pantai 180 km Samudra Hindia, dan kawasan penyangga TNKS.
             
-            ⚠️ *Potensi Bencana*:
-            1. Gempa Bumi Megathrust Mentawai-Sunda (M 7.5 - 8.5+)
-            2. Potensi Gelombang Tsunami Pesisir (waktu tiba 20-30 menit)
-            3. Banjir Luapan Sungai Manjunto & Selagan
+            ⚠️ *Potensi Bencana & Mitigasi*:
+            1. Zona Megathrust Mentawai - Bengkulu
+            2. Potensi Gelombang Tsunami Pesisir (waktu evakuasi < 20 menit)
+            3. Genangan Luapan Debit Sungai
             4. Kebakaran Hutan & Lahan (Karhutla) Gambut
             
             🛡️ *Rumus 20-20-20 Evakuasi Mandiri*:
             Jika gempa dirasakan 20 detik atau lebih, segera evakuasi dalam tempo 20 menit menuju tempat berketinggian minimal 20 meter / Titik Kumpul TES.
             
             ☎️ *Call Center BPBD Mukomuko*: 117 (Bebas Pulsa / 24 Jam)
-            _Aplikasi Resmi Cuaca & Mitigasi Bencana Mukomuko v1.3.0_
+            _SIPAGAR KITA BPBD Mukomuko_
         """.trimIndent()
 
         val sendIntent = Intent().apply {

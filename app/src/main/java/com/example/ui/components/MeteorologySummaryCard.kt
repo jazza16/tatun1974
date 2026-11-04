@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -120,15 +121,20 @@ fun MeteorologySummaryCard(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = Color(0xFF0284C7).copy(alpha = 0.12f),
-                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF0284C7).copy(alpha = 0.4f))
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF0284C7).copy(alpha = 0.4f)),
+                    modifier = Modifier
+                        .height(24.dp)
+                        .wrapContentWidth()
                 ) {
-                    Text(
-                        text = "TREN 7 HARI",
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0284C7),
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                    )
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
+                        Text(
+                            text = "TREN 7 HARI",
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0284C7),
+                            maxLines = 1
+                        )
+                    }
                 }
             }
 

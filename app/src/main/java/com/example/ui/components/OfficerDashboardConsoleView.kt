@@ -256,6 +256,7 @@ fun OfficerDashboardConsoleView(
 
     LaunchedEffect(Unit) {
         personnelRepository.seedDefaultAsnPersonnelIfNeeded()
+        personnelRepository.startAutoSyncFromCloud(this)
     }
 
     // 30-Minute Inactivity Auto-Logout Timer for Officer Security
@@ -387,7 +388,7 @@ fun OfficerDashboardConsoleView(
             }
             .testTag("officer_dashboard_console_view"),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // 1. OFFICER COMMAND BAR WITH EXPORT PDF & CSV BUTTONS
         item {
@@ -822,7 +823,8 @@ fun OfficerDashboardConsoleView(
                     0 to "🚨 Antrean (${pendingCount + validatedCount})",
                     1 to "🗄️ Arsip ($resolvedCount)",
                     2 to "📊 Tren",
-                    3 to "📡 Sync (${activeDevices.size} HP)"
+                    3 to "📡 Sync (${activeDevices.size} HP)",
+                    4 to "📝 Catatan"
                 ).forEach { (idx, label) ->
                     val isSel = dashboardSubTab == idx
                     Surface(
@@ -844,7 +846,7 @@ fun OfficerDashboardConsoleView(
                     ) {
                         Text(
                             text = label,
-                            fontSize = 9.5.sp,
+                            fontSize = 9.sp,
                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSel) Color(0xFF0F172A) else Color(0xFF64748B),
                             textAlign = TextAlign.Center,
@@ -859,6 +861,28 @@ fun OfficerDashboardConsoleView(
         if (dashboardSubTab == 2) {
             item {
                 DisasterMonthlyBarChartCard(reports = reports)
+            }
+        }
+
+        // 3B. CATATAN OPERASIONAL PUSDALOPS (IF SELECTED)
+        if (dashboardSubTab == 4) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(680.dp)
+                        .testTag("card_pusdalops_notes_container")
+                ) {
+                    PusdalopsNotesSection(
+                        officerName = officerName,
+                        officerRole = officerRole,
+                        currentDistrict = currentDistrict.name,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
 
@@ -2417,19 +2441,17 @@ fun OfficerDashboardConsoleView(
                                     }
 
                                     coroutineScope.launch {
-                                        // 1. Insert into local Room Database
-                                        personnelRepository.insert(
-                                            Personnel(
-                                                name = inputFullName.trim(),
-                                                nip = inputNip.trim(),
-                                                role = inputRole,
-                                                unit = inputUnit.trim(),
-                                                shift = inputShift.trim(),
-                                                phone = inputPhone.trim()
-                                            )
+                                        // 1. Otomatis simpan data petugas ke Room dan sinkron ke Cloud Firestore untuk seluruh perangkat
+                                        personnelRepository.autoSaveAndSyncNewPersonnel(
+                                            name = inputFullName.trim(),
+                                            nip = inputNip.trim(),
+                                            role = inputRole,
+                                            unit = inputUnit.trim(),
+                                            shift = inputShift.trim(),
+                                            phone = inputPhone.trim()
                                         )
 
-                                        // 2. Register in officer auth manager for session matching
+                                        // 2. Daftarkan ke officer auth manager
                                         val res = officerAuthManager.addOfficer(
                                             fullName = inputFullName.trim(),
                                             nip = inputNip.trim(),
@@ -2444,12 +2466,13 @@ fun OfficerDashboardConsoleView(
                                             rosterMode = 0
                                             formError = null
                                             val savedName = inputFullName.trim()
+                                            val savedNip = inputNip.trim()
                                             inputFullName = ""
                                             inputNip = ""
                                             inputPhone = ""
                                             Toast.makeText(
                                                 context,
-                                                "Personil '$savedName' berhasil disimpan ke Room Database & direktori Pusdalops!",
+                                                "Petugas '$savedName' (NIP: $savedNip) otomatis tersimpan & tersinkron ke semua perangkat baru!",
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         } else {
@@ -3395,7 +3418,7 @@ private fun SyncDiagnosticsSection(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // 0. PLAY INTEGRITY CLASSIC BACKEND SECURITY SESSIONS CARD
         Card(
@@ -3443,15 +3466,20 @@ private fun SyncDiagnosticsSection(
 
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFFDCFCE7)
+                        color = Color(0xFFDCFCE7),
+                        modifier = Modifier
+                            .height(24.dp)
+                            .wrapContentWidth()
                     ) {
-                        Text(
-                            text = "${securitySessions.size} Sesi Aktif",
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF15803D),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
+                            Text(
+                                text = "${securitySessions.size} Sesi Aktif",
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF15803D),
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
 
@@ -3649,15 +3677,20 @@ private fun SyncDiagnosticsSection(
 
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = if (isSlowNetwork) Color(0xFFDC2626) else Color(0xFF059669)
+                        color = if (isSlowNetwork) Color(0xFFDC2626) else Color(0xFF059669),
+                        modifier = Modifier
+                            .height(24.dp)
+                            .wrapContentWidth()
                     ) {
-                        Text(
-                            text = if (isSlowNetwork) "JARINGAN LAMBAT" else "NORMAL",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
+                            Text(
+                                text = if (isSlowNetwork) "JARINGAN LAMBAT" else "NORMAL",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
 
