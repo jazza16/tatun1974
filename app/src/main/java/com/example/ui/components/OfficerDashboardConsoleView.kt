@@ -130,9 +130,11 @@ import com.example.ui.theme.OrangePrimary
 import com.example.data.local.AppDatabase
 import com.example.data.local.Personnel
 import com.example.data.local.OfficerAuthManager
+import com.example.data.local.OfficerCredentialEntity
 import com.example.data.local.OfficerProfile
 import com.example.data.local.OfficerRoles
 import com.example.data.repository.PersonnelRepository
+import com.example.data.repository.SmartOfficerAuthRepository
 import com.example.model.CitizenDisasterReport
 import com.example.model.District
 import com.example.security.PlayIntegritySecurityManager
@@ -495,6 +497,39 @@ fun OfficerDashboardConsoleView(
 
                             Spacer(modifier = Modifier.width(6.dp))
 
+                            // Sinkron Cloud Multi-Perangkat
+                            OutlinedButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        val smartRepo = SmartOfficerAuthRepository.getInstance(context)
+                                        smartRepo.harvestAndSyncAllOfficers()
+                                        smartRepo.pullCredentialsFromCloud { success, count ->
+                                            Toast.makeText(
+                                                context,
+                                                if (success) "Sinkronisasi Berhasil: $count kredensial multi-perangkat diperbarui dari Cloud Firestore." else "Kredensial database lokal sudah mutakhir.",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB)),
+                                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sync,
+                                    contentDescription = "Sinkron Kredensial",
+                                    tint = Color(0xFF60A5FA),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(text = "Sinkron", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
                             // Ubah PIN
                             OutlinedButton(
                                 onClick = { showChangePinDialog = true },
@@ -656,7 +691,7 @@ fun OfficerDashboardConsoleView(
                     }
 
                     if (isOfficerLoggedIn) {
-                        // Security banner if officer is still using default shared PIN (117 / BPBD117)
+                        // Security banner if officer is still using initial NIP key without custom personal PIN
                         if (!hasCustomPin) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Surface(
@@ -684,7 +719,7 @@ fun OfficerDashboardConsoleView(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "PIN Anda masih menggunakan sandi bawaan. Ganti PIN pribadi sekarang agar ID/NIP dinas tidak disalahgunakan orang lain.",
+                                            text = "PIN Anda masih menggunakan kunci awal 6-digit NIP. Buat PIN pribadi sekarang agar tersimpan aman di database & Cloud Firestore untuk login multi-perangkat.",
                                             fontSize = 10.sp,
                                             color = Color(0xFFFEF3C7),
                                             lineHeight = 13.sp
@@ -1250,7 +1285,12 @@ fun OfficerDashboardConsoleView(
 
                             DropdownMenu(
                                 expanded = isDistrictDropdownExpanded,
-                                onDismissRequest = { isDistrictDropdownExpanded = false }
+                                onDismissRequest = { isDistrictDropdownExpanded = false },
+                                properties = androidx.compose.ui.window.PopupProperties(
+                                    focusable = false,
+                                    dismissOnClickOutside = true,
+                                    dismissOnBackPress = true
+                                )
                             ) {
                                 districtOptions.forEach { dist ->
                                     DropdownMenuItem(
@@ -1587,7 +1627,7 @@ fun OfficerDashboardConsoleView(
                     } else {
                         // MODE RESET PIN
                         Text(
-                            text = "Reset PIN mengembalikan sandi otorisasi ke PIN resmi Pusdalops bawaan dinas (117 / BPBD117 / TRC2026). Masukkan Sandi Administrator atau PIN lama untuk konfirmasi.",
+                            text = "Reset PIN mengembalikan sandi otorisasi ke kunci individual awal 6-digit NIP Anda (tanpa melalui PIN default umum '117'). Masukkan Sandi Administrator atau PIN lama untuk konfirmasi.",
                             fontSize = 11.sp,
                             color = Color(0xFF475569),
                             lineHeight = 15.sp
@@ -1646,11 +1686,17 @@ fun OfficerDashboardConsoleView(
                                 errorMessage = "Konfirmasi PIN baru tidak sama."
                                 return@Button
                             }
+                            if (SmartOfficerAuthRepository.FORBIDDEN_DEFAULT_PINS.any { it.equals(newPinInput.trim(), ignoreCase = true) }) {
+                                errorMessage = "PIN baru dilarang menggunakan PIN default umum (117 / TRC2026 / dsb)."
+                                return@Button
+                            }
                             isProcessingSecurity = true
                             coroutineScope.launch {
                                 val integrityResult = PlayIntegritySecurityManager.getInstance(context)
                                     .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "CHANGE_PIN")
-                                val result = officerAuthManager.changeOfficerPin(oldPinInput, newPinInput)
+                                val smartRepo = SmartOfficerAuthRepository.getInstance(context)
+                                val result = smartRepo.changePersonalPin(officerBadgeId, oldPinInput, newPinInput)
+                                officerAuthManager.changeOfficerPin(oldPinInput, newPinInput)
                                 isProcessingSecurity = false
                                 result.onSuccess { msg ->
                                     hasCustomPin = true
@@ -1669,7 +1715,9 @@ fun OfficerDashboardConsoleView(
                             coroutineScope.launch {
                                 val integrityResult = PlayIntegritySecurityManager.getInstance(context)
                                     .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "RESET_PIN")
-                                val result = officerAuthManager.resetPinWithAdmin(resetAdminInput)
+                                val smartRepo = SmartOfficerAuthRepository.getInstance(context)
+                                val result = smartRepo.resetToInitialNipSecret(officerBadgeId)
+                                officerAuthManager.resetPinToDefault(resetAdminInput)
                                 isProcessingSecurity = false
                                 result.onSuccess { msg ->
                                     hasCustomPin = false
@@ -1689,7 +1737,7 @@ fun OfficerDashboardConsoleView(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Memverifikasi...")
                     } else {
-                        Text(if (pinDialogMode == 0) "Simpan PIN Baru" else "Reset ke PIN Bawaan")
+                        Text(if (pinDialogMode == 0) "Simpan PIN Baru" else "Reset ke Kunci NIP")
                     }
                 }
             },

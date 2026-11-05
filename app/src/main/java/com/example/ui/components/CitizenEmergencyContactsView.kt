@@ -189,97 +189,131 @@ fun CitizenEmergencyContactsView(
         }
     }
 
-    Column(
+    androidx.compose.foundation.layout.BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFF9FAFB))
             .testTag("citizen_emergency_contacts_view")
     ) {
-        // Top Info Banner
-        Surface(
-            color = Color(0xFFFEF2F2),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
-            modifier = Modifier.fillMaxWidth()
+        val columnCount = if (maxWidth >= 600.dp) 2 else 1
+        val chunkedContacts = remember(filteredContacts, columnCount) {
+            filteredContacts.chunked(columnCount)
+        }
+
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Row(
-                modifier = Modifier.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Top Info Banner
+            Surface(
+                color = Color(0xFFFEF2F2),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(Color(0xFFDC2626), CircleShape),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PhoneInTalk,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column {
-                    Text(
-                        text = "Direktori Kontak Darurat Mukomuko",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF991B1B)
-                    )
-                    Text(
-                        text = "Ketuk tombol 'Panggil' untuk langsung membuka dialer ponsel ke instansi terkait.",
-                        fontSize = 11.sp,
-                        color = Color(0xFF7F1D1D)
-                    )
-                }
-            }
-        }
-
-        // Horizontal Category Filter
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(categories) { cat ->
-                val isSelected = selectedCategory == cat
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (isSelected) Color(0xFFDC2626) else Color.White,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (isSelected) Color(0xFFDC2626) else Color(0xFFE5E7EB)
-                    ),
-                    modifier = Modifier.clickable { selectedCategory = cat }
-                ) {
-                    Text(
-                        text = cat,
-                        fontSize = 11.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else Color(0xFF4B5563),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-            }
-        }
-
-        // Contact Items List
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 32.dp)
-        ) {
-            items(filteredContacts) { item ->
-                EmergencyContactCard(
-                    contact = item,
-                    onDial = {
-                        EmergencyDialer.dial(context, item.phoneNumber)
-                        Toast.makeText(context, "Membuka dialer untuk ${item.name}...", Toast.LENGTH_SHORT).show()
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(Color(0xFFDC2626), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhoneInTalk,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
-                )
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column {
+                        Text(
+                            text = "Direktori Kontak Darurat Mukomuko",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF991B1B)
+                        )
+                        Text(
+                            text = "Ketuk tombol 'Panggil' untuk langsung membuka dialer ponsel ke instansi terkait.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF7F1D1D)
+                        )
+                    }
+                }
+            }
+
+            // Horizontal Category Filter
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(categories) { cat ->
+                    val isSelected = selectedCategory == cat
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isSelected) Color(0xFFDC2626) else Color.White,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) Color(0xFFDC2626) else Color(0xFFE5E7EB)
+                        ),
+                        modifier = Modifier.clickable { selectedCategory = cat }
+                    ) {
+                        Text(
+                            text = cat,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else Color(0xFF4B5563),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+
+            // Contact Items List (Adaptive 1 or 2 Columns)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 32.dp)
+            ) {
+                items(chunkedContacts) { rowItems ->
+                    if (columnCount > 1) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            rowItems.forEach { item ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    EmergencyContactCard(
+                                        contact = item,
+                                        onDial = {
+                                            EmergencyDialer.dial(context, item.phoneNumber)
+                                            Toast.makeText(context, "Membuka dialer untuk ${item.name}...", Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                }
+                            }
+                            if (rowItems.size < columnCount) {
+                                for (i in 0 until (columnCount - rowItems.size)) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    } else {
+                        val item = rowItems.first()
+                        EmergencyContactCard(
+                            contact = item,
+                            onDial = {
+                                EmergencyDialer.dial(context, item.phoneNumber)
+                                Toast.makeText(context, "Membuka dialer untuk ${item.name}...", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                }
             }
         }
     }

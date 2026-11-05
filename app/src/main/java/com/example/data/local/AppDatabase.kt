@@ -16,9 +16,10 @@ import androidx.room.RoomDatabase
         Personnel::class,
         PersonnelAuditLogEntity::class,
         SyncConflictLogEntity::class,
-        OfficerNoteEntity::class
+        OfficerNoteEntity::class,
+        OfficerCredentialEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,6 +28,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun auditLogDao(): PersonnelAuditLogDao
     abstract fun syncConflictLogDao(): SyncConflictLogDao
     abstract fun noteDao(): NoteDao
+    abstract fun credentialDao(): OfficerCredentialDao
 
     companion object {
         @Volatile

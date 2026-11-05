@@ -18,6 +18,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -137,7 +139,10 @@ import com.example.data.local.OfficialAsnBpbdPersonnel
 import com.example.data.local.OfficerAuthManager
 import com.example.data.local.OfficerProfile
 import com.example.data.local.OfficerRoles
+import com.example.data.local.OfficerCredentialEntity
+import com.example.data.local.FirestoreHelper
 import com.example.data.repository.PersonnelRepository
+import com.example.data.repository.SmartOfficerAuthRepository
 import com.example.model.CitizenDisasterReport
 import com.example.model.District
 import com.example.model.MukomukoDistricts
@@ -669,7 +674,19 @@ fun CitizenReportScreen(
                 .fillMaxSize()
                 .weight(1f)
         ) {
-            when (selectedTab) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val isWideScreen = maxWidth >= 600.dp
+                Box(
+                    modifier = if (isWideScreen) {
+                        Modifier
+                            .fillMaxSize()
+                            .widthIn(max = 840.dp)
+                            .align(Alignment.TopCenter)
+                    } else {
+                        Modifier.fillMaxSize()
+                    }
+                ) {
+                    when (selectedTab) {
                 0 -> {
                     // TAB 0: FORMULIR INPUT (Matches Screenshot)
                     LazyColumn(
@@ -1804,6 +1821,7 @@ fun CitizenReportScreen(
             }
         }
     }
+}
 
     // Permission Guidance Dialog for CAMERA & LOCATION
     if (permissionDeniedDialogMessage != null) {
@@ -1938,6 +1956,7 @@ fun CitizenReportScreen(
 
     // Officer Login & PIN Verification Dialog
     if (showOfficerLoginDialog) {
+        val smartAuthRepo = remember { SmartOfficerAuthRepository.getInstance(context) }
         var roster by remember { mutableStateOf(officerAuthManager.getOfficerRoster()) }
         var selectedRoleFilter by remember { mutableStateOf(OfficerRoles.OPERATOR) }
         var selectedOfficer by remember {
@@ -1947,6 +1966,8 @@ fun CitizenReportScreen(
                     ?: roster.firstOrNull()
             )
         }
+        var selectedCredential by remember { mutableStateOf<OfficerCredentialEntity?>(null) }
+        var isHarvestingSync by remember { mutableStateOf(false) }
         var dialogMode by remember { mutableIntStateOf(0) } // 0 = Pilih dari Roster / Dropdown, 1 = Form Input Petugas Baru (Admin Only)
         var isNameDropdownOpen by remember { mutableStateOf(false) }
         var rosterSearchQuery by remember { mutableStateOf("") }
@@ -1969,6 +1990,30 @@ fun CitizenReportScreen(
         var inputShift by remember { mutableStateOf("Shift Siaga 24 Jam") }
         var inputUnit by remember { mutableStateOf("Pusdalops BPBD Kab. Mukomuko") }
         var formValidationError by remember { mutableStateOf("") }
+
+        // Automatically harvest un-synced official officers and pull credentials from cloud
+        LaunchedEffect(Unit) {
+            isHarvestingSync = true
+            try {
+                smartAuthRepo.harvestAndSyncAllOfficers()
+                smartAuthRepo.pullCredentialsFromCloud { _, _ -> }
+                roster = officerAuthManager.getOfficerRoster()
+                val nip = selectedOfficer?.nip ?: officerBadgeId
+                if (!nip.isNullOrBlank()) {
+                    selectedCredential = smartAuthRepo.getCredential(nip)
+                }
+            } catch (_: Exception) {
+            } finally {
+                isHarvestingSync = false
+            }
+        }
+
+        LaunchedEffect(selectedOfficer) {
+            val nip = selectedOfficer?.nip
+            if (!nip.isNullOrBlank()) {
+                selectedCredential = smartAuthRepo.getCredential(nip)
+            }
+        }
 
         val filteredRoster = roster.filter { off ->
             val matchesRole = if (selectedRoleFilter == "Semua") true else off.role.contains(selectedRoleFilter, ignoreCase = true)
@@ -2155,7 +2200,12 @@ fun CitizenReportScreen(
                                 onDismissRequest = { isNameDropdownOpen = false },
                                 modifier = Modifier
                                     .fillMaxWidth(0.9f)
-                                    .heightIn(max = 280.dp)
+                                    .heightIn(max = 280.dp),
+                                properties = androidx.compose.ui.window.PopupProperties(
+                                    focusable = false,
+                                    dismissOnClickOutside = true,
+                                    dismissOnBackPress = true
+                                )
                             ) {
                                 val availableInRole = filteredRoster.ifEmpty { roster }
                                 availableInRole.forEach { off ->
@@ -2339,40 +2389,110 @@ fun CitizenReportScreen(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        // Anti-Spoofing & Security Indicator
+                        // Smart Database Credentials & Multi-Device Sync Card
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFFFEF3C7),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A)),
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (selectedCredential?.isCustomPinSet == true) Color(0xFFF0FDF4) else Color(0xFFFFFBEB),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (selectedCredential?.isCustomPinSet == true) Color(0xFF86EFAC) else Color(0xFFFDE68A)
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
-                                modifier = Modifier.padding(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Shield,
-                                    contentDescription = null,
-                                    tint = Color(0xFFB45309),
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (selectedCredential?.isCustomPinSet == true) Icons.Default.CheckCircle else Icons.Default.Shield,
+                                        contentDescription = null,
+                                        tint = if (selectedCredential?.isCustomPinSet == true) Color(0xFF15803D) else Color(0xFFB45309),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (selectedCredential?.isCustomPinSet == true) "Kredensial Aktif: PIN Pribadi Terdaftar" else "Aktivasi Akun Baru: Kunci Individual NIP",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (selectedCredential?.isCustomPinSet == true) Color(0xFF166534) else Color(0xFF92400E)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Proteksi Kredensial: Kolom Nama & NIP dikunci otomatis dari database resmi BPBD. Input manual dinonaktifkan guna menghindari pemalsuan identitas oleh pihak tidak berwenang.",
-                                    fontSize = 9.sp,
-                                    color = Color(0xFF92400E),
-                                    lineHeight = 12.sp
+                                    text = if (selectedCredential?.isCustomPinSet == true) {
+                                        "Kredensial tersimpan di SQLite & Cloud Firestore. Wajib login dengan PIN pribadi Anda pada perangkat ini maupun perangkat baru. PIN default '117' dinonaktifkan."
+                                    } else {
+                                        val initialHint = selectedCredential?.initialSecurePin?.ifBlank {
+                                            selectedOfficer?.nip?.filter { it.isDigit() }?.takeLast(6)
+                                        } ?: "6 digit NIP"
+                                        "Akun personil belum mengganti PIN. Login awal wajib menggunakan 6 digit akhir NIP ($initialHint). Akses melalui PIN default '117' dilarang."
+                                    },
+                                    fontSize = 9.5.sp,
+                                    color = if (selectedCredential?.isCustomPinSet == true) Color(0xFF166534) else Color(0xFF78350F),
+                                    lineHeight = 13.sp
                                 )
+                                if (selectedCredential?.lastLoginDevice?.isNotBlank() == true) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "📱 Perangkat Terakhir: ${selectedCredential?.lastLoginDevice}",
+                                        fontSize = 8.5.sp,
+                                        color = Color(0xFF475569)
+                                    )
+                                }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Tombol Tambah Petugas (Khusus Admin dengan PIN Master)
+                        // Multi-device Cloud Sync & Admin Management Row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            OutlinedButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        isHarvestingSync = true
+                                        try {
+                                            smartAuthRepo.harvestAndSyncAllOfficers()
+                                            smartAuthRepo.pullCredentialsFromCloud { success, count ->
+                                                roster = officerAuthManager.getOfficerRoster()
+                                                val nip = selectedOfficer?.nip
+                                                if (!nip.isNullOrBlank()) {
+                                                    coroutineScope.launch {
+                                                        selectedCredential = smartAuthRepo.getCredential(nip)
+                                                    }
+                                                }
+                                                isHarvestingSync = false
+                                                Toast.makeText(
+                                                    context,
+                                                    if (success) "Sinkronisasi Cloud Berhasil: $count kredensial multi-perangkat diperbarui." else "Kredensial database lokal sudah mutakhir.",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        } catch (e: Exception) {
+                                            isHarvestingSync = false
+                                            Toast.makeText(context, "Sinkronisasi cloud: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudSync,
+                                    contentDescription = null,
+                                    tint = Color(0xFF2563EB),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isHarvestingSync) "Menyinkronkan..." else "Sinkronkan Cloud",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF2563EB)
+                                )
+                            }
+
                             OutlinedButton(
                                 onClick = {
                                     if (officerAuthManager.isAdminLoggedIn()) {
@@ -2395,7 +2515,7 @@ fun CitizenReportScreen(
                                     modifier = Modifier.size(12.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Kelola Personil (Admin)", fontSize = 10.sp, color = Color(0xFF0F766E))
+                                Text("Kelola Personil", fontSize = 10.sp, color = Color(0xFF0F766E))
                             }
                         }
 
@@ -2469,15 +2589,21 @@ fun CitizenReportScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // PIN Input Field
+                        // Smart PIN Input Field (Dedicated Personal PIN, No Default PIN Allowed)
                         OutlinedTextField(
                             value = inputPin,
                             onValueChange = {
                                 inputPin = it
                                 isError = false
                             },
-                            label = { Text("PIN Keamanan Petugas", fontSize = 11.sp) },
-                            placeholder = { Text("PIN Default: 117 / BPBD117 / TRC2026", fontSize = 11.sp) },
+                            label = { Text("PIN Pribadi Petugas Pusdalops", fontSize = 11.sp) },
+                            placeholder = {
+                                Text(
+                                    if (selectedCredential?.isCustomPinSet == true) "Masukkan PIN pribadi tersimpan"
+                                    else "Masukkan 6 digit akhir NIP",
+                                    fontSize = 11.sp
+                                )
+                            },
                             visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             trailingIcon = {
@@ -2497,16 +2623,17 @@ fun CitizenReportScreen(
 
                         if (isError) {
                             Text(
-                                text = errorMessage.ifBlank { "PIN salah. Gunakan PIN resmi BPBD (117 / BPBD117 / TRC2026)." },
+                                text = errorMessage.ifBlank { "PIN salah. Gunakan PIN pribadi yang tersimpan di database." },
                                 color = Color(0xFFDC2626),
                                 fontSize = 10.sp,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         } else {
                             Text(
-                                text = "Petunjuk: PIN standar Pusdalops adalah 117 atau BPBD117",
-                                color = Color(0xFF6B7280),
+                                text = "🔒 Skema Login Pintar: PIN default '117 / BPBD117 / TRC2026' ditolak. Masukkan PIN pribadi tersimpan atau 6 digit akhir NIP.",
+                                color = Color(0xFF0F766E),
                                 fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
@@ -2690,6 +2817,15 @@ fun CitizenReportScreen(
                                                     unit = inputUnit.trim()
                                                 )
                                             )
+                                            val newCred = OfficerCredentialEntity.createDefault(
+                                                nip = inputNip.trim(),
+                                                fullName = inputFullName.trim(),
+                                                role = inputRole,
+                                                unit = inputUnit.trim(),
+                                                shift = inputShift.trim()
+                                            )
+                                            AppDatabase.getInstance(context).credentialDao().insertCredential(newCred)
+                                            FirestoreHelper.syncCredentialToCloud(newCred)
                                         }
                                         roster = officerAuthManager.getOfficerRoster()
                                         selectedOfficer = newOff
@@ -2697,7 +2833,7 @@ fun CitizenReportScreen(
                                         formValidationError = ""
                                         Toast.makeText(
                                             context,
-                                            "Petugas '${newOff?.fullName}' berhasil didaftarkan ke sistem Pusdalops!",
+                                            "Petugas '${newOff?.fullName}' berhasil didaftarkan ke sistem & kredensial tersimpan di database!",
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
@@ -2720,104 +2856,71 @@ fun CitizenReportScreen(
                         onClick = {
                             val officer = selectedOfficer
                             if (officer == null) {
-                                if (inputPin.isNotBlank() && officerAuthManager.verifyPin(inputPin)) {
-                                    val success = officerAuthManager.loginOfficer(
-                                        name = "Admin Pusdalops PB",
-                                        badgeId = "ADMIN-BPBD-MMK-117",
-                                        shift = "Komando Utama (24 Jam)",
-                                        pin = inputPin,
-                                        role = OfficerRoles.MANAJER
-                                    )
-                                    if (success) {
-                                        isOfficerLoggedIn = true
-                                        officerName = officerAuthManager.getOfficerName()
-                                        officerBadgeId = officerAuthManager.getOfficerBadgeId()
-                                        officerShift = officerAuthManager.getOfficerShift()
-                                        officerRole = officerAuthManager.getOfficerRole()
-                                        showOfficerLoginDialog = false
-                                        selectedTab = 4 // Direct to Konsol Petugas
-                                        coroutineScope.launch {
-                                            securityManager.verifyDeviceAuthenticityDuringLogin(
-                                                officerNip = "ADMIN-BPBD-MMK-117",
-                                                officerName = "Admin Pusdalops PB",
-                                                officerRole = OfficerRoles.MANAJER
-                                            )
-                                        }
-                                        Toast.makeText(
-                                            context,
-                                            "Masuk sebagai Administrator Pusdalops PB. Silakan kelola personil di Konsol Petugas.",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        return@Button
-                                    } else {
-                                        isError = true
-                                        errorMessage = "PIN Master tidak valid."
-                                        return@Button
-                                    }
-                                } else {
-                                    isError = true
-                                    errorMessage = if (officerAuthManager.getOfficerRoster().isEmpty()) {
-                                        "Masukkan PIN Master (117 / BPBD117 / ADMIN117) untuk masuk sebagai Administrator."
-                                    } else {
-                                        "Pilih petugas dari daftar terlebih dahulu atau masukkan PIN Master Admin."
-                                    }
-                                    return@Button
-                                }
-                            }
-
-                            val nonNullOfficer = officer
-                            if (inputPin.isBlank()) {
                                 isError = true
-                                errorMessage = "Masukkan PIN keamanan petugas dinas."
+                                errorMessage = "Pilih petugas dari daftar terlebih dahulu."
                                 return@Button
                             }
 
-                            val success = officerAuthManager.loginOfficer(
-                                name = nonNullOfficer.fullName,
-                                badgeId = nonNullOfficer.nip,
-                                shift = nonNullOfficer.shift,
-                                pin = inputPin,
-                                role = nonNullOfficer.role
-                            )
-
-                            if (success) {
-                                isOfficerLoggedIn = true
-                                officerName = officerAuthManager.getOfficerName()
-                                officerBadgeId = officerAuthManager.getOfficerBadgeId()
-                                officerShift = officerAuthManager.getOfficerShift()
-                                officerRole = officerAuthManager.getOfficerRole()
-                                showOfficerLoginDialog = false
-                                onOfficerLoginDismissed?.invoke()
-                                selectedTab = 4 // Direct to Konsol Petugas
-                                coroutineScope.launch {
-                                    securityManager.verifyDeviceAuthenticityDuringLogin(
-                                        officerNip = nonNullOfficer.nip,
-                                        officerName = nonNullOfficer.fullName,
-                                        officerRole = nonNullOfficer.role
-                                    )
-                                }
-
-                                val targetId = pendingStatusReportId
-                                val targetStatus = pendingStatusTarget
-                                if (targetId != null && targetStatus != null) {
-                                    onUpdateReportStatus(targetId, targetStatus)
-                                    Toast.makeText(
-                                        context,
-                                        "Terverifikasi sebagai ${nonNullOfficer.formattedLabel()}. Status laporan diperbarui menjadi '$targetStatus'",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "Selamat bertugas, ${nonNullOfficer.formattedLabel()}!",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                                pendingStatusReportId = null
-                                pendingStatusTarget = null
-                            } else {
+                            val nonNullOfficer = officer
+                            val trimmedPin = inputPin.trim()
+                            if (trimmedPin.isBlank()) {
                                 isError = true
-                                errorMessage = "PIN salah. Gunakan PIN resmi Pusdalops (117 / BPBD117 / TRC2026) atau PIN baru yang telah diubah."
+                                errorMessage = "Masukkan PIN pribadi petugas dinas."
+                                return@Button
+                            }
+
+                            // STRICT CHECK: Reject generic default PINs without exception
+                            if (SmartOfficerAuthRepository.FORBIDDEN_DEFAULT_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) {
+                                isError = true
+                                errorMessage = "PIN default '$trimmedPin' dinonaktifkan demi keamanan. Wajib login menggunakan PIN pribadi yang telah tersimpan di database."
+                                return@Button
+                            }
+
+                            coroutineScope.launch {
+                                val authResult = smartAuthRepo.authenticateOfficer(
+                                    nip = nonNullOfficer.nip,
+                                    inputPin = trimmedPin
+                                )
+
+                                if (authResult.isSuccess) {
+                                    val profile = authResult.getOrNull() ?: nonNullOfficer
+                                    isOfficerLoggedIn = true
+                                    officerName = profile.fullName
+                                    officerBadgeId = profile.nip
+                                    officerShift = profile.shift
+                                    officerRole = profile.role
+                                    showOfficerLoginDialog = false
+                                    onOfficerLoginDismissed?.invoke()
+                                    selectedTab = 4 // Direct to Konsol Petugas
+                                    securityManager.verifyDeviceAuthenticityDuringLogin(
+                                        officerNip = profile.nip,
+                                        officerName = profile.fullName,
+                                        officerRole = profile.role
+                                    )
+
+                                    val targetId = pendingStatusReportId
+                                    val targetStatus = pendingStatusTarget
+                                    if (targetId != null && targetStatus != null) {
+                                        onUpdateReportStatus(targetId, targetStatus)
+                                        Toast.makeText(
+                                            context,
+                                            "Terverifikasi sebagai ${profile.formattedLabel()}. Status laporan diperbarui menjadi '$targetStatus'",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            "Selamat bertugas, ${profile.formattedLabel()}! (Kredensial Database Terverifikasi)",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                    pendingStatusReportId = null
+                                    pendingStatusTarget = null
+                                } else {
+                                    isError = true
+                                    errorMessage = authResult.exceptionOrNull()?.message
+                                        ?: "PIN salah. Periksa kembali PIN pribadi Anda."
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
@@ -2996,6 +3099,7 @@ fun CitizenReportScreen(
         }
     }
 }
+}
 
 /**
  * Reusable Dropdown Row matching the clean underlined layout of the screenshot
@@ -3043,7 +3147,12 @@ private fun ReportDropdownField(
 
             DropdownMenu(
                 expanded = isExpanded,
-                onDismissRequest = onDismiss
+                onDismissRequest = onDismiss,
+                properties = androidx.compose.ui.window.PopupProperties(
+                    focusable = false,
+                    dismissOnClickOutside = true,
+                    dismissOnBackPress = true
+                )
             ) {
                 content()
             }

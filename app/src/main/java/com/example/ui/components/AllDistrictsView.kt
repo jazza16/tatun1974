@@ -46,157 +46,207 @@ fun AllDistrictsView(
     onSelectDistrict: (District) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    androidx.compose.foundation.layout.BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("all_districts_view"),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .testTag("all_districts_view")
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-            shape = RoundedCornerShape(20.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(OrangePrimary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LocationCity,
-                        contentDescription = null,
-                        tint = OrangePrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = "15 Kecamatan di Kabupaten Mukomuko",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Ketuk untuk melihat rincian cuaca tiap wilayah",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                }
-            }
+        val columnCount = when {
+            maxWidth < 600.dp -> 1
+            maxWidth < 840.dp -> 2
+            else -> 3
         }
 
-        MukomukoDistricts.list.forEach { dist ->
-            val report = districtsSummary.find { it.district.id == dist.id }
-            val isCurrentSelected = dist.id == selectedDistrict.id
-            val isFav = favoriteDistricts.contains(dist.id)
-            val weatherInfo = report?.current?.weatherInfo ?: WeatherCodeHelper.getWeatherInfo(1)
-            val tempDisplay = report?.current?.temperature?.toInt()?.toString() ?: "30"
-
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .clickable { onSelectDistrict(dist) }
-                    .testTag("district_item_${dist.id}"),
-                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isCurrentSelected) OrangePrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    if (isCurrentSelected) OrangePrimary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = if (isCurrentSelected) 3.dp else 1.5.dp)
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = dist.name,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface
-                            )
-                            if (isFav) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = "Favorit",
-                                    tint = WeatherSunGold,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = OrangePrimary.copy(alpha = 0.12f)
-                        ) {
-                            Text(
-                                text = dist.category,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = OrangePrimary,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(3.dp))
-
-                        Text(
-                            text = dist.landmark,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                            maxLines = 1
-                        )
-                    }
-
-                    // Condition icon & text
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(OrangePrimary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = weatherInfo.icon,
-                            contentDescription = weatherInfo.conditionText,
-                            tint = weatherInfo.color,
+                            imageVector = Icons.Default.LocationCity,
+                            contentDescription = null,
+                            tint = OrangePrimary,
                             modifier = Modifier.size(22.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
                         Text(
-                            text = "$tempDisplay°C",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.ExtraBold,
+                            text = "15 Kecamatan di Kabupaten Mukomuko",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                            modifier = Modifier.size(18.dp)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Prakiraan cuaca spesifik pesisir & hulu Taman Nasional Kerinci Seblat",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
+                    }
+                }
+            }
+
+            // Adaptive layout: render in rows of `columnCount`
+            val chunkedDistricts = MukomukoDistricts.list.chunked(columnCount)
+
+            chunkedDistricts.forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    rowItems.forEach { dist ->
+                        val report = districtsSummary.find { it.district.id == dist.id }
+                        val isCurrentSelected = dist.id == selectedDistrict.id
+                        val isFav = favoriteDistricts.contains(dist.id)
+                        val weatherInfo = report?.current?.weatherInfo ?: WeatherCodeHelper.getWeatherInfo(1)
+                        val tempDisplay = report?.current?.temperature?.toInt()?.toString() ?: "30"
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            DistrictCardItem(
+                                dist = dist,
+                                isCurrentSelected = isCurrentSelected,
+                                isFav = isFav,
+                                weatherInfo = weatherInfo,
+                                tempDisplay = tempDisplay,
+                                onSelectDistrict = onSelectDistrict
+                            )
+                        }
+                    }
+
+                    // Fill remaining empty slots in last row if needed
+                    val emptySlots = columnCount - rowItems.size
+                    for (i in 0 until emptySlots) {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun DistrictCardItem(
+    dist: District,
+    isCurrentSelected: Boolean,
+    isFav: Boolean,
+    weatherInfo: com.example.model.WeatherInfo,
+    tempDisplay: String,
+    onSelectDistrict: (District) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable { onSelectDistrict(dist) }
+            .testTag("district_item_${dist.id}"),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isCurrentSelected) OrangePrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isCurrentSelected) OrangePrimary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isCurrentSelected) 3.dp else 1.5.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = dist.name,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+                    if (isFav) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "Favorit",
+                            tint = WeatherSunGold,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(3.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = OrangePrimary.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = dist.category,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = OrangePrimary,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        maxLines = 1
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = dist.landmark,
+                    fontSize = 10.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    maxLines = 1
+                )
+            }
+
+            // Condition icon & text
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = weatherInfo.icon,
+                    contentDescription = weatherInfo.conditionText,
+                    tint = weatherInfo.color,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "$tempDisplay°C",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
