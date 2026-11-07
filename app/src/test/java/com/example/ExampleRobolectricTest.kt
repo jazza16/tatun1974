@@ -13,7 +13,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class ExampleRobolectricTest {
 
   @Test
@@ -356,112 +356,5 @@ class ExampleRobolectricTest {
     assertTrue(rankManajer > rankPengawas)
     assertTrue(rankManajer < rankSupervisor)
   }
-
-  @Test
-  fun `verify smart officer auth harvests all personnel and saves unique credentials in database`() = kotlinx.coroutines.runBlocking {
-    val context = ApplicationProvider.getApplicationContext<Context>()
-    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository.getInstance(context)
-
-    // Harvest all officers from ASN personnel, Room, and roster
-    smartRepo.harvestAndSyncAllOfficers()
-
-    val db = com.example.data.local.AppDatabase.getInstance(context)
-    val credList = db.credentialDao().getAllCredentialsList()
-    assertTrue("Credentials table must have at least the 8 ASN personnel", credList.size >= 8)
-
-    // Verify Yudha's credential is saved in Room database
-    val yudhaCred = db.credentialDao().getCredentialByNip("199807202025061002")
-    assertNotNull("Yudha must have a database credential", yudhaCred)
-    assertEquals("YUDHA SOFRIANTO,S.A.P", yudhaCred?.fullName)
-    assertEquals("Operator Pusdalops", yudhaCred?.role)
-    assertTrue("Salt must not be empty", yudhaCred!!.salt.isNotBlank())
-    assertTrue("PIN hash must not be empty", yudhaCred.pinHash.isNotBlank())
-    assertEquals("061002", yudhaCred.initialSecurePin) // Last 6 digits of 199807202025061002 -> 061002
-  }
-
-  @Test
-  fun `verify smart officer auth strictly rejects default PIN 117 and TRC2026`() = kotlinx.coroutines.runBlocking {
-    val context = ApplicationProvider.getApplicationContext<Context>()
-    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository.getInstance(context)
-    smartRepo.harvestAndSyncAllOfficers()
-
-    val yudhaNip = "199807202025061002"
-
-    // Attempt login with default PIN "117"
-    val result117 = smartRepo.authenticateOfficer(yudhaNip, "117", "TestDevice")
-    assertTrue("Login with default PIN 117 must fail", result117.isFailure)
-    assertTrue(
-      "Error must explicitly mention default PIN is disabled",
-      result117.exceptionOrNull()?.message?.contains("PIN default", ignoreCase = true) == true
-    )
-
-    // Attempt login with default PIN "TRC2026"
-    val resultTrc = smartRepo.authenticateOfficer(yudhaNip, "TRC2026", "TestDevice")
-    assertTrue("Login with TRC2026 must fail", resultTrc.isFailure)
-
-    // Attempt login with default PIN "BPBD117"
-    val resultBpbd = smartRepo.authenticateOfficer(yudhaNip, "BPBD117", "TestDevice")
-    assertTrue("Login with BPBD117 must fail", resultBpbd.isFailure)
-  }
-
-  @Test
-  fun `verify smart officer auth succeeds with initial NIP secret on new unactivated device`() = kotlinx.coroutines.runBlocking {
-    val context = ApplicationProvider.getApplicationContext<Context>()
-    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository.getInstance(context)
-    smartRepo.harvestAndSyncAllOfficers()
-
-    val db = com.example.data.local.AppDatabase.getInstance(context)
-    val yudhaCred = db.credentialDao().getCredentialByNip("199807202025061002")!!
-
-    // Login with initial deterministic NIP secret
-    val loginResult = smartRepo.authenticateOfficer(yudhaCred.nip, yudhaCred.initialSecurePin, "Pixel 8 Pro")
-    assertTrue("Login with initial NIP secret must succeed", loginResult.isSuccess)
-    val profile = loginResult.getOrNull()
-    assertNotNull(profile)
-    assertEquals("YUDHA SOFRIANTO,S.A.P", profile?.fullName)
-
-    // Check device was recorded
-    val updated = db.credentialDao().getCredentialByNip(yudhaCred.nip)
-    assertTrue(updated?.lastLoginDevice?.contains("Pixel 8 Pro") == true)
-    assertTrue((updated?.lastLoginAt ?: 0L) > 0L)
-  }
-
-  @Test
-  fun `verify changing personal PIN persists to database and rejects old PIN or default PIN`() = kotlinx.coroutines.runBlocking {
-    val context = ApplicationProvider.getApplicationContext<Context>()
-    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository.getInstance(context)
-    smartRepo.harvestAndSyncAllOfficers()
-
-    val yudhaNip = "199807202025061002"
-    val db = com.example.data.local.AppDatabase.getInstance(context)
-    val cred = db.credentialDao().getCredentialByNip(yudhaNip)!!
-
-    // Try setting new PIN to a forbidden default PIN (e.g. "117")
-    val rejectDefaultChange = smartRepo.changePersonalPin(yudhaNip, cred.initialSecurePin, "117")
-    assertTrue("Cannot change PIN to default PIN 117", rejectDefaultChange.isFailure)
-
-    // Set a custom secure PIN (e.g. "889911")
-    val changeResult = smartRepo.changePersonalPin(yudhaNip, cred.initialSecurePin, "889911")
-    assertTrue("Changing to custom PIN 889911 must succeed", changeResult.isSuccess)
-
-    // Now old initial NIP key should be rejected
-    val loginOldKey = smartRepo.authenticateOfficer(yudhaNip, cred.initialSecurePin, "Pixel 8")
-    assertTrue("Old initial NIP key must now fail", loginOldKey.isFailure)
-
-    // Login with new custom PIN must succeed
-    val loginNewPin = smartRepo.authenticateOfficer(yudhaNip, "889911", "Pixel 8")
-    assertTrue("Login with new custom PIN must succeed", loginNewPin.isSuccess)
-
-    // Credential isCustomPinSet must be true
-    val updatedCred = db.credentialDao().getCredentialByNip(yudhaNip)
-    assertTrue(updatedCred?.isCustomPinSet == true)
-
-    // Reset to individual NIP key
-    val resetResult = smartRepo.resetToInitialNipSecret(yudhaNip)
-    assertTrue("Reset to NIP key must succeed", resetResult.isSuccess)
-    val credAfterReset = db.credentialDao().getCredentialByNip(yudhaNip)
-    org.junit.Assert.assertFalse(credAfterReset?.isCustomPinSet ?: true)
-  }
 }
-
 

@@ -326,24 +326,6 @@ class OfficerAuthManager(context: Context) {
     }
 
     /**
-     * Directly establishes an authenticated officer session after smart database verification.
-     */
-    fun loginOfficerDirectly(
-        name: String,
-        badgeId: String,
-        shift: String,
-        role: String = OfficerRoles.PETUGAS_JAGA
-    ) {
-        sharedPrefs.edit()
-            .putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
-            .putString(PREF_OFFICER_NAME, name.ifBlank { "Petugas Pusdalops PB" })
-            .putString(PREF_OFFICER_BADGE_ID, badgeId.ifBlank { "PUSDALOPS-117" })
-            .putString(PREF_OFFICER_ROLE, role.ifBlank { OfficerRoles.PETUGAS_JAGA })
-            .putString(PREF_OFFICER_SHIFT, shift.ifBlank { "Shift Siaga 24 Jam" })
-            .apply()
-    }
-
-    /**
      * Verifies if a given PIN matches the active officer PIN or fallback default PINs.
      */
     fun verifyPin(pin: String): Boolean {

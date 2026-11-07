@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,10 +28,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
-import androidx.window.core.layout.WindowWidthSizeClass
-import com.example.ui.components.WeatherNavigationRail
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -199,9 +194,6 @@ fun WeatherAppScreen(
     val currentDistrict = uiState.selectedDistrict
     val isFavorite = favorites.contains(currentDistrict.id)
 
-    val windowAdaptiveInfo = currentWindowAdaptiveInfo()
-    val isExpandedWindow = windowAdaptiveInfo.windowSizeClass.windowWidthSizeClass == WindowWidthSizeClass.EXPANDED
-
     // Handle incoming navigation from BMKG earthquake or App Update notifications
     val initialTab = remember {
         (context as? android.app.Activity)?.intent?.getIntExtra("EXTRA_NAVIGATE_TAB", -1) ?: -1
@@ -302,23 +294,11 @@ fun WeatherAppScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            val isExpandedScreen = isExpandedWindow || maxWidth >= 840.dp
-            Row(modifier = Modifier.fillMaxSize()) {
-                if (isExpandedScreen) {
-                    WeatherNavigationRail(
-                        selectedTabIndex = uiState.selectedTab,
-                        warningCount = uiState.earlyWarnings.size,
-                        reportCount = citizenDisasterReports.size,
-                        onTabSelected = { viewModel.selectTab(it) }
-                    )
-                }
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.background)
-                ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
             // AUTOMATED RETRY PROGRESS BAR IN STATUS STRIP
             if (isRetrying) {
                 Surface(
@@ -388,15 +368,13 @@ fun WeatherAppScreen(
                 }
             }
 
-            // Horizontal Tab Navigation (Compact and Medium screens only)
-            if (!isExpandedScreen) {
-                WeatherTabs(
-                    selectedTabIndex = uiState.selectedTab,
-                    warningCount = uiState.earlyWarnings.size,
-                    reportCount = citizenDisasterReports.size,
-                    onTabSelected = { viewModel.selectTab(it) }
-                )
-            }
+            // Horizontal Tab Navigation
+            WeatherTabs(
+                selectedTabIndex = uiState.selectedTab,
+                warningCount = uiState.earlyWarnings.size,
+                reportCount = citizenDisasterReports.size,
+                onTabSelected = { viewModel.selectTab(it) }
+            )
 
             // Location detection notification banner if any
             if (uiState.locationDetectionMessage != null) {
@@ -493,186 +471,174 @@ fun WeatherAppScreen(
                     }
                 }
             } else {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .widthIn(max = 840.dp)
-                            .align(Alignment.TopCenter)
-                    ) {
-                        AnimatedContent(
-                            targetState = uiState.selectedTab,
-                            transitionSpec = {
-                                val duration = 320
-                                val slideDistanceFraction = 0.22f
-                                if (targetState > initialState) {
-                                    (slideInHorizontally(
-                                        animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-                                    ) { width -> (width * slideDistanceFraction).toInt() } +
-                                     fadeIn(animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)))
-                                        .togetherWith(
-                                            slideOutHorizontally(
-                                                animationSpec = tween(duration - 60, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-                                            ) { width -> (-width * slideDistanceFraction).toInt() } +
-                                            fadeOut(animationSpec = tween(duration - 60))
-                                        )
-                                } else {
-                                    (slideInHorizontally(
-                                        animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                AnimatedContent(
+                    targetState = uiState.selectedTab,
+                    transitionSpec = {
+                        val duration = 320
+                        val slideDistanceFraction = 0.22f
+                        if (targetState > initialState) {
+                            (slideInHorizontally(
+                                animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                            ) { width -> (width * slideDistanceFraction).toInt() } +
+                             fadeIn(animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)))
+                                .togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(duration - 60, easing = androidx.compose.animation.core.FastOutSlowInEasing)
                                     ) { width -> (-width * slideDistanceFraction).toInt() } +
-                                     fadeIn(animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)))
-                                        .togetherWith(
-                                            slideOutHorizontally(
-                                                animationSpec = tween(duration - 60, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-                                            ) { width -> (width * slideDistanceFraction).toInt() } +
-                                            fadeOut(animationSpec = tween(duration - 60))
-                                        )
-                                }
-                            },
-                            label = "tabModuleTransition",
-                            modifier = Modifier.fillMaxSize()
-                        ) { currentTabIndex ->
-                            when (currentTabIndex) {
-                                0 -> {
-                                    // Tab 0: Hari Ini (Adaptive Grid Dashboard)
-                                    val report = uiState.report
-                                    if (report != null) {
-                                        LazyVerticalGrid(
-                                            columns = GridCells.Adaptive(minSize = 360.dp),
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .testTag("weather_content_list"),
-                                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 84.dp),
-                                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                        ) {
-                                            // Active Severe Weather Alert if available
-                                            if (report.alert != null) {
-                                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                                    ActiveAlertCard(
-                                                        alert = report.alert,
-                                                        onViewDetail = { viewModel.selectTab(3) }
-                                                    )
-                                                }
-                                            }
-
-                                            // In-App OTA Update Available Banner
-                                            if (uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
-                                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                                    InAppUpdateBannerCard(
-                                                        updateState = uiState.updateState,
-                                                        onUpdateNow = { viewModel.downloadAndApplyUpdate(context) },
-                                                        onViewDetails = { viewModel.setAppUpdateSheetOpen(true) },
-                                                        onDismiss = { viewModel.dismissUpdateBanner() }
-                                                    )
-                                                }
-                                            } else if (uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
-                                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                                    InAppUpdateSuccessCard(
-                                                        version = uiState.updateState.currentVersion,
-                                                        onDismiss = { viewModel.dismissUpdateBanner() }
-                                                    )
-                                                }
-                                            }
-
-                                            // Real-Time WRS-NTWC BMKG Earthquake Quick Banner
-                                            val latestEq = uiState.latestEarthquake
-                                            if (latestEq != null) {
-                                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                                    WrsLiveEarthquakeQuickCard(
-                                                        earthquake = latestEq,
-                                                        onClick = { viewModel.selectTab(3) }
-                                                    )
-                                                }
-                                            }
-
-                                            // Hero Weather Overview Card with Dynamic Animated Weather Icon
-                                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                                HeroWeatherCard(report = report)
-                                            }
-
-                                            // Feature: Edukasi & Makna Akronim SIPAGAR KITA (Otomatis disembunyikan bila sudah dibaca/ditutup, tersimpan di Menu Info)
-                                            if (!isSipagarKitaDismissed) {
-                                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                                    SipagarKitaAcronymCard(
-                                                        isDark = isActuallyDark,
-                                                        onDismissCard = { isSipagarKitaDismissed = true }
-                                                    )
-                                                }
-                                            }
-
-                                            // Feature: Prakiraan Cuaca 3 Hari (Mukomuko)
-                                            item {
-                                                ThreeDayForecastCard(
-                                                    district = currentDistrict,
-                                                    dailyList = report.daily,
-                                                    isDark = isActuallyDark
-                                                )
-                                            }
-
-                                            // Sun, UV Index & Atmospheric Metrics Card
-                                            item {
-                                                SunAndAtmosphereCard(
-                                                    daily = report.daily.firstOrNull(),
-                                                    current = report.current
-                                                )
-                                            }
-
-                                            // 24-Hour Forecast Timeline
-                                            item {
-                                                HourlyForecastCard(hourlyList = report.hourly)
-                                            }
-
-                                            // Feature: Overlay Peta Suhu Interaktif BMKG (Distribusi Panas 15 Kecamatan)
-                                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                                InteractiveTemperatureMapCard(
-                                                    currentDistrict = currentDistrict,
-                                                    districtsSummary = uiState.allDistrictsSummary,
-                                                    onSelectDistrict = { dist ->
-                                                        viewModel.selectDistrict(dist)
-                                                    }
-                                                )
-                                            }
-
-                                            // Data Visualization: Weekly Rainfall Precipitation Bar Chart
-                                            item {
-                                                WeeklyRainfallBarChartCard(
-                                                    currentDistrict = currentDistrict,
-                                                    dailyList = report.daily
-                                                )
-                                            }
-
-                                            // Parameter Meteorologi Harian: Native Compose Canvas Temperature & Rainfall Trend Chart
-                                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                                com.example.ui.components.MeteorologySummaryCard(
-                                                    report = report,
-                                                    isDark = isActuallyDark
-                                                )
-                                            }
-
-                                            // Data Visualization: Historical Marine Wave Height Chart
-                                            item {
-                                                MarineWaveHistoryChart(district = currentDistrict)
-                                            }
-
-                                            // Marine Pesisir Conditions Card
-                                            item {
-                                                MarinePesisirCard(
-                                                    district = currentDistrict,
-                                                    marine = report.marine
-                                                )
-                                            }
-
-                                            // Info Pasang Surut & Pasang Naik Dinamis Samudra Hindia Mukomuko
-                                            item {
-                                                TidalInformationCard(district = currentDistrict)
-                                            }
+                                    fadeOut(animationSpec = tween(duration - 60))
+                                )
+                        } else {
+                            (slideInHorizontally(
+                                animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                            ) { width -> (-width * slideDistanceFraction).toInt() } +
+                             fadeIn(animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)))
+                                .togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(duration - 60, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                    ) { width -> (width * slideDistanceFraction).toInt() } +
+                                    fadeOut(animationSpec = tween(duration - 60))
+                                )
+                        }
+                    },
+                    label = "tabModuleTransition",
+                    modifier = Modifier.fillMaxSize()
+                ) { currentTabIndex ->
+                    when (currentTabIndex) {
+                        0 -> {
+                            // Tab 0: Hari Ini (Maximized Mobile Phone Portrait Single-Column Dashboard)
+                            val report = uiState.report
+                            if (report != null) {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .testTag("weather_content_list"),
+                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 84.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    // Active Severe Weather Alert if available
+                                    if (report.alert != null) {
+                                        item {
+                                            ActiveAlertCard(
+                                                alert = report.alert,
+                                                onViewDetail = { viewModel.selectTab(3) }
+                                            )
                                         }
                                     }
+
+                                    // In-App OTA Update Available Banner
+                                    if (uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
+                                        item {
+                                            InAppUpdateBannerCard(
+                                                updateState = uiState.updateState,
+                                                onUpdateNow = { viewModel.downloadAndApplyUpdate(context) },
+                                                onViewDetails = { viewModel.setAppUpdateSheetOpen(true) },
+                                                onDismiss = { viewModel.dismissUpdateBanner() }
+                                            )
+                                        }
+                                    } else if (uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
+                                        item {
+                                            InAppUpdateSuccessCard(
+                                                version = uiState.updateState.currentVersion,
+                                                onDismiss = { viewModel.dismissUpdateBanner() }
+                                            )
+                                        }
+                                    }
+
+                                    // Real-Time WRS-NTWC BMKG Earthquake Quick Banner
+                                    val latestEq = uiState.latestEarthquake
+                                    if (latestEq != null) {
+                                        item {
+                                            WrsLiveEarthquakeQuickCard(
+                                                earthquake = latestEq,
+                                                onClick = { viewModel.selectTab(3) }
+                                            )
+                                        }
+                                    }
+
+                                    // Hero Weather Overview Card with Dynamic Animated Weather Icon
+                                    item {
+                                        HeroWeatherCard(report = report)
+                                    }
+
+                                    // Feature: Edukasi & Makna Akronim SIPAGAR KITA (Otomatis disembunyikan bila sudah dibaca/ditutup, tersimpan di Menu Info)
+                                    if (!isSipagarKitaDismissed) {
+                                        item {
+                                            SipagarKitaAcronymCard(
+                                                isDark = isActuallyDark,
+                                                onDismissCard = { isSipagarKitaDismissed = true }
+                                            )
+                                        }
+                                    }
+
+                                    // Feature: Prakiraan Cuaca 3 Hari (Mukomuko)
+                                    item {
+                                        ThreeDayForecastCard(
+                                            district = currentDistrict,
+                                            dailyList = report.daily,
+                                            isDark = isActuallyDark
+                                        )
+                                    }
+
+                                    // Sun, UV Index & Atmospheric Metrics Card
+                                    item {
+                                        SunAndAtmosphereCard(
+                                            daily = report.daily.firstOrNull(),
+                                            current = report.current
+                                        )
+                                    }
+
+                                    // 24-Hour Forecast Timeline
+                                    item {
+                                        HourlyForecastCard(hourlyList = report.hourly)
+                                    }
+
+                                    // Feature: Overlay Peta Suhu Interaktif BMKG (Distribusi Panas 15 Kecamatan)
+                                    item {
+                                        InteractiveTemperatureMapCard(
+                                            currentDistrict = currentDistrict,
+                                            districtsSummary = uiState.allDistrictsSummary,
+                                            onSelectDistrict = { dist ->
+                                                viewModel.selectDistrict(dist)
+                                            }
+                                        )
+                                    }
+
+                                    // Data Visualization: Weekly Rainfall Precipitation Bar Chart
+                                    item {
+                                        WeeklyRainfallBarChartCard(
+                                            currentDistrict = currentDistrict,
+                                            dailyList = report.daily
+                                        )
+                                    }
+
+                                    // Parameter Meteorologi Harian: Native Compose Canvas Temperature & Rainfall Trend Chart
+                                    item {
+                                        com.example.ui.components.MeteorologySummaryCard(
+                                            report = report,
+                                            isDark = isActuallyDark
+                                        )
+                                    }
+
+                                    // Data Visualization: Historical Marine Wave Height Chart
+                                    item {
+                                        MarineWaveHistoryChart(district = currentDistrict)
+                                    }
+
+                                    // Marine Pesisir Conditions Card
+                                    item {
+                                        MarinePesisirCard(
+                                            district = currentDistrict,
+                                            marine = report.marine
+                                        )
+                                    }
+
+                                    // Info Pasang Surut & Pasang Naik Dinamis Samudra Hindia Mukomuko
+                                    item {
+                                        TidalInformationCard(district = currentDistrict)
+                                    }
                                 }
+                            }
+                        }
 
                         1 -> {
                             // Tab 1: Laporan Warga Bencana (Formulir, Peta GIS Spasial, Tabel Riwayat, Kontak Penting) - Moved directly next to Hari Ini!
@@ -920,9 +886,6 @@ fun WeatherAppScreen(
                 }
             }
         }
-    }
-}
-}
 
         // Speed Dial Quick Actions FAB Overlay (100% Reliable Tap & Direct Links)
         QuickActionsFab(
