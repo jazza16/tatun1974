@@ -247,7 +247,7 @@ private fun EvacuationHeaderCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "PUSDALOPS-PB BPBD MUKOMUKO",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White,
                                 letterSpacing = 0.5.sp
@@ -262,7 +262,7 @@ private fun EvacuationHeaderCard(
                     ) {
                         Text(
                             text = "SIAGA GEMPA",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFFCA5A5),
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
@@ -299,7 +299,7 @@ private fun EvacuationHeaderCard(
                         Text(
                             text = "Prosedur keselamatan warga saat guncangan gempa bumi di wilayah pesisir & daratan Mukomuko.",
                             fontSize = 11.sp,
-                            color = Color(0xFFCBD5E1),
+                            color = Color(0xFF64748B),
                             lineHeight = 15.sp
                         )
                     }
@@ -504,7 +504,7 @@ private fun RuleItemBox(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = description,
-                fontSize = 9.sp,
+                fontSize = 11.sp,
                 color = Color(0xFF431407),
                 lineHeight = 12.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -549,7 +549,7 @@ private fun DropCoverHoldOnCard() {
                     Text(
                         text = "Protokol perlindungan diri seketika gempa mengguncang",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                     )
                 }
             }
@@ -665,7 +665,7 @@ private fun EvacuationPhasesTabsCard(
             Text(
                 text = "Ketahui langkah tepat sebelum, saat, dan sesudah bencana gempa bumi",
                 fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -901,7 +901,7 @@ private fun EmergencyBagChecklistCard() {
                         Text(
                             text = "Tandai perlengkapan darurat yang sudah Anda siapkan",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -983,8 +983,8 @@ private fun EmergencyBagChecklistCard() {
                         )
                         Text(
                             text = item.description,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                             lineHeight = 13.sp
                         )
                     }
@@ -1039,7 +1039,7 @@ private fun MukomukoEvacuationAssemblyPointsCard(
                     Text(
                         text = "Lokasi dataran tinggi dan titik kumpul terkoordinasi BPBD",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                     )
                 }
             }
@@ -1108,8 +1108,8 @@ private fun AssemblyPointItem(
                 )
                 Text(
                     text = location,
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                 )
                 Surface(
                     color = OrangePrimary.copy(alpha = 0.15f),
@@ -1118,7 +1118,7 @@ private fun AssemblyPointItem(
                 ) {
                     Text(
                         text = type,
-                        fontSize = 9.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = OrangePrimary,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)

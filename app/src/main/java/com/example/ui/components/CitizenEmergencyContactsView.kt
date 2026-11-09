@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -233,7 +234,7 @@ fun CitizenEmergencyContactsView(
                         Text(
                             text = "Direktori Kontak Darurat Mukomuko",
                             fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Normal,
                             color = Color(0xFF991B1B)
                         )
                         Text(
@@ -266,7 +267,10 @@ fun CitizenEmergencyContactsView(
                             fontSize = 11.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.White else Color(0xFF4B5563),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }
@@ -375,10 +379,13 @@ private fun EmergencyContactCard(
                             ) {
                                 Text(
                                     text = contact.category,
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = contact.themeColor,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                             if (contact.name.contains("Polres Mukomuko", ignoreCase = true)) {
@@ -388,10 +395,13 @@ private fun EmergencyContactCard(
                                 ) {
                                     Text(
                                         text = "POLISI BERSAMA MASYARAKAT",
-                                        fontSize = 8.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color(0xFFFFD700),
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -399,26 +409,27 @@ private fun EmergencyContactCard(
                     }
                 }
 
-                // Dial Button
-                Button(
-                    onClick = onDial,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = contact.themeColor),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                // Badge Panggil Mode Bulat (Identik dengan Mode Bulat pada Judul Direktori Kontak)
+                Surface(
+                    shape = CircleShape,
+                    color = contact.themeColor,
+                    shadowElevation = 2.dp,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable(onClick = onDial)
+                        .testTag("dial_badge_${contact.phoneNumber}")
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Call,
-                        contentDescription = "Panggil",
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Panggil",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhoneInTalk,
+                            contentDescription = "Panggil ${contact.name}",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
@@ -468,8 +479,8 @@ private fun EmergencyContactCard(
                     Spacer(modifier = Modifier.width(2.dp))
                     Text(
                         text = contact.address.take(24) + if (contact.address.length > 24) "..." else "",
-                        fontSize = 9.sp,
-                        color = Color(0xFF9CA3AF)
+                        fontSize = 11.sp,
+                        color = Color(0xFF6B7280)
                     )
                 }
             }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -414,7 +415,7 @@ private fun NotesListView(
                             )
                             Text(
                                 text = "Logbook Tim & Lapangan BPBD",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 color = Color(0xFF94A3B8)
                             )
                         }
@@ -426,16 +427,18 @@ private fun NotesListView(
                         color = Color(0xFF1E293B),
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155)),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                             Text(
                                 text = "${notes.size} Catatan",
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF38BDF8),
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -499,17 +502,19 @@ private fun NotesListView(
                             if (isSelected) OrangePrimary else Color(0xFFE2E8F0)
                         ),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                             .clickable { onCategorySelect(cat) }
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                             Text(
                                 text = cat,
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) Color.White else Color(0xFF334155),
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -560,7 +565,7 @@ private fun NotesListView(
                     Text(
                         text = "Tekan tombol di atas untuk membuat catatan koordinasi baru.",
                         fontSize = 11.sp,
-                        color = Color(0xFF94A3B8),
+                        color = Color(0xFF64748B),
                         textAlign = TextAlign.Center
                     )
                 }
@@ -681,16 +686,18 @@ private fun NoteListItemCard(
                         shape = RoundedCornerShape(4.dp),
                         color = Color(0xFF0F172A).copy(alpha = 0.08f),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp)) {
                             Text(
                                 text = note.category,
-                                fontSize = 8.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF334155),
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -700,16 +707,18 @@ private fun NoteListItemCard(
                         shape = RoundedCornerShape(4.dp),
                         color = priorityColor.copy(alpha = 0.12f),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp)) {
                             Text(
                                 text = note.priority,
-                                fontSize = 8.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = priorityColor,
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -717,8 +726,8 @@ private fun NoteListItemCard(
 
                 Text(
                     text = formattedDate,
-                    fontSize = 9.sp,
-                    color = Color(0xFF94A3B8),
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B),
                     maxLines = 1
                 )
             }
@@ -793,7 +802,7 @@ private fun NoteEditorView(
                         )
                         Text(
                             text = "Oleh: ${note.authorName} (${note.authorRole})",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             color = Color(0xFF64748B)
                         )
                     }
@@ -859,7 +868,7 @@ private fun NoteEditorView(
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color(0xFFCBD5E1),
+                    focusedIndicatorColor = Color(0xFF64748B),
                     unfocusedIndicatorColor = Color(0xFFE2E8F0)
                 ),
                 textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
@@ -886,16 +895,19 @@ private fun NoteEditorView(
                         color = if (isSel) Color(0xFF0F172A) else Color(0xFFF1F5F9),
                         border = androidx.compose.foundation.BorderStroke(1.dp, if (isSel) Color(0xFF0F172A) else Color(0xFFE2E8F0)),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                             .clickable { category = cat }
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                             Text(
                                 text = cat,
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSel) Color.White else Color(0xFF475569)
+                                color = if (isSel) Color.White else Color(0xFF475569),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -916,16 +928,19 @@ private fun NoteEditorView(
                         color = if (isSel) color else color.copy(alpha = 0.1f),
                         border = androidx.compose.foundation.BorderStroke(1.dp, if (isSel) color else color.copy(alpha = 0.3f)),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                             .clickable { priority = prio }
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                             Text(
                                 text = prio,
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isSel) Color.White else color
+                                color = if (isSel) Color.White else color,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -1007,7 +1022,7 @@ private fun NoteEditorView(
                         ) {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(12.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Ringkas Catatan (Gemini)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("Ringkas Catatan (Gemini)", fontSize = 11.sp, fontWeight = FontWeight.Normal)
                         }
 
                         // AI Action 2: Draf SOP Rekomendasi
@@ -1031,7 +1046,7 @@ private fun NoteEditorView(
                         ) {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(12.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Draf SOP Rekomendasi", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("Draf SOP Rekomendasi", fontSize = 11.sp, fontWeight = FontWeight.Normal)
                         }
                     }
 
@@ -1039,7 +1054,7 @@ private fun NoteEditorView(
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = aiNotificationMessage ?: "",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             color = Color(0xFF0369A1),
                             fontWeight = FontWeight.Medium
                         )

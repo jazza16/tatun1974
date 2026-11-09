@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -337,11 +338,12 @@ fun StartupSplashWallpaperScreen(
 
                             // Official BPBD Logo Image
                             Image(
-                                painter = painterResource(id = R.drawable.ic_bpbd_logo),
+                                painter = painterResource(id = R.drawable.ic_bpbd_mukomuko_official),
                                 contentDescription = "Logo BPBD Mukomuko",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .size(86.dp)
+                                    .aspectRatio(1f)
                                     .scale(logoScale.value)
                                     .clip(CircleShape)
                                     .border(2.dp, Color.White, CircleShape)
@@ -433,7 +435,7 @@ fun StartupSplashWallpaperScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = if (progress.value < 0.95f) "Menyiapkan telemetri cuaca & maritim Mukomuko..." else "Sistem siap digunakan",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFFE2E8F0)
                             )
@@ -638,7 +640,7 @@ fun MukomukoDisasterDetailSheet(onDismiss: () -> Unit) {
                     )
                     Text(
                         text = "Foto Dokumentasi Resolusi Tinggi: Samudra Hindia, Tanggul Abrasi, Rambu Tsunami & Armada Rescue BPBD",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color.White,
                         modifier = Modifier
@@ -768,7 +770,7 @@ private fun DisasterInfoSectionCard(
                     Text(
                         text = item,
                         fontSize = 11.sp,
-                        color = Color(0xFFCBD5E1),
+                        color = Color(0xFF64748B),
                         lineHeight = 15.sp
                     )
                 }

@@ -95,7 +95,7 @@ fun DistrictSelectorBottomSheet(
                     Text(
                         text = "Total 15 kecamatan di Kabupaten Mukomuko",
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
                 }
 
@@ -146,8 +146,8 @@ fun DistrictSelectorBottomSheet(
                         )
                         Text(
                             text = "Otomatis memilih kecamatan terdekat di Mukomuko",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -222,7 +222,7 @@ fun DistrictSelectorBottomSheet(
                                 Text(
                                     text = "${district.category} • ${district.landmark}",
                                     fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                                 )
                             }
 

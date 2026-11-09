@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -178,7 +180,7 @@ fun EmergencyWarningPopupDialog(
                             ) {
                                 Text(
                                     text = "PERINGATAN DINI AKTIF",
-                                    fontSize = 8.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Black,
                                     color = Color.White,
                                     maxLines = 1,
@@ -188,7 +190,7 @@ fun EmergencyWarningPopupDialog(
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "SIPAGAR KITA • BPBD MUKOMUKO",
-                                fontSize = 10.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = OrangePrimary,
                                 maxLines = 1
@@ -306,7 +308,7 @@ fun EmergencyWarningPopupDialog(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "1. Hindari aktivitas di bibir pantai dan muara saat gelombang pasang tinggi.\n2. Waspadai pohon tumbang, banjir luapan sungai, dan tanah longsor.\n3. Tetap tenang dan ikuti arahan resmi Posko PB BPBD Kabupaten Mukomuko.",
-                            fontSize = 10.5.sp,
+                            fontSize = 11.sp,
                             color = if (isDark) Color(0xFFFEE2E2) else Color(0xFF7F1D1D),
                             lineHeight = 15.sp
                         )
@@ -432,31 +434,33 @@ private fun WarningCardItem(
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = category,
-                        fontSize = 9.5.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = iconTint,
                         letterSpacing = 0.4.sp,
                         maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = iconTint,
-                        border = androidx.compose.foundation.BorderStroke(0.6.dp, Color.White.copy(alpha = 0.4f))
+                        border = androidx.compose.foundation.BorderStroke(0.6.dp, Color.White.copy(alpha = 0.4f)),
+                        modifier = Modifier.wrapContentWidth()
                     ) {
                         Text(
                             text = badgeText,
-                            fontSize = 7.5.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
                             color = Color.White,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                         )
                     }

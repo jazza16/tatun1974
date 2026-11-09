@@ -22,12 +22,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -85,6 +88,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -213,13 +217,20 @@ fun CitizenReportMapView(
         }
     }
 
-    Column(
-        modifier = modifier
+    Box(
+        modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF9FAFB))
-            .testTag("citizen_report_map_view")
+            .background(Color(0xFFF9FAFB)),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // 1. Category Filter Chips Bar
+        Column(
+            modifier = modifier
+                .fillMaxHeight()
+                .fillMaxWidth()
+                .widthIn(max = 840.dp)
+                .testTag("citizen_report_map_view")
+        ) {
+            // 1. Category Filter Chips Bar
         Surface(
             color = Color.White,
             shadowElevation = 2.dp,
@@ -237,11 +248,19 @@ fun CitizenReportMapView(
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp)
+                            modifier = Modifier.heightIn(min = 28.dp)
                         ) {
                             Icon(Icons.Default.Layers, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Peta 15 Kec", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(
+                                text = "Peta 15 Kec",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
+                            )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -259,7 +278,7 @@ fun CitizenReportMapView(
                     ) {
                         Text(
                             text = "Layer Rawan",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (showHazardOverlay) Color(0xFFDC2626) else Color.Gray
                         )
@@ -609,7 +628,7 @@ fun CitizenReportMapView(
                 Column(modifier = Modifier.padding(8.dp)) {
                     Text(
                         text = "LEGENDA STATUS PIN:",
-                        fontSize = 9.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF374151)
                     )
@@ -617,15 +636,36 @@ fun CitizenReportMapView(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(8.dp).background(Color(0xFFEA580C), CircleShape))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Diproses", fontSize = 9.sp, color = Color(0xFF4B5563))
+                        Text(
+                            text = "Diproses",
+                            fontSize = 11.sp,
+                            color = Color(0xFF4B5563),
+                            modifier = Modifier.weight(0.5f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(modifier = Modifier.size(8.dp).background(Color(0xFF16A34A), CircleShape))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Divalidasi", fontSize = 9.sp, color = Color(0xFF4B5563))
+                        Text(
+                            text = "Divalidasi",
+                            fontSize = 11.sp,
+                            color = Color(0xFF4B5563),
+                            modifier = Modifier.weight(0.5f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(modifier = Modifier.size(8.dp).background(Color(0xFF2563EB), CircleShape))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Selesai", fontSize = 9.sp, color = Color(0xFF4B5563))
+                        Text(
+                            text = "Selesai",
+                            fontSize = 11.sp,
+                            color = Color(0xFF4B5563),
+                            modifier = Modifier.weight(0.5f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -671,6 +711,7 @@ fun CitizenReportMapView(
             )
         }
     }
+}
 }
 
 /**
@@ -745,7 +786,7 @@ private fun ReportInspectionCard(
                         ) {
                             Text(
                                 text = "🛡️ FOTO KAMERA GPS SATELIT",
-                                fontSize = 8.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF86EFAC),
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
@@ -871,7 +912,7 @@ private fun CasualtyTag(text: String, color: Color, isNonZero: Boolean) {
     ) {
         Text(
             text = text,
-            fontSize = 10.sp,
+            fontSize = 11.sp,
             fontWeight = if (isNonZero) FontWeight.Bold else FontWeight.Normal,
             color = if (isNonZero) color else Color(0xFF6B7280),
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
@@ -892,7 +933,7 @@ private fun StatusButton(label: String, isActive: Boolean, activeColor: Color, o
     ) {
         Text(
             text = label,
-            fontSize = 10.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             color = if (isActive) Color.White else Color(0xFF4B5563),
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)

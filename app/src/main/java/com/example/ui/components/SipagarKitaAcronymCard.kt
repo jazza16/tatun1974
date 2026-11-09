@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -99,24 +100,22 @@ fun SipagarKitaAcronymCard(
                     .clickable { isExpanded = !isExpanded },
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Logo BPBD in circular badge
+                // Logo BPBD
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
+                        .size(38.dp)
+                        .aspectRatio(1f)
                         .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(OrangePrimary, Color(0xFFC2410C))
-                            )
-                        )
-                        .border(1.5.dp, Color(0xFFFFEDD5), CircleShape),
+                        .background(Color.White)
+                        .border(1.5.dp, Color(0xFFF97316), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_bpbd_logo),
+                        painter = painterResource(id = R.drawable.ic_bpbd_mukomuko_official),
                         contentDescription = "Logo BPBD Mukomuko",
                         modifier = Modifier
-                            .size(42.dp)
+                            .size(38.dp)
+                            .aspectRatio(1f)
                             .clip(CircleShape),
                         contentScale = ContentScale.Crop
                     )
@@ -140,7 +139,7 @@ fun SipagarKitaAcronymCard(
                         ) {
                             Text(
                                 text = "KAB. MUKOMUKO",
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = OrangePrimary,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -346,7 +345,7 @@ private fun AcronymItemCard(
                     Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                         Text(
                             text = "Makna:",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = OrangePrimary
                         )

@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -115,7 +116,7 @@ fun InAppUpdateBannerCard(
                             ) {
                                 Text(
                                     text = "v${updateState.latestVersion} DARING",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
@@ -170,13 +171,19 @@ fun InAppUpdateBannerCard(
                             text = "Mengunduh pembaruan daring...",
                             fontSize = 11.sp,
                             color = Color(0xFF1D4ED8),
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "${(updateState.downloadProgress * 100).toInt()}%",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1D4ED8)
+                            color = Color(0xFF1D4ED8),
+                            modifier = Modifier.weight(0.5f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
@@ -286,7 +293,7 @@ fun InAppUpdateSuccessCard(
                 Text(
                     text = "Aplikasi Berhasil Diperbarui ke v$version!",
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Normal,
                     color = Color(0xFF14532D)
                 )
                 Text(

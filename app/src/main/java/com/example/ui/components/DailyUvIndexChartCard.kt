@@ -145,7 +145,7 @@ fun DailyUvIndexChartCard(
                         ) {
                             Text(
                                 text = "Maks $uvCategory",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = categoryColor,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -190,7 +190,7 @@ fun DailyUvIndexChartCard(
                         )
                         Text(
                             text = "Radiasi UV mencapai titik tertinggi (${String.format("%.1f", maxUvIndex)}). Wajib kenakan tabir surya & pelindung mata.",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             color = Color(0xFF7F1D1D),
                             lineHeight = 13.sp
                         )
@@ -457,7 +457,7 @@ private fun UvScaleLegendItem(label: String, color: Color) {
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = label,
-            fontSize = 9.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
         )

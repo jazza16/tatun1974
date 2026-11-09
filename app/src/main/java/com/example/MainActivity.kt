@@ -1,4 +1,15 @@
 package com.example
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.example.model.AirQuality
+import com.example.model.BmkgEarthquake
+import com.example.model.DetailedEarlyWarning
+import com.example.model.EarthquakeUrgency
+import com.example.model.HourlyItem
+import com.example.model.MarineWeather
+import com.example.model.MukomukoDistricts
+import com.example.util.WeatherAlertSettings
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -21,13 +32,21 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import com.example.ui.components.WeatherNavigationRail
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,6 +91,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -133,6 +153,7 @@ import com.example.ui.viewmodel.AiWeatherViewModel
 import com.example.ui.viewmodel.WeatherViewModel
 
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -143,6 +164,7 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
+            val windowSizeClass = calculateWindowSizeClass(this@MainActivity)
             val context = LocalContext.current
             val database = AppDatabase.getInstance(context)
             val repository = WeatherRepository(database.weatherDao())
@@ -163,7 +185,8 @@ class MainActivity : ComponentActivity() {
                 MyApplicationTheme(darkTheme = isDark) {
                     WeatherAppScreen(
                         viewModel = weatherViewModel,
-                        aiViewModel = aiViewModel
+                        aiViewModel = aiViewModel,
+                        windowSizeClass = windowSizeClass
                     )
                 }
             }
@@ -174,7 +197,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun WeatherAppScreen(
     viewModel: WeatherViewModel,
-    aiViewModel: AiWeatherViewModel
+    aiViewModel: AiWeatherViewModel,
+    windowSizeClass: WindowSizeClass
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -193,6 +217,8 @@ fun WeatherAppScreen(
 
     val currentDistrict = uiState.selectedDistrict
     val isFavorite = favorites.contains(currentDistrict.id)
+
+    val isExpandedWindow = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
 
     // Handle incoming navigation from BMKG earthquake or App Update notifications
     val initialTab = remember {
@@ -268,25 +294,35 @@ fun WeatherAppScreen(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
-            WeatherTopBar(
-                district = currentDistrict,
-                isFavorite = isFavorite,
-                isRefreshing = uiState.isRefreshing,
-                isDarkMode = isActuallyDark,
-                isUpdateAvailable = uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated,
-                isDetectingLocation = uiState.isDetectingLocation,
-                onDistrictClick = { viewModel.setDistrictSheetOpen(true) },
-                onFavoriteToggle = { viewModel.toggleFavorite(currentDistrict.id) },
-                onRefreshClick = {
-                    viewModel.syncAllDataOnline(context) { _, msg ->
-                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                },
-                onThemeToggle = { viewModel.toggleDarkMode(isActuallyDark) },
-                onOpenAppMenu = { viewModel.setAppUpdateSheetOpen(true) },
-                onCallCenter117Click = { isCallCenter117SheetOpen = true },
-                onDetectLocationClick = triggerLocationDetection
-            )
+            Column {
+                WeatherTopBar(
+                    district = currentDistrict,
+                    isFavorite = isFavorite,
+                    isRefreshing = uiState.isRefreshing,
+                    isDarkMode = isActuallyDark,
+                    isUpdateAvailable = uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated,
+                    isDetectingLocation = uiState.isDetectingLocation,
+                    onDistrictClick = { viewModel.setDistrictSheetOpen(true) },
+                    onFavoriteToggle = { viewModel.toggleFavorite(currentDistrict.id) },
+                    onRefreshClick = {
+                        viewModel.syncAllDataOnline(context) { _, msg ->
+                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onThemeToggle = { viewModel.toggleDarkMode(isActuallyDark) },
+                    onOpenAppMenu = { viewModel.setAppUpdateSheetOpen(true) },
+                    onCallCenter117Click = { isCallCenter117SheetOpen = true },
+                    onDetectLocationClick = triggerLocationDetection
+                )
+                if (!isExpandedWindow) {
+                    WeatherTabs(
+                        selectedTabIndex = uiState.selectedTab,
+                        warningCount = uiState.earlyWarnings.size,
+                        reportCount = citizenDisasterReports.size,
+                        onTabSelected = { viewModel.selectTab(it) }
+                    )
+                }
+            }
         }
     ) { innerPadding ->
         BoxWithConstraints(
@@ -294,11 +330,22 @@ fun WeatherAppScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-            ) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                if (isExpandedWindow) {
+                    WeatherNavigationRail(
+                        selectedTabIndex = uiState.selectedTab,
+                        warningCount = uiState.earlyWarnings.size,
+                        reportCount = citizenDisasterReports.size,
+                        onTabSelected = { viewModel.selectTab(it) }
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
             // AUTOMATED RETRY PROGRESS BAR IN STATUS STRIP
             if (isRetrying) {
                 Surface(
@@ -327,7 +374,7 @@ fun WeatherAppScreen(
                             }
                             Text(
                                 text = "${(retryProgress * 100).toInt()}%",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = OrangePrimary
                             )
@@ -359,7 +406,7 @@ fun WeatherAppScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Jaringan Lambat (${latencyMs}ms) - Antrean retry otomatis diaktifkan",
-                                fontSize = 10.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF92400E)
                             )
@@ -367,14 +414,6 @@ fun WeatherAppScreen(
                     }
                 }
             }
-
-            // Horizontal Tab Navigation
-            WeatherTabs(
-                selectedTabIndex = uiState.selectedTab,
-                warningCount = uiState.earlyWarnings.size,
-                reportCount = citizenDisasterReports.size,
-                onTabSelected = { viewModel.selectTab(it) }
-            )
 
             // Location detection notification banner if any
             if (uiState.locationDetectionMessage != null) {
@@ -466,179 +505,190 @@ fun WeatherAppScreen(
                             text = "Memuat data cuaca Kabupaten Mukomuko...",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f)
                         )
                     }
                 }
             } else {
-                AnimatedContent(
-                    targetState = uiState.selectedTab,
-                    transitionSpec = {
-                        val duration = 320
-                        val slideDistanceFraction = 0.22f
-                        if (targetState > initialState) {
-                            (slideInHorizontally(
-                                animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-                            ) { width -> (width * slideDistanceFraction).toInt() } +
-                             fadeIn(animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)))
-                                .togetherWith(
-                                    slideOutHorizontally(
-                                        animationSpec = tween(duration - 60, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-                                    ) { width -> (-width * slideDistanceFraction).toInt() } +
-                                    fadeOut(animationSpec = tween(duration - 60))
-                                )
-                        } else {
-                            (slideInHorizontally(
-                                animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-                            ) { width -> (-width * slideDistanceFraction).toInt() } +
-                             fadeIn(animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)))
-                                .togetherWith(
-                                    slideOutHorizontally(
-                                        animationSpec = tween(duration - 60, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .widthIn(max = 840.dp)
+                            .fillMaxHeight()
+                    ) {
+                        AnimatedContent(
+                            targetState = uiState.selectedTab,
+                            transitionSpec = {
+                                val duration = 320
+                                val slideDistanceFraction = 0.22f
+                                if (targetState > initialState) {
+                                    (slideInHorizontally(
+                                        animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)
                                     ) { width -> (width * slideDistanceFraction).toInt() } +
-                                    fadeOut(animationSpec = tween(duration - 60))
-                                )
-                        }
-                    },
-                    label = "tabModuleTransition",
-                    modifier = Modifier.fillMaxSize()
-                ) { currentTabIndex ->
-                    when (currentTabIndex) {
-                        0 -> {
-                            // Tab 0: Hari Ini (Maximized Mobile Phone Portrait Single-Column Dashboard)
-                            val report = uiState.report
-                            if (report != null) {
-                                LazyColumn(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .testTag("weather_content_list"),
-                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 84.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    // Active Severe Weather Alert if available
-                                    if (report.alert != null) {
-                                        item {
-                                            ActiveAlertCard(
-                                                alert = report.alert,
-                                                onViewDetail = { viewModel.selectTab(3) }
-                                            )
-                                        }
-                                    }
-
-                                    // In-App OTA Update Available Banner
-                                    if (uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
-                                        item {
-                                            InAppUpdateBannerCard(
-                                                updateState = uiState.updateState,
-                                                onUpdateNow = { viewModel.downloadAndApplyUpdate(context) },
-                                                onViewDetails = { viewModel.setAppUpdateSheetOpen(true) },
-                                                onDismiss = { viewModel.dismissUpdateBanner() }
-                                            )
-                                        }
-                                    } else if (uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
-                                        item {
-                                            InAppUpdateSuccessCard(
-                                                version = uiState.updateState.currentVersion,
-                                                onDismiss = { viewModel.dismissUpdateBanner() }
-                                            )
-                                        }
-                                    }
-
-                                    // Real-Time WRS-NTWC BMKG Earthquake Quick Banner
-                                    val latestEq = uiState.latestEarthquake
-                                    if (latestEq != null) {
-                                        item {
-                                            WrsLiveEarthquakeQuickCard(
-                                                earthquake = latestEq,
-                                                onClick = { viewModel.selectTab(3) }
-                                            )
-                                        }
-                                    }
-
-                                    // Hero Weather Overview Card with Dynamic Animated Weather Icon
-                                    item {
-                                        HeroWeatherCard(report = report)
-                                    }
-
-                                    // Feature: Edukasi & Makna Akronim SIPAGAR KITA (Otomatis disembunyikan bila sudah dibaca/ditutup, tersimpan di Menu Info)
-                                    if (!isSipagarKitaDismissed) {
-                                        item {
-                                            SipagarKitaAcronymCard(
-                                                isDark = isActuallyDark,
-                                                onDismissCard = { isSipagarKitaDismissed = true }
-                                            )
-                                        }
-                                    }
-
-                                    // Feature: Prakiraan Cuaca 3 Hari (Mukomuko)
-                                    item {
-                                        ThreeDayForecastCard(
-                                            district = currentDistrict,
-                                            dailyList = report.daily,
-                                            isDark = isActuallyDark
+                                     fadeIn(animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)))
+                                        .togetherWith(
+                                            slideOutHorizontally(
+                                                animationSpec = tween(duration - 60, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                            ) { width -> (-width * slideDistanceFraction).toInt() } +
+                                            fadeOut(animationSpec = tween(duration - 60))
                                         )
-                                    }
-
-                                    // Sun, UV Index & Atmospheric Metrics Card
-                                    item {
-                                        SunAndAtmosphereCard(
-                                            daily = report.daily.firstOrNull(),
-                                            current = report.current
+                                } else {
+                                    (slideInHorizontally(
+                                        animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                    ) { width -> (-width * slideDistanceFraction).toInt() } +
+                                     fadeIn(animationSpec = tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)))
+                                        .togetherWith(
+                                            slideOutHorizontally(
+                                                animationSpec = tween(duration - 60, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                            ) { width -> (width * slideDistanceFraction).toInt() } +
+                                            fadeOut(animationSpec = tween(duration - 60))
                                         )
-                                    }
-
-                                    // 24-Hour Forecast Timeline
-                                    item {
-                                        HourlyForecastCard(hourlyList = report.hourly)
-                                    }
-
-                                    // Feature: Overlay Peta Suhu Interaktif BMKG (Distribusi Panas 15 Kecamatan)
-                                    item {
-                                        InteractiveTemperatureMapCard(
-                                            currentDistrict = currentDistrict,
-                                            districtsSummary = uiState.allDistrictsSummary,
-                                            onSelectDistrict = { dist ->
-                                                viewModel.selectDistrict(dist)
+                                }
+                            },
+                            label = "tabModuleTransition",
+                            modifier = Modifier.fillMaxSize()
+                        ) { currentTabIndex ->
+                            when (currentTabIndex) {
+                                0 -> {
+                                    // Tab 0: Hari Ini (Adaptive Grid Dashboard)
+                                    val report = uiState.report
+                                    if (report != null) {
+                                        LazyVerticalGrid(
+                                            columns = GridCells.Adaptive(minSize = 360.dp),
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .testTag("weather_content_list"),
+                                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 84.dp),
+                                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                        ) {
+                                            // Active Severe Weather Alert if available
+                                            if (report.alert != null) {
+                                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                                    ActiveAlertCard(
+                                                        alert = report.alert,
+                                                        onViewDetail = { viewModel.selectTab(3) }
+                                                    )
+                                                }
                                             }
-                                        )
-                                    }
 
-                                    // Data Visualization: Weekly Rainfall Precipitation Bar Chart
-                                    item {
-                                        WeeklyRainfallBarChartCard(
-                                            currentDistrict = currentDistrict,
-                                            dailyList = report.daily
-                                        )
-                                    }
+                                            // In-App OTA Update Available Banner
+                                            if (uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
+                                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                                    InAppUpdateBannerCard(
+                                                        updateState = uiState.updateState,
+                                                        onUpdateNow = { viewModel.downloadAndApplyUpdate(context) },
+                                                        onViewDetails = { viewModel.setAppUpdateSheetOpen(true) },
+                                                        onDismiss = { viewModel.dismissUpdateBanner() }
+                                                    )
+                                                }
+                                            } else if (uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
+                                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                                    InAppUpdateSuccessCard(
+                                                        version = uiState.updateState.currentVersion,
+                                                        onDismiss = { viewModel.dismissUpdateBanner() }
+                                                    )
+                                                }
+                                            }
 
-                                    // Parameter Meteorologi Harian: Native Compose Canvas Temperature & Rainfall Trend Chart
-                                    item {
-                                        com.example.ui.components.MeteorologySummaryCard(
-                                            report = report,
-                                            isDark = isActuallyDark
-                                        )
-                                    }
+                                            // Real-Time WRS-NTWC BMKG Earthquake Quick Banner
+                                            val latestEq = uiState.latestEarthquake
+                                            if (latestEq != null) {
+                                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                                    WrsLiveEarthquakeQuickCard(
+                                                        earthquake = latestEq,
+                                                        onClick = { viewModel.selectTab(3) }
+                                                    )
+                                                }
+                                            }
 
-                                    // Data Visualization: Historical Marine Wave Height Chart
-                                    item {
-                                        MarineWaveHistoryChart(district = currentDistrict)
-                                    }
+                                            // Hero Weather Overview Card with Dynamic Animated Weather Icon
+                                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                                HeroWeatherCard(report = report)
+                                            }
 
-                                    // Marine Pesisir Conditions Card
-                                    item {
-                                        MarinePesisirCard(
-                                            district = currentDistrict,
-                                            marine = report.marine
-                                        )
-                                    }
+                                            // Feature: Edukasi & Makna Akronim SIPAGAR KITA (Otomatis disembunyikan bila sudah dibaca/ditutup, tersimpan di Menu Info)
+                                            if (!isSipagarKitaDismissed) {
+                                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                                    SipagarKitaAcronymCard(
+                                                        isDark = isActuallyDark,
+                                                        onDismissCard = { isSipagarKitaDismissed = true }
+                                                    )
+                                                }
+                                            }
 
-                                    // Info Pasang Surut & Pasang Naik Dinamis Samudra Hindia Mukomuko
-                                    item {
-                                        TidalInformationCard(district = currentDistrict)
+                                            // Feature: Prakiraan Cuaca 3 Hari (Mukomuko)
+                                            item {
+                                                ThreeDayForecastCard(
+                                                    district = currentDistrict,
+                                                    dailyList = report.daily,
+                                                    isDark = isActuallyDark
+                                                )
+                                            }
+
+                                            // Sun, UV Index & Atmospheric Metrics Card
+                                            item {
+                                                SunAndAtmosphereCard(
+                                                    daily = report.daily.firstOrNull(),
+                                                    current = report.current
+                                                )
+                                            }
+
+                                            // 24-Hour Forecast Timeline
+                                            item {
+                                                HourlyForecastCard(hourlyList = report.hourly)
+                                            }
+
+                                            // Feature: Overlay Peta Suhu Interaktif BMKG (Distribusi Panas 15 Kecamatan)
+                                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                                InteractiveTemperatureMapCard(
+                                                    currentDistrict = currentDistrict,
+                                                    districtsSummary = uiState.allDistrictsSummary,
+                                                    onSelectDistrict = { dist ->
+                                                        viewModel.selectDistrict(dist)
+                                                    }
+                                                )
+                                            }
+
+                                            // Data Visualization: Weekly Rainfall Precipitation Bar Chart
+                                            item {
+                                                WeeklyRainfallBarChartCard(
+                                                    currentDistrict = currentDistrict,
+                                                    dailyList = report.daily
+                                                )
+                                            }
+
+                                            // Parameter Meteorologi Harian: Native Compose Canvas Temperature & Rainfall Trend Chart
+                                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                                com.example.ui.components.MeteorologySummaryCard(
+                                                    report = report,
+                                                    isDark = isActuallyDark
+                                                )
+                                            }
+
+                                            // Data Visualization: Historical Marine Wave Height Chart
+                                            item {
+                                                MarineWaveHistoryChart(district = currentDistrict)
+                                            }
+
+                                            // Marine Pesisir Conditions Card
+                                            item {
+                                                MarinePesisirCard(
+                                                    district = currentDistrict,
+                                                    marine = report.marine
+                                                )
+                                            }
+
+                                            // Info Pasang Surut & Pasang Naik Dinamis Samudra Hindia Mukomuko
+                                            item {
+                                                TidalInformationCard(district = currentDistrict)
+                                            }
+                                        }
                                     }
                                 }
-                            }
-                        }
 
                         1 -> {
                             // Tab 1: Laporan Warga Bencana (Formulir, Peta GIS Spasial, Tabel Riwayat, Kontak Penting) - Moved directly next to Hari Ini!
@@ -886,11 +936,18 @@ fun WeatherAppScreen(
                 }
             }
         }
+    }
+}
+}
 
         // Speed Dial Quick Actions FAB Overlay (100% Reliable Tap & Direct Links)
         QuickActionsFab(
             isExpanded = isQuickActionsFabExpanded,
             onToggleExpand = { isQuickActionsFabExpanded = !isQuickActionsFabExpanded },
+            onSelectFormLaporan = {
+                isQuickActionsFabExpanded = false
+                context.startActivity(android.content.Intent(context, com.example.FormLaporanActivity::class.java))
+            },
             onSelectCitizenReport = {
                 isQuickActionsFabExpanded = false
                 viewModel.selectTab(1)
@@ -1048,7 +1105,7 @@ fun WeatherAppScreen(
                     Text(
                         text = "Ukuran paket: ${uiState.updateState.packageSizeMb} MB • Tanda Tangan Digital Terverifikasi",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
                 }
             },
@@ -1183,7 +1240,10 @@ private fun QuickEvacuationPreparednessBanner(
                         text = "Kesiapsiagaan Evakuasi Gempa",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = titleCol
+                        color = titleCol,
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Surface(
@@ -1192,16 +1252,19 @@ private fun QuickEvacuationPreparednessBanner(
                     ) {
                         Text(
                             text = "SOP BPBD",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color(0xFFFECACA) else Color(0xFFDC2626),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }
                 Text(
                     text = "Refleks Drop-Cover-Hold On & Rumus 20-20-20 Tsunami Pesisir",
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     color = descCol,
                     maxLines = 1
                 )
@@ -1263,7 +1326,10 @@ private fun QuickGeminiAdvisorBanner(
                         text = "Tanya AI Gemini",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = titleCol
+                        color = titleCol,
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Surface(
@@ -1272,16 +1338,19 @@ private fun QuickGeminiAdvisorBanner(
                     ) {
                         Text(
                             text = "AI Advisor",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color(0xFFE9D5FF) else Color(0xFF9333EA),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }
                 Text(
                     text = "Konsultasi kelayakan melaut nelayan & panen sawit",
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     color = descCol,
                     maxLines = 1
                 )
@@ -1349,19 +1418,25 @@ private fun QuickEmergency117Strip(
                             text = "Call Center 117",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = titleCol
+                            color = titleCol,
+                            modifier = Modifier.weight(1f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "• Bebas Pulsa 24 Jam",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             color = if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626),
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(0.6f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     Text(
                         text = "Pusdalops-PB BPBD Mukomuko • Tanggap Darurat Bencana",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = subtitleCol,
                         maxLines = 1
                     )
@@ -1375,7 +1450,7 @@ private fun QuickEmergency117Strip(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
                 shape = RoundedCornerShape(10.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                modifier = Modifier.height(34.dp)
+                modifier = Modifier.heightIn(min = 34.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.PhoneInTalk,
@@ -1384,7 +1459,14 @@ private fun QuickEmergency117Strip(
                     modifier = Modifier.size(14.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("117", fontSize = 12.sp, fontWeight = FontWeight.Black)
+                Text(
+                    text = "117",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
+                )
             }
         }
     }
@@ -1506,7 +1588,7 @@ private fun SunAndAtmosphereCard(
                         Text(
                             text = "Radiasi UV & Siklus Surya Mukomuko",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -1517,10 +1599,13 @@ private fun SunAndAtmosphereCard(
                 ) {
                     Text(
                         text = "BMKG",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = OrangePrimary,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
             }
@@ -1560,7 +1645,7 @@ private fun SunAndAtmosphereCard(
                         Column {
                             Text(
                                 text = "Terbit (WIB)",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF9A3412)
                             )
@@ -1602,7 +1687,7 @@ private fun SunAndAtmosphereCard(
                         Column {
                             Text(
                                 text = "Terbenam",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF991B1B)
                             )
@@ -1635,8 +1720,8 @@ private fun SunAndAtmosphereCard(
                 Column {
                     Text(
                         text = "Indeks UV Maks",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1650,14 +1735,20 @@ private fun SunAndAtmosphereCard(
                             text = String.format(Locale.US, "%.1f", uvIndex),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = "($uvCategory)",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = uvBadgeColor
+                            color = uvBadgeColor,
+                            modifier = Modifier.weight(0.6f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -1666,8 +1757,8 @@ private fun SunAndAtmosphereCard(
                 Column {
                     Text(
                         text = "Tekanan Udara",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1691,8 +1782,8 @@ private fun SunAndAtmosphereCard(
                 Column {
                     Text(
                         text = "Kelembaban",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1777,17 +1868,20 @@ private fun WrsLiveEarthquakeQuickCard(
                             ) {
                                 Text(
                                     text = "LIVE",
-                                    fontSize = 8.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
                         Text(
                             text = "${earthquake.date} • ${earthquake.timeWib}",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -1798,10 +1892,13 @@ private fun WrsLiveEarthquakeQuickCard(
                 ) {
                     Text(
                         text = if (isTsunami) "⚠️ POTENSI TSUNAMI" else "✓ AMAN TSUNAMI",
-                        fontSize = 9.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isTsunami) Color(0xFFDC2626) else Color(0xFF16A34A),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
             }
@@ -1822,7 +1919,10 @@ private fun WrsLiveEarthquakeQuickCard(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Black,
                         color = Color(0xFFDC2626),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
 
@@ -1838,8 +1938,8 @@ private fun WrsLiveEarthquakeQuickCard(
                     )
                     Text(
                         text = "Kedalaman: ${earthquake.depth} • ~${earthquake.distanceKmToMukomuko} km dari Mukomuko",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                     )
                 }
 
@@ -1856,3 +1956,210 @@ private fun WrsLiveEarthquakeQuickCard(
     }
 }
 
+
+
+// ============================================================================
+// Visual Density & Accessibility Previews for Font Scale & Screen Size
+// ============================================================================
+
+private fun createPreviewReport(): WeatherFullReport {
+    val district = MukomukoDistricts.defaultDistrict
+    return WeatherFullReport(
+        district = district,
+        current = CurrentWeather(
+            temperature = 31.0,
+            feelsLike = 34.5,
+            humidity = 78,
+            precipitation = 2.4,
+            weatherCode = 61,
+            surfacePressure = 1010.5,
+            windSpeed = 14.5,
+            windDirection = 210,
+            time = "2026-11-08T14:00"
+        ),
+        hourly = listOf(
+            HourlyItem("2026-11-08T12:00", "12:00", 32.0, 1, 10, 70, 12.0),
+            HourlyItem("2026-11-08T13:00", "13:00", 31.5, 2, 20, 72, 13.0),
+            HourlyItem("2026-11-08T14:00", "14:00", 31.0, 61, 65, 78, 14.5),
+            HourlyItem("2026-11-08T15:00", "15:00", 29.0, 63, 80, 85, 16.0),
+            HourlyItem("2026-11-08T16:00", "16:00", 28.0, 80, 90, 88, 18.0)
+        ),
+        daily = listOf(
+            DailyItem("2026-11-08", "Hari Ini", 61, 32.0, 24.0, 75, 12.5, 7.5, 14.0, "05:58", "18:12"),
+            DailyItem("2026-11-09", "Senin", 63, 31.0, 23.0, 85, 24.0, 6.0, 16.0, "05:58", "18:12"),
+            DailyItem("2026-11-10", "Selasa", 2, 33.0, 24.0, 30, 1.2, 8.5, 12.0, "05:58", "18:12")
+        ),
+        marine = MarineWeather(
+            waveHeight = 1.75,
+            seaCondition = "Sedang (1.25 - 2.50 m)",
+            windSpeedKnots = 12.0,
+            tideStatus = "Pasang Tinggi",
+            fishermanSafety = "Waspada Perahu Kecil",
+            fishermanAdvice = "Waspada potensi gelombang sedang di perairan Mukomuko",
+            waterTemp = 29.0
+        ),
+        airQuality = AirQuality(
+            aqi = 42,
+            pm25 = 18.4,
+            pm10 = 28.0,
+            status = "Baik",
+            recommendation = "Kualitas udara sangat baik untuk beraktivitas di luar."
+        ),
+        alert = null
+    )
+}
+
+private fun createPreviewEarthquake(): BmkgEarthquake {
+    return BmkgEarthquake(
+        id = "gempa_preview_1",
+        date = "08 Nov 2026",
+        timeWib = "14:22:10 WIB",
+        dateTimeIso = "2026-11-08T14:22:10+07:00",
+        latitude = -2.85,
+        longitude = 100.95,
+        magnitude = 5.2,
+        depth = "18 km",
+        region = "62 km BaratDaya MUKOMUKO-BENGKULU",
+        potentialTsunami = "Tidak berpotensi tsunami",
+        feltDescription = "Dirasakan (MMI): III Mukomuko, II-III Kerinci",
+        shakemapUrl = null,
+        distanceKmToMukomuko = 62,
+        isNearMukomuko = true,
+        urgencyLevel = EarthquakeUrgency.WARNING
+    )
+}
+
+private fun createPreviewEarlyWarnings(): List<DetailedEarlyWarning> {
+    return listOf(
+        DetailedEarlyWarning(
+            id = "warning_1",
+            title = "Peringatan Dini Cuaca Ekstrem Pesisir",
+            severity = "SIAGA",
+            category = "Hujan Lebat & Angin Kencang",
+            affectedDistricts = listOf("Kota Mukomuko", "Air Dikit", "Teramang Jaya"),
+            validUntil = "Hari Ini, 20:00 WIB",
+            description = "Berpotensi terjadi hujan sedang hingga lebat disertai kilat/petir dan angin kencang berdurasi singkat.",
+            safetyInstructions = listOf(
+                "Hindari berada di bawah pohon rindang atau baliho besar",
+                "Nelayan diimbau menunda melaut sementara waktu",
+                "Waspada genangan air di dataran rendah pesisir"
+            )
+        )
+    )
+}
+
+@Composable
+private fun WeatherDenseComponentsPreviewContent() {
+    val report = remember<WeatherFullReport> { createPreviewReport() }
+    val earthquake = remember<BmkgEarthquake> { createPreviewEarthquake() }
+    val warnings = remember<List<DetailedEarlyWarning>> { createPreviewEarlyWarnings() }
+    val alertSettings = remember<WeatherAlertSettings> { WeatherAlertSettings() }
+
+    MyApplicationTheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // 1. Quick Emergency 117 Strip
+                QuickEmergency117Strip(
+                    isDark = isSystemInDarkTheme(),
+                    onCall117 = {},
+                    onViewDetails = {}
+                )
+
+                // 2. WRS Live Earthquake Quick Card
+                WrsLiveEarthquakeQuickCard(
+                    earthquake = earthquake,
+                    onClick = {}
+                )
+
+                // 3. Early Warning Section
+                EarlyWarningSection(
+                    warnings = warnings,
+                    currentDistrict = report.district,
+                    weatherAlertSettings = alertSettings,
+                    onUpdateWeatherAlertSettings = {},
+                    onTestWeatherAlertNotification = {},
+                    onCall117 = {},
+                    onOpenCallCenterInfo = {}
+                )
+
+                // 4. Hero Weather Card
+                HeroWeatherCard(report = report)
+            }
+        }
+    }
+}
+
+/**
+ * Preview 1: Baseline font scale (1.0f) for Compact Phone (360dp) and Tablet (800dp).
+ */
+@Preview(
+    name = "Preview 1: Baseline (1.0x) - Phone (360dp)",
+    group = "WeatherAppScreen Dense Previews",
+    widthDp = 360,
+    fontScale = 1.0f,
+    showBackground = true
+)
+@Preview(
+    name = "Preview 1: Baseline (1.0x) - Tablet (800dp)",
+    group = "WeatherAppScreen Dense Previews",
+    widthDp = 800,
+    fontScale = 1.0f,
+    showBackground = true
+)
+@Composable
+fun WeatherAppScreenPreviewBaseline() {
+    WeatherDenseComponentsPreviewContent()
+}
+
+/**
+ * Preview 2: Samsung Default font scale (1.3f) for Compact Phone (360dp) and Tablet (800dp).
+ */
+@Preview(
+    name = "Preview 2: Samsung Default (1.3x) - Phone (360dp)",
+    group = "WeatherAppScreen Dense Previews",
+    widthDp = 360,
+    fontScale = 1.3f,
+    showBackground = true
+)
+@Preview(
+    name = "Preview 2: Samsung Default (1.3x) - Tablet (800dp)",
+    group = "WeatherAppScreen Dense Previews",
+    widthDp = 800,
+    fontScale = 1.3f,
+    showBackground = true
+)
+@Composable
+fun WeatherAppScreenPreviewSamsung() {
+    WeatherDenseComponentsPreviewContent()
+}
+
+/**
+ * Preview 3: Accessibility Max font scale (2.0f) for Compact Phone (360dp) and Tablet (800dp).
+ */
+@Preview(
+    name = "Preview 3: Accessibility Max (2.0x) - Phone (360dp)",
+    group = "WeatherAppScreen Dense Previews",
+    widthDp = 360,
+    fontScale = 2.0f,
+    showBackground = true
+)
+@Preview(
+    name = "Preview 3: Accessibility Max (2.0x) - Tablet (800dp)",
+    group = "WeatherAppScreen Dense Previews",
+    widthDp = 800,
+    fontScale = 2.0f,
+    showBackground = true
+)
+@Composable
+fun WeatherAppScreenPreviewAccessibilityMax() {
+    WeatherDenseComponentsPreviewContent()
+}

@@ -85,6 +85,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.District
@@ -225,16 +226,19 @@ fun InteractiveTemperatureMapCard(
                             ) {
                                 Text(
                                     text = "15 Kec",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = OrangePrimary,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                             Text(
                                 text = "Distribusi panas wilayah Mukomuko",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                 maxLines = 1
                             )
                         }
@@ -329,9 +333,9 @@ fun InteractiveTemperatureMapCard(
                         Column {
                             Text(
                                 text = "Tertinggi",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                             Text(
                                 text = "${maxTempItem?.temperature?.let { "%.1f".format(it) } ?: "-"}°C",
@@ -341,9 +345,9 @@ fun InteractiveTemperatureMapCard(
                             )
                             Text(
                                 text = maxTempItem?.district?.name?.take(9) ?: "-",
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 maxLines = 1,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
                     }
@@ -371,9 +375,9 @@ fun InteractiveTemperatureMapCard(
                         Column {
                             Text(
                                 text = "Rata-Rata",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                             Text(
                                 text = "%.1f°C".format(avgTemp),
@@ -383,8 +387,8 @@ fun InteractiveTemperatureMapCard(
                             )
                             Text(
                                 text = "Kabupaten",
-                                fontSize = 9.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
                     }
@@ -412,9 +416,9 @@ fun InteractiveTemperatureMapCard(
                         Column {
                             Text(
                                 text = "Tersejuk",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                             Text(
                                 text = "${minTempItem?.temperature?.let { "%.1f".format(it) } ?: "-"}°C",
@@ -424,9 +428,9 @@ fun InteractiveTemperatureMapCard(
                             )
                             Text(
                                 text = minTempItem?.district?.name?.take(9) ?: "-",
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 maxLines = 1,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
                     }
@@ -793,7 +797,7 @@ fun InteractiveTemperatureMapCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Samudra Hindia ↔ Bukit Barisan",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 color = Color(0xFFE2E8F0)
                             )
                         }
@@ -848,25 +852,25 @@ fun InteractiveTemperatureMapCard(
                 ) {
                     when (selectedMode) {
                         TempMapMode.RAIN_RADAR -> {
-                            Text("Cerah (0mm)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF38BDF8))
-                            Text("2 mm", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                            Text("Sedang (5mm)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEAB308))
-                            Text("10 mm", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                            Text("Lebat (>15mm)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFFDC2626))
+                            Text("Cerah (0mm)", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFF38BDF8))
+                            Text("2 mm", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                            Text("Sedang (5mm)", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEAB308))
+                            Text("10 mm", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                            Text("Lebat (>15mm)", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFFDC2626))
                         }
                         TempMapMode.WIND_SPEED -> {
-                            Text("Tenang (<8kph)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF06B6D4))
-                            Text("12 kph", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                            Text("Sedang (16kph)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEAB308))
-                            Text("20 kph", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                            Text("Kencang (>25kph)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEF4444))
+                            Text("Tenang (<8kph)", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFF06B6D4))
+                            Text("12 kph", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                            Text("Sedang (16kph)", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEAB308))
+                            Text("20 kph", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                            Text("Kencang (>25kph)", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEF4444))
                         }
                         else -> {
-                            Text("Sejuk (<27°C)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF0284C7))
-                            Text("28°C", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                            Text("Normal (30°C)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEAB308))
-                            Text("32°C", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                            Text("Panas (>33°C)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEF4444))
+                            Text("Sejuk (<27°C)", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFF0284C7))
+                            Text("28°C", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                            Text("Normal (30°C)", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEAB308))
+                            Text("32°C", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                            Text("Panas (>33°C)", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEF4444))
                         }
                     }
                 }
@@ -918,10 +922,13 @@ fun InteractiveTemperatureMapCard(
                                     ) {
                                         Text(
                                             text = "Aktif",
-                                            fontSize = 10.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = OrangeOnPrimary,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            softWrap = false
                                         )
                                     }
                                 }
@@ -930,7 +937,7 @@ fun InteractiveTemperatureMapCard(
                             Text(
                                 text = "${inspectedData.district.category} • ${inspectedData.district.landmark}",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                 maxLines = 1
                             )
                         }
@@ -953,7 +960,7 @@ fun InteractiveTemperatureMapCard(
                                 )
                                 Text(
                                     text = "Terasa %.1f°C".format(inspectedData.feelsLike),
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                                 )
                             }
@@ -1076,7 +1083,7 @@ private fun MetricPill(
         Column {
             Text(
                 text = label,
-                fontSize = 9.sp,
+                fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
             )
             Text(

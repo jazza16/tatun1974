@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -254,7 +255,7 @@ private fun ShakemapContent(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "BMKG SHAKEMAP TERKINI",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color.White
                     )
@@ -267,20 +268,25 @@ private fun ShakemapContent(
                         text = "M ${String.format(Locale.US, "%.1f", earthquake.magnitude)}",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
-                        color = Color(0xFFF87171)
+                        color = Color(0xFFF87171),
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Kedalaman ${earthquake.depth}",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = Color.White.copy(alpha = 0.85f),
-                        modifier = Modifier.padding(bottom = 2.dp)
+                        modifier = Modifier.padding(bottom = 2.dp).weight(0.8f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 Text(
                     text = "${earthquake.distanceKmToMukomuko} km dari Mukomuko",
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (earthquake.isNearMukomuko) Color(0xFFFCA5A5) else Color(0xFF93C5FD)
                 )
@@ -392,7 +398,7 @@ private fun ShakemapContent(
                     } else {
                         "Cubit (Pinch) atau Ketuk 2x untuk Zoom In Peta"
                     },
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White
                 )

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -78,6 +79,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -338,10 +340,13 @@ fun EarthquakeEvacuationPreparednessSection(
                             ) {
                                 Text(
                                     text = "SOP RESMI PUSDALOPS-PB BPBD",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                             Text(
@@ -359,7 +364,7 @@ fun EarthquakeEvacuationPreparednessSection(
                         colors = ButtonDefaults.buttonColors(containerColor = Color.White),
                         shape = RoundedCornerShape(12.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        modifier = Modifier.testTag("btn_hero_call_117")
+                        modifier = Modifier.heightIn(min = 32.dp).testTag("btn_hero_call_117")
                     ) {
                         Icon(
                             imageVector = Icons.Default.PhoneInTalk,
@@ -372,7 +377,10 @@ fun EarthquakeEvacuationPreparednessSection(
                             text = "117",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Black,
-                            color = Color(0xFFDC2626)
+                            color = Color(0xFFDC2626),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }
@@ -405,7 +413,7 @@ fun EarthquakeEvacuationPreparednessSection(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Panduan Kesiapsiagaan Mandiri Bencana Gempa & Tsunami",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
@@ -459,16 +467,19 @@ fun EarthquakeEvacuationPreparednessSection(
                             ) {
                                 Text(
                                     text = "WAJIB HAFAL",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                             Text(
                                 text = "Tindakan seketika saat bumi mulai berguncang",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                 maxLines = 1
                             )
                         }
@@ -556,7 +567,7 @@ fun EarthquakeEvacuationPreparednessSection(
                         ) {
                             Text(
                                 text = if (isDrillRunning) "00:${drillSecondsLeft.toString().padStart(2, '0')}" else "60 Detik",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White,
                                 modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
@@ -568,7 +579,7 @@ fun EarthquakeEvacuationPreparednessSection(
                         Text(
                             text = "Latih refleks evakuasi bersama anggota keluarga",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -715,16 +726,19 @@ fun EarthquakeEvacuationPreparednessSection(
                             ) {
                                 Text(
                                     text = "KRUSIAL",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Black,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                             Text(
                                 text = "Khas Zona Pesisir Samudra Hindia Mukomuko",
                                 fontSize = 11.sp,
-                                color = Color(0xFF94A3B8),
+                                color = Color(0xFF64748B),
                                 maxLines = 1
                             )
                         }
@@ -821,7 +835,7 @@ fun EarthquakeEvacuationPreparednessSection(
                 Text(
                     text = "Langkah spesifik penyelamatan di berbagai tempat",
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -963,16 +977,19 @@ fun EarthquakeEvacuationPreparednessSection(
                             ) {
                                 Text(
                                     text = "15 KECAMATAN",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF16A34A),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                             Text(
                                 text = "Lokasi kumpul aman per kecamatan di Mukomuko",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                 maxLines = 1
                             )
                         }
@@ -1097,7 +1114,7 @@ fun EarthquakeEvacuationPreparednessSection(
                             ) {
                                 Text(
                                     text = "$readyPercentage% Siaga",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -1106,7 +1123,7 @@ fun EarthquakeEvacuationPreparednessSection(
                             Text(
                                 text = "Cek perlengkapan wajib penyelamatan keluarga",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                 maxLines = 1
                             )
                         }
@@ -1160,7 +1177,7 @@ fun EarthquakeEvacuationPreparednessSection(
                         Text(
                             text = itemText,
                             fontSize = 12.sp,
-                            color = if (checkedItems[index]) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                            color = if (checkedItems[index]) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                             fontWeight = if (checkedItems[index]) FontWeight.SemiBold else FontWeight.Normal
                         )
                     }
@@ -1204,7 +1221,7 @@ fun EarthquakeEvacuationPreparednessSection(
                         Text(
                             text = "Pastikan ponsel Anda dapat menerima getaran & suara sirine",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -1368,7 +1385,7 @@ private fun StepActionItem(
                     ) {
                         Text(
                             text = badge,
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
                             color = Color.White,
                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
@@ -1420,14 +1437,14 @@ private fun TsunamiTripletCard(
             )
             Text(
                 text = unit,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = desc,
-                fontSize = 9.sp,
+                fontSize = 11.sp,
                 color = Color(0xFFCBD5E1),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 lineHeight = 13.sp
@@ -1510,7 +1527,7 @@ private fun InfoRowItem(label: String, value: String) {
         Text(
             text = label,
             fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
         )
         Text(
             text = value,
@@ -1548,7 +1565,7 @@ private fun EmergencyContactItem(
                 )
                 Text(
                     text = "$number • $desc",
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     color = Color(0xFF7F1D1D)
                 )
             }
@@ -1558,11 +1575,18 @@ private fun EmergencyContactItem(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                modifier = Modifier.height(30.dp)
+                modifier = Modifier.heightIn(min = 30.dp)
             ) {
                 Icon(Icons.Default.PhoneInTalk, contentDescription = null, modifier = Modifier.size(12.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Panggil", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Panggil",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
+                )
             }
         }
     }

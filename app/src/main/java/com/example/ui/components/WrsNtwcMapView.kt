@@ -298,7 +298,7 @@ private fun WrsMapInnerContent(
                             ) {
                                 Text(
                                     text = type.displayName,
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     color = Color.White
                                 )
@@ -412,7 +412,7 @@ private fun WrsMapInnerContent(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Zona Megathrust Sunda & Sesar Mentawai",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             color = Color(0xFFFCA5A5)
                         )
                     }
@@ -431,7 +431,7 @@ private fun LegendDot(color: Color, label: String) {
                 .background(color, CircleShape)
         )
         Spacer(modifier = Modifier.width(4.dp))
-        Text(text = label, fontSize = 9.sp, color = Color.White.copy(alpha = 0.9f))
+        Text(text = label, fontSize = 11.sp, color = Color.White.copy(alpha = 0.9f))
     }
 }
 

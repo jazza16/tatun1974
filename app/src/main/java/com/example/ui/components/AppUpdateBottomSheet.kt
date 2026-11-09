@@ -10,13 +10,17 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,8 +120,9 @@ fun AppUpdateBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp)
                 .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .navigationBarsPadding()
         ) {
             // Header Bar
             Row(
@@ -194,12 +199,14 @@ fun AppUpdateBottomSheet(
                     Text(
                         text = "Pelajari kembali fitur utama aplikasi atau gunakan kompas digital evakuasi darurat.",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    Row(
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
                             onClick = {
@@ -264,7 +271,7 @@ fun AppUpdateBottomSheet(
                                 ) {
                                     Text(
                                         text = "WALLPAPER HD 9:16",
-                                        fontSize = 9.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = OrangePrimary,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -272,9 +279,9 @@ fun AppUpdateBottomSheet(
                                 }
                                 Text(
                                     text = "Lanskap Alam & Mitigasi",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                                 )
                             }
 
@@ -303,7 +310,7 @@ fun AppUpdateBottomSheet(
                                         tint = OrangeOnPrimary
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Lihat Foto Penuh", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = OrangeOnPrimary)
+                                    Text("Lihat Foto Penuh", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = OrangeOnPrimary)
                                 }
 
                                 val context = androidx.compose.ui.platform.LocalContext.current
@@ -333,7 +340,7 @@ fun AppUpdateBottomSheet(
                                         tint = OrangePrimary
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Pasang di HP", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = OrangePrimary)
+                                    Text("Pasang di HP", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = OrangePrimary)
                                 }
                             }
                         }
@@ -390,6 +397,7 @@ fun AppUpdateBottomSheet(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ThemeToggleCard(
     isDarkMode: Boolean?,
@@ -446,8 +454,8 @@ private fun ThemeToggleCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // 3-way Segmented Button (Terang, Gelap, Otomatis)
-            Row(
+            // 3-way Segmented Button (Terang, Gelap, Otomatis) wrapped in FlowRow for large font scales
+            FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
@@ -455,14 +463,17 @@ private fun ThemeToggleCard(
                         RoundedCornerShape(12.dp)
                     )
                     .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // Light Mode Option
                 ThemeModePill(
                     label = "Terang",
                     icon = Icons.Default.LightMode,
                     isSelected = isDarkMode == false,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .widthIn(min = 90.dp),
                     onClick = { onSetThemeMode(false) },
                     testTag = "theme_option_light"
                 )
@@ -472,7 +483,9 @@ private fun ThemeToggleCard(
                     label = "Gelap",
                     icon = Icons.Default.DarkMode,
                     isSelected = isDarkMode == true,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .widthIn(min = 90.dp),
                     onClick = { onSetThemeMode(true) },
                     testTag = "theme_option_dark"
                 )
@@ -482,7 +495,9 @@ private fun ThemeToggleCard(
                     label = "Sistem",
                     icon = Icons.Default.SettingsBrightness,
                     isSelected = isDarkMode == null,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .widthIn(min = 90.dp),
                     onClick = { onSetThemeMode(null) },
                     testTag = "theme_option_system"
                 )
@@ -501,7 +516,9 @@ private fun ThemeToggleCard(
                 )
             ) {
                 Row(
-                    modifier = Modifier.padding(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -510,12 +527,14 @@ private fun ThemeToggleCard(
                         tint = if (isActuallyDark) OrangePrimaryDark else OrangePrimary,
                         modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Kontras Tinggi Aktif: Seluruh notifikasi oranye & teks memenuhi standar keterbacaan WCAG AAA.",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (isActuallyDark) WarningAlertTextDark else WarningAlertTextLight
+                        color = if (isActuallyDark) WarningAlertTextDark else WarningAlertTextLight,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(12.dp)
                     )
                 }
             }
@@ -550,7 +569,7 @@ private fun ThemeModePill(
         shape = RoundedCornerShape(8.dp)
     ) {
         Row(
-            modifier = Modifier.padding(vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -624,7 +643,7 @@ private fun OnlineUpdateCard(
                         Text(
                             text = "Terakhir dicek: ${updateState.lastCheckedTime}",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                         )
                     }
                 }
@@ -662,7 +681,7 @@ private fun OnlineUpdateCard(
                     Text(
                         text = "Versi Terpasang",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
                     Text(
                         text = "v${updateState.currentVersion}",
@@ -683,7 +702,7 @@ private fun OnlineUpdateCard(
                     Text(
                         text = "Rilis Online Terbaru",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
                     Text(
                         text = "v${updateState.latestVersion}",
@@ -886,8 +905,8 @@ private fun OnlineUpdateCard(
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = "Sistem menggunakan Semantic Versioning (AppVersionHelper) untuk mendeteksi perangkat versi sebelumnya (v1.4.0) guna memicu notifikasi update ke v1.5.0, serta otomatis berlaku untuk versi berikutnya (v1.6.0, dst) saat dirilis pengembang.",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         lineHeight = 14.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -904,7 +923,7 @@ private fun OnlineUpdateCard(
                         ) {
                             Text(
                                 text = "Uji v1.4.0 (Notif v1.5.0)",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 maxLines = 1
                             )
                         }
@@ -918,7 +937,7 @@ private fun OnlineUpdateCard(
                         ) {
                             Text(
                                 text = "Uji Rilis v1.6.0",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 maxLines = 1
                             )
                         }
@@ -935,7 +954,7 @@ private fun OnlineUpdateCard(
                         ) {
                             Text(
                                 text = "Kunci v1.5.0",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 color = Color.White,
                                 maxLines = 1
                             )
@@ -996,7 +1015,7 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
                         )
                         Text(
                             text = "Enterprise Security, Play Integrity & In-App Update",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             color = if (isDark) Color(0xFFFDC5A2) else Color(0xFF92400E)
                         )
                     }
@@ -1008,7 +1027,7 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
                 ) {
                     Text(
                         text = if (isExpanded) "Tutup" else "Detail",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = OrangePrimary,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -1184,7 +1203,7 @@ private fun CollapsibleVersionCard(
                         ) {
                             Text(
                                 text = "TERBARU",
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
@@ -1198,7 +1217,7 @@ private fun CollapsibleVersionCard(
                         ) {
                             Text(
                                 text = "TERPASANG",
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
@@ -1211,7 +1230,7 @@ private fun CollapsibleVersionCard(
                     Text(
                         text = log.releaseDate,
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
@@ -1227,8 +1246,8 @@ private fun CollapsibleVersionCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "${log.highlights.size} catatan pembaruan • Ketuk untuk rincian",
-                    fontSize = 10.5.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                 )
             }
 

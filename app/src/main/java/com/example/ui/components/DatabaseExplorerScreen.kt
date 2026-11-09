@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -32,6 +33,8 @@ import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.SyncProblem
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -62,6 +65,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.AppDatabase
 import com.example.data.local.CitizenDisasterReportEntity
+import com.example.data.local.LaporanHarian
+import com.example.data.local.LaporanHarianWithLogKomunikasi
+import com.example.data.local.LogKomunikasi
 import com.example.data.local.OfficialAsnBpbdPersonnel
 import com.example.data.local.Personnel
 import com.example.data.local.PersonnelAuditLogEntity
@@ -77,6 +83,7 @@ import java.util.Locale
 
 enum class RoomTable(val label: String, val tableName: String) {
     PERSONNEL("Personil ASN", "personnel"),
+    LAPORAN_HARIAN("Laporan Harian", "laporan_harian"),
     CITIZEN_REPORTS("Laporan Bencana", "citizen_disaster_reports"),
     AUDIT_LOGS("Audit Log", "personnel_audit_logs"),
     CONFLICT_LOGS("Log Konflik Sync", "sync_conflict_logs")
@@ -93,6 +100,7 @@ fun DatabaseExplorerScreen(
     val scope = rememberCoroutineScope()
 
     var personnelList by remember { mutableStateOf<List<Personnel>>(emptyList()) }
+    var laporanHarianList by remember { mutableStateOf<List<LaporanHarianWithLogKomunikasi>>(emptyList()) }
     var reportsList by remember { mutableStateOf<List<CitizenDisasterReportEntity>>(emptyList()) }
     var auditLogsList by remember { mutableStateOf<List<PersonnelAuditLogEntity>>(emptyList()) }
     var conflictLogsList by remember { mutableStateOf<List<SyncConflictLogEntity>>(emptyList()) }
@@ -102,11 +110,20 @@ fun DatabaseExplorerScreen(
         isLoading = true
         scope.launch(Dispatchers.IO) {
             val p = database.personnelDao().getAllPersonnelList()
+            val l = try {
+                database.laporanHarianDao().getAllLaporanHarianSync().map { lap ->
+                    val logs = database.laporanHarianDao().getLogsForLaporanSync(lap.id)
+                    LaporanHarianWithLogKomunikasi(lap, logs)
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
             val r = database.weatherDao().getAllCitizenDisasterReportsSync()
             val a = database.auditLogDao().getAllAuditLogsList()
             val c = database.syncConflictLogDao().getAllConflictLogsList()
             withContext(Dispatchers.Main) {
                 personnelList = p
+                laporanHarianList = l
                 reportsList = r
                 auditLogsList = a
                 conflictLogsList = c
@@ -117,6 +134,20 @@ fun DatabaseExplorerScreen(
 
     LaunchedEffect(Unit) {
         refreshData()
+    }
+
+    var showFormLaporanHarian by remember { mutableStateOf(false) }
+
+    if (showFormLaporanHarian) {
+        FormLaporanHarianScreen(
+            database = database,
+            onClose = { showFormLaporanHarian = false },
+            onSavedSuccess = {
+                showFormLaporanHarian = false
+                refreshData()
+            }
+        )
+        return
     }
 
     Surface(
@@ -171,15 +202,33 @@ fun DatabaseExplorerScreen(
                     }
                 }
 
-                IconButton(
-                    onClick = { refreshData() },
-                    modifier = Modifier.testTag("btn_refresh_db_explorer")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh Data",
-                        tint = OrangePrimary
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (selectedTable == RoomTable.LAPORAN_HARIAN) {
+                        Button(
+                            onClick = { showFormLaporanHarian = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .padding(end = 4.dp)
+                                .testTag("btn_open_form_laporan_harian")
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Input Form", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    IconButton(
+                        onClick = { refreshData() },
+                        modifier = Modifier.testTag("btn_refresh_db_explorer")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh Data",
+                            tint = OrangePrimary
+                        )
+                    }
                 }
             }
 
@@ -195,6 +244,7 @@ fun DatabaseExplorerScreen(
                     val isSelected = selectedTable == table
                     val count = when (table) {
                         RoomTable.PERSONNEL -> personnelList.size
+                        RoomTable.LAPORAN_HARIAN -> laporanHarianList.size
                         RoomTable.CITIZEN_REPORTS -> reportsList.size
                         RoomTable.AUDIT_LOGS -> auditLogsList.size
                         RoomTable.CONFLICT_LOGS -> conflictLogsList.size
@@ -213,6 +263,7 @@ fun DatabaseExplorerScreen(
                         leadingIcon = {
                             val icon = when (table) {
                                 RoomTable.PERSONNEL -> Icons.Default.Badge
+                                RoomTable.LAPORAN_HARIAN -> Icons.Default.Storage
                                 RoomTable.CITIZEN_REPORTS -> Icons.Default.Report
                                 RoomTable.AUDIT_LOGS -> Icons.Default.History
                                 RoomTable.CONFLICT_LOGS -> Icons.Default.SyncProblem
@@ -299,7 +350,7 @@ fun DatabaseExplorerScreen(
                                                 ) {
                                                     Text(
                                                         text = p.role.uppercase(),
-                                                        fontSize = 9.sp,
+                                                        fontSize = 11.sp,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         color = badgeText,
                                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
@@ -315,9 +366,178 @@ fun DatabaseExplorerScreen(
                                             )
                                             Text(
                                                 text = "Unit: ${p.unit} • Telp: ${if (p.phone.isNotBlank()) p.phone else "-"}",
-                                                fontSize = 10.sp,
+                                                fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                             )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    RoomTable.LAPORAN_HARIAN -> {
+                        val filtered = laporanHarianList.filter {
+                            val lap = it.laporan
+                            searchQuery.isBlank() ||
+                                lap.jenisBencana.contains(searchQuery, ignoreCase = true) ||
+                                lap.lokasi.contains(searchQuery, ignoreCase = true) ||
+                                lap.operatorName.contains(searchQuery, ignoreCase = true) ||
+                                lap.tanggalLaporan.contains(searchQuery, ignoreCase = true)
+                        }
+                        if (filtered.isEmpty()) {
+                            EmptyTablePlaceholder("Belum ada data laporan harian Pusdalops.")
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                items(filtered, key = { it.laporan.id }) { item ->
+                                    val lap = item.laporan
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                        shape = RoundedCornerShape(12.dp),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                                        modifier = Modifier.fillMaxWidth().testTag("row_laporan_harian_${lap.id}")
+                                    ) {
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        color = Color(0xFFDC2626).copy(alpha = 0.12f),
+                                                        modifier = Modifier.padding(end = 6.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "#${lap.id}",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFFDC2626),
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = lap.jenisBencana,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 13.sp,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                }
+                                                Surface(
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = Color(0xFF0284C7).copy(alpha = 0.12f)
+                                                ) {
+                                                    Text(
+                                                        text = lap.tanggalLaporan,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = Color(0xFF0369A1),
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = "📍 ${lap.lokasi} (${lap.koordinat})",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            if (lap.kedalaman.isNotBlank() && lap.kedalaman != "-") {
+                                                Text(
+                                                    text = "Kedalaman: ${lap.kedalaman} • Cuaca: ${lap.kondisiCuaca}",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = "Cuaca: ${lap.kondisiCuaca} • Waktu: ${lap.tanggalKejadian} ${lap.waktuKejadian}",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                            ) {
+                                                Column(modifier = Modifier.padding(8.dp)) {
+                                                    Text(
+                                                        text = "Dampak & Korban: ${lap.cakupanDampak}",
+                                                        fontSize = 11.sp,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = "Korban: ${lap.korbanMeninggal} Meninggal, ${lap.korbanLuka} Luka • Kerusakan: ${lap.kerusakan}",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = if (lap.korbanMeninggal > 0 || lap.korbanLuka > 0) Color(0xFFDC2626) else Color(0xFF16A34A)
+                                                    )
+                                                    Text(
+                                                        text = "Upaya: ${lap.upayaDilakukan}",
+                                                        fontSize = 11.sp,
+                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                                    )
+                                                    Text(
+                                                        text = "Kondisi Mutakhir: ${lap.kondisiMutakhir}",
+                                                        fontSize = 11.sp,
+                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                                    )
+                                                }
+                                            }
+
+                                            // Log Komunikasi (Relasi One-to-Many)
+                                            if (item.logs.isNotEmpty()) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "📡 Log Komunikasi (${item.logs.size} Riwayat):",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFFD97706)
+                                                )
+                                                item.logs.forEach { log ->
+                                                    Row(
+                                                        modifier = Modifier.padding(top = 2.dp, start = 4.dp),
+                                                        verticalAlignment = Alignment.Top
+                                                    ) {
+                                                        Text(
+                                                            text = "• [${log.waktuKomunikasi} | ${log.saluran}] ",
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = Color(0xFFB45309)
+                                                        )
+                                                        Text(
+                                                            text = "${log.pihakDihubungi}: \"${log.pesan}\" (Arahan: ${log.arahanTindakan})",
+                                                            fontSize = 10.sp,
+                                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = "Operator: ${lap.operatorName}",
+                                                    fontSize = 10.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                                )
+                                                Text(
+                                                    text = "Stasiun: ${lap.stationId}",
+                                                    fontSize = 10.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -366,7 +586,7 @@ fun DatabaseExplorerScreen(
                                                 ) {
                                                     Text(
                                                         text = r.status.uppercase(),
-                                                        fontSize = 9.sp,
+                                                        fontSize = 11.sp,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         color = repColor,
                                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
@@ -381,14 +601,14 @@ fun DatabaseExplorerScreen(
                                             )
                                             Text(
                                                 text = "GPS: Lat ${r.latitude}, Lon ${r.longitude} • Akurasi: ${r.gpsAccuracyMeters ?: "-"}m",
-                                                fontSize = 10.sp,
+                                                fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                                 fontFamily = FontFamily.Monospace
                                             )
                                             if (r.additionalNotes.isNotBlank()) {
                                                 Text(
                                                     text = "Catatan: ${r.additionalNotes}",
-                                                    fontSize = 10.sp,
+                                                    fontSize = 11.sp,
                                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                                                 )
                                             }
@@ -423,10 +643,10 @@ fun DatabaseExplorerScreen(
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
                                                 Text(text = a.action, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0369A1))
-                                                Text(text = dateStr, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                                Text(text = dateStr, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                                             }
                                             Text(text = "${a.name} (${a.nip}) • ${a.role}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
-                                            Text(text = "Perangkat: ${a.deviceInfo}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                            Text(text = "Perangkat: ${a.deviceInfo}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                                         }
                                     }
                                 }
@@ -470,7 +690,7 @@ fun DatabaseExplorerScreen(
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
                                                     text = dateStr,
-                                                    fontSize = 10.sp,
+                                                    fontSize = 11.sp,
                                                     fontWeight = FontWeight.Medium,
                                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                                     maxLines = 1
@@ -478,8 +698,8 @@ fun DatabaseExplorerScreen(
                                             }
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(text = "Resolusi: ${c.resolution}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF10B981))
-                                            Text(text = "Status: Lokal(${c.localStatus}) vs Server(${c.remoteStatus})", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
-                                            Text(text = "Detail: ${c.details}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                            Text(text = "Status: Lokal(${c.localStatus}) vs Server(${c.remoteStatus})", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                                            Text(text = "Detail: ${c.details}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                                         }
                                     }
                                 }

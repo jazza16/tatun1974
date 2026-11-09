@@ -95,7 +95,7 @@ object ReportExporter {
             } catch (_: Exception) {}
 
             try {
-                val rightLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_bpbd_logo)
+                val rightLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_mukomuko_logo)
                 if (rightLogo != null) {
                     val dstRight = RectF((pageWidth - 76).toFloat(), 30f, (pageWidth - 36).toFloat(), 70f)
                     canvas.drawBitmap(rightLogo, null, dstRight, null)
@@ -333,7 +333,7 @@ object ReportExporter {
         } catch (_: Exception) {}
 
         try {
-            val rightLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_bpbd_logo)
+            val rightLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_mukomuko_logo)
             if (rightLogo != null) {
                 val dstRight = RectF(pageWidth - margin - 42f, 22f, pageWidth - margin, 64f)
                 canvas.drawBitmap(rightLogo, null, dstRight, null)

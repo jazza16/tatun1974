@@ -100,7 +100,7 @@ fun AllDistrictsView(
                         Text(
                             text = "Prakiraan cuaca spesifik pesisir & hulu Taman Nasional Kerinci Seblat",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -203,7 +203,7 @@ private fun DistrictCardItem(
                 ) {
                     Text(
                         text = dist.category,
-                        fontSize = 9.5.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = OrangePrimary,
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
@@ -215,8 +215,8 @@ private fun DistrictCardItem(
 
                 Text(
                     text = dist.landmark,
-                    fontSize = 10.5.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                     maxLines = 1
                 )
             }

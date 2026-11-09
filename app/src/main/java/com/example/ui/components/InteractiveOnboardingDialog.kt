@@ -322,7 +322,7 @@ private fun OnboardingWelcomePage() {
         Text(
             text = "Aplikasi resmi terpercaya untuk memantau prakiraan cuaca 15 kecamatan, gelombang laut pesisir Mukomuko, dan panduan evakuasi darurat mandiri.",
             fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
             textAlign = TextAlign.Center,
             lineHeight = 18.sp
         )
@@ -387,8 +387,8 @@ private fun HighlightPill(
             )
             Text(
                 text = desc,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
             )
         }
     }
@@ -441,7 +441,7 @@ private fun OnboardingWeatherForecastPage() {
         Text(
             text = "Dapatkan informasi cuaca harian dan prakiraan 3 hari ke depan untuk seluruh kecamatan di Kabupaten Mukomuko, lengkap dengan status peringatan dini BMKG.",
             fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
             textAlign = TextAlign.Center,
             lineHeight = 18.sp
         )
@@ -507,7 +507,7 @@ private fun OnboardingWeatherForecastPage() {
                         Text(
                             text = "Kelembaban: 82% • Angin: 18 km/j Barat Daya",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                         )
                     }
 
@@ -524,7 +524,7 @@ private fun OnboardingWeatherForecastPage() {
                 Text(
                     text = "Ketuk untuk mencoba simulasi peringatan cuaca BMKG:",
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                     fontWeight = FontWeight.Medium
                 )
 
@@ -545,7 +545,7 @@ private fun OnboardingWeatherForecastPage() {
                         ) {
                             Text(
                                 text = cond.first.split(" ")[0],
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = if (sampleConditionIndex == idx) FontWeight.Bold else FontWeight.Normal
                             )
                         }
@@ -603,7 +603,7 @@ private fun OnboardingMaritimeDataPage() {
         Text(
             text = "Pantau kondisi pesisir Samudra Hindia Mukomuko: prakiraan tinggi gelombang 7 hari, pasang surut air laut, dan rekomendasi keselamatan berlayar nelayan.",
             fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
             textAlign = TextAlign.Center,
             lineHeight = 18.sp
         )
@@ -680,7 +680,7 @@ private fun OnboardingMaritimeDataPage() {
                 Text(
                     text = "Pilih tinggi gelombang untuk melihat rekomendasi:",
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -700,7 +700,7 @@ private fun OnboardingMaritimeDataPage() {
                         ) {
                             Text(
                                 text = wave.first,
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = if (waveLevelIndex == idx) FontWeight.Bold else FontWeight.Normal
                             )
                         }
@@ -767,7 +767,7 @@ private fun OnboardingCompassPage(
         Text(
             text = "Gunakan sensor orientasi ponsel untuk mengetahui arah mata angin dan menemukan jalur evakuasi aman menuju dataran tinggi saat potensi gempa/tsunami.",
             fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
             textAlign = TextAlign.Center,
             lineHeight = 18.sp
         )
@@ -799,7 +799,7 @@ private fun OnboardingCompassPage(
                         Text(
                             text = if (state.hasHardwareSensor) "Sensor Kompas Terhubung" else "Geser untuk memutar kompas",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                         )
                     }
 
@@ -809,7 +809,7 @@ private fun OnboardingCompassPage(
                     ) {
                         Text(
                             text = "EVAKUASI: TIMUR",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)

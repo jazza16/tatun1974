@@ -205,7 +205,7 @@ fun DigitalCompassBottomSheet(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = if (state.hasHardwareSensor) "AKURAT" else "ROTASI",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
@@ -360,7 +360,7 @@ fun DigitalCompassBottomSheet(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Arah Evakuasi Tsunami: Timur (65°)",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )

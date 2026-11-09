@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -177,7 +178,7 @@ fun MarineWaveHistoryChart(
                             ) {
                                 Text(
                                     text = "Historis BMKG",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = WeatherSeaCyan,
                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
@@ -186,7 +187,7 @@ fun MarineWaveHistoryChart(
                             Text(
                                 text = "Pesisir Samudra Hindia • ${district.name}",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                 maxLines = 1
                             )
                         }
@@ -212,7 +213,7 @@ fun MarineWaveHistoryChart(
                         ) {
                             Text(
                                 text = label,
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSel) OrangeOnPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -274,14 +275,19 @@ fun MarineWaveHistoryChart(
                                 selectedPoint.waveHeight >= 2.5f -> Color(0xFFDC2626)
                                 selectedPoint.waveHeight >= 1.25f -> OrangePrimary
                                 else -> WeatherGoodGreen
-                            }
+                            },
+                            modifier = Modifier.weight(1f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = " meter",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(bottom = 3.dp)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            modifier = Modifier.padding(bottom = 3.dp).weight(0.5f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -465,9 +471,9 @@ fun MarineWaveHistoryChart(
                     val isSel = selectedPointIndex == idx
                     Text(
                         text = pt.dateLabel,
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSel) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = if (isSel) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
                 }
             }
@@ -511,9 +517,9 @@ private fun LegendItem(
         Spacer(modifier = Modifier.width(5.dp))
         Text(
             text = label,
-            fontSize = 10.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
         )
     }
 }

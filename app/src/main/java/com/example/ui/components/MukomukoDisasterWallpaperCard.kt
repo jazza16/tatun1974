@@ -140,7 +140,7 @@ fun MukomukoDisasterWallpaperCard(
                 ) {
                     Text(
                         text = "Kearifan Lokal",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = OrangePrimary,
                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
@@ -192,7 +192,7 @@ fun MukomukoDisasterWallpaperCard(
                     ) {
                         Text(
                             text = "EDUKASI PUSDALOPS BPBD",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -210,7 +210,7 @@ fun MukomukoDisasterWallpaperCard(
 
                     Text(
                         text = "Ketuk untuk melihat penjelas lengkap & mode zoom",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = Color(0xFFE2E8F0)
                     )
                 }
@@ -303,7 +303,7 @@ private fun TagPill(label: String, isDark: Boolean, modifier: Modifier = Modifie
     ) {
         Text(
             text = label,
-            fontSize = 9.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
             color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF9A3412),
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),

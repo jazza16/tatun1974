@@ -63,7 +63,7 @@ object OfficerRoles {
  * Manages authentication, duty personnel roster, and verification for Petugas Jaga (Duty Officers),
  * Operator Pusdalops, and Petugas Lapangan TRC BPBD Kabupaten Mukomuko.
  */
-class OfficerAuthManager(context: Context) {
+class OfficerAuthManager(private val context: Context) {
 
     private val sharedPrefs: SharedPreferences = context.getSharedPreferences(
         "bpbd_officer_auth_prefs",
@@ -313,16 +313,42 @@ class OfficerAuthManager(context: Context) {
                 (customPin != null && customPin == trimmedPin)
 
         if (isPinValid) {
+            val resolvedName = name.ifBlank { "Petugas Pusdalops PB" }
+            val resolvedBadge = badgeId.ifBlank { "PUSDALOPS-117" }
+            val resolvedRole = role.ifBlank { OfficerRoles.PETUGAS_JAGA }
             sharedPrefs.edit()
                 .putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
-                .putString(PREF_OFFICER_NAME, name.ifBlank { "Petugas Pusdalops PB" })
-                .putString(PREF_OFFICER_BADGE_ID, badgeId.ifBlank { "PUSDALOPS-117" })
-                .putString(PREF_OFFICER_ROLE, role.ifBlank { OfficerRoles.PETUGAS_JAGA })
+                .putString(PREF_OFFICER_NAME, resolvedName)
+                .putString(PREF_OFFICER_BADGE_ID, resolvedBadge)
+                .putString(PREF_OFFICER_ROLE, resolvedRole)
                 .putString(PREF_OFFICER_SHIFT, shift.ifBlank { "Shift Siaga 24 Jam" })
                 .apply()
+            com.example.util.SessionManager(context).setPetugasLogin(resolvedName, resolvedBadge, resolvedRole)
             return true
         }
         return false
+    }
+
+    /**
+     * Directly establishes an authenticated officer session after smart database verification.
+     */
+    fun loginOfficerDirectly(
+        name: String,
+        badgeId: String,
+        shift: String,
+        role: String = OfficerRoles.PETUGAS_JAGA
+    ) {
+        val resolvedName = name.ifBlank { "Petugas Pusdalops PB" }
+        val resolvedBadge = badgeId.ifBlank { "PUSDALOPS-117" }
+        val resolvedRole = role.ifBlank { OfficerRoles.PETUGAS_JAGA }
+        sharedPrefs.edit()
+            .putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
+            .putString(PREF_OFFICER_NAME, resolvedName)
+            .putString(PREF_OFFICER_BADGE_ID, resolvedBadge)
+            .putString(PREF_OFFICER_ROLE, resolvedRole)
+            .putString(PREF_OFFICER_SHIFT, shift.ifBlank { "Shift Siaga 24 Jam" })
+            .apply()
+        com.example.util.SessionManager(context).setPetugasLogin(resolvedName, resolvedBadge, resolvedRole)
     }
 
     /**
@@ -398,6 +424,7 @@ class OfficerAuthManager(context: Context) {
         sharedPrefs.edit()
             .putBoolean(PREF_IS_OFFICER_LOGGED_IN, false)
             .apply()
+        com.example.util.SessionManager(context).clearSession()
     }
 
     /**

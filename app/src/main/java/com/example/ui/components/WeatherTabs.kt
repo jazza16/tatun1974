@@ -1,12 +1,16 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.OrangeOnPrimary
@@ -122,25 +127,29 @@ fun WeatherTabs(
                                 text = tab.title,
                                 fontSize = 13.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = if (isSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
 
                             if (tab.badgeCount != null) {
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Box(
                                     modifier = Modifier
-                                        .size(18.dp)
+                                        .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
                                         .background(
                                             if (tab.isWarningBadge) Color(0xFFDC2626) else OrangePrimary,
-                                            CircleShape
+                                            RoundedCornerShape(percent = 50)
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "${tab.badgeCount}",
-                                        fontSize = 10.sp,
+                                        text = if (tab.badgeCount > 99) "99+" else "${tab.badgeCount}",
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 4.dp),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -186,7 +195,7 @@ fun WeatherNavigationRail(
         androidx.compose.foundation.layout.Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .androidx.compose.foundation.verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -202,7 +211,14 @@ fun WeatherNavigationRail(
                                     androidx.compose.material3.Badge(
                                         containerColor = if (tab.isWarningBadge) Color(0xFFDC2626) else OrangePrimary
                                     ) {
-                                        Text("${tab.badgeCount}", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        Text(
+                                            text = if (tab.badgeCount > 99) "99+" else "${tab.badgeCount}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            softWrap = false
+                                        )
                                     }
                                 }
                             }
@@ -217,7 +233,7 @@ fun WeatherNavigationRail(
                     label = {
                         Text(
                             text = tab.title,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             maxLines = 1
                         )

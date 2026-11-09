@@ -540,7 +540,7 @@ fun InteractiveDisasterMapSection(
                                 ) {
                                     Text(
                                         text = point.name.take(14) + "...",
-                                        fontSize = 8.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
@@ -564,13 +564,13 @@ fun InteractiveDisasterMapSection(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.size(8.dp).background(Color(0xFFDC2626), CircleShape))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Rawan Tsunami", fontSize = 9.sp, fontWeight = FontWeight.Medium)
+                            Text("Rawan Tsunami", fontSize = 11.sp, fontWeight = FontWeight.Medium)
                         }
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.size(8.dp).background(Color(0xFF16A34A), CircleShape))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Jalur & Titik Aman", fontSize = 9.sp, fontWeight = FontWeight.Medium)
+                            Text("Jalur & Titik Aman", fontSize = 11.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -694,7 +694,7 @@ fun InteractiveDisasterMapSection(
                                         )
                                         Text(
                                             text = "Status: ${point.riskLevel} • Ketinggian ${point.altitudeMeters} mdpl",
-                                            fontSize = 10.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = point.category.color
                                         )
@@ -741,7 +741,7 @@ fun InteractiveDisasterMapSection(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = "SOP: ${point.sopInstruction}",
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF9A3412)
                                     )
@@ -772,7 +772,7 @@ fun InteractiveDisasterMapSection(
                                 ) {
                                     Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(13.dp))
                                     Spacer(modifier = Modifier.width(3.dp))
-                                    Text("Rute Maps", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("Rute Maps", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
 
                                 Button(
@@ -784,7 +784,7 @@ fun InteractiveDisasterMapSection(
                                 ) {
                                     Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(13.dp))
                                     Spacer(modifier = Modifier.width(3.dp))
-                                    Text("SOP Evakuasi", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("SOP Evakuasi", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
 
                                 OutlinedButton(

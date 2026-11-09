@@ -130,9 +130,11 @@ import com.example.ui.theme.OrangePrimary
 import com.example.data.local.AppDatabase
 import com.example.data.local.Personnel
 import com.example.data.local.OfficerAuthManager
+import com.example.data.local.OfficerCredentialEntity
 import com.example.data.local.OfficerProfile
 import com.example.data.local.OfficerRoles
 import com.example.data.repository.PersonnelRepository
+import com.example.data.repository.SmartOfficerAuthRepository
 import com.example.model.CitizenDisasterReport
 import com.example.model.District
 import com.example.security.PlayIntegritySecurityManager
@@ -236,6 +238,7 @@ fun OfficerDashboardConsoleView(
     val conflictLogs by database.syncConflictLogDao().getAllConflictLogs().collectAsStateWithLifecycle(initialValue = emptyList())
 
     var showDatabaseExplorer by remember { mutableStateOf(false) }
+    var showFormLaporanHarian by remember { mutableStateOf(false) }
     var integrityCheckResult by remember { mutableStateOf<com.example.data.sync.IntegrityCheckResult?>(null) }
     var isCheckingIntegrity by remember { mutableStateOf(false) }
     var editingPersonnel by remember { mutableStateOf<com.example.data.local.Personnel?>(null) }
@@ -420,9 +423,9 @@ fun OfficerDashboardConsoleView(
                         )
                         Text(
                             text = "KONSOL PUSDALOPS",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFF94A3B8),
+                            color = Color(0xFF64748B),
                             letterSpacing = 0.3.sp,
                             textAlign = TextAlign.Center
                         )
@@ -459,7 +462,7 @@ fun OfficerDashboardConsoleView(
                                         )
                                         Text(
                                             text = "Sesi Resmi",
-                                            fontSize = 10.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
                                             maxLines = 1
@@ -490,7 +493,40 @@ fun OfficerDashboardConsoleView(
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "Personil", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(text = "Personil", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            // Sinkron Cloud Multi-Perangkat
+                            OutlinedButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        val smartRepo = SmartOfficerAuthRepository.getInstance(context)
+                                        smartRepo.harvestAndSyncAllOfficers()
+                                        smartRepo.pullCredentialsFromCloud { success, count ->
+                                            Toast.makeText(
+                                                context,
+                                                if (success) "Sinkronisasi Berhasil: $count kredensial multi-perangkat diperbarui dari Cloud Firestore." else "Kredensial database lokal sudah mutakhir.",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB)),
+                                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sync,
+                                    contentDescription = "Sinkron Kredensial",
+                                    tint = Color(0xFF60A5FA),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(text = "Sinkron", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                             }
 
                             Spacer(modifier = Modifier.width(6.dp))
@@ -511,7 +547,7 @@ fun OfficerDashboardConsoleView(
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "Ubah PIN", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(text = "Ubah PIN", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                             }
 
                             Spacer(modifier = Modifier.width(6.dp))
@@ -531,7 +567,7 @@ fun OfficerDashboardConsoleView(
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "Keluar", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(text = "Keluar", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                             }
                         } else {
                             Surface(
@@ -555,7 +591,7 @@ fun OfficerDashboardConsoleView(
                                         )
                                         Text(
                                             text = "Terkunci",
-                                            fontSize = 10.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
                                             maxLines = 1
@@ -622,9 +658,9 @@ fun OfficerDashboardConsoleView(
                                     ) {
                                         Text(
                                             text = "Petugas Jaga Aktif:",
-                                            fontSize = 10.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.Medium,
-                                            color = Color(0xFF94A3B8)
+                                            color = Color(0xFF64748B)
                                         )
                                         Text(
                                             text = officerName,
@@ -638,7 +674,7 @@ fun OfficerDashboardConsoleView(
                                     val nipPrefix = if (officerBadgeId.startsWith("TRC", ignoreCase = true)) "Reg TRC" else "NIP"
                                     Text(
                                         text = "$nipPrefix: $officerBadgeId • $officerRole • $officerShift • BPBD Kab. Mukomuko",
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         color = Color(0xFF64748B),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -650,13 +686,13 @@ fun OfficerDashboardConsoleView(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Autentikasi Petugas Diperlukan • Akses Konsol Khusus Petugas BPBD",
-                            fontSize = 10.sp,
-                            color = Color(0xFF94A3B8)
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B)
                         )
                     }
 
                     if (isOfficerLoggedIn) {
-                        // Security banner if officer is still using default shared PIN (117 / BPBD117)
+                        // Security banner if officer is still using initial NIP key without custom personal PIN
                         if (!hasCustomPin) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Surface(
@@ -684,8 +720,8 @@ fun OfficerDashboardConsoleView(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "PIN Anda masih menggunakan sandi bawaan. Ganti PIN pribadi sekarang agar ID/NIP dinas tidak disalahgunakan orang lain.",
-                                            fontSize = 10.sp,
+                                            text = "PIN Anda masih menggunakan kunci awal 6-digit NIP. Buat PIN pribadi sekarang agar tersimpan aman di database & Cloud Firestore untuk login multi-perangkat.",
+                                            fontSize = 11.sp,
                                             color = Color(0xFFFEF3C7),
                                             lineHeight = 13.sp
                                         )
@@ -693,7 +729,7 @@ fun OfficerDashboardConsoleView(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = "Ubah ➜",
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFFBBF24)
                                     )
@@ -801,7 +837,7 @@ fun OfficerDashboardConsoleView(
                             )
                             Text(
                                 text = "Waktu respon API Firestore melebihi batas 3000ms. Sinkronisasi antar 5 perangkat dialihkan ke antrean retry otomatis berlatar belakang.",
-                                fontSize = 10.5.sp,
+                                fontSize = 11.sp,
                                 color = Color(0xFFB45309)
                             )
                         }
@@ -846,7 +882,7 @@ fun OfficerDashboardConsoleView(
                     ) {
                         Text(
                             text = label,
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSel) Color(0xFF0F172A) else Color(0xFF64748B),
                             textAlign = TextAlign.Center,
@@ -937,6 +973,9 @@ fun OfficerDashboardConsoleView(
                     },
                     onOpenDatabaseExplorer = {
                         showDatabaseExplorer = true
+                    },
+                    onOpenFormLaporanHarian = {
+                        showFormLaporanHarian = true
                     }
                 )
             }
@@ -1036,7 +1075,7 @@ fun OfficerDashboardConsoleView(
                             ) {
                                 Text(
                                     text = "#${rep.id.takeLast(7)}",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
@@ -1074,7 +1113,7 @@ fun OfficerDashboardConsoleView(
                                 ) {
                                     Text(
                                         text = "${rep.village}, Kec. ${rep.district} • ${rep.disasterType}",
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
@@ -1092,7 +1131,7 @@ fun OfficerDashboardConsoleView(
                                     ) {
                                         Text(
                                             text = "GPS: %.4f, %.4f (±%.0fm)".format(rep.latitude, rep.longitude, rep.gpsAccuracyMeters ?: 5f),
-                                            fontSize = 9.sp,
+                                            fontSize = 11.sp,
                                             color = Color(0xFF86EFAC),
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                         )
@@ -1119,7 +1158,7 @@ fun OfficerDashboardConsoleView(
                                             modifier = Modifier.size(12.dp)
                                         )
                                         Spacer(modifier = Modifier.width(3.dp))
-                                        Text("Rute Maps", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Text("Rute Maps", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -1182,7 +1221,7 @@ fun OfficerDashboardConsoleView(
                     // Disaster Category Filter Chips (Scrollable)
                     Text(
                         text = "Kategori Bencana:",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF475569)
                     )
@@ -1204,7 +1243,7 @@ fun OfficerDashboardConsoleView(
                             ) {
                                 Text(
                                     text = cat,
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                                     color = if (isSel) Color.White else Color(0xFF334155),
                                     modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
@@ -1250,7 +1289,12 @@ fun OfficerDashboardConsoleView(
 
                             DropdownMenu(
                                 expanded = isDistrictDropdownExpanded,
-                                onDismissRequest = { isDistrictDropdownExpanded = false }
+                                onDismissRequest = { isDistrictDropdownExpanded = false },
+                                properties = androidx.compose.ui.window.PopupProperties(
+                                    focusable = true,
+                                    dismissOnClickOutside = true,
+                                    dismissOnBackPress = true
+                                )
                             ) {
                                 districtOptions.forEach { dist ->
                                     DropdownMenuItem(
@@ -1286,7 +1330,7 @@ fun OfficerDashboardConsoleView(
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Ada Korban",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = if (onlyWithCasualties) FontWeight.Bold else FontWeight.Normal,
                                     color = if (onlyWithCasualties) Color(0xFF991B1B) else Color(0xFF475569)
                                 )
@@ -1339,7 +1383,7 @@ fun OfficerDashboardConsoleView(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = if (dashboardSubTab == 1) "Belum Ada Laporan yang Diarsipkan" else "Tidak Ada Laporan Aktif",
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Normal,
                             fontSize = 13.sp,
                             color = Color(0xFF1E293B)
                         )
@@ -1365,12 +1409,47 @@ fun OfficerDashboardConsoleView(
                     },
                     onUpdateStatus = { targetStatus ->
                         if (isOfficerLoggedIn) {
-                            onUpdateReportStatus(report.id, targetStatus)
-                            Toast.makeText(
-                                context,
-                                "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            if (targetStatus.equals("Divalidasi", ignoreCase = true)) {
+                                val isOperator = officerRole.contains("Operator", ignoreCase = true)
+                                if (!isOperator) {
+                                    Toast.makeText(
+                                        context,
+                                        "Akses Ditolak: Tombol Validasi Laporan hanya dapat dieksekusi oleh Operator Pusdalops sebagai wujud tanggung jawab petugas.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                } else {
+                                    onUpdateReportStatus(report.id, targetStatus)
+                                    Toast.makeText(
+                                        context,
+                                        "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            } else if (targetStatus.equals("Selesai", ignoreCase = true)) {
+                                val isAuthorizedLeader = officerRole.contains("Manajer", ignoreCase = true) ||
+                                        officerRole.contains("Administrasi", ignoreCase = true)
+                                if (!isAuthorizedLeader) {
+                                    Toast.makeText(
+                                        context,
+                                        "Akses Ditolak: Tombol Selesai hanya dapat dieksekusi oleh Manajer Pusdalops atau Koord. Administrasi sebagai wujud tanggung jawab petugas.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                } else {
+                                    onUpdateReportStatus(report.id, targetStatus)
+                                    Toast.makeText(
+                                        context,
+                                        "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            } else {
+                                onUpdateReportStatus(report.id, targetStatus)
+                                Toast.makeText(
+                                    context,
+                                    "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         } else {
                             onLoginClick()
                         }
@@ -1447,7 +1526,7 @@ fun OfficerDashboardConsoleView(
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Dilindungi Play Integrity API (Mode Classic) untuk mencegah pembajakan sesi dan pemalsuan kredensial akun dinas.",
-                        fontSize = 10.5.sp,
+                        fontSize = 11.sp,
                         color = Color(0xFF475569),
                         lineHeight = 14.sp
                     )
@@ -1587,7 +1666,7 @@ fun OfficerDashboardConsoleView(
                     } else {
                         // MODE RESET PIN
                         Text(
-                            text = "Reset PIN mengembalikan sandi otorisasi ke PIN resmi Pusdalops bawaan dinas (117 / BPBD117 / TRC2026). Masukkan Sandi Administrator atau PIN lama untuk konfirmasi.",
+                            text = "Reset PIN mengembalikan sandi otorisasi ke kunci individual awal 6-digit NIP Anda (tanpa melalui PIN default umum '117'). Masukkan Sandi Administrator atau PIN lama untuk konfirmasi.",
                             fontSize = 11.sp,
                             color = Color(0xFF475569),
                             lineHeight = 15.sp
@@ -1646,11 +1725,17 @@ fun OfficerDashboardConsoleView(
                                 errorMessage = "Konfirmasi PIN baru tidak sama."
                                 return@Button
                             }
+                            if (SmartOfficerAuthRepository.FORBIDDEN_DEFAULT_PINS.any { it.equals(newPinInput.trim(), ignoreCase = true) }) {
+                                errorMessage = "PIN baru dilarang menggunakan PIN default umum (117 / TRC2026 / dsb)."
+                                return@Button
+                            }
                             isProcessingSecurity = true
                             coroutineScope.launch {
                                 val integrityResult = PlayIntegritySecurityManager.getInstance(context)
                                     .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "CHANGE_PIN")
-                                val result = officerAuthManager.changeOfficerPin(oldPinInput, newPinInput)
+                                val smartRepo = SmartOfficerAuthRepository.getInstance(context)
+                                val result = smartRepo.changePersonalPin(officerBadgeId, oldPinInput, newPinInput)
+                                officerAuthManager.changeOfficerPin(oldPinInput, newPinInput)
                                 isProcessingSecurity = false
                                 result.onSuccess { msg ->
                                     hasCustomPin = true
@@ -1669,7 +1754,9 @@ fun OfficerDashboardConsoleView(
                             coroutineScope.launch {
                                 val integrityResult = PlayIntegritySecurityManager.getInstance(context)
                                     .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "RESET_PIN")
-                                val result = officerAuthManager.resetPinWithAdmin(resetAdminInput)
+                                val smartRepo = SmartOfficerAuthRepository.getInstance(context)
+                                val result = smartRepo.resetToInitialNipSecret(officerBadgeId)
+                                officerAuthManager.resetPinToDefault(resetAdminInput)
                                 isProcessingSecurity = false
                                 result.onSuccess { msg ->
                                     hasCustomPin = false
@@ -1689,7 +1776,7 @@ fun OfficerDashboardConsoleView(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Memverifikasi...")
                     } else {
-                        Text(if (pinDialogMode == 0) "Simpan PIN Baru" else "Reset ke PIN Bawaan")
+                        Text(if (pinDialogMode == 0) "Simpan PIN Baru" else "Reset ke Kunci NIP")
                     }
                 }
             },
@@ -1955,7 +2042,7 @@ fun OfficerDashboardConsoleView(
             title = {
                 Text(
                     text = if (rosterMode == 1) "Input Personil Pusdalops Baru" else "Direktori Personil Pusdalops & TRC",
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Normal,
                     fontSize = 15.sp,
                     textAlign = TextAlign.Center
                 )
@@ -2019,7 +2106,7 @@ fun OfficerDashboardConsoleView(
                                     modifier = Modifier.size(15.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("+ Input", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("+ Input", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -2052,7 +2139,7 @@ fun OfficerDashboardConsoleView(
                                 ) {
                                     Text(
                                         text = label,
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         color = if (isSelected) Color.White else Color(0xFF475569),
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -2148,13 +2235,13 @@ fun OfficerDashboardConsoleView(
                                                 val nipLabel = if (off.nip.startsWith("TRC", ignoreCase = true)) "Reg TRC" else "NIP"
                                                 Text(
                                                     text = "$nipLabel: ${off.nip}",
-                                                    fontSize = 10.sp,
+                                                    fontSize = 11.sp,
                                                     fontWeight = FontWeight.SemiBold,
                                                     color = Color(0xFF334155)
                                                 )
                                                 Text(
                                                     text = "${off.unit} • ${off.shift}",
-                                                    fontSize = 9.sp,
+                                                    fontSize = 11.sp,
                                                     color = Color(0xFF64748B)
                                                 )
                                                 Row(
@@ -2168,17 +2255,20 @@ fun OfficerDashboardConsoleView(
                                                     ) {
                                                         Text(
                                                             text = roleBadgeLabel.uppercase(),
-                                                            fontSize = 8.5.sp,
+                                                            fontSize = 10.sp,
                                                             fontWeight = FontWeight.ExtraBold,
                                                             color = roleColor,
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp),
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            softWrap = false
                                                         )
                                                     }
                                                     if (off.phone.isNotBlank()) {
                                                         Spacer(modifier = Modifier.width(6.dp))
                                                         Text(
                                                             text = "📞 ${off.phone}",
-                                                            fontSize = 9.sp,
+                                                            fontSize = 11.sp,
                                                             color = Color(0xFF475569)
                                                         )
                                                     }
@@ -2357,7 +2447,7 @@ fun OfficerDashboardConsoleView(
                                             )
                                             Text(
                                                 text = roleDesc,
-                                                fontSize = 9.sp,
+                                                fontSize = 11.sp,
                                                 color = Color(0xFF64748B)
                                             )
                                         }
@@ -2412,7 +2502,7 @@ fun OfficerDashboardConsoleView(
                             Text(
                                 text = formError!!,
                                 color = Color(0xFFDC2626),
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -2606,6 +2696,19 @@ fun OfficerDashboardConsoleView(
         }
     }
 
+    // FULL SCREEN DIALOG FORM LAPORAN HARIAN
+    if (showFormLaporanHarian) {
+        Dialog(
+            onDismissRequest = { showFormLaporanHarian = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            FormLaporanHarianScreen(
+                database = database,
+                onClose = { showFormLaporanHarian = false }
+            )
+        }
+    }
+
     // 8. OFFICIAL OFFICER FOLLOW-UP NOTE EDITOR DIALOG
     if (noteEditingReport != null) {
         val activeRep = noteEditingReport!!
@@ -2676,7 +2779,7 @@ fun OfficerDashboardConsoleView(
                             ) {
                                 Text(
                                     text = st,
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                                     color = if (isSel) Color.White else Color(0xFF334155),
                                     textAlign = TextAlign.Center,
@@ -2784,7 +2887,7 @@ private fun DisasterMonthlyBarChartCard(
                 }
                 Text(
                     text = "Tahun 2026",
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF64748B)
                 )
@@ -2846,13 +2949,13 @@ private fun DisasterMonthlyBarChartCard(
                         ) {}
                         Text(
                             text = name,
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             color = Color(0xFF475569),
                             modifier = Modifier.padding(top = 2.dp)
                         )
                         Text(
                             text = "$count",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
                         )
@@ -2970,7 +3073,7 @@ private fun KpiMetricCard(
             )
             Text(
                 text = subtitle,
-                fontSize = 9.sp,
+                fontSize = 11.sp,
                 color = Color(0xFF64748B),
                 textAlign = TextAlign.Center
             )
@@ -3026,16 +3129,17 @@ private fun OfficerIncidentReportCard(
                         shape = RoundedCornerShape(4.dp),
                         color = Color(0xFF0F172A),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp)) {
                             Text(
                                 text = "#${report.id.takeLast(7)}",
-                                fontSize = 9.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 softWrap = false
                             )
                         }
@@ -3065,16 +3169,17 @@ private fun OfficerIncidentReportCard(
                         color = statusBg,
                         border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.4f)),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                             Text(
                                 text = report.status.uppercase(),
-                                fontSize = 8.5.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = statusColor,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 softWrap = false
                             )
                         }
@@ -3091,7 +3196,7 @@ private fun OfficerIncidentReportCard(
                         color = syncColor.copy(alpha = 0.12f),
                         border = androidx.compose.foundation.BorderStroke(0.5.dp, syncColor.copy(alpha = 0.35f)),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                     ) {
                         Row(
@@ -3107,10 +3212,11 @@ private fun OfficerIncidentReportCard(
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = syncText,
-                                fontSize = 8.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = syncColor,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 softWrap = false
                             )
                         }
@@ -3120,16 +3226,17 @@ private fun OfficerIncidentReportCard(
                         shape = RoundedCornerShape(12.dp),
                         color = Color(0xFFF1F5F9),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 7.dp)) {
                             Text(
                                 text = report.district,
-                                fontSize = 8.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF475569),
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 softWrap = false
                             )
                         }
@@ -3166,7 +3273,7 @@ private fun OfficerIncidentReportCard(
                     }
                     Text(
                         text = "Waktu Kejadian: ${report.incidentTime}",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = Color(0xFF64748B)
                     )
                 }
@@ -3194,7 +3301,7 @@ private fun OfficerIncidentReportCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Korban: ${report.casualtiesDead} Meninggal • ${report.casualtiesInjured} Luka • ${report.casualtiesMissing} Hilang",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF991B1B)
                         )
@@ -3229,14 +3336,14 @@ private fun OfficerIncidentReportCard(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(text = "Foto Bukti Warga", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "Sentuh untuk zoom", fontSize = 9.sp, color = Color(0xFF15803D))
+                            Text(text = "Sentuh untuk zoom", fontSize = 11.sp, color = Color(0xFF15803D))
                         }
                     }
                 } else {
                     Text(
                         text = "Laporan tanpa lampiran foto",
-                        fontSize = 10.sp,
-                        color = Color(0xFF94A3B8)
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B)
                     )
                 }
 
@@ -3254,7 +3361,7 @@ private fun OfficerIncidentReportCard(
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(3.dp))
-                    Text("Tinjau Peta", fontSize = 10.sp, color = Color(0xFF0284C7))
+                    Text("Tinjau Peta", fontSize = 11.sp, color = Color(0xFF0284C7))
                 }
             }
 
@@ -3278,7 +3385,7 @@ private fun OfficerIncidentReportCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Catatan Tindak Lanjut TRC:",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF166534)
                             )
@@ -3319,7 +3426,7 @@ private fun OfficerIncidentReportCard(
                             modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "Validasi TRC", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Validasi (Operator)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -3340,7 +3447,7 @@ private fun OfficerIncidentReportCard(
                             modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "Selesai", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Selesai (Pimpinan)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 } else {
                     OutlinedButton(
@@ -3351,7 +3458,7 @@ private fun OfficerIncidentReportCard(
                             .weight(1f)
                             .height(34.dp)
                     ) {
-                        Text(text = "Buka Kembali", fontSize = 10.sp)
+                        Text(text = "Buka Kembali", fontSize = 11.sp)
                     }
                 }
 
@@ -3364,7 +3471,7 @@ private fun OfficerIncidentReportCard(
                 ) {
                     Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(3.dp))
-                    Text(text = "Catatan", fontSize = 10.sp)
+                    Text(text = "Catatan", fontSize = 11.sp)
                 }
 
                 // Google Maps route
@@ -3412,8 +3519,10 @@ private fun SyncDiagnosticsSection(
     onRunIntegrityCheck: () -> Unit,
     onTestPing: () -> Unit,
     onExportConflictLogsCsv: () -> Unit,
-    onOpenDatabaseExplorer: () -> Unit
+    onOpenDatabaseExplorer: () -> Unit,
+    onOpenFormLaporanHarian: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -3458,7 +3567,7 @@ private fun SyncDiagnosticsSection(
                             )
                             Text(
                                 text = "Otorisasi Firestore backend untuk modul Ruang Kerja",
-                                fontSize = 9.5.sp,
+                                fontSize = 11.sp,
                                 color = Color(0xFF64748B)
                             )
                         }
@@ -3468,16 +3577,18 @@ private fun SyncDiagnosticsSection(
                         shape = RoundedCornerShape(6.dp),
                         color = Color(0xFFDCFCE7),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                             Text(
                                 text = "${securitySessions.size} Sesi Aktif",
-                                fontSize = 8.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF15803D),
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -3486,7 +3597,7 @@ private fun SyncDiagnosticsSection(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Admin Pusdalops dapat memverifikasi keaslian hardware perangkat dan token integritas kriptografis sebelum memberikan akses modul Ruang Kerja.",
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     color = Color(0xFF475569),
                     lineHeight = 14.sp
                 )
@@ -3546,7 +3657,7 @@ private fun SyncDiagnosticsSection(
                                             )
                                             Text(
                                                 text = "NIP: ${session.officerNip} • ${session.deviceModel}",
-                                                fontSize = 10.sp,
+                                                fontSize = 11.sp,
                                                 color = Color(0xFF64748B)
                                             )
                                         }
@@ -3557,7 +3668,7 @@ private fun SyncDiagnosticsSection(
                                         ) {
                                             Text(
                                                 text = if (session.accessGranted) "AKSES DIIZINKAN" else "AKSES DICABUT",
-                                                fontSize = 9.sp,
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = if (session.accessGranted) Color(0xFF15803D) else Color(0xFFDC2626),
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -3579,13 +3690,13 @@ private fun SyncDiagnosticsSection(
                                         ) {
                                             Text(
                                                 text = "Verdict: ${session.verdict}",
-                                                fontSize = 9.sp,
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = Color(0xFF1D4ED8)
                                             )
                                             Text(
                                                 text = "Nonce: ${session.classicNonce.take(12)}...",
-                                                fontSize = 9.sp,
+                                                fontSize = 11.sp,
                                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                                                 color = Color(0xFF475569)
                                             )
@@ -3601,7 +3712,7 @@ private fun SyncDiagnosticsSection(
                                     ) {
                                         Text(
                                             text = "OS: ${session.osVersion} • Token: ${session.tokenHash.take(16)}...",
-                                            fontSize = 9.sp,
+                                            fontSize = 11.sp,
                                             color = Color(0xFF64748B),
                                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                                             modifier = Modifier.weight(1f)
@@ -3627,7 +3738,7 @@ private fun SyncDiagnosticsSection(
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(
                                                 text = if (session.accessGranted) "Cabut Akses" else "Beri Akses",
-                                                fontSize = 10.sp,
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White
                                             )
@@ -3671,7 +3782,7 @@ private fun SyncDiagnosticsSection(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text("Pemantauan Latensi Firestore", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text("Waktu bolak-balik respon API cloud", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                            Text("Waktu bolak-balik respon API cloud", fontSize = 11.sp, color = Color(0xFF64748B))
                         }
                     }
 
@@ -3679,16 +3790,18 @@ private fun SyncDiagnosticsSection(
                         shape = RoundedCornerShape(8.dp),
                         color = if (isSlowNetwork) Color(0xFFDC2626) else Color(0xFF059669),
                         modifier = Modifier
-                            .height(24.dp)
+                            .heightIn(min = 24.dp)
                             .wrapContentWidth()
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                             Text(
                                 text = if (isSlowNetwork) "JARINGAN LAMBAT" else "NORMAL",
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -3702,13 +3815,16 @@ private fun SyncDiagnosticsSection(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text("Response Time", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                        Text("Response Time", fontSize = 11.sp, color = Color(0xFF64748B))
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(
                                 text = if (latencyMs > 0) "$latencyMs" else "-",
                                 fontSize = 32.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = if (isSlowNetwork) Color(0xFFEF4444) else Color(0xFF10B981)
+                                color = if (isSlowNetwork) Color(0xFFEF4444) else Color(0xFF10B981),
+                                modifier = Modifier.weight(1f, fill = false),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
@@ -3716,7 +3832,9 @@ private fun SyncDiagnosticsSection(
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF94A3B8),
-                                modifier = Modifier.padding(bottom = 4.dp)
+                                modifier = Modifier.padding(bottom = 4.dp).weight(0.5f, fill = false),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -3726,11 +3844,18 @@ private fun SyncDiagnosticsSection(
                         colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        modifier = Modifier.height(36.dp).testTag("btn_test_latency_ping")
+                        modifier = Modifier.heightIn(min = 36.dp).testTag("btn_test_latency_ping")
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Uji Ping Sekarang", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "Uji Ping Sekarang",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
+                        )
                     }
                 }
             }
@@ -3761,7 +3886,7 @@ private fun SyncDiagnosticsSection(
                     }
                     Text(
                         text = "5 HP Pengujian",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF64748B)
                     )
@@ -3799,7 +3924,7 @@ private fun SyncDiagnosticsSection(
                                         )
                                         Text(
                                             text = "Petugas: ${dev.officerName} • ID: ${dev.deviceId.take(8)}",
-                                            fontSize = 10.sp,
+                                            fontSize = 11.sp,
                                             color = Color(0xFF64748B)
                                         )
                                     }
@@ -3811,7 +3936,7 @@ private fun SyncDiagnosticsSection(
                                         ) {
                                             Text(
                                                 text = if (dev.status == "SLOW_NET") "SLOW NET" else "ONLINE",
-                                                fontSize = 9.sp,
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = if (dev.status == "SLOW_NET") Color(0xFFB45309) else Color(0xFF15803D),
                                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
@@ -3819,7 +3944,7 @@ private fun SyncDiagnosticsSection(
                                         }
                                         Text(
                                             text = "${dev.latencyMs} ms",
-                                            fontSize = 10.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF334155)
                                         )
@@ -3889,7 +4014,7 @@ private fun SyncDiagnosticsSection(
                                 )
                                 Text(
                                     text = "Lokal: ${integrityResult.localCount} | Cloud: ${integrityResult.remoteCount}",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFF334155)
                                 )
@@ -3897,7 +4022,7 @@ private fun SyncDiagnosticsSection(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Checksum Lokal: ${integrityResult.localChecksum}\nChecksum Cloud: ${integrityResult.remoteChecksum}",
-                                fontSize = 9.5.sp,
+                                fontSize = 11.sp,
                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                                 color = Color(0xFF475569)
                             )
@@ -3905,12 +4030,12 @@ private fun SyncDiagnosticsSection(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = "Tindakan Resolusi Otomatis (${integrityResult.resolvedDiscrepancyCount} laporan diselaraskan):",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Normal,
                                     color = Color(0xFFB45309)
                                 )
                                 integrityResult.discrepancies.take(3).forEach { d ->
-                                    Text("• $d", fontSize = 9.sp, color = Color(0xFF78350F))
+                                    Text("• $d", fontSize = 11.sp, color = Color(0xFF78350F))
                                 }
                             }
                         }
@@ -3996,6 +4121,47 @@ private fun SyncDiagnosticsSection(
                         Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Database Explorer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Card Buat Laporan Harian (Navigasi ke FormLaporanActivity)
+                Card(
+                    onClick = {
+                        val intent = Intent(context, com.example.FormLaporanActivity::class.java)
+                        context.startActivity(intent)
+                    },
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1976D2)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("cardBuatLaporan")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Assignment,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                "Buat Laporan Harian (Form Resmi)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                "Buka FormLaporanActivity dengan 4 Tab (Kejadian, Dampak, Log, Simpan)",
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.85f)
+                            )
+                        }
                     }
                 }
             }

@@ -93,7 +93,7 @@ fun HourlyForecastCard(
                                 text = if (isFirst) "Sekarang" else item.hourLabel,
                                 fontSize = 11.sp,
                                 fontWeight = if (isFirst) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isFirst) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = if (isFirst) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))
@@ -126,7 +126,7 @@ fun HourlyForecastCard(
                                 Spacer(modifier = Modifier.width(2.dp))
                                 Text(
                                     text = "${item.rainProbability}%",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = WeatherRainBlue
                                 )

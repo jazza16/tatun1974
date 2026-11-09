@@ -146,7 +146,7 @@ fun WeatherTopBar(
                             }
                             Text(
                                 text = "Pusdalops-PB BPBD Mukomuko",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = barContentColor.copy(alpha = 0.95f)
                             )

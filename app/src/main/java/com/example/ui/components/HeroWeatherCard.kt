@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -118,16 +120,18 @@ fun HeroWeatherCard(
                             color = Color.Black.copy(alpha = 0.35f),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
-                                .height(24.dp)
+                                .heightIn(min = 24.dp)
                                 .wrapContentWidth()
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                                 Text(
                                     text = "Offline Cache",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color.White,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -149,14 +153,19 @@ fun HeroWeatherCard(
                                 fontSize = 68.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
-                                lineHeight = 68.sp
+                                lineHeight = 68.sp,
+                                modifier = Modifier.weight(1f, fill = false),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "°C",
                                 fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White.copy(alpha = 0.9f),
-                                modifier = Modifier.padding(top = 8.dp)
+                                modifier = Modifier.padding(top = 8.dp).weight(0.5f, fill = false),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -190,7 +199,10 @@ fun HeroWeatherCard(
                                     text = weatherInfo.conditionText,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -339,7 +351,7 @@ private fun StatPillWithIndicator(
             )
             Text(
                 text = label,
-                fontSize = 8.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.White.copy(alpha = 0.85f),
                 maxLines = 1
@@ -365,7 +377,7 @@ private fun StatPillWithIndicator(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = subLabel,
-                fontSize = 8.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = indicatorColor,
                 maxLines = 1
@@ -406,7 +418,7 @@ private fun StatPillWindDirection(
             )
             Text(
                 text = "Arah Angin",
-                fontSize = 8.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.White.copy(alpha = 0.85f),
                 maxLines = 1
@@ -414,7 +426,7 @@ private fun StatPillWindDirection(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "$windDegree°",
-                fontSize = 9.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFFFDE047)
             )
@@ -453,7 +465,7 @@ private fun StatPill(
             )
             Text(
                 text = label,
-                fontSize = 9.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.White.copy(alpha = 0.85f),
                 maxLines = 1

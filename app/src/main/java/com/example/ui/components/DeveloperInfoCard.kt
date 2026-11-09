@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.OrangePrimary
@@ -151,7 +152,7 @@ fun DeveloperInfoCard(
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = "Terverifikasi",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = WeatherGoodGreen
                                 )
@@ -221,10 +222,13 @@ fun DeveloperInfoCard(
                             ) {
                                 Text(
                                     text = "Lead Dev",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -240,7 +244,7 @@ fun DeveloperInfoCard(
 
                         Text(
                             text = organization,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             color = if (isDark) Color(0xFFE2D6CF) else Color(0xFF573E32)
                         )
                     }
@@ -333,7 +337,7 @@ fun DeveloperInfoCard(
                                             Spacer(modifier = Modifier.width(3.dp))
                                             Text(
                                                 text = name,
-                                                fontSize = 7.8.sp,
+                                                fontSize = 10.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = if (isDark) Color(0xFFF1F5F9) else Color(0xFF1E293B),
                                                 maxLines = 1
@@ -438,7 +442,7 @@ fun DeveloperInfoCard(
                             )
                             Text(
                                 text = "Kondisi Alam & Mitigasi Bencana Kab. Mukomuko",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 color = if (isDark) Color(0xFFFDBA74) else Color(0xFF9A3412)
                             )
                         }
@@ -532,7 +536,7 @@ fun DeveloperInfoCard(
                         Column(modifier = Modifier.padding(top = 8.dp)) {
                             Text(
                                 text = "Saat menguji APK sideload di perangkat Android di luar Google Play Store, Google Play Protect memunculkan dialog 'Aplikasi tidak dikenal' karena belum melalui Google Play Console.",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 color = if (isDark) Color(0xFFE2D6CF) else Color(0xFF78350F),
                                 lineHeight = 14.sp
                             )
@@ -541,7 +545,7 @@ fun DeveloperInfoCard(
                                 text = "Langkah pengujian sideload:\n" +
                                         "1. Pada dialog Play Protect saat instalasi: ketuk 'Detail selengkapnya' (More details) lalu pilih 'Tetap instal' (Install anyway).\n" +
                                         "2. Untuk menonaktifkan pemindaian Play Protect selama pengujian developer di perangkat uji: Buka Google Play Store > Profil > Play Protect > Ikon Roda Gigi (Pengaturan) > Matikan 'Pindai aplikasi dengan Play Protect'.",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF451A03),
                                 lineHeight = 14.sp
@@ -586,7 +590,7 @@ private fun TechPill(
             Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = label,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF7C2D12),
                 maxLines = 1

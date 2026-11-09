@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.DailyItem
@@ -123,16 +125,18 @@ fun MeteorologySummaryCard(
                     color = Color(0xFF0284C7).copy(alpha = 0.12f),
                     border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF0284C7).copy(alpha = 0.4f)),
                     modifier = Modifier
-                        .height(24.dp)
+                        .heightIn(min = 24.dp)
                         .wrapContentWidth()
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                         Text(
                             text = "TREN 7 HARI",
-                            fontSize = 8.5.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0284C7),
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }
@@ -215,8 +219,8 @@ fun MeteorologySummaryCard(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "Suhu Maksimal (°C)",
-                    fontSize = 10.sp,
-                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                    fontSize = 11.sp,
+                    color = if (isDark) Color(0xFF64748B) else Color(0xFF64748B)
                 )
 
                 Spacer(modifier = Modifier.width(16.dp))
@@ -230,8 +234,8 @@ fun MeteorologySummaryCard(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "Curah Hujan (mm)",
-                    fontSize = 10.sp,
-                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                    fontSize = 11.sp,
+                    color = if (isDark) Color(0xFF64748B) else Color(0xFF64748B)
                 )
             }
         }
@@ -258,7 +262,7 @@ private fun MetricPill(
         ) {
             Text(
                 text = label,
-                fontSize = 8.5.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
                 color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
             )

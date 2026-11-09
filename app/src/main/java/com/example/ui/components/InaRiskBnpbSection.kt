@@ -281,7 +281,7 @@ fun InaRiskBnpbSection(
                                 ) {
                                     Text(
                                         text = "RISIKO TINGGI",
-                                        fontSize = 9.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color.White,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -291,7 +291,7 @@ fun InaRiskBnpbSection(
                             Text(
                                 text = "Kajian Risiko Bencana Indonesia • Dokumen KRB Mukomuko",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
                     }
@@ -326,7 +326,7 @@ fun InaRiskBnpbSection(
                             )
                             Text(
                                 text = "Mukomuko termasuk kawasan prioritas nasional pengurangan risiko bencana multi-ancaman gempa, tsunami, banjir, dan abrasi.",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 color = Color(0xFF7F1D1D),
                                 lineHeight = 14.sp
                             )
@@ -460,8 +460,8 @@ fun InaRiskBnpbSection(
                                 )
                                 Text(
                                     text = hazard.affectedArea,
-                                    fontSize = 10.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                     maxLines = 1
                                 )
                             }
@@ -474,7 +474,7 @@ fun InaRiskBnpbSection(
                             ) {
                                 Text(
                                     text = hazard.hazardLevel,
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -529,7 +529,7 @@ fun InaRiskBnpbSection(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = "Paparan: ${hazard.exposedPopulation}",
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -566,7 +566,7 @@ fun InaRiskBnpbSection(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = step,
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                         lineHeight = 14.sp
                                     )
@@ -596,8 +596,8 @@ fun InaRiskBnpbSection(
                 )
                 Text(
                     text = "Analisis kapasitas dan kerentanan Kabupaten Mukomuko menurut inaRISK",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -730,7 +730,7 @@ fun InaRiskBnpbSection(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Kunjungi Portal Resmi inaRisk: inarisk.bnpb.go.id",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = WeatherRainBlue
                     )
@@ -760,8 +760,8 @@ private fun VulnerabilityMetric(
         ) {
             Text(
                 text = label,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
                 fontWeight = FontWeight.Medium
             )
             Spacer(modifier = Modifier.height(2.dp))
@@ -774,7 +774,7 @@ private fun VulnerabilityMetric(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = desc,
-                fontSize = 8.sp,
+                fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 maxLines = 1
             )

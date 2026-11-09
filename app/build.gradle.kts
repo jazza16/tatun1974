@@ -16,7 +16,7 @@ android {
     applicationId = "com.aistudio.cuacamukomuko.wmzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 13
+    versionCode = 14
     versionName = "3.6.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -95,6 +95,10 @@ dependencies {
   implementation(libs.androidx.compose.material.icons.core)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)
+  implementation("androidx.compose.material3:material3-window-size-class")
+  implementation(libs.androidx.compose.material3.adaptive)
+  implementation(libs.androidx.compose.material3.adaptive.layout)
+  implementation(libs.androidx.compose.material3.adaptive.navigation)
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)
@@ -108,7 +112,7 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
-  // implementation(libs.firebase.ai)
+  implementation(libs.firebase.ai)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
   implementation(libs.androidx.credentials)
@@ -131,6 +135,8 @@ dependencies {
   implementation("com.google.android.material:material:1.12.0")
   implementation("androidx.constraintlayout:constraintlayout:2.2.0")
   implementation("androidx.recyclerview:recyclerview:1.4.0")
+  implementation("androidx.viewpager2:viewpager2:1.1.0")
+  implementation("androidx.fragment:fragment-ktx:1.8.5")
   implementation("androidx.slidingpanelayout:slidingpanelayout:1.2.0")
   implementation("androidx.window:window:1.3.0")
   testImplementation(libs.androidx.compose.ui.test.junit4)

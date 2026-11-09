@@ -137,7 +137,7 @@ fun PusdalopsStartupBanner(
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = "PUSDALOPS-PB",
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color.White,
                                         letterSpacing = 0.5.sp
@@ -152,7 +152,7 @@ fun PusdalopsStartupBanner(
                             ) {
                                 Text(
                                     text = "KAB. MUKOMUKO",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF334155),
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AirQuality
@@ -108,22 +110,24 @@ fun AirQualityAndUvCard(
                                 text = "Indeks AQI",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                             Surface(
                                 color = aqiStatusColor.copy(alpha = 0.2f),
                                 shape = RoundedCornerShape(6.dp),
                                 modifier = Modifier
-                                    .height(24.dp)
+                                    .heightIn(min = 24.dp)
                                     .wrapContentWidth()
                             ) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                                     Text(
                                         text = airQuality.status,
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = aqiStatusColor,
-                                        maxLines = 1
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -142,8 +146,8 @@ fun AirQualityAndUvCard(
 
                         Text(
                             text = "PM2.5: ${airQuality.pm25} µg/m³\nPM10: ${airQuality.pm10} µg/m³",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                             lineHeight = 13.sp
                         )
                     }
@@ -165,22 +169,24 @@ fun AirQualityAndUvCard(
                                 text = "Indeks Sinar UV",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                             Surface(
                                 color = uvStatus.second.copy(alpha = 0.2f),
                                 shape = RoundedCornerShape(6.dp),
                                 modifier = Modifier
-                                    .height(24.dp)
+                                    .heightIn(min = 24.dp)
                                     .wrapContentWidth()
                             ) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                                     Text(
                                         text = uvStatus.first,
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = uvStatus.second,
-                                        maxLines = 1
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -193,13 +199,18 @@ fun AirQualityAndUvCard(
                                 text = "${uvIndex.toInt()}",
                                 fontSize = 32.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = uvStatus.second
+                                color = uvStatus.second,
+                                modifier = Modifier.weight(1f, fill = false),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = " / 12+",
                                 fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(bottom = 4.dp)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                modifier = Modifier.padding(bottom = 4.dp).weight(0.5f, fill = false),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -207,8 +218,8 @@ fun AirQualityAndUvCard(
 
                         Text(
                             text = if (uvIndex >= 8.0) "Gunakan tabir surya SPF 30+ dan topi" else "Aman berkegiatan di luar ruangan",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                             lineHeight = 13.sp
                         )
                     }

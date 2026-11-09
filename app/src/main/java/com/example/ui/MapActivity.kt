@@ -21,13 +21,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -82,6 +85,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -390,13 +394,20 @@ fun MukomukoInteractiveMapScreen(
         panOffsetY = (panOffsetY + offsetChange.y).coerceIn(-1400f, 1400f)
     }
 
-    Column(
-        modifier = modifier
+    Box(
+        modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0F172A))
-            .testTag("map_activity_screen")
+            .background(Color(0xFF0F172A)),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // 1. TOP APP BAR HEADER
+        Column(
+            modifier = modifier
+                .fillMaxHeight()
+                .fillMaxWidth()
+                .widthIn(max = 840.dp)
+                .testTag("map_activity_screen")
+        ) {
+            // 1. TOP APP BAR HEADER
         Surface(
             color = Color(0xFF1E293B),
             shadowElevation = 4.dp,
@@ -432,7 +443,7 @@ fun MukomukoInteractiveMapScreen(
                         )
                         Text(
                             text = "PUSDALOPS BPBD • GOOGLE MAPS GIS",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFFFBBF24),
                             letterSpacing = 0.5.sp
@@ -446,7 +457,7 @@ fun MukomukoInteractiveMapScreen(
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
+                    modifier = Modifier.heightIn(min = 32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Place,
@@ -455,7 +466,14 @@ fun MukomukoInteractiveMapScreen(
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Buka Maps", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Buka Maps",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
+                    )
                 }
             }
         }
@@ -497,7 +515,7 @@ fun MukomukoInteractiveMapScreen(
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
                                 text = type.label,
-                                fontSize = 10.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = Color.White
                             )
@@ -619,10 +637,13 @@ fun MukomukoInteractiveMapScreen(
                         ) {
                             Text(
                                 text = marker.subDistrict,
-                                fontSize = 8.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -692,8 +713,8 @@ fun MukomukoInteractiveMapScreen(
                     .padding(12.dp)
             ) {
                 Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
-                    Text("15 Kecamatan Mukomuko", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFBBF24))
-                    Text("Zoom: ${(zoomScale * 100).toInt()}% • Titik: ${filteredMarkers.size}", fontSize = 8.sp, color = Color(0xFFCBD5E1))
+                    Text("15 Kecamatan Mukomuko", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFBBF24))
+                    Text("Zoom: ${(zoomScale * 100).toInt()}% • Titik: ${filteredMarkers.size}", fontSize = 10.sp, color = Color(0xFFCBD5E1))
                 }
             }
         }
@@ -743,7 +764,7 @@ fun MukomukoInteractiveMapScreen(
                                     )
                                     Text(
                                         text = "Kecamatan ${marker.subDistrict} • ${marker.readinessStatus}",
-                                        fontSize = 10.5.sp,
+                                        fontSize = 11.sp,
                                         color = marker.type.color,
                                         fontWeight = FontWeight.SemiBold
                                     )
@@ -763,7 +784,7 @@ fun MukomukoInteractiveMapScreen(
                         Text(
                             text = marker.description,
                             fontSize = 11.sp,
-                            color = Color(0xFFCBD5E1),
+                            color = Color(0xFF64748B),
                             lineHeight = 15.sp
                         )
 
@@ -771,8 +792,8 @@ fun MukomukoInteractiveMapScreen(
 
                         Text(
                             text = "Koordinat GPS: %.4f, %.4f".format(marker.latitude, marker.longitude),
-                            fontSize = 10.sp,
-                            color = Color(0xFF94A3B8)
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B)
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -823,4 +844,5 @@ fun MukomukoInteractiveMapScreen(
             }
         }
     }
+}
 }

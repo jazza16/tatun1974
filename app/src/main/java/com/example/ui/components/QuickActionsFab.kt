@@ -95,6 +95,7 @@ fun QuickActionsFab(
     onCall117: () -> Unit = {},
     onOpenCompass: () -> Unit = {},
     onOpenOnboarding: () -> Unit = {},
+    onSelectFormLaporan: () -> Unit = {},
     parentMaxWidth: Dp = 380.dp,
     parentMaxHeight: Dp = 700.dp,
     isDark: Boolean = false,
@@ -110,6 +111,7 @@ fun QuickActionsFab(
     )
 
     val actionItems = listOf(
+        QuickActionItemData("form_laporan", "Form Laporan Harian", Icons.Default.Edit, Color(0xFF1976D2), Color.White, "cardBuatLaporan"),
         QuickActionItemData("citizen_report", "Laporan Warga Bencana", Icons.Default.Edit, Color(0xFFEA580C), Color.White, "action_citizen_report"),
         QuickActionItemData("forecast", "Prakiraan Cuaca", Icons.Default.CalendarMonth, Color(0xFF2563EB), Color.White, "action_forecast"),
         QuickActionItemData("dial_117", "Darurat 117 BPBD", Icons.Default.PhoneInTalk, Color(0xFFDC2626), Color.White, "action_dial_117"),
@@ -185,7 +187,7 @@ fun QuickActionsFab(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = if (isDockedLeft) "Pindah ke Kanan" else "Pindah ke Kiri",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF374151)
                             )
@@ -200,6 +202,7 @@ fun QuickActionsFab(
                             onClick = {
                                 onToggleExpand()
                                 when (item.id) {
+                                    "form_laporan" -> onSelectFormLaporan()
                                     "citizen_report" -> onSelectCitizenReport()
                                     "forecast" -> onSelectForecast()
                                     "dial_117" -> onCall117()

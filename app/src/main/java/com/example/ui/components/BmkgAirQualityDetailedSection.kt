@@ -158,7 +158,7 @@ fun BmkgAirQualityDetailedSection(
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = "Data Real-time",
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF047857)
                                     )
@@ -178,7 +178,7 @@ fun BmkgAirQualityDetailedSection(
                                 Text(
                                     text = "SPKU Wilayah ${currentDistrict.name}, Mukomuko",
                                     fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -206,7 +206,7 @@ fun BmkgAirQualityDetailedSection(
                                     text = "Indeks ISPU BMKG",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                                 )
                                 Text(
                                     text = "$aqi",
@@ -275,7 +275,7 @@ fun BmkgAirQualityDetailedSection(
                 Text(
                     text = "Standar Baku Mutu Udara Ambien Nasional (PP No. 22 Tahun 2021)",
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -406,7 +406,7 @@ fun BmkgAirQualityDetailedSection(
                         Text(
                             text = "Dinamika Atmosfer & Kualitas Udara Pesisir Barat Bengkulu",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -476,7 +476,7 @@ fun BmkgAirQualityDetailedSection(
                         Text(
                             text = "Rekomendasi Medis Pusdalops & Dinas Kesehatan",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -572,7 +572,7 @@ private fun PollutantBox(
                 ) {
                     Text(
                         text = status,
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = color,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -582,8 +582,8 @@ private fun PollutantBox(
 
             Text(
                 text = fullName,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
             )
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -593,14 +593,19 @@ private fun PollutantBox(
                     text = value,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = color
+                    color = color,
+                    modifier = Modifier.weight(1f, fill = false),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = unit,
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(bottom = 2.dp)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    modifier = Modifier.padding(bottom = 2.dp).weight(0.5f, fill = false),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -608,8 +613,8 @@ private fun PollutantBox(
 
             Text(
                 text = thresholdText,
-                fontSize = 9.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
             )
         }
     }
@@ -640,7 +645,7 @@ private fun BmkgReleaseItem(
             ) {
                 Text(
                     text = tag,
-                    fontSize = 9.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = OrangePrimary,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -700,8 +705,8 @@ private fun HealthAdvisoryCard(
                     if (subtitle != null) {
                         Text(
                             text = subtitle,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }

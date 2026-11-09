@@ -271,7 +271,7 @@ private fun WrsConsoleHeaderCard(
                             ) {
                                 Text(
                                     text = "MODE OPERASIONAL",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -281,7 +281,7 @@ private fun WrsConsoleHeaderCard(
                         Text(
                             text = "InaTEWS BMKG • Warning Receiver System",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -372,7 +372,7 @@ private fun WrsConsoleHeaderCard(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "inatews.bmkg.go.id/wrs",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
@@ -424,7 +424,7 @@ private fun WrsNavigationTabRow(
                         text = title,
                         fontSize = 11.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        color = if (isSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                     )
                 }
             )
@@ -474,8 +474,8 @@ private fun WrsMainEarthquakeView(
 
                     Text(
                         text = "Pinch Zoom & Pan Aktif",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
                 }
 
@@ -561,7 +561,7 @@ private fun WrsTsunamiThreatCard(earthquake: BmkgEarthquake) {
                 ) {
                     Text(
                         text = "InaTEWS BMKG",
-                        fontSize = 9.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = warningTextCol,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -633,7 +633,7 @@ private fun WrsParameterMatrixCard(
                 ) {
                     Text(
                         text = "PARAMETER OT BMKG",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = OrangePrimary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -644,7 +644,7 @@ private fun WrsParameterMatrixCard(
                     text = "${earthquake.date} • ${earthquake.timeWib}",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                 )
             }
 
@@ -668,7 +668,7 @@ private fun WrsParameterMatrixCard(
                     ) {
                         Text(
                             text = "MAGNITUDO",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF991B1B)
                         )
@@ -681,7 +681,7 @@ private fun WrsParameterMatrixCard(
                         )
                         Text(
                             text = "Skala Richter",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             color = Color(0xFF7F1D1D)
                         )
                     }
@@ -700,7 +700,7 @@ private fun WrsParameterMatrixCard(
                     ) {
                         Text(
                             text = "KEDALAMAN",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = depthColor
                         )
@@ -713,7 +713,7 @@ private fun WrsParameterMatrixCard(
                         )
                         Text(
                             text = depthCategory,
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = depthColor.copy(alpha = 0.85f),
                             maxLines = 1
@@ -737,9 +737,9 @@ private fun WrsParameterMatrixCard(
                     ) {
                         Text(
                             text = "JARAK KE MUKOMUKO",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (earthquake.isNearMukomuko) Color(0xFF92400E) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            color = if (earthquake.isNearMukomuko) Color(0xFF92400E) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
@@ -750,7 +750,7 @@ private fun WrsParameterMatrixCard(
                         )
                         Text(
                             text = if (earthquake.isNearMukomuko) "Radius Dekat" else "Radius Aman",
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (earthquake.isNearMukomuko) Color(0xFFB45309) else Color.Gray
                         )
@@ -765,7 +765,7 @@ private fun WrsParameterMatrixCard(
                 text = "Pusat Episentrum Gempa:",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
@@ -829,7 +829,7 @@ private fun WrsParameterMatrixCard(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Keterangan: Skala II (dirasakan beberapa orang) • Skala III (getaran nyata dalam rumah) • Skala IV (gerabah pecah, jendela berderit).",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             lineHeight = 13.sp
                         )
@@ -858,7 +858,7 @@ private fun WrsParameterMatrixCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Diseminasi Otomatis WRS BMKG: Pada beberapa menit pertama, parameter dapat diperbarui setelah dianalisis ulang seismolog.",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = Color(0xFF475569),
                         lineHeight = 14.sp
                     )
@@ -953,7 +953,7 @@ private fun WrsShakemapSection(earthquake: BmkgEarthquake) {
                 ) {
                     Text(
                         text = "Zoom In / Out Aktif",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = OrangePrimary,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -965,7 +965,7 @@ private fun WrsShakemapSection(earthquake: BmkgEarthquake) {
             Text(
                 text = "Peta kontur pemodelan intensitas percepatan tanah (PGA) BMKG di wilayah terdampak.",
                 fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -1015,7 +1015,7 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
                 Text(
                     text = "${filteredList.size} Kejadian",
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                 )
             }
 
@@ -1029,7 +1029,7 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
                 FilterChip(
                     selected = filterType == "ALL",
                     onClick = { filterType = "ALL" },
-                    label = { Text("Semua (M ≥ 5.0)", fontSize = 10.sp) },
+                    label = { Text("Semua (M ≥ 5.0)", fontSize = 11.sp) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = OrangePrimary.copy(alpha = 0.15f),
                         selectedLabelColor = OrangePrimary
@@ -1038,7 +1038,7 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
                 FilterChip(
                     selected = filterType == "NEAR",
                     onClick = { filterType = "NEAR" },
-                    label = { Text("Dekat Mukomuko", fontSize = 10.sp) },
+                    label = { Text("Dekat Mukomuko", fontSize = 11.sp) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = Color(0xFFDC2626).copy(alpha = 0.15f),
                         selectedLabelColor = Color(0xFFDC2626)
@@ -1047,7 +1047,7 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
                 FilterChip(
                     selected = filterType == "FELT",
                     onClick = { filterType = "FELT" },
-                    label = { Text("Dirasakan Warga", fontSize = 10.sp) },
+                    label = { Text("Dirasakan Warga", fontSize = 11.sp) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = Color(0xFF2563EB).copy(alpha = 0.15f),
                         selectedLabelColor = Color(0xFF2563EB)
@@ -1097,14 +1097,14 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "${eq.date} • ${eq.timeWib}",
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                             if (eq.isNearMukomuko) {
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "• Dekat Mukomuko",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFDC2626)
                                 )
@@ -1317,7 +1317,7 @@ private fun EmptyEarthquakePlaceholder(isLoading: Boolean, onRefresh: () -> Unit
                 Text(
                     text = "Mengunduh data telemetry gempabumi WRS-NTWC...",
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                 )
             } else {
                 Text(

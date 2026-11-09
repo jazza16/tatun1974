@@ -82,6 +82,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -204,7 +205,7 @@ fun MukomukoDisasterWallpaperDialog(
                                     Text(
                                         text = "Cubit layar untuk zoom • Geser untuk jelajahi detail",
                                         fontSize = 11.sp,
-                                        color = Color(0xFFCBD5E1)
+                                        color = Color(0xFF64748B)
                                     )
                                 }
                             }
@@ -395,7 +396,7 @@ fun MukomukoDisasterWallpaperDialog(
                                             Spacer(modifier = Modifier.width(5.dp))
                                             Text(
                                                 text = "Kearifan Budaya & Mitigasi Bencana",
-                                                fontSize = 10.sp,
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White
                                             )
@@ -573,7 +574,7 @@ fun MukomukoDisasterWallpaperDialog(
                                     Text(
                                         text = "Siaga Bencana 24 Jam • BPBD Mukomuko",
                                         fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.Normal,
                                         color = if (isDark) Color(0xFFFCA5A5) else Color(0xFF991B1B)
                                     )
                                     Text(
@@ -773,10 +774,13 @@ private fun InfoDetailCard(
                 ) {
                     Text(
                         text = tag,
-                        fontSize = 9.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = tagColor,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
             }
@@ -786,7 +790,7 @@ private fun InfoDetailCard(
             Text(
                 text = description,
                 fontSize = 11.sp,
-                color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF4B5563),
+                color = if (isDark) Color(0xFF64748B) else Color(0xFF4B5563),
                 lineHeight = 16.sp
             )
         }

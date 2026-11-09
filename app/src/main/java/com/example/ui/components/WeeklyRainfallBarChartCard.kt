@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.DailyItem
@@ -310,10 +311,13 @@ fun WeeklyRainfallBarChartCard(
                             ) {
                                 Text(
                                     text = "Recharts",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -431,10 +435,13 @@ fun WeeklyRainfallBarChartCard(
                         ) {
                             Text(
                                 text = activeItem.riskStatus,
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -458,14 +465,19 @@ fun WeeklyRainfallBarChartCard(
                                 text = String.format(Locale.US, "%.1f", activeItem.precipitationMm),
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f, fill = false),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = " mm",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = WeatherRainBlue,
-                                modifier = Modifier.padding(bottom = 2.dp)
+                                modifier = Modifier.padding(bottom = 2.dp).weight(0.5f, fill = false),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -481,8 +493,8 @@ fun WeeklyRainfallBarChartCard(
 
                     Text(
                         text = activeItem.recommendation,
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         lineHeight = 14.sp
                     )
                 }
@@ -624,8 +636,8 @@ private fun RechartsLegendChip(
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = label,
-            fontSize = 10.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
             fontWeight = FontWeight.Medium
         )
     }
@@ -653,8 +665,8 @@ private fun RainfallStatCard(
             ) {
                 Text(
                     text = title,
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Medium
                 )
                 Icon(
@@ -673,7 +685,7 @@ private fun RainfallStatCard(
             )
             Text(
                 text = subtext,
-                fontSize = 9.sp,
+                fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
         }

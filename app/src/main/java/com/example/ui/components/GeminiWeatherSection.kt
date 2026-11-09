@@ -161,7 +161,7 @@ fun GeminiWeatherSection(
                                 ) {
                                     Text(
                                         text = if (customApiKey.isNotBlank()) "Gemini Direct" else "PUSDALOPS AI",
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -242,7 +242,7 @@ fun GeminiWeatherSection(
                         Text(
                             text = "Jika Anda memiliki API Key Gemini dari Google AI Studio dan ingin menggunakannya langsung:",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                             lineHeight = 15.sp
                         )
                         OutlinedTextField(
@@ -393,7 +393,7 @@ fun GeminiWeatherSection(
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(
                                                 text = "Salin",
-                                                fontSize = 10.sp,
+                                                fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
@@ -496,7 +496,7 @@ fun GeminiWeatherSection(
                             Text(
                                 text = "Gemini sedang berpikir...",
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
                     }

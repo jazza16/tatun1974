@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.DailyItem
@@ -100,7 +101,7 @@ fun ThreeDayForecastCard(
                         Text(
                             text = "Kecamatan ${district.name}, Mukomuko",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -111,10 +112,13 @@ fun ThreeDayForecastCard(
                 ) {
                     Text(
                         text = "3 HARI",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color.White,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
             }
@@ -221,7 +225,7 @@ private fun ThreeDayColumnItem(
             )
             Text(
                 text = day.date.takeLast(5),
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
             )
 
@@ -265,18 +269,27 @@ private fun ThreeDayColumnItem(
                     text = "${day.maxTemp.toInt()}°",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Black,
-                    color = OrangePrimary
+                    color = OrangePrimary,
+                    modifier = Modifier.weight(1f, fill = false),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = " / ",
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    modifier = Modifier.weight(0.3f, fill = false),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = "${day.minTemp.toInt()}°",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    modifier = Modifier.weight(0.7f, fill = false),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -298,7 +311,7 @@ private fun ThreeDayColumnItem(
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = "${day.rainProbabilityMax}%",
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = WeatherRainBlue
                 )
@@ -319,7 +332,7 @@ private fun ThreeDayColumnItem(
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = "${day.windSpeedMax.toInt()} km/j",
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                 )

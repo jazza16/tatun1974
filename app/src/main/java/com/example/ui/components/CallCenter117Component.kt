@@ -136,7 +136,7 @@ fun CallCenter117HeroBanner(
                             ) {
                                 Text(
                                     text = "24 JAM",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
@@ -277,7 +277,7 @@ fun CallCenter117DetailBottomSheet(
                         Text(
                             text = "Panggilan Kedaruratan Bencana Bebas Biaya",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -330,7 +330,7 @@ fun CallCenter117DetailBottomSheet(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Hubungi 117", fontWeight = FontWeight.Bold)
+                            Text("Hubungi 117", fontWeight = FontWeight.Normal)
                         }
                     }
 
@@ -372,7 +372,7 @@ fun CallCenter117DetailBottomSheet(
                         )
                         Text(
                             text = "Kompleks Perkantoran Pemda Mukomuko",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
                     }

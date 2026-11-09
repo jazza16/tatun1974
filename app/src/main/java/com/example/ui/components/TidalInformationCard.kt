@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -141,7 +142,7 @@ fun TidalInformationCard(
                         Text(
                             text = "Pesisir ${district.name} • Samudra Hindia",
                             fontSize = 11.sp,
-                            color = Color(0xFF94A3B8)
+                            color = Color(0xFF64748B)
                         )
                     }
                 }
@@ -162,7 +163,7 @@ fun TidalInformationCard(
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Panduan", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Panduan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -246,7 +247,7 @@ fun TidalInformationCard(
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = tidalData.tideMovementText,
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
@@ -255,7 +256,7 @@ fun TidalInformationCard(
 
                         Text(
                             text = tidalData.lunarPhaseName,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFFFDE68A)
                         )
@@ -269,7 +270,7 @@ fun TidalInformationCard(
                         Column {
                             Text(
                                 text = "Ketinggian Muka Air Saat Ini",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 color = Color.White.copy(alpha = 0.8f)
                             )
                             Row(verticalAlignment = Alignment.Bottom) {
@@ -277,14 +278,19 @@ fun TidalInformationCard(
                                     text = "${tidalData.currentWaterLevelMeters}",
                                     fontSize = 28.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = " meter",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF38BDF8),
-                                    modifier = Modifier.padding(bottom = 3.dp, start = 2.dp)
+                                    modifier = Modifier.padding(bottom = 3.dp, start = 2.dp).weight(0.5f, fill = false),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -299,12 +305,12 @@ fun TidalInformationCard(
                             ) {
                                 Text(
                                     text = "Event Berikutnya:",
-                                    fontSize = 9.sp,
-                                    color = Color(0xFF94A3B8)
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF64748B)
                                 )
                                 Text(
                                     text = "${tidalData.nextEventTime} (${tidalData.nextEventType})",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF38BDF8)
                                 )
@@ -428,7 +434,7 @@ fun TidalInformationCard(
                     Text(
                         text = "1. Siklus Ganda Harian (Semi-Diurnal):",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Normal,
                         color = Color(0xFF0284C7)
                     )
                     Text(
@@ -442,7 +448,7 @@ fun TidalInformationCard(
                     Text(
                         text = "2. Waktu Aman Melintasi Pintu Muara Sungai:",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Normal,
                         color = Color(0xFF15803D)
                     )
                     Text(
@@ -502,7 +508,7 @@ private fun TidalEventPill(
         ) {
             Text(
                 text = title,
-                fontSize = 9.sp,
+                fontSize = 11.sp,
                 color = Color(0xFF94A3B8),
                 maxLines = 1
             )
@@ -515,7 +521,7 @@ private fun TidalEventPill(
             )
             Text(
                 text = height,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (isHigh) Color(0xFF38BDF8) else Color(0xFFFBBF24)
             )

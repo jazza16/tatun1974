@@ -238,7 +238,7 @@ fun HistoricalWeatherSection(
                     Text(
                         text = "Memuat arsip cuaca historis Mukomuko...",
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f)
                     )
                 }
             }
@@ -269,7 +269,7 @@ fun HistoricalWeatherSection(
                             Text(
                                 text = "Wilayah: ${record.districtName}, Mukomuko",
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
 
@@ -435,8 +435,8 @@ private fun HistoricalMetricBox(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = subText,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                 maxLines = 1
             )
         }

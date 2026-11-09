@@ -217,7 +217,7 @@ fun EarlyWarningSection(
                             text = warning.validUntil,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                         )
                     }
 
@@ -374,7 +374,7 @@ fun EarlyWarningSection(
                             )
                             Text(
                                 text = "Hubungi >",
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFDC2626)
                             )
@@ -455,7 +455,7 @@ private fun WeatherAlertNotificationSettingsCard(
                             ) {
                                 Text(
                                     text = "PUSH",
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Black,
                                     color = OrangeOnPrimary,
                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
@@ -465,7 +465,7 @@ private fun WeatherAlertNotificationSettingsCard(
                         Text(
                             text = "Peringatan dini cuaca ekstrem di Mukomuko",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
                 }
