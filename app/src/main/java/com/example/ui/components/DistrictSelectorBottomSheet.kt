@@ -158,7 +158,12 @@ fun DistrictSelectorBottomSheet(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onQueryChange,
-                placeholder = { Text("Cari kecamatan, misal: Ipuh, Penarik...") },
+                placeholder = {
+                    Text(
+                        text = "Cari Kecamatan...",
+                        maxLines = 1
+                    )
+                },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -207,7 +212,8 @@ fun DistrictSelectorBottomSheet(
                                         text = district.name,
                                         fontSize = 15.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                        color = if (isSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface
+                                        color = if (isSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
                                     if (isSelected) {
                                         Spacer(modifier = Modifier.width(6.dp))
@@ -226,9 +232,10 @@ fun DistrictSelectorBottomSheet(
                                 )
                             }
 
+                            Spacer(modifier = Modifier.width(8.dp))
+
                             IconButton(
-                                onClick = { onToggleFavorite(district.id) },
-                                modifier = Modifier.size(36.dp)
+                                onClick = { onToggleFavorite(district.id) }
                             ) {
                                 Icon(
                                     imageVector = if (isFav) Icons.Default.Star else Icons.Outlined.StarBorder,

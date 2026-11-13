@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -176,6 +178,7 @@ val MUKOMUKO_HAZARD_ZONES = listOf(
  * Interactive Spatial Map (Google Maps / GIS Style) for Citizen Disaster Reports
  * Placed inside Tab Laporan Warga.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CitizenReportMapView(
     reports: List<CitizenDisasterReport>,
@@ -237,12 +240,15 @@ fun CitizenReportMapView(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    ) {
                         Button(
                             onClick = { com.example.ui.MapActivity.launch(context) },
                             shape = RoundedCornerShape(8.dp),
@@ -929,14 +935,22 @@ private fun StatusButton(label: String, isActive: Boolean, activeColor: Color, o
             1.dp,
             if (isActive) activeColor else Color(0xFFD1D5DB)
         ),
-        modifier = Modifier.clickable { onClick() }
+        modifier = Modifier
+            .heightIn(min = 40.dp)
+            .clickable { onClick() }
     ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (isActive) Color.White else Color(0xFF4B5563),
+        Box(
+            contentAlignment = Alignment.Center,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
+        ) {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isActive) Color.White else Color(0xFF4B5563),
+                maxLines = 1,
+                softWrap = false
+            )
+        }
     }
 }

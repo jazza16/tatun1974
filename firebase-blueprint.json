@@ -297,6 +297,28 @@
         "timestamp": { "type": "integer" }
       },
       "required": ["sessionId", "officerNip", "accessGranted", "timestamp"]
+    },
+    "OfficerCredential": {
+      "title": "OfficerCredential",
+      "description": "Individual BPBD officer login credential with salted SHA-256 PIN hash and custom PIN status",
+      "type": "object",
+      "properties": {
+        "nip": { "type": "string" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string" },
+        "unit": { "type": "string" },
+        "shift": { "type": "string" },
+        "phone": { "type": "string" },
+        "pinHash": { "type": "string" },
+        "salt": { "type": "string" },
+        "isCustomPinSet": { "type": "boolean" },
+        "isPinChanged": { "type": "boolean" },
+        "initialSecurePin": { "type": "string" },
+        "lastLoginAt": { "type": "integer" },
+        "lastLoginDevice": { "type": "string" },
+        "updatedAt": { "type": "integer" }
+      },
+      "required": ["nip", "fullName", "pinHash", "salt"]
     }
   },
   "firestore": {
@@ -315,6 +337,10 @@
     "/officers/{officerId}": {
       "schema": "OfficerProfile",
       "description": "BPBD Pusdalops & TRC duty personnel roster"
+    },
+    "/officer_credentials/{nip}": {
+      "schema": "OfficerCredential",
+      "description": "Individual BPBD officer login credentials and custom PIN hashes"
     },
     "/database_backups/{backupId}": {
       "schema": "DatabaseBackup",

@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import android.Manifest
 import android.os.Build
@@ -63,6 +64,29 @@ import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import com.example.util.WeatherAlertSettings
 import com.example.util.WeatherNotificationHelper
+
+/**
+ * Menyisipkan spasi pada teks wilayah pusat gempa BMKG yang menempel tanpa spasi,
+ * misalnya "TimurLaut" -> "Timur Laut" dan "HALMAHERASELATAN" -> "HALMAHERA SELATAN".
+ */
+fun formatEarthquakeRegion(rawRegion: String): String {
+    if (rawRegion.isBlank()) return rawRegion
+    return rawRegion
+        // 1. Pisahkan huruf kecil diikuti huruf kapital (contoh: TimurLaut -> Timur Laut, BaratDaya -> Barat Daya)
+        .replace(Regex("([a-z])([A-Z])"), "$1 $2")
+        // 2. Pisahkan kata arah mata angin/geografis kapital yang menempel di akhir kata kapital (contoh: HALMAHERASELATAN -> HALMAHERA SELATAN)
+        .replace(
+            Regex("([A-Z]{3,})(SELATAN|UTARA|BARAT|TIMUR|TENGAH|TENGGARA|DAYA|LAUT)\\b"),
+            "$1 $2"
+        )
+        // 3. Pisahkan awalan geografis kapital yang menempel di awal kata kapital (contoh: PULAUMOROTAI -> PULAU MOROTAI)
+        .replace(
+            Regex("\\b(PULAU|KEPULAUAN|KABUPATEN|TELUK|SELAT|PEGUNUNGAN)([A-Z]{3,})"),
+            "$1 $2"
+        )
+        .replace(Regex("\\s+"), " ")
+        .trim()
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -184,10 +208,9 @@ fun EarlyWarningSection(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     // Title & Severity Badge
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Surface(
                             color = severityColor.copy(alpha = 0.15f),
@@ -221,7 +244,7 @@ fun EarlyWarningSection(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(verticalAlignment = Alignment.Top) {
                         Box(
@@ -423,7 +446,10 @@ private fun WeatherAlertNotificationSettingsCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(42.dp)
@@ -440,13 +466,14 @@ private fun WeatherAlertNotificationSettingsCard(
 
                     Spacer(modifier = Modifier.width(10.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "Notifikasi Cuaca Buruk",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
@@ -455,10 +482,10 @@ private fun WeatherAlertNotificationSettingsCard(
                             ) {
                                 Text(
                                     text = "PUSH",
-                                    fontSize = 11.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Black,
                                     color = OrangeOnPrimary,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                 )
                             }
                         }
@@ -485,7 +512,9 @@ private fun WeatherAlertNotificationSettingsCard(
                         checkedThumbColor = Color.White,
                         checkedTrackColor = OrangePrimary
                     ),
-                    modifier = Modifier.testTag("switch_weather_alert_master")
+                    modifier = Modifier
+                        .scale(0.8f)
+                        .testTag("switch_weather_alert_master")
                 )
             }
 

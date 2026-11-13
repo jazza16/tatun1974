@@ -56,8 +56,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -99,9 +102,9 @@ private val MUKOMUKO_EMERGENCY_CONTACTS = listOf(
         name = "Polres Mukomuko (Kepolisian)",
         category = "Kepolisian",
         phoneNumber = "110",
-        displayPhone = "110 / (0737) 71110",
-        description = "POLISI BERSAMA MASYARAKAT • Sentra Pelayanan Kepolisian Terpadu (SPKT) keamanan warga, laka lantas, dan blokade jalan darurat.",
-        address = "Jl. Lintas Barat Sumatera Km. 5, Mukomuko",
+        displayPhone = "110",
+        description = "POLISI BERSAMA MASYARAKAT • Sentra Pelayanan Kepolisian Terpadu (SPKT) keamanan warga, laka lintas, dan pengaduan masyarakat.",
+        address = "Gedung Pelayanan Terpadu Sarja Arya Racana, Bandar Ratu, Kota Mukomuko",
         icon = Icons.Default.LocalPolice,
         themeColor = Color(0xFF1D4ED8),
         isTollFree = true
@@ -328,6 +331,7 @@ private fun EmergencyContactCard(
     contact: EmergencyContactItem,
     onDial: () -> Unit
 ) {
+    val context = LocalContext.current
     Card(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -388,23 +392,6 @@ private fun EmergencyContactCard(
                                     softWrap = false
                                 )
                             }
-                            if (contact.name.contains("Polres Mukomuko", ignoreCase = true)) {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFF4A3525)
-                                ) {
-                                    Text(
-                                        text = "POLISI BERSAMA MASYARAKAT",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color(0xFFFFD700),
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        softWrap = false
-                                    )
-                                }
-                            }
                         }
                     }
                 }
@@ -435,8 +422,22 @@ private fun EmergencyContactCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            val annotatedDescription = buildAnnotatedString {
+                val boldPhrase = "POLISI BERSAMA MASYARAKAT"
+                val startIndex = contact.description.indexOf(boldPhrase)
+                if (startIndex >= 0) {
+                    append(contact.description.substring(0, startIndex))
+                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                        append(boldPhrase)
+                    }
+                    append(contact.description.substring(startIndex + boldPhrase.length))
+                } else {
+                    append(contact.description)
+                }
+            }
+
             Text(
-                text = contact.description,
+                text = annotatedDescription,
                 fontSize = 11.sp,
                 color = Color(0xFF4B5563),
                 lineHeight = 15.sp
@@ -469,7 +470,25 @@ private fun EmergencyContactCard(
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
+                        val query = if (contact.name.contains("Polres Mukomuko", ignoreCase = true)) {
+                            "Polres+Mukomuko+Bandar+Ratu"
+                        } else {
+                            Uri.encode("${contact.name} ${contact.address}")
+                        }
+                        try {
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://www.google.com/maps/search/?api=1&query=$query")
+                            )
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Tidak dapat membuka Google Maps", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
                     Icon(
                         imageVector = Icons.Default.LocationOn,
                         contentDescription = null,

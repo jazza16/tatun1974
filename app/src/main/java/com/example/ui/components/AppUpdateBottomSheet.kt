@@ -148,7 +148,7 @@ fun AppUpdateBottomSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "SIPAGAR KITA v${updateState.currentVersion}",
+                            text = "SIPAGAR KITA v${updateState.currentVersion} • Rilis Resmi",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
@@ -364,7 +364,10 @@ fun AppUpdateBottomSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             // --- 4. EXPLANATION OF NEW FEATURES (Penjelasan Fitur Update yang Baru) ---
-            NewFeaturesExplanationSection(isDark = isActuallyDark)
+            NewFeaturesExplanationSection(
+                currentVersion = updateState.currentVersion,
+                isDark = isActuallyDark
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -471,9 +474,7 @@ private fun ThemeToggleCard(
                     label = "Terang",
                     icon = Icons.Default.LightMode,
                     isSelected = isDarkMode == false,
-                    modifier = Modifier
-                        .weight(1f)
-                        .widthIn(min = 90.dp),
+                    modifier = Modifier.widthIn(min = 90.dp),
                     onClick = { onSetThemeMode(false) },
                     testTag = "theme_option_light"
                 )
@@ -483,9 +484,7 @@ private fun ThemeToggleCard(
                     label = "Gelap",
                     icon = Icons.Default.DarkMode,
                     isSelected = isDarkMode == true,
-                    modifier = Modifier
-                        .weight(1f)
-                        .widthIn(min = 90.dp),
+                    modifier = Modifier.widthIn(min = 90.dp),
                     onClick = { onSetThemeMode(true) },
                     testTag = "theme_option_dark"
                 )
@@ -495,9 +494,7 @@ private fun ThemeToggleCard(
                     label = "Sistem",
                     icon = Icons.Default.SettingsBrightness,
                     isSelected = isDarkMode == null,
-                    modifier = Modifier
-                        .weight(1f)
-                        .widthIn(min = 90.dp),
+                    modifier = Modifier.widthIn(min = 90.dp),
                     onClick = { onSetThemeMode(null) },
                     testTag = "theme_option_system"
                 )
@@ -584,7 +581,8 @@ private fun ThemeModePill(
                 text = label,
                 fontSize = 12.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = contentColor
+                color = contentColor,
+                maxLines = 1
             )
         }
     }
@@ -654,7 +652,7 @@ private fun OnlineUpdateCard(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = if (updateState.isPermanentlyInstalled && updateState.isUpdated) "Terkini v${updateState.currentVersion} (Permanen)"
+                        text = if (updateState.isPermanentlyInstalled && updateState.isUpdated) "Rilis Resmi v${updateState.currentVersion}"
                         else "Update v${updateState.latestVersion}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -904,7 +902,7 @@ private fun OnlineUpdateCard(
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        text = "Sistem menggunakan Semantic Versioning (AppVersionHelper) untuk mendeteksi perangkat versi sebelumnya (v1.4.0) guna memicu notifikasi update ke v1.5.0, serta otomatis berlaku untuk versi berikutnya (v1.6.0, dst) saat dirilis pengembang.",
+                        text = "Sistem menggunakan Semantic Versioning (AppVersionHelper) untuk mendeteksi perangkat versi sebelumnya (v3.6.0) guna memicu notifikasi update ke Rilis Resmi v3.7.0, serta otomatis berlaku untuk versi berikutnya (v3.8.0, dst) saat dirilis pengembang.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         lineHeight = 14.sp
@@ -922,7 +920,7 @@ private fun OnlineUpdateCard(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = "Uji v1.4.0 (Notif v1.5.0)",
+                                text = "Uji v3.6.0 (Notif v3.7.0)",
                                 fontSize = 11.sp,
                                 maxLines = 1
                             )
@@ -936,7 +934,7 @@ private fun OnlineUpdateCard(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = "Uji Rilis v1.6.0",
+                                text = "Uji Rilis v3.8.0",
                                 fontSize = 11.sp,
                                 maxLines = 1
                             )
@@ -953,7 +951,7 @@ private fun OnlineUpdateCard(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = "Kunci v1.5.0",
+                                text = "Rilis v3.7.0",
                                 fontSize = 11.sp,
                                 color = Color.White,
                                 maxLines = 1
@@ -967,7 +965,10 @@ private fun OnlineUpdateCard(
 }
 
 @Composable
-private fun NewFeaturesExplanationSection(isDark: Boolean) {
+private fun NewFeaturesExplanationSection(
+    currentVersion: String = "3.7.0",
+    isDark: Boolean
+) {
     var isExpanded by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier
@@ -1008,13 +1009,13 @@ private fun NewFeaturesExplanationSection(isDark: Boolean) {
 
                     Column {
                         Text(
-                            text = "Panduan Fitur & Rilis v3.4.0",
+                            text = "Panduan Fitur & Rilis Resmi v$currentVersion",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF78350F)
                         )
                         Text(
-                            text = "Enterprise Security, Play Integrity & In-App Update",
+                            text = "Biometric Auth, Play Integrity Server & Laporan Harian PDF",
                             fontSize = 11.sp,
                             color = if (isDark) Color(0xFFFDC5A2) else Color(0xFF92400E)
                         )

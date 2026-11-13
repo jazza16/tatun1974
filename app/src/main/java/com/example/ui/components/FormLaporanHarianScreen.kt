@@ -540,14 +540,14 @@ private fun Step1DataKejadian(
                     OutlinedTextField(
                         value = tanggalKejadian,
                         onValueChange = onTanggalKejadianChange,
-                        label = { Text("Tanggal Kejadian") },
+                        label = { Text("Tanggal", maxLines = 1) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = waktuKejadian,
                         onValueChange = onWaktuKejadianChange,
-                        label = { Text("Waktu Kejadian") },
+                        label = { Text("Waktu", maxLines = 1) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )

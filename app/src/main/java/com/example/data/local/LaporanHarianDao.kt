@@ -20,6 +20,9 @@ interface LaporanHarianDao {
     @Query("SELECT * FROM laporan_harian ORDER BY id DESC")
     fun getAllLaporanHarian(): Flow<List<LaporanHarian>>
 
+    @Query("SELECT * FROM laporan_harian ORDER BY id DESC LIMIT 1")
+    fun getLaporanTerakhir(): LaporanHarianEntity?
+
     @Query("SELECT * FROM laporan_harian ORDER BY id DESC")
     suspend fun getAllLaporanHarianSync(): List<LaporanHarian>
 
@@ -69,6 +72,9 @@ interface LaporanHarianDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLogKomunikasi(log: LogKomunikasi): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLog(log: LogKomunikasiEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLogKomunikasiList(logs: List<LogKomunikasi>)

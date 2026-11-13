@@ -110,16 +110,31 @@ fun QuickActionsFab(
         label = "fab_rotation"
     )
 
-    val actionItems = listOf(
-        QuickActionItemData("form_laporan", "Form Laporan Harian", Icons.Default.Edit, Color(0xFF1976D2), Color.White, "cardBuatLaporan"),
-        QuickActionItemData("citizen_report", "Laporan Warga Bencana", Icons.Default.Edit, Color(0xFFEA580C), Color.White, "action_citizen_report"),
-        QuickActionItemData("forecast", "Prakiraan Cuaca", Icons.Default.CalendarMonth, Color(0xFF2563EB), Color.White, "action_forecast"),
-        QuickActionItemData("dial_117", "Darurat 117 BPBD", Icons.Default.PhoneInTalk, Color(0xFFDC2626), Color.White, "action_dial_117"),
-        QuickActionItemData("compass", "Kompas Evakuasi", Icons.Default.Explore, Color(0xFF16A34A), Color.White, "action_open_compass"),
-        QuickActionItemData("disaster_map", "Peta Bencana Mukomuko", Icons.Default.Map, Color(0xFF0D9488), Color.White, "action_disaster_map"),
-        QuickActionItemData("maritime", "Keselamatan Maritim", Icons.Default.Surfing, Color(0xFF0284C7), Color.White, "action_maritime_safety_guide"),
-        QuickActionItemData("onboarding", "Panduan Aplikasi", Icons.Default.AutoAwesome, Color(0xFF8B5CF6), Color.White, "action_open_onboarding")
-    )
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val officerAuth = remember { com.example.data.local.OfficerAuthManager(context) }
+    val isOfficerLoggedIn = officerAuth.isOfficerLoggedIn()
+    val officerRole = officerAuth.getOfficerRole()
+    val hasSpecialAssignment = officerRole.contains("Penugasan Khusus", ignoreCase = true)
+
+    val actionItems = buildList {
+        if (
+            isOfficerLoggedIn && (
+                officerRole.contains("Manajer", ignoreCase = true) ||
+                officerRole.contains("Administrasi", ignoreCase = true) ||
+                officerRole.contains("Operator", ignoreCase = true) ||
+                hasSpecialAssignment
+            )
+        ) {
+            add(QuickActionItemData("form_laporan", "Form Laporan Harian", Icons.Default.Edit, Color(0xFF1976D2), Color.White, "cardBuatLaporan"))
+        }
+        add(QuickActionItemData("citizen_report", "Laporan Warga Bencana", Icons.Default.Edit, Color(0xFFEA580C), Color.White, "action_citizen_report"))
+        add(QuickActionItemData("forecast", "Prakiraan Cuaca", Icons.Default.CalendarMonth, Color(0xFF2563EB), Color.White, "action_forecast"))
+        add(QuickActionItemData("dial_117", "Darurat 117 BPBD", Icons.Default.PhoneInTalk, Color(0xFFDC2626), Color.White, "action_dial_117"))
+        add(QuickActionItemData("compass", "Kompas Evakuasi", Icons.Default.Explore, Color(0xFF16A34A), Color.White, "action_open_compass"))
+        add(QuickActionItemData("disaster_map", "Peta Bencana Mukomuko", Icons.Default.Map, Color(0xFF0D9488), Color.White, "action_disaster_map"))
+        add(QuickActionItemData("maritime", "Keselamatan Maritim", Icons.Default.Surfing, Color(0xFF0284C7), Color.White, "action_maritime_safety_guide"))
+        add(QuickActionItemData("onboarding", "Panduan Aplikasi", Icons.Default.AutoAwesome, Color(0xFF8B5CF6), Color.White, "action_open_onboarding"))
+    }
 
     Box(
         modifier = modifier

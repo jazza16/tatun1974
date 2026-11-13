@@ -1,5 +1,6 @@
 package com.example.util
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -8,19 +9,28 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import com.example.data.local.OfficerAuthManager
 import com.example.model.CitizenDisasterReport
+import com.example.ui.components.DisasterChartCategory
+import com.example.ui.components.MonthlyDisasterSummary
+import com.example.ui.components.PieSliceData
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 /**
- * Helper untuk mengekspor laporan bencana warga ke format PDF dan CSV.
- * Digunakan oleh Petugas Pusdalops BPBD Kabupaten Mukomuko untuk arsip digital
- * dan analisis data spreadsheet (Excel).
+ * Helper untuk mengekspor laporan bencana warga dan statistik bulanan ke format PDF dan CSV.
+ * Digunakan oleh Petugas Pusdalops BPBD Kabupaten Mukomuko untuk arsip digital,
+ * lampiran laporan resmi harian, dan analisis data spreadsheet (Excel).
  */
 object ReportExporter {
 
@@ -502,5 +512,619 @@ object ReportExporter {
         } catch (_: Exception) {}
 
         return outputFile
+    }
+
+    /**
+     * Menghasilkan dokumen PDF resmi A4 berisi Ringkasan & Statistik Data Bencana Bulanan
+     * (lengkap dengan visualisasi Grafik Batang, Pie Chart proporsi bencana, KPI Eksekutif,
+     * dan Tabel Matriks 12 Bulan Januari–Desember) untuk lampiran laporan resmi harian Pusdalops BPBD.
+     *
+     * Menyimpan berkas langsung ke folder Downloads perangkat (via MediaStore pada Android 10+)
+     * serta membuka lembar berbagi/pratinjau PDF melalui FileProvider.
+     */
+    fun exportMonthlyDisasterAnalyticsToPdf(
+        context: Context,
+        monthlyData: List<MonthlyDisasterSummary>,
+        pieSlices: List<PieSliceData>,
+        selectedYear: Int,
+        scopeLabel: String
+    ): File? {
+        if (monthlyData.isEmpty()) {
+            Toast.makeText(context, "Tidak ada data ringkasan bencana bulanan untuk diunduh", Toast.LENGTH_SHORT).show()
+            return null
+        }
+
+        return try {
+            val officerAuth = OfficerAuthManager(context)
+            val rawOfficerName = officerAuth.getOfficerName().ifBlank { "Petugas Operator Siaga Pusdalops-PB" }
+            val rawOfficerNip = officerAuth.getOfficerBadgeId().ifBlank { "197401282006041006" }
+
+            val pdfDoc = PdfDocument()
+            val pageWidth = 595 // Standar A4 (points)
+            val pageHeight = 842 // Standar A4 (points)
+            val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
+            val page = pdfDoc.startPage(pageInfo)
+            val canvas = page.canvas
+            val margin = 30f
+
+            val titlePaint = Paint().apply {
+                color = Color.rgb(15, 23, 42)
+                textSize = 11.5f
+                isFakeBoldText = true
+                isAntiAlias = true
+                textAlign = Paint.Align.CENTER
+            }
+
+            val subtitlePaint = Paint().apply {
+                color = Color.rgb(37, 99, 235)
+                textSize = 9f
+                isFakeBoldText = true
+                isAntiAlias = true
+                textAlign = Paint.Align.CENTER
+            }
+
+            val sectionHeaderPaint = Paint().apply {
+                color = Color.rgb(15, 23, 42)
+                textSize = 9f
+                isFakeBoldText = true
+                isAntiAlias = true
+            }
+
+            val textPaint = Paint().apply {
+                color = Color.rgb(51, 65, 85)
+                textSize = 7.8f
+                isAntiAlias = true
+            }
+
+            val boldTextPaint = Paint().apply {
+                color = Color.rgb(15, 23, 42)
+                textSize = 7.8f
+                isFakeBoldText = true
+                isAntiAlias = true
+            }
+
+            val linePaint = Paint().apply {
+                color = Color.rgb(203, 213, 225)
+                strokeWidth = 0.8f
+                isAntiAlias = true
+            }
+
+            var y = 32f
+
+            // 1. Kop Surat Resmi & Logo Ganda (BPBD & Pemkab Mukomuko)
+            try {
+                val leftLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_bpbd_mukomuko)
+                if (leftLogo != null) {
+                    canvas.drawBitmap(leftLogo, null, RectF(margin, 20f, margin + 40f, 60f), null)
+                }
+            } catch (_: Exception) {}
+
+            try {
+                val rightLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_mukomuko_logo)
+                if (rightLogo != null) {
+                    canvas.drawBitmap(rightLogo, null, RectF(pageWidth - margin - 40f, 20f, pageWidth - margin, 60f), null)
+                }
+            } catch (_: Exception) {}
+
+            canvas.drawText("PEMERINTAH KABUPATEN MUKOMUKO", pageWidth / 2f, y, titlePaint)
+            y += 13f
+            canvas.drawText("BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)", pageWidth / 2f, y, titlePaint)
+            y += 12f
+            canvas.drawText("PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)", pageWidth / 2f, y, subtitlePaint)
+            y += 11f
+            val addressPaint = Paint(textPaint).apply { textAlign = Paint.Align.CENTER; textSize = 7.2f }
+            canvas.drawText(
+                "Jl. Danau Nibung, Kompleks Perkantoran Pemkab Mukomuko • Call Center Darurat 117 • Sistem SiPagarKita",
+                pageWidth / 2f,
+                y,
+                addressPaint
+            )
+            y += 9f
+            canvas.drawLine(margin, y, pageWidth - margin, y, Paint(linePaint).apply { strokeWidth = 1.8f; color = Color.rgb(15, 23, 42) })
+            y += 2.5f
+            canvas.drawLine(margin, y, pageWidth - margin, y, Paint(linePaint).apply { strokeWidth = 0.7f; color = Color.rgb(100, 116, 139) })
+            y += 14f
+
+            // 2. Judul Dokumen & Metadata
+            val docTitlePaint = Paint(titlePaint).apply {
+                color = Color.rgb(30, 58, 138)
+                textSize = 10.5f
+            }
+            canvas.drawText(
+                "LAPORAN RESMI RINGKASAN & STATISTIK DATA BENCANA BULANAN TAHUN $selectedYear",
+                pageWidth / 2f,
+                y,
+                docTitlePaint
+            )
+            y += 12f
+
+            val sdf = SimpleDateFormat("dd MMMM yyyy, HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
+            val printDateStr = sdf.format(Date())
+            val metaPaint = Paint(textPaint).apply {
+                textAlign = Paint.Align.CENTER
+                color = Color.rgb(71, 85, 105)
+            }
+            canvas.drawText(
+                "Cakupan Wilayah: $scopeLabel  |  Waktu Unduh: $printDateStr  |  Petugas: $rawOfficerName",
+                pageWidth / 2f,
+                y,
+                metaPaint
+            )
+            y += 10f
+
+            // 3. Kotak Ringkasan Eksekutif (KPI Tahunan)
+            val totalAnnual = monthlyData.sumOf { it.totalIncidents }
+            val totalAffected = monthlyData.sumOf { it.casualtiesAffected }
+            val totalResolved = monthlyData.sumOf { it.resolvedCount }
+            val resolvedPct = if (totalAnnual > 0) ((totalResolved * 100f) / totalAnnual).roundToInt().coerceIn(0, 100) else 100
+            val avgMonthly = totalAnnual / 12f
+            val peakMonth = monthlyData.maxByOrNull { it.totalIncidents } ?: monthlyData.first()
+            val domCatEntry = DisasterChartCategory.entries.associateWith { cat ->
+                monthlyData.sumOf { it.countsByCategory[cat] ?: 0 }
+            }.maxByOrNull { it.value }
+
+            val kpiRect = RectF(margin, y, pageWidth - margin, y + 40f)
+            canvas.drawRoundRect(kpiRect, 6f, 6f, Paint().apply { color = Color.rgb(239, 246, 255) })
+            canvas.drawRoundRect(kpiRect, 6f, 6f, Paint().apply {
+                color = Color.rgb(147, 197, 253)
+                style = Paint.Style.STROKE
+                strokeWidth = 1f
+                isAntiAlias = true
+            })
+
+            canvas.drawText(
+                "I. RINGKASAN EKSEKUTIF STATISTIK KEBENCANAAN TAHUN $selectedYear",
+                margin + 10f,
+                y + 12f,
+                Paint(boldTextPaint).apply { color = Color.rgb(30, 64, 175) }
+            )
+            canvas.drawText(
+                "• Total Kejadian Tahunan: $totalAnnual kejadian (Rata-rata ${String.format(Locale.getDefault(), "%.1f", avgMonthly)}/bln)",
+                margin + 10f,
+                y + 24f,
+                textPaint
+            )
+            canvas.drawText(
+                "• Bulan Puncak Kejadian: ${peakMonth.monthFull} (${peakMonth.totalIncidents} kejadian - Dominan Kec. ${peakMonth.topDistrict})",
+                margin + 10f,
+                y + 34f,
+                textPaint
+            )
+            canvas.drawText(
+                "• Bencana Dominan: ${domCatEntry?.key?.shortLabel ?: "Banjir"} (${domCatEntry?.value ?: 0} kejadian)",
+                margin + 295f,
+                y + 24f,
+                textPaint
+            )
+            canvas.drawText(
+                "• Penanganan Tuntas TRC: $totalResolved/$totalAnnual selesai ($resolvedPct%) • Terdampak: $totalAffected jiwa",
+                margin + 295f,
+                y + 34f,
+                textPaint
+            )
+
+            y += 48f
+
+            // 4. Visualisasi Grafik Batang (Jan-Des) & Pie Chart Proporsi Bencana
+            canvas.drawText(
+                "II. VISUALISASI GRAFIK BATANG TREN BULANAN & PIE CHART PROPORSI BENCANA",
+                margin,
+                y,
+                sectionHeaderPaint
+            )
+            y += 6f
+
+            val chartBoxHeight = 142f
+            val barBoxRect = RectF(margin, y, margin + 332f, y + chartBoxHeight)
+            val pieBoxRect = RectF(margin + 340f, y, pageWidth - margin, y + chartBoxHeight)
+
+            // Kotak Kiri: Grafik Batang Bulanan (Jan-Des)
+            canvas.drawRoundRect(barBoxRect, 6f, 6f, Paint().apply { color = Color.rgb(248, 250, 252) })
+            canvas.drawRoundRect(barBoxRect, 6f, 6f, Paint(linePaint).apply { style = Paint.Style.STROKE })
+            canvas.drawText(
+                "Grafik Batang Kejadian Bulanan (Jan–Des $selectedYear)",
+                barBoxRect.left + 8f,
+                barBoxRect.top + 12f,
+                boldTextPaint
+            )
+
+            val chartLeft = barBoxRect.left + 24f
+            val chartRight = barBoxRect.right - 8f
+            val chartTop = barBoxRect.top + 24f
+            val chartBottom = barBoxRect.bottom - 28f
+            val cWidth = chartRight - chartLeft
+            val cHeight = chartBottom - chartTop
+            val maxMonthInc = max(monthlyData.maxOfOrNull { it.totalIncidents } ?: 10, 6)
+
+            val axisLabelPaint = Paint(textPaint).apply {
+                textSize = 6.5f
+                textAlign = Paint.Align.RIGHT
+                color = Color.rgb(100, 116, 139)
+            }
+            for (step in 0..3) {
+                val frac = step / 3f
+                val gy = chartBottom - cHeight * frac
+                val gVal = (maxMonthInc * frac).roundToInt()
+                canvas.drawLine(chartLeft, gy, chartRight, gy, Paint(linePaint).apply { strokeWidth = 0.5f })
+                canvas.drawText("$gVal", chartLeft - 3f, gy + 2f, axisLabelPaint)
+            }
+
+            val slotW = cWidth / 12f
+            val barW = slotW * 0.56f
+            val barMonthPaint = Paint(textPaint).apply {
+                textSize = 6.5f
+                textAlign = Paint.Align.CENTER
+            }
+            val barValPaint = Paint(boldTextPaint).apply {
+                textSize = 6.5f
+                textAlign = Paint.Align.CENTER
+            }
+
+            monthlyData.forEachIndexed { idx, m ->
+                val cx = chartLeft + slotW * idx + slotW / 2f
+                val bLeft = cx - barW / 2f
+                var currBottom = chartBottom
+
+                DisasterChartCategory.entries.forEach { cat ->
+                    val count = m.countsByCategory[cat] ?: 0
+                    if (count > 0) {
+                        val segH = (count.toFloat() / maxMonthInc) * cHeight
+                        val segTop = (currBottom - segH).coerceAtLeast(chartTop)
+                        val catPaint = Paint().apply {
+                            color = getCategoryRgbColor(cat)
+                            isAntiAlias = true
+                        }
+                        canvas.drawRect(bLeft, segTop, bLeft + barW, currBottom, catPaint)
+                        currBottom = segTop
+                    }
+                }
+
+                canvas.drawText("${m.totalIncidents}", cx, (currBottom - 2.5f).coerceAtLeast(chartTop - 2f), barValPaint)
+                canvas.drawText(m.monthShort, cx, chartBottom + 9f, barMonthPaint)
+            }
+
+            // Legenda ringkas di bawah grafik batang
+            var legX = barBoxRect.left + 8f
+            val legY = barBoxRect.bottom - 7f
+            val legPaint = Paint(textPaint).apply { textSize = 6.3f }
+            DisasterChartCategory.entries.forEach { cat ->
+                canvas.drawRect(legX, legY - 5f, legX + 5f, legY, Paint().apply { color = getCategoryRgbColor(cat) })
+                canvas.drawText(cat.shortLabel, legX + 7f, legY - 0.5f, legPaint)
+                legX += legPaint.measureText(cat.shortLabel) + 14f
+            }
+
+            // Kotak Kanan: Pie / Donut Chart Proporsi Bencana
+            canvas.drawRoundRect(pieBoxRect, 6f, 6f, Paint().apply { color = Color.rgb(248, 250, 252) })
+            canvas.drawRoundRect(pieBoxRect, 6f, 6f, Paint(linePaint).apply { style = Paint.Style.STROKE })
+            canvas.drawText(
+                "Pie Chart Proporsi Bencana",
+                pieBoxRect.left + 8f,
+                pieBoxRect.top + 12f,
+                boldTextPaint
+            )
+
+            val pieOval = RectF(
+                pieBoxRect.left + 10f,
+                pieBoxRect.top + 26f,
+                pieBoxRect.left + 86f,
+                pieBoxRect.top + 102f
+            )
+            var startAng = -90f
+            pieSlices.forEachIndexed { idx, slice ->
+                val sweep = (slice.percentage / 100f) * 360f
+                val slicePaint = Paint().apply {
+                    color = getSliceRgbColor(slice.shortLabel, idx)
+                    style = Paint.Style.FILL
+                    isAntiAlias = true
+                }
+                canvas.drawArc(pieOval, startAng, sweep, true, slicePaint)
+                startAng += sweep
+            }
+            // Lubang tengah Donut Chart
+            canvas.drawCircle(
+                pieOval.centerX(),
+                pieOval.centerY(),
+                19f,
+                Paint().apply { color = Color.rgb(248, 250, 252); isAntiAlias = true }
+            )
+            canvas.drawText(
+                "$totalAnnual",
+                pieOval.centerX(),
+                pieOval.centerY() + 3f,
+                Paint(boldTextPaint).apply { textAlign = Paint.Align.CENTER; textSize = 8f }
+            )
+
+            // Legenda Persentase Pie Chart di sebelah kanan Donut
+            var pLegY = pieBoxRect.top + 30f
+            val pLegX = pieBoxRect.left + 94f
+            val smallLegPaint = Paint(textPaint).apply { textSize = 6.6f }
+            val smallBoldPaint = Paint(boldTextPaint).apply { textSize = 6.6f }
+            pieSlices.take(6).forEachIndexed { idx, slice ->
+                val cRgb = getSliceRgbColor(slice.shortLabel, idx)
+                canvas.drawRect(pLegX, pLegY - 5f, pLegX + 6f, pLegY + 1f, Paint().apply { color = cRgb })
+                val pctStr = "${String.format(Locale.getDefault(), "%.1f", slice.percentage)}%"
+                canvas.drawText(
+                    "${slice.shortLabel.take(12)}: ${slice.count} ($pctStr)",
+                    pLegX + 9f,
+                    pLegY,
+                    smallBoldPaint
+                )
+                pLegY += 15f
+            }
+            canvas.drawText(
+                "Total: $totalAnnual Kejadian ($selectedYear)",
+                pieBoxRect.left + 10f,
+                pieBoxRect.bottom - 8f,
+                smallLegPaint
+            )
+
+            y += chartBoxHeight + 14f
+
+            // 5. Tabel Rekapitulasi 12 Bulan (Januari - Desember)
+            canvas.drawText(
+                "III. TABEL REKAPITULASI DATA KEJADIAN BENCANA BULANAN (JANUARI – DESEMBER $selectedYear)",
+                margin,
+                y,
+                sectionHeaderPaint
+            )
+            y += 6f
+
+            val colNo = margin + 4f
+            val colBulan = margin + 22f
+            val colBanjir = margin + 82f
+            val colEkstrem = margin + 118f
+            val colLongsor = margin + 158f
+            val colAbrasi = margin + 196f
+            val colKarhutla = margin + 232f
+            val colLain = margin + 272f
+            val colTotal = margin + 308f
+            val colJiwa = margin + 342f
+            val colSelesai = margin + 386f
+            val colKec = margin + 422f
+            val colStatus = margin + 488f
+
+            val thHeight = 18f
+            canvas.drawRect(RectF(margin, y, pageWidth - margin, y + thHeight), Paint().apply { color = Color.rgb(226, 232, 240) })
+            val thPaint = Paint(boldTextPaint).apply { textSize = 7.2f }
+            canvas.drawText("No", colNo, y + 12f, thPaint)
+            canvas.drawText("Bulan", colBulan, y + 12f, thPaint)
+            canvas.drawText("Banjir", colBanjir, y + 12f, thPaint)
+            canvas.drawText("Ekstrem", colEkstrem, y + 12f, thPaint)
+            canvas.drawText("Longsor", colLongsor, y + 12f, thPaint)
+            canvas.drawText("Abrasi", colAbrasi, y + 12f, thPaint)
+            canvas.drawText("Karhutla", colKarhutla, y + 12f, thPaint)
+            canvas.drawText("Lainnya", colLain, y + 12f, thPaint)
+            canvas.drawText("Total", colTotal, y + 12f, thPaint)
+            canvas.drawText("Dampak", colJiwa, y + 12f, thPaint)
+            canvas.drawText("Selesai", colSelesai, y + 12f, thPaint)
+            canvas.drawText("Kec. Dominan", colKec, y + 12f, thPaint)
+            canvas.drawText("Status", colStatus, y + 12f, thPaint)
+            y += thHeight
+
+            val rowH = 17.5f
+            val cellPaint = Paint(textPaint).apply { textSize = 7.2f }
+            val cellBoldPaint = Paint(boldTextPaint).apply { textSize = 7.2f }
+
+            monthlyData.forEachIndexed { idx, m ->
+                if (idx % 2 == 1) {
+                    canvas.drawRect(
+                        RectF(margin, y, pageWidth - margin, y + rowH),
+                        Paint().apply { color = Color.rgb(248, 250, 252) }
+                    )
+                }
+                val ry = y + 12f
+                val cBanjir = m.countsByCategory[DisasterChartCategory.BANJIR] ?: 0
+                val cEkstrem = m.countsByCategory[DisasterChartCategory.CUACA_EKSTREM] ?: 0
+                val cLongsor = m.countsByCategory[DisasterChartCategory.LONGSOR] ?: 0
+                val cAbrasi = m.countsByCategory[DisasterChartCategory.ABRASI] ?: 0
+                val cKarhutla = m.countsByCategory[DisasterChartCategory.KEBAKARAN] ?: 0
+                val cLain = m.countsByCategory[DisasterChartCategory.GEMPA_LAINNYA] ?: 0
+
+                val statusText = when {
+                    m.totalIncidents >= 10 -> "SIAGA TINGGI"
+                    m.totalIncidents >= 6 -> "WASPADA"
+                    else -> "TERKENDALI"
+                }
+                val statusColor = when {
+                    m.totalIncidents >= 10 -> Color.rgb(220, 38, 38)
+                    m.totalIncidents >= 6 -> Color.rgb(217, 119, 6)
+                    else -> Color.rgb(22, 163, 74)
+                }
+
+                canvas.drawText("${idx + 1}", colNo, ry, cellPaint)
+                canvas.drawText(m.monthFull, colBulan, ry, cellBoldPaint)
+                canvas.drawText("$cBanjir", colBanjir + 6f, ry, cellPaint)
+                canvas.drawText("$cEkstrem", colEkstrem + 8f, ry, cellPaint)
+                canvas.drawText("$cLongsor", colLongsor + 8f, ry, cellPaint)
+                canvas.drawText("$cAbrasi", colAbrasi + 6f, ry, cellPaint)
+                canvas.drawText("$cKarhutla", colKarhutla + 8f, ry, cellPaint)
+                canvas.drawText("$cLain", colLain + 6f, ry, cellPaint)
+                canvas.drawText("${m.totalIncidents}", colTotal + 4f, ry, cellBoldPaint)
+                canvas.drawText("${m.casualtiesAffected} jw", colJiwa, ry, cellPaint)
+                canvas.drawText("${m.resolvedCount}/${m.totalIncidents}", colSelesai, ry, cellPaint)
+                canvas.drawText(m.topDistrict.take(13), colKec, ry, cellPaint)
+                canvas.drawText(
+                    statusText,
+                    colStatus,
+                    ry,
+                    Paint(cellBoldPaint).apply { color = statusColor; textSize = 6.5f }
+                )
+
+                y += rowH
+                canvas.drawLine(margin, y, pageWidth - margin, y, linePaint)
+            }
+
+            // Baris Total Tahunan
+            canvas.drawRect(
+                RectF(margin, y, pageWidth - margin, y + 19f),
+                Paint().apply { color = Color.rgb(219, 234, 254) }
+            )
+            val totY = y + 13f
+            val sumBanjir = monthlyData.sumOf { it.countsByCategory[DisasterChartCategory.BANJIR] ?: 0 }
+            val sumEkstrem = monthlyData.sumOf { it.countsByCategory[DisasterChartCategory.CUACA_EKSTREM] ?: 0 }
+            val sumLongsor = monthlyData.sumOf { it.countsByCategory[DisasterChartCategory.LONGSOR] ?: 0 }
+            val sumAbrasi = monthlyData.sumOf { it.countsByCategory[DisasterChartCategory.ABRASI] ?: 0 }
+            val sumKarhutla = monthlyData.sumOf { it.countsByCategory[DisasterChartCategory.KEBAKARAN] ?: 0 }
+            val sumLain = monthlyData.sumOf { it.countsByCategory[DisasterChartCategory.GEMPA_LAINNYA] ?: 0 }
+
+            canvas.drawText("TOTAL", colBulan, totY, cellBoldPaint)
+            canvas.drawText("$sumBanjir", colBanjir + 6f, totY, cellBoldPaint)
+            canvas.drawText("$sumEkstrem", colEkstrem + 8f, totY, cellBoldPaint)
+            canvas.drawText("$sumLongsor", colLongsor + 8f, totY, cellBoldPaint)
+            canvas.drawText("$sumAbrasi", colAbrasi + 6f, totY, cellBoldPaint)
+            canvas.drawText("$sumKarhutla", colKarhutla + 8f, totY, cellBoldPaint)
+            canvas.drawText("$sumLain", colLain + 6f, totY, cellBoldPaint)
+            canvas.drawText("$totalAnnual", colTotal + 4f, totY, cellBoldPaint)
+            canvas.drawText("$totalAffected jw", colJiwa, totY, cellBoldPaint)
+            canvas.drawText("$totalResolved/$totalAnnual", colSelesai, totY, cellBoldPaint)
+            canvas.drawText("15 Kecamatan", colKec, totY, cellBoldPaint)
+            canvas.drawText("$resolvedPct% TUNTAS", colStatus, totY, Paint(cellBoldPaint).apply { color = Color.rgb(21, 128, 61); textSize = 6.5f })
+            y += 27f
+
+            // 6. Catatan Evaluasi Musiman & Tanda Tangan Pengesahan Laporan Harian
+            val noteBox = RectF(margin, y, pageWidth - margin, y + 34f)
+            canvas.drawRoundRect(noteBox, 5f, 5f, Paint().apply { color = Color.rgb(255, 251, 235) })
+            canvas.drawRoundRect(noteBox, 5f, 5f, Paint().apply { color = Color.rgb(253, 230, 138); style = Paint.Style.STROKE; strokeWidth = 0.8f })
+            canvas.drawText(
+                "CATATAN LAMPIRAN LAPORAN HARIAN PUSDALOPS-PB BPBD KABUPATEN MUKOMUKO:",
+                margin + 8f,
+                y + 11f,
+                Paint(boldTextPaint).apply { color = Color.rgb(180, 83, 9); textSize = 7.2f }
+            )
+            canvas.drawText(
+                "Dokumen statistik bulanan ini dihasilkan otomatis dari basis data terpadu SiPagarKita BPBD Mukomuko sebagai lampiran",
+                margin + 8f,
+                y + 21f,
+                cellPaint
+            )
+            canvas.drawText(
+                "resmi laporan harian Pusdalops-PB untuk evaluasi kesiapsiagaan personil TRC dan distribusi logistik kebencanaan.",
+                margin + 8f,
+                y + 30f,
+                cellPaint
+            )
+
+            y += 46f
+
+            // Kiri Bawah: Keterangan Arsip Digital
+            canvas.drawText("Dokumen Resmi Terverifikasi Sistem Informasi SiPagarKita", margin, y + 10f, cellBoldPaint)
+            canvas.drawText("Pusdalops-PB BPBD Kabupaten Mukomuko • Provinsi Bengkulu", margin, y + 21f, cellPaint)
+            canvas.drawText("Status Integritas Data: Sinkronisasi Cloud & Database Lokal Aktif", margin, y + 32f, cellPaint)
+
+            // Kanan Bawah: Blok Tanda Tangan Petugas
+            val sigX = pageWidth - margin - 185f
+            val dateOnlyStr = SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("id-ID")).format(Date())
+            canvas.drawText("Mukomuko, $dateOnlyStr", sigX, y, cellPaint)
+            canvas.drawText("Petugas Jaga / Operator Pusdalops-PB,", sigX, y + 11f, cellBoldPaint)
+            canvas.drawText(rawOfficerName, sigX, y + 46f, cellBoldPaint)
+            val nipPrefix = if (rawOfficerNip.startsWith("TRC", ignoreCase = true)) "Reg. TRC" else "NIP"
+            canvas.drawText("$nipPrefix: $rawOfficerNip", sigX, y + 56f, cellPaint)
+
+            pdfDoc.finishPage(page)
+
+            val safeScope = scopeLabel.replace(Regex("[^A-Za-z0-9]"), "_").take(20)
+            val fileName = "Ringkasan_Statistik_Bencana_Bulanan_BPBD_Mukomuko_${selectedYear}_$safeScope.pdf"
+
+            // Simpan ke cacheDir untuk FileProvider Share/View
+            val cachePdfFile = File(context.cacheDir, fileName)
+            FileOutputStream(cachePdfFile).use { out ->
+                pdfDoc.writeTo(out)
+            }
+
+            // Simpan juga langsung ke folder Downloads perangkat (Android 10+ / API 29+) tanpa izin penyimpanan
+            var savedToDownloads = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    val resolver = context.contentResolver
+                    val contentValues = ContentValues().apply {
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                        put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                    }
+                    val downloadUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                    if (downloadUri != null) {
+                        resolver.openOutputStream(downloadUri)?.use { outStream ->
+                            cachePdfFile.inputStream().use { inStream ->
+                                inStream.copyTo(outStream)
+                            }
+                        }
+                        savedToDownloads = true
+                    }
+                } catch (_: Exception) {}
+            }
+
+            pdfDoc.close()
+
+            // Buka dialog bagikan / lihat PDF via FileProvider
+            try {
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cachePdfFile)
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(
+                        Intent.EXTRA_SUBJECT,
+                        "Laporan PDF Statistik Bencana Bulanan BPBD Mukomuko ($selectedYear)"
+                    )
+                    putExtra(
+                        Intent.EXTRA_TEXT,
+                        "Terlampir dokumen PDF resmi Ringkasan & Statistik Data Bencana Bulanan ($selectedYear - $scopeLabel) untuk lampiran laporan harian Pusdalops BPBD Kabupaten Mukomuko."
+                    )
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                val chooser = Intent.createChooser(shareIntent, "Unduh / Lampirkan PDF Statistik Bulanan").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(chooser)
+            } catch (_: Exception) {}
+
+            val toastMsg = if (savedToDownloads) {
+                "PDF tersimpan di folder Downloads/$fileName & siap dilampirkan!"
+            } else {
+                "Dokumen PDF berhasil dibuat & siap dilampirkan!"
+            }
+            Toast.makeText(context, toastMsg, Toast.LENGTH_LONG).show()
+
+            cachePdfFile
+        } catch (e: Exception) {
+            Toast.makeText(context, "Gagal mengunduh PDF: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            null
+        }
+    }
+
+    private fun getCategoryRgbColor(cat: DisasterChartCategory): Int {
+        return when (cat) {
+            DisasterChartCategory.BANJIR -> Color.rgb(37, 99, 235)
+            DisasterChartCategory.CUACA_EKSTREM -> Color.rgb(245, 158, 11)
+            DisasterChartCategory.LONGSOR -> Color.rgb(16, 185, 129)
+            DisasterChartCategory.ABRASI -> Color.rgb(6, 182, 212)
+            DisasterChartCategory.KEBAKARAN -> Color.rgb(239, 68, 68)
+            DisasterChartCategory.GEMPA_LAINNYA -> Color.rgb(139, 92, 246)
+        }
+    }
+
+    private fun getSliceRgbColor(shortLabel: String, fallbackIdx: Int): Int {
+        val lower = shortLabel.lowercase(Locale.getDefault())
+        return when {
+            lower.contains("banjir") -> Color.rgb(37, 99, 235)
+            lower.contains("ekstrem") -> Color.rgb(245, 158, 11)
+            lower.contains("longsor") || lower.contains("tengah") -> Color.rgb(16, 185, 129)
+            lower.contains("abrasi") || lower.contains("pesisir") -> Color.rgb(6, 182, 212)
+            lower.contains("karhutla") -> Color.rgb(239, 68, 68)
+            lower.contains("selesai") -> Color.rgb(22, 163, 74)
+            lower.contains("proses") -> Color.rgb(37, 99, 235)
+            lower.contains("verifikasi") -> Color.rgb(245, 158, 11)
+            else -> {
+                val palette = listOf(
+                    Color.rgb(139, 92, 246),
+                    Color.rgb(37, 99, 235),
+                    Color.rgb(16, 185, 129),
+                    Color.rgb(245, 158, 11),
+                    Color.rgb(239, 68, 68),
+                    Color.rgb(6, 182, 212)
+                )
+                palette[fallbackIdx % palette.size]
+            }
+        }
     }
 }

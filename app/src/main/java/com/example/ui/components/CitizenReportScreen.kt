@@ -5,13 +5,34 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.util.Base64
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.biometric.AuthenticationRequest
+import androidx.biometric.AuthenticationResult
+import androidx.biometric.compose.rememberAuthenticationLauncher
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,17 +41,23 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -45,8 +72,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -54,6 +83,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
@@ -110,14 +140,22 @@ import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -221,6 +259,7 @@ fun CitizenReportScreen(
     onUpdateReportStatusAndNotes: ((String, String, String) -> Unit)? = null,
     initialShowOfficerLogin: Boolean = false,
     onOfficerLoginDismissed: (() -> Unit)? = null,
+    hasSpecialAssignment: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -470,12 +509,12 @@ fun CitizenReportScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -486,23 +525,17 @@ fun CitizenReportScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Laporan Warga",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "PUSDALOPS BPBD Kab. Mukomuko",
-                        fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.85f)
-                    )
-                }
+                Text(
+                    text = "Laporan Warga",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.weight(1f)
+                )
 
                 IconButton(
                     onClick = { showDisasterWallpaperDialog = true },
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Info,
@@ -665,6 +698,29 @@ fun CitizenReportScreen(
                         }
                     }
                 )
+
+                // Tab 5: Statistik & Tren Bulanan (Grafik Batang & Pie Chart)
+                Tab(
+                    selected = selectedTab == 5,
+                    onClick = { selectedTab = 5 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Analytics,
+                                contentDescription = null,
+                                tint = if (selectedTab == 5) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Tren Bulanan",
+                                fontWeight = if (selectedTab == 5) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 12.sp,
+                                color = if (selectedTab == 5) Color.White else Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                )
             }
         }
 
@@ -694,63 +750,74 @@ fun CitizenReportScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                            .imePadding()
+                            .padding(horizontal = 20.dp),
+                        contentPadding = PaddingValues(vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         // Card Buat Laporan Harian (Navigasi ke FormLaporanActivity)
-                        item {
-                            Card(
-                                onClick = {
-                                    val intent = Intent(context, com.example.FormLaporanActivity::class.java)
-                                    context.startActivity(intent)
-                                },
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-                                shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("cardBuatLaporan")
-                            ) {
-                                Row(
+                        if (
+                            isOfficerLoggedIn && (
+                                officerRole.contains("Manajer", ignoreCase = true) ||
+                                officerRole.contains("Administrasi", ignoreCase = true) ||
+                                officerRole.contains("Operator", ignoreCase = true) ||
+                                hasSpecialAssignment
+                            )
+                        ) {
+                            item {
+                                Card(
+                                    onClick = {
+                                        val intent = Intent(context, com.example.FormLaporanActivity::class.java)
+                                        context.startActivity(intent)
+                                    },
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .testTag("cardBuatLaporan")
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = Color(0xFF1976D2),
-                                        modifier = Modifier.size(38.dp)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.AutoMirrored.Filled.Assignment,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(20.dp)
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFF1976D2),
+                                            modifier = Modifier.size(38.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    Icons.AutoMirrored.Filled.Assignment,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Form Laporan Harian (Resmi)",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF1E3A8A)
+                                            )
+                                            Text(
+                                                text = "Buka form multi-tab Pusdalops (Kejadian, Dampak, Log, Simpan)",
+                                                fontSize = 11.sp,
+                                                color = Color(0xFF3B82F6)
                                             )
                                         }
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Form Laporan Harian (Resmi)",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF1E3A8A)
-                                        )
-                                        Text(
-                                            text = "Buka form multi-tab Pusdalops (Kejadian, Dampak, Log, Simpan)",
-                                            fontSize = 11.sp,
-                                            color = Color(0xFF3B82F6)
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowForward,
+                                            contentDescription = null,
+                                            tint = Color(0xFF1976D2),
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = null,
-                                        tint = Color(0xFF1976D2),
-                                        modifier = Modifier.size(16.dp)
-                                    )
                                 }
                             }
                         }
@@ -1085,28 +1152,46 @@ fun CitizenReportScreen(
 
                                     // Photo Preview with Geotag Watermark
                                     if (cameraCapturedBitmap != null || photoUriString != null) {
+                                        val previewModel = remember(cameraCapturedBitmap, photoUriString) {
+                                            cameraCapturedBitmap ?: decodeCitizenPhotoModel(photoUriString)
+                                        }
+                                        val fallbackPainter = rememberVectorPainter(Icons.Default.BrokenImage)
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(180.dp)
                                                 .clip(RoundedCornerShape(12.dp))
                                                 .border(1.dp, Color(0xFFD1D5DB), RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    val targetUri = photoUriString
+                                                    if (!targetUri.isNullOrBlank()) {
+                                                        previewPhotoUri = targetUri
+                                                        previewPhotoReport = CitizenDisasterReport(
+                                                            id = "PRATINJAU",
+                                                            disasterType = selectedDisasterType,
+                                                            incidentTime = incidentTime,
+                                                            incidentLocation = incidentLocation.ifBlank { selectedVillage },
+                                                            district = selectedDistrict,
+                                                            village = selectedVillage,
+                                                            latitude = latitude,
+                                                            longitude = longitude,
+                                                            gpsAccuracyMeters = gpsAccuracy,
+                                                            isGpsVerified = isGpsLocked,
+                                                            photoUri = targetUri,
+                                                            reporterName = reporterName.ifBlank { "Pelapor Warga" },
+                                                            reporterPhone = reporterPhone
+                                                        )
+                                                    }
+                                                }
                                         ) {
-                                            if (cameraCapturedBitmap != null) {
-                                                Image(
-                                                    bitmap = cameraCapturedBitmap!!.asImageBitmap(),
-                                                    contentDescription = "Foto Kamera Kejadian",
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = Modifier.fillMaxSize()
-                                                )
-                                            } else {
-                                                AsyncImage(
-                                                    model = photoUriString,
-                                                    contentDescription = "Foto Galeri Kejadian",
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = Modifier.fillMaxSize()
-                                                )
-                                            }
+                                            AsyncImage(
+                                                model = previewModel,
+                                                contentDescription = "Foto Bukti Kejadian",
+                                                placeholder = fallbackPainter,
+                                                error = fallbackPainter,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
 
                                             // Digital Geotag Watermark Overlay
                                             Surface(
@@ -1394,7 +1479,6 @@ fun CitizenReportScreen(
                                     color = Color.White
                                 )
                             }
-                            Spacer(modifier = Modifier.height(40.dp))
                         }
                     }
                 }
@@ -1730,10 +1814,6 @@ fun CitizenReportScreen(
                                 )
                             }
                         }
-
-                        item {
-                            Spacer(modifier = Modifier.height(40.dp))
-                        }
                     }
                 }
 
@@ -1916,6 +1996,23 @@ fun CitizenReportScreen(
                         }
                     }
                 }
+                5 -> {
+                    // TAB 5: TREN & STATISTIK BENCANA BULANAN (GRAFIK BATANG & PIE CHART)
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        item {
+                            MonthlyDisasterAnalyticsSection(
+                                reports = reports,
+                                currentDistrict = currentDistrict,
+                                isDark = false
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -2070,11 +2167,108 @@ fun CitizenReportScreen(
         var isNameDropdownOpen by remember { mutableStateOf(false) }
         var rosterSearchQuery by remember { mutableStateOf("") }
 
-        // PIN state
+        // PIN & Biometric state
         var inputPin by remember { mutableStateOf("") }
         var isPinVisible by remember { mutableStateOf(false) }
         var isError by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf("") }
+        var authResultText by rememberSaveable { mutableStateOf("") }
+        var isBiometricScanning by rememberSaveable { mutableStateOf(false) }
+        val hapticFeedback = LocalHapticFeedback.current
+
+        val authLauncher = rememberAuthenticationLauncher { authResult ->
+            when (authResult) {
+                is AuthenticationResult.Success -> {
+                    // Autentikasi biometrik BERHASIL
+                    triggerBiometricVibration(context, "SUCCESS")
+                    authResultText = "Login Biometrik Berhasil! Memverifikasi sesi..."
+                    val savedNip = officerAuthManager.getOfficerBadgeId()
+                        .ifBlank { selectedOfficer?.nip.orEmpty() }
+
+                    if (savedNip.isBlank()) {
+                        isBiometricScanning = false
+                        isError = true
+                        errorMessage = "NIP petugas belum tersimpan di sesi perangkat. Silakan pilih petugas atau login dengan PIN terlebih dahulu."
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+                    } else {
+                        coroutineScope.launch {
+                            isHarvestingSync = true
+                            val bioResult = smartAuthRepo.authenticateWithBiometric(savedNip)
+                            isHarvestingSync = false
+                            isBiometricScanning = false
+
+                            if (bioResult.isSuccess) {
+                                val cred = bioResult.getOrThrow()
+                                selectedCredential = cred
+                                val nipPrefix = if (cred.nip.startsWith("TRC", ignoreCase = true)) "Reg TRC" else "NIP"
+                                val formattedLabel = "${cred.fullName} ($nipPrefix: ${cred.nip})"
+
+                                val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
+                                    officerNip = cred.nip,
+                                    officerName = cred.fullName,
+                                    officerRole = cred.role
+                                )
+                                securityAccessResult = SecurityAccessResult(
+                                    isAuthorized = true,
+                                    message = "Perangkat terverifikasi valid.",
+                                    session = sessionRes.getOrNull()
+                                )
+                                isOfficerLoggedIn = true
+                                officerName = cred.fullName
+                                officerBadgeId = cred.nip
+                                officerShift = cred.shift
+                                officerRole = cred.role
+                                showOfficerLoginDialog = false
+                                onOfficerLoginDismissed?.invoke()
+                                selectedTab = 4 // Direct to Konsol Petugas
+
+                                val targetId = pendingStatusReportId
+                                val targetStatus = pendingStatusTarget
+                                if (targetId != null && targetStatus != null) {
+                                    onUpdateReportStatus(targetId, targetStatus)
+                                    Toast.makeText(
+                                        context,
+                                        "Terverifikasi sebagai $formattedLabel. Status laporan diperbarui menjadi '$targetStatus'",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Selamat bertugas, $formattedLabel! (Biometrik Terverifikasi)",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                                pendingStatusReportId = null
+                                pendingStatusTarget = null
+                            } else {
+                                triggerBiometricVibration(context, "ERROR")
+                                isError = true
+                                val errMsg = bioResult.exceptionOrNull()?.message
+                                    ?: "Petugas tidak ditemukan"
+                                errorMessage = errMsg
+                                authResultText = "Error: $errMsg"
+                                Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                }
+                is AuthenticationResult.Error -> {
+                    // Autentikasi GAGAL (misalnya, pengguna membatalkan, sensor error)
+                    isBiometricScanning = false
+                    triggerBiometricVibration(context, "ERROR")
+                    authResultText = "Error: ${authResult.errString}"
+                    isError = true
+                    errorMessage = "Biometrik gagal: ${authResult.errString}. Silakan gunakan PIN pribadi."
+                }
+                is AuthenticationResult.CustomFallbackSelected -> {
+                    // Pengguna memilih opsi fallback (misalnya, "Gunakan PIN")
+                    isBiometricScanning = false
+                    triggerBiometricVibration(context, "SCAN_START")
+                    authResultText = "Fallback dipilih: ${authResult.fallback.text}"
+                    isError = false
+                }
+            }
+        }
 
         // Admin Security Prompt for manual input protection
         var showAdminPromptForAdd by remember { mutableStateOf(false) }
@@ -2293,17 +2487,15 @@ fun CitizenReportScreen(
                                 }
                             }
 
+                            androidx.compose.runtime.DisposableEffect(Unit) {
+                                onDispose { isNameDropdownOpen = false }
+                            }
                             DropdownMenu(
                                 expanded = isNameDropdownOpen,
                                 onDismissRequest = { isNameDropdownOpen = false },
                                 modifier = Modifier
                                     .fillMaxWidth(0.9f)
-                                    .heightIn(max = 280.dp),
-                                properties = androidx.compose.ui.window.PopupProperties(
-                                    focusable = true,
-                                    dismissOnClickOutside = true,
-                                    dismissOnBackPress = true
-                                )
+                                    .heightIn(max = 280.dp)
                             ) {
                                 val availableInRole = filteredRoster.ifEmpty { roster }
                                 availableInRole.forEach { off ->
@@ -2739,6 +2931,105 @@ fun CitizenReportScreen(
                             )
                         }
 
+                        if (authResultText.isNotBlank()) {
+                            Text(
+                                text = authResultText,
+                                color = if (authResultText.startsWith("Login Biometrik Berhasil")) Color(0xFF15803D) else Color(0xFF1E40AF),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+
+                        // Visual Biometric Scanner Animation Banner when active
+                        AnimatedVisibility(
+                            visible = isBiometricScanning,
+                            enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                            exit = fadeOut(tween(180)) + shrinkVertically(tween(180))
+                        ) {
+                            BiometricScanningVisualBanner(
+                                officerName = selectedOfficer?.fullName ?: "Petugas Pusdalops",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp)
+                                    .testTag("biometric_scanning_animation_banner")
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val buttonScanTransition = rememberInfiniteTransition(label = "biometricButtonPulse")
+                        val buttonIconScale by buttonScanTransition.animateFloat(
+                            initialValue = 1f,
+                            targetValue = if (isBiometricScanning) 1.24f else 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(650, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "buttonIconScale"
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                val officer = selectedOfficer
+                                if (officer == null) {
+                                    isError = true
+                                    errorMessage = "Pilih petugas dari daftar terlebih dahulu."
+                                    triggerBiometricVibration(context, "ERROR")
+                                    return@OutlinedButton
+                                }
+                                isError = false
+                                isBiometricScanning = true
+                                authResultText = "Memindai sensor sidik jari / biometrik..."
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                triggerBiometricVibration(context, "SCAN_START")
+
+                                val fallbackOption = AuthenticationRequest.Biometric.Fallback.CustomOption(
+                                    "Gunakan PIN",
+                                    AuthenticationRequest.Biometric.Fallback.ICON_TYPE_PASSWORD
+                                )
+                                val biometricRequest = AuthenticationRequest.Biometric.Builder(
+                                    "Login Biometrik Petugas Pusdalops",
+                                    fallbackOption
+                                )
+                                    .setSubtitle("${officer.fullName} (${officer.nip})")
+                                    .build()
+                                authLauncher.launch(biometricRequest)
+                            },
+                            enabled = !isHarvestingSync,
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                width = if (isBiometricScanning) 1.5.dp else 1.dp,
+                                color = if (isBiometricScanning) Color(0xFF0284C7) else Color(0xFF2563EB)
+                            ),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (isBiometricScanning) Color(0xFFE0F2FE) else Color.Transparent
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(42.dp)
+                                .testTag("officer_biometric_login_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Fingerprint,
+                                contentDescription = "Login Biometrik",
+                                tint = if (isBiometricScanning) Color(0xFF0284C7) else Color(0xFF2563EB),
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .graphicsLayer {
+                                        scaleX = if (isBiometricScanning) buttonIconScale else 1f
+                                        scaleY = if (isBiometricScanning) buttonIconScale else 1f
+                                    }
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isBiometricScanning) "Memindai Sidik Jari..." else "Gunakan Sidik Jari / Biometrik",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isBiometricScanning) Color(0xFF0369A1) else Color(0xFF2563EB)
+                            )
+                        }
+
                     } else {
                         // MODE 1: FORM INPUT NAMA PETUGAS BESERTA NIP ASN/TRC BPBD
                         Text(
@@ -2978,13 +3269,26 @@ fun CitizenReportScreen(
                             }
 
                             coroutineScope.launch {
+                                isHarvestingSync = true
                                 val authResult = smartAuthRepo.authenticateOfficer(
                                     nip = nonNullOfficer.nip,
                                     inputPin = trimmedPin
                                 )
+                                selectedCredential = smartAuthRepo.getCredential(nonNullOfficer.nip)
+                                isHarvestingSync = false
 
                                 if (authResult.isSuccess) {
                                     val profile = authResult.getOrNull() ?: nonNullOfficer
+                                    val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
+                                        officerNip = profile.nip,
+                                        officerName = profile.fullName,
+                                        officerRole = profile.role
+                                    )
+                                    securityAccessResult = SecurityAccessResult(
+                                        isAuthorized = true,
+                                        message = "Perangkat terverifikasi valid.",
+                                        session = sessionRes.getOrNull()
+                                    )
                                     isOfficerLoggedIn = true
                                     officerName = profile.fullName
                                     officerBadgeId = profile.nip
@@ -2993,11 +3297,6 @@ fun CitizenReportScreen(
                                     showOfficerLoginDialog = false
                                     onOfficerLoginDismissed?.invoke()
                                     selectedTab = 4 // Direct to Konsol Petugas
-                                    securityManager.verifyDeviceAuthenticityDuringLogin(
-                                        officerNip = profile.nip,
-                                        officerName = profile.fullName,
-                                        officerRole = profile.role
-                                    )
 
                                     val targetId = pendingStatusReportId
                                     val targetStatus = pendingStatusTarget
@@ -3019,14 +3318,27 @@ fun CitizenReportScreen(
                                     pendingStatusTarget = null
                                 } else {
                                     isError = true
-                                    errorMessage = authResult.exceptionOrNull()?.message
-                                        ?: "PIN salah. Periksa kembali PIN pribadi Anda."
+                                    val errMsg = authResult.exceptionOrNull()?.message
+                                        ?: "Gagal sinkronisasi, periksa koneksi internet"
+                                    errorMessage = errMsg
+                                    Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
                                 }
                             }
                         },
+                        enabled = !isHarvestingSync,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
                     ) {
-                        Text("Verifikasi & Masuk")
+                        if (isHarvestingSync) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Memverifikasi...")
+                        } else {
+                            Text("Verifikasi & Masuk")
+                        }
                     }
                 }
             },
@@ -3120,12 +3432,45 @@ fun CitizenReportScreen(
                             .background(Color(0xFF111827)),
                         contentAlignment = Alignment.Center
                     ) {
+                        val fullPhotoModel = remember(previewPhotoUri) {
+                            decodeCitizenPhotoModel(previewPhotoUri)
+                        }
+                        val brokenImagePainter = rememberVectorPainter(Icons.Default.BrokenImage)
+                        var isZoomPhotoError by remember(previewPhotoUri) {
+                            mutableStateOf(fullPhotoModel == null)
+                        }
+
                         AsyncImage(
-                            model = previewPhotoUri,
+                            model = fullPhotoModel,
                             contentDescription = "Foto Bencana Resolusi Penuh",
+                            placeholder = brokenImagePainter,
+                            error = brokenImagePainter,
+                            onSuccess = { isZoomPhotoError = false },
+                            onError = { isZoomPhotoError = true },
                             contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize()
                         )
+
+                        if (isZoomPhotoError) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BrokenImage,
+                                    contentDescription = "Foto tidak tersedia",
+                                    tint = Color(0xFF9CA3AF),
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Foto tidak tersedia",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFFD1D5DB)
+                                )
+                            }
+                        }
 
                         // GPS Satellite Geotag Watermark Overlay (Bottom)
                         Surface(
@@ -3246,14 +3591,14 @@ private fun ReportDropdownField(
                 )
             }
 
+            androidx.compose.runtime.DisposableEffect(Unit) {
+                onDispose {
+                    if (isExpanded) onDismiss()
+                }
+            }
             DropdownMenu(
                 expanded = isExpanded,
-                onDismissRequest = onDismiss,
-                properties = androidx.compose.ui.window.PopupProperties(
-                    focusable = true,
-                    dismissOnClickOutside = true,
-                    dismissOnBackPress = true
-                )
+                onDismissRequest = onDismiss
             ) {
                 content()
             }
@@ -3339,6 +3684,7 @@ private fun CasualtyCounterRow(
  * Report Card Item inside the History Table view with interactive status buttons,
  * GPS Photo display with watermark, Google Maps navigation, and officer-gated actions.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CitizenReportItemCard(
     report: CitizenDisasterReport,
@@ -3490,6 +3836,14 @@ private fun CitizenReportItemCard(
 
             // PHOTO DISPLAY: Captured Photo with BPBD GPS Watermark
             if (!report.photoUri.isNullOrBlank()) {
+                val resolvedPhotoModel = remember(report.photoUri) {
+                    decodeCitizenPhotoModel(report.photoUri)
+                }
+                val brokenImagePainter = rememberVectorPainter(Icons.Default.BrokenImage)
+                var isPhotoLoadError by remember(report.photoUri) {
+                    mutableStateOf(resolvedPhotoModel == null)
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -3500,13 +3854,43 @@ private fun CitizenReportItemCard(
                         .height(150.dp)
                         .clickable { onViewPhoto(report.photoUri) }
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable { onViewPhoto(report.photoUri) },
+                        contentAlignment = Alignment.Center
+                    ) {
                         AsyncImage(
-                            model = report.photoUri,
+                            model = resolvedPhotoModel,
                             contentDescription = "Foto Bencana di Lokasi",
+                            placeholder = brokenImagePainter,
+                            error = brokenImagePainter,
+                            onSuccess = { isPhotoLoadError = false },
+                            onError = { isPhotoLoadError = true },
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
+
+                        if (isPhotoLoadError) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BrokenImage,
+                                    contentDescription = "Foto tidak tersedia",
+                                    tint = Color(0xFF9CA3AF),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Foto tidak tersedia",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFFE5E7EB)
+                                )
+                            }
+                        }
 
                         // GPS Satellite Watermark Banner (Bottom)
                         Surface(
@@ -3551,7 +3935,7 @@ private fun CitizenReportItemCard(
                     }
                 }
                 Text(
-                    text = "🔍 Ketuk foto untuk melihat dalam resolusi penuh & stempel digital",
+                    text = "🔍 Sentuh untuk zoom • Lihat resolusi penuh & stempel digital",
                     fontSize = 11.sp,
                     color = Color(0xFF6B7280),
                     modifier = Modifier.padding(top = 3.dp)
@@ -3696,12 +4080,15 @@ private fun CitizenReportItemCard(
             )
 
             // Status Management Row with Buttons (Officer role-gated)
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                ) {
                     if (!isOfficerLoggedIn) {
                         Icon(
                             imageVector = Icons.Default.Lock,
@@ -3719,7 +4106,10 @@ private fun CitizenReportItemCard(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     ReportStatusChip(
                         label = "Diproses",
                         isSelected = report.status == "Diproses",
@@ -3761,15 +4151,23 @@ private fun ReportStatusChip(
             1.dp,
             if (isSelected) color else Color(0xFFE5E7EB)
         ),
-        modifier = Modifier.clickable { onClick() }
+        modifier = Modifier
+            .heightIn(min = 40.dp)
+            .clickable { onClick() }
     ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (isSelected) Color.White else Color(0xFF6B7280),
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) Color.White else Color(0xFF6B7280),
+                maxLines = 1,
+                softWrap = false
+            )
+        }
     }
 }
 
@@ -3803,3 +4201,260 @@ private fun CasualtyBadge(label: String, count: Int, color: Color) {
         }
     }
 }
+
+/**
+ * Mendekode sumber gambar laporan warga:
+ * - Jika berupa string Base64 (dengan prefix `data:image/...;base64,` maupun raw Base64),
+ *   didekode menggunakan `Base64.decode` menjadi `Bitmap`.
+ * - Jika berupa URI `file://` atau path file lokal, memverifikasi keberadaan file.
+ * - Jika berupa URI `content://` atau URL `http(s)://`, diteruskan langsung ke Coil `AsyncImage`.
+ */
+internal fun decodeCitizenPhotoModel(photoSource: String?): Any? {
+    if (photoSource.isNullOrBlank()) return null
+    val trimmed = photoSource.trim()
+
+    // 1. Cek format Data URI Base64 (mis. data:image/jpeg;base64,...)
+    if (trimmed.startsWith("data:image", ignoreCase = true) || trimmed.contains("base64,", ignoreCase = true)) {
+        return try {
+            val base64Part = trimmed.substringAfter("base64,", trimmed)
+            val decodedBytes = Base64.decode(base64Part, Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // 2. Cek URI standar (file://, content://, http://, https://, android.resource://)
+    if (
+        trimmed.startsWith("file://", ignoreCase = true) ||
+        trimmed.startsWith("content://", ignoreCase = true) ||
+        trimmed.startsWith("http://", ignoreCase = true) ||
+        trimmed.startsWith("https://", ignoreCase = true) ||
+        trimmed.startsWith("android.resource://", ignoreCase = true)
+    ) {
+        if (trimmed.startsWith("file://", ignoreCase = true)) {
+            val path = Uri.parse(trimmed).path
+            if (path.isNullOrBlank()) return null
+            val file = File(path)
+            return if (file.exists() && file.length() > 0L) file else null
+        }
+        return trimmed
+    }
+
+    // 3. Cek path file absolut lokal (/data/..., /storage/...)
+    if (trimmed.startsWith("/")) {
+        val file = File(trimmed)
+        return if (file.exists() && file.length() > 0L) file else null
+    }
+
+    // 4. Fallback: raw Base64 string tanpa prefix
+    return try {
+        val decodedBytes = Base64.decode(trimmed, Base64.DEFAULT)
+        BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/**
+ * Triggers tactile vibration feedback during biometric authentication stages:
+ * - "SCAN_START": Double light pulse when biometric prompt is initiated.
+ * - "SUCCESS": Crisp confirmation pulse when fingerprint/face is verified.
+ * - "ERROR": Triple warning pulse when authentication fails or is cancelled.
+ */
+@Suppress("DEPRECATION")
+internal fun triggerBiometricVibration(context: Context, mode: String) {
+    try {
+        val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            manager?.defaultVibrator
+        } else {
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+
+        if (vibrator == null || !vibrator.hasVibrator()) return
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val effect = when (mode) {
+                "SUCCESS" -> VibrationEffect.createWaveform(
+                    longArrayOf(0L, 40L, 60L, 90L),
+                    intArrayOf(0, 180, 0, 255),
+                    -1
+                )
+                "ERROR" -> VibrationEffect.createWaveform(
+                    longArrayOf(0L, 65L, 50L, 65L, 50L, 95L),
+                    intArrayOf(0, 220, 0, 220, 0, 255),
+                    -1
+                )
+                else -> VibrationEffect.createWaveform(
+                    longArrayOf(0L, 35L, 55L, 45L),
+                    intArrayOf(0, 150, 0, 200),
+                    -1
+                )
+            }
+            vibrator.vibrate(effect)
+        } else {
+            when (mode) {
+                "SUCCESS" -> vibrator.vibrate(longArrayOf(0L, 40L, 60L, 90L), -1)
+                "ERROR" -> vibrator.vibrate(longArrayOf(0L, 65L, 50L, 65L, 50L, 95L), -1)
+                else -> vibrator.vibrate(longArrayOf(0L, 35L, 55L, 45L), -1)
+            }
+        }
+    } catch (_: Exception) {
+        // Ignore if device lacks vibrator hardware or permission is restricted
+    }
+}
+
+/**
+ * Animated visual banner displayed while the biometric sensor is actively scanning.
+ * Features concentric pulsing radar rings, a vertical laser scan sweep across the fingerprint icon,
+ * and live status instructions for the duty officer.
+ */
+@Composable
+private fun BiometricScanningVisualBanner(
+    officerName: String,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "biometricScannerBanner")
+
+    val pulseProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1350, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "radarPulse"
+    )
+
+    val scanLineY by infiniteTransition.animateFloat(
+        initialValue = 0.12f,
+        targetValue = 0.88f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "laserScanLine"
+    )
+
+    val iconGlowScale by infiniteTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 675, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "iconGlowScale"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFFF0F9FF),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF7DD3FC)),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    val maxRadius = size.minDimension / 2f
+
+                    // Outer expanding radar ring
+                    drawCircle(
+                        color = Color(0xFF0284C7).copy(alpha = (1f - pulseProgress) * 0.45f),
+                        radius = maxRadius * (0.45f + 0.55f * pulseProgress),
+                        center = center,
+                        style = Stroke(width = 2.dp.toPx())
+                    )
+
+                    // Secondary staggered radar ring
+                    val secondaryProgress = (pulseProgress + 0.5f) % 1f
+                    drawCircle(
+                        color = Color(0xFF2563EB).copy(alpha = (1f - secondaryProgress) * 0.35f),
+                        radius = maxRadius * (0.45f + 0.55f * secondaryProgress),
+                        center = center,
+                        style = Stroke(width = 1.5.dp.toPx())
+                    )
+
+                    // Inner soft glow circle
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF38BDF8).copy(alpha = 0.25f),
+                                Color.Transparent
+                            ),
+                            center = center,
+                            radius = maxRadius * 0.78f
+                        ),
+                        radius = maxRadius * 0.78f,
+                        center = center
+                    )
+
+                    // Horizontal laser scan line sweeping over the fingerprint sensor area
+                    val yPos = size.height * scanLineY
+                    drawLine(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color(0xFF0284C7),
+                                Color(0xFF10B981),
+                                Color(0xFF0284C7),
+                                Color.Transparent
+                            )
+                        ),
+                        start = Offset(size.width * 0.14f, yPos),
+                        end = Offset(size.width * 0.86f, yPos),
+                        strokeWidth = 2.2.dp.toPx()
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.Fingerprint,
+                    contentDescription = "Memindai Sidik Jari",
+                    tint = Color(0xFF0284C7),
+                    modifier = Modifier
+                        .size(26.dp)
+                        .graphicsLayer {
+                            scaleX = iconGlowScale
+                            scaleY = iconGlowScale
+                        }
+                )
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Memindai Sensor Biometrik...",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0369A1)
+                )
+                Text(
+                    text = "Verifikasi identitas: $officerName",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF0F172A),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Tempelkan jari pada sensor sidik jari perangkat Anda.",
+                    fontSize = 10.sp,
+                    color = Color(0xFF475569),
+                    lineHeight = 13.sp
+                )
+            }
+        }
+    }
+}
+
+

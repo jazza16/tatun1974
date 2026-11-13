@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -173,7 +174,7 @@ fun TidalInformationCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(115.dp)
+                    .heightIn(min = 115.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color(0xFF1E293B))
                     .border(1.dp, Color(0xFF334155), RoundedCornerShape(16.dp))
@@ -232,7 +233,8 @@ fun TidalInformationCard(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (tidalData.isRisingTide) Color(0xFF166534).copy(alpha = 0.9f) else Color(0xFF7C2D12).copy(alpha = 0.9f)
+                            color = if (tidalData.isRisingTide) Color(0xFF166534).copy(alpha = 0.9f) else Color(0xFF7C2D12).copy(alpha = 0.9f),
+                            modifier = Modifier.weight(1f, fill = false)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -249,16 +251,23 @@ fun TidalInformationCard(
                                     text = tidalData.tideMovementText,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                             }
                         }
+
+                        Spacer(modifier = Modifier.width(8.dp))
 
                         Text(
                             text = tidalData.lunarPhaseName,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFFFDE68A)
+                            color = Color(0xFFFDE68A),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 

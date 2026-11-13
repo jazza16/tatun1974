@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -122,6 +124,7 @@ data class EvacuationRouteLine(
     val destinationName: String
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InteractiveDisasterMapSection(
     currentDistrict: District,
@@ -315,11 +318,12 @@ fun InteractiveDisasterMapSection(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Category Filter Chips
-            LazyRow(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                items(DisasterCategory.values()) { cat ->
+                DisasterCategory.values().forEach { cat ->
                     val isSelected = selectedCategory == cat
                     FilterChip(
                         selected = isSelected,
@@ -328,7 +332,8 @@ fun InteractiveDisasterMapSection(
                             Text(
                                 text = cat.label,
                                 fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(

@@ -35,11 +35,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 
 /**
  * Fragment untuk Tab 2: Dampak & Korban Bencana.
  */
 class FormTab2Fragment : Fragment() {
+    private val sharedViewModel: LaporanViewModel by activityViewModels()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -50,7 +52,7 @@ class FormTab2Fragment : Fragment() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 MaterialTheme {
-                    FormTab2Content()
+                    FormTab2Content(sharedViewModel = sharedViewModel)
                 }
             }
         }
@@ -58,12 +60,30 @@ class FormTab2Fragment : Fragment() {
 }
 
 @Composable
-fun FormTab2Content() {
-    var cakupanDampak by remember { mutableStateOf("3 Desa pesisir terdampak getaran dan genangan pasang air laut") }
-    var korbanLuka by remember { mutableIntStateOf(0) }
-    var korbanMeninggal by remember { mutableIntStateOf(0) }
-    var kerusakan by remember { mutableStateOf("Nihil korban jiwa. Retak rambut pada 1 pos ronda.") }
-    var penyebab by remember { mutableStateOf("Aktivitas subduksi lempeng tektonik Samudra Hindia") }
+fun FormTab2Content(sharedViewModel: LaporanViewModel? = null) {
+    var cakupanDampak by remember {
+        mutableStateOf(
+            sharedViewModel?.laporanSementara?.cakupanDampak?.ifBlank {
+                "3 Desa pesisir terdampak getaran dan genangan pasang air laut"
+            } ?: "3 Desa pesisir terdampak getaran dan genangan pasang air laut"
+        )
+    }
+    var korbanLuka by remember { mutableIntStateOf(sharedViewModel?.laporanSementara?.korbanLuka ?: 0) }
+    var korbanMeninggal by remember { mutableIntStateOf(sharedViewModel?.laporanSementara?.korbanMeninggal ?: 0) }
+    var kerusakan by remember {
+        mutableStateOf(
+            sharedViewModel?.laporanSementara?.kerusakan?.ifBlank {
+                "Nihil korban jiwa. Retak rambut pada 1 pos ronda."
+            } ?: "Nihil korban jiwa. Retak rambut pada 1 pos ronda."
+        )
+    }
+    var penyebab by remember {
+        mutableStateOf(
+            sharedViewModel?.laporanSementara?.penyebab?.ifBlank {
+                "Aktivitas subduksi lempeng tektonik Samudra Hindia"
+            } ?: "Aktivitas subduksi lempeng tektonik Samudra Hindia"
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -88,7 +108,12 @@ fun FormTab2Content() {
 
                 OutlinedTextField(
                     value = cakupanDampak,
-                    onValueChange = { cakupanDampak = it },
+                    onValueChange = {
+                        cakupanDampak = it
+                        sharedViewModel?.let { vm ->
+                            vm.laporanSementara = vm.laporanSementara.copy(cakupanDampak = it)
+                        }
+                    },
                     label = { Text("Cakupan Wilayah Terdampak & KK") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2
@@ -103,11 +128,23 @@ fun FormTab2Content() {
                         Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Korban Meninggal", fontSize = 11.sp, color = Color(0xFF991B1B), fontWeight = FontWeight.SemiBold)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { if (korbanMeninggal > 0) korbanMeninggal -= 1 }) {
+                                IconButton(onClick = {
+                                    if (korbanMeninggal > 0) {
+                                        korbanMeninggal -= 1
+                                        sharedViewModel?.let { vm ->
+                                            vm.laporanSementara = vm.laporanSementara.copy(korbanMeninggal = korbanMeninggal)
+                                        }
+                                    }
+                                }) {
                                     Text("-", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Text("$korbanMeninggal", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
-                                IconButton(onClick = { korbanMeninggal += 1 }) {
+                                IconButton(onClick = {
+                                    korbanMeninggal += 1
+                                    sharedViewModel?.let { vm ->
+                                        vm.laporanSementara = vm.laporanSementara.copy(korbanMeninggal = korbanMeninggal)
+                                    }
+                                }) {
                                     Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
@@ -122,11 +159,23 @@ fun FormTab2Content() {
                         Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Korban Luka-Luka", fontSize = 11.sp, color = Color(0xFF92400E), fontWeight = FontWeight.SemiBold)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { if (korbanLuka > 0) korbanLuka -= 1 }) {
+                                IconButton(onClick = {
+                                    if (korbanLuka > 0) {
+                                        korbanLuka -= 1
+                                        sharedViewModel?.let { vm ->
+                                            vm.laporanSementara = vm.laporanSementara.copy(korbanLuka = korbanLuka)
+                                        }
+                                    }
+                                }) {
                                     Text("-", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Text("$korbanLuka", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
-                                IconButton(onClick = { korbanLuka += 1 }) {
+                                IconButton(onClick = {
+                                    korbanLuka += 1
+                                    sharedViewModel?.let { vm ->
+                                        vm.laporanSementara = vm.laporanSementara.copy(korbanLuka = korbanLuka)
+                                    }
+                                }) {
                                     Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
@@ -136,7 +185,12 @@ fun FormTab2Content() {
 
                 OutlinedTextField(
                     value = kerusakan,
-                    onValueChange = { kerusakan = it },
+                    onValueChange = {
+                        kerusakan = it
+                        sharedViewModel?.let { vm ->
+                            vm.laporanSementara = vm.laporanSementara.copy(kerusakan = it)
+                        }
+                    },
                     label = { Text("Kerusakan Fasilitas / Rumah / Infrastruktur") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3
@@ -144,7 +198,12 @@ fun FormTab2Content() {
 
                 OutlinedTextField(
                     value = penyebab,
-                    onValueChange = { penyebab = it },
+                    onValueChange = {
+                        penyebab = it
+                        sharedViewModel?.let { vm ->
+                            vm.laporanSementara = vm.laporanSementara.copy(penyebab = it)
+                        }
+                    },
                     label = { Text("Penyebab Terjadinya Bencana") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2

@@ -15,7 +15,7 @@ import androidx.room.PrimaryKey
     tableName = "log_komunikasi",
     foreignKeys = [
         ForeignKey(
-            entity = LaporanHarian::class,
+            entity = LaporanHarianEntity::class,
             parentColumns = ["id"],
             childColumns = ["laporanId"],
             onDelete = CASCADE
@@ -36,6 +36,25 @@ data class LogKomunikasiEntity(
     // Tambahan Sinkronisasi
     val operatorName: String = "HITATUN ARAZAK" // Akan diisi otomatis "HITATUN ARAZAK"
 ) {
+    // Secondary constructor untuk pemanggilan dengan parameter `operator`
+    @Ignore
+    constructor(
+        laporanId: Int,
+        waktu: String,
+        stationIdFrom: String,
+        stationIdTo: String,
+        subjek: String,
+        operator: String
+    ) : this(
+        id = 0,
+        laporanId = laporanId,
+        waktu = waktu,
+        stationIdFrom = stationIdFrom,
+        stationIdTo = stationIdTo,
+        subjek = subjek,
+        operatorName = operator.ifBlank { "HITATUN ARAZAK" }
+    )
+
     // Secondary constructor untuk pemanggilan dengan operatorNama & operatorNip
     @Ignore
     constructor(
@@ -85,6 +104,7 @@ data class LogKomunikasiEntity(
     val pihakDihubungi: String get() = stationIdTo
     val pesan: String get() = subjek
     val arahanTindakan: String get() = ""
+    val operator: String get() = operatorName
     val operatorLog: String get() = operatorName
     val operatorNama: String get() = operatorName
     val operatorNip: String get() = "197401282006041006"

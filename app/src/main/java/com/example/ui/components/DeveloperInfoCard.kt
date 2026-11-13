@@ -213,7 +213,10 @@ fun DeveloperInfoCard(
                                 text = developerName,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Black,
-                                color = if (isDark) Color(0xFFFFF7ED) else Color(0xFF7C2D12)
+                                color = if (isDark) Color(0xFFFFF7ED) else Color(0xFF7C2D12),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
@@ -225,9 +228,8 @@ fun DeveloperInfoCard(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                     softWrap = false
                                 )
                             }

@@ -46,15 +46,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import com.example.data.local.LogKomunikasi
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Fragment untuk Tab 4: Administrasi Stasiun & Log Komunikasi Kedaruratan.
+ * Fragment untuk Tab 4: Administrasi Stasiun & Simpan Laporan.
  */
 class FormTab4Fragment : Fragment() {
+    private val sharedViewModel: LaporanViewModel by activityViewModels()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -65,7 +67,7 @@ class FormTab4Fragment : Fragment() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 MaterialTheme {
-                    FormTab4Content()
+                    FormTab4Content(sharedViewModel = sharedViewModel)
                 }
             }
         }
@@ -73,26 +75,52 @@ class FormTab4Fragment : Fragment() {
 }
 
 @Composable
-fun FormTab4Content() {
+fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val session = remember { com.example.util.SessionManager(context) }
-    var tanggalSurat by remember { mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())) }
-    var tanggalTerima by remember { mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())) }
-    var operatorName by remember { mutableStateOf(session.getNamaPetugas().ifBlank { "Rahmat Hidayat (Operator Utama)" }) }
-    var stationId by remember { mutableStateOf("PUSDALOPS-MM-01") }
+    val defaultDate = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()) }
+    var tanggalSurat by remember {
+        mutableStateOf(
+            sharedViewModel?.laporanSementara?.tanggalSurat?.ifBlank { defaultDate } ?: defaultDate
+        )
+    }
+    var tanggalTerima by remember {
+        mutableStateOf(
+            sharedViewModel?.laporanSementara?.tanggalTerima?.ifBlank { defaultDate } ?: defaultDate
+        )
+    }
+    var operatorName by remember {
+        mutableStateOf(
+            sharedViewModel?.laporanSementara?.petugasJaga?.ifBlank {
+                session.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
+            } ?: session.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
+        )
+    }
+    var stationId by remember {
+        mutableStateOf(
+            sharedViewModel?.laporanSementara?.stationId?.ifBlank { "PUSDALOPS-MM-01" } ?: "PUSDALOPS-MM-01"
+        )
+    }
 
     val logsList = remember {
-        mutableStateListOf(
-            LogKomunikasi(
-                laporanId = 0,
-                waktu = SimpleDateFormat("HH:mm 'WIB'", Locale.getDefault()).format(Date()),
-                stationIdFrom = "PUSDALOPS-MM-01",
-                stationIdTo = "Kalaksa BPBD Mukomuko",
-                subjek = "Laporan awal kejadian disampaikan. Tidak terdeteksi potensi tsunami.",
-                operatorNama = session.getNamaPetugas(),
-                operatorNip = session.getNipPetugas()
-            )
-        )
+        mutableStateListOf<LogKomunikasi>().apply {
+            val vmLogs = sharedViewModel?.listLogSementara
+            if (!vmLogs.isNullOrEmpty()) {
+                addAll(vmLogs)
+            } else {
+                add(
+                    LogKomunikasi(
+                        laporanId = 0,
+                        waktu = SimpleDateFormat("HH:mm 'WIB'", Locale.getDefault()).format(Date()),
+                        stationIdFrom = "PUSDALOPS-MM-01",
+                        stationIdTo = "Kalaksa BPBD Mukomuko",
+                        subjek = "Laporan awal kejadian disampaikan. Tidak terdeteksi potensi tsunami.",
+                        operatorNama = session.getNamaPetugas(),
+                        operatorNip = session.getNipPetugas()
+                    )
+                )
+            }
+        }
     }
 
     Column(
@@ -119,14 +147,24 @@ fun FormTab4Content() {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = tanggalSurat,
-                        onValueChange = { tanggalSurat = it },
+                        onValueChange = {
+                            tanggalSurat = it
+                            sharedViewModel?.let { vm ->
+                                vm.laporanSementara = vm.laporanSementara.copy(tanggalSurat = it)
+                            }
+                        },
                         label = { Text("Tanggal Surat") },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = tanggalTerima,
-                        onValueChange = { tanggalTerima = it },
+                        onValueChange = {
+                            tanggalTerima = it
+                            sharedViewModel?.let { vm ->
+                                vm.laporanSementara = vm.laporanSementara.copy(tanggalTerima = it)
+                            }
+                        },
                         label = { Text("Tanggal Terima") },
                         modifier = Modifier.weight(1f),
                         singleLine = true
@@ -135,7 +173,12 @@ fun FormTab4Content() {
 
                 OutlinedTextField(
                     value = operatorName,
-                    onValueChange = { operatorName = it },
+                    onValueChange = {
+                        operatorName = it
+                        sharedViewModel?.let { vm ->
+                            vm.laporanSementara = vm.laporanSementara.copy(petugasJaga = it)
+                        }
+                    },
                     label = { Text("Nama Operator Pusdalops") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -143,7 +186,12 @@ fun FormTab4Content() {
 
                 OutlinedTextField(
                     value = stationId,
-                    onValueChange = { stationId = it },
+                    onValueChange = {
+                        stationId = it
+                        sharedViewModel?.let { vm ->
+                            vm.laporanSementara = vm.laporanSementara.copy(stationId = it)
+                        }
+                    },
                     label = { Text("ID Stasiun / Pos Komando") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -204,6 +252,37 @@ fun FormTab4Content() {
                             Text(text = "Petugas: ${log.operatorNama} (NIP: ${log.operatorNip})", fontSize = 11.sp, color = Color(0xFF0369A1), fontWeight = FontWeight.SemiBold)
                         }
                     }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        val laporan = sharedViewModel?.laporanSementara ?: com.example.data.local.LaporanHarianEntity(
+                            tanggalSurat = tanggalSurat,
+                            tanggalTerima = tanggalTerima,
+                            petugasJaga = operatorName,
+                            stationId = stationId
+                        )
+                        val listLog = if (!sharedViewModel?.listLogSementara.isNullOrEmpty()) {
+                            sharedViewModel?.listLogSementara ?: emptyList()
+                        } else {
+                            logsList.toList()
+                        }
+                        com.example.util.PdfGenerator.cetakLaporanKePdf(
+                            context = context,
+                            laporan = laporan,
+                            listLog = listLog
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "CETAK LAPORAN KE PDF",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

@@ -3,9 +3,13 @@ package com.example.ui.form
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.viewpager2.widget.ViewPager2
 import com.example.R
+import com.example.data.local.AppDatabase
+import com.example.util.PdfGenerator
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.tabs.TabLayout
@@ -17,16 +21,23 @@ import com.google.android.material.tabs.TabLayoutMediator
  */
 class FormLaporanHarianActivity : AppCompatActivity() {
 
+    private val sharedViewModel: LaporanViewModel by viewModels()
+    private val db by lazy { AppDatabase.getDatabase(this) }
+
     private lateinit var toolbar: MaterialToolbar
     private lateinit var tabLayout: TabLayout
     private lateinit var viewPager: ViewPager2
     private lateinit var btnSebelumnya: MaterialButton
     private lateinit var btnSelanjutnya: MaterialButton
 
-    private val tabTitles = arrayOf("Kejadian", "Dampak & Korban", "Upaya & Kondisi", "Administrasi & Log")
+    private val tabTitles = arrayOf("Kejadian", "Dampak", "Log BPBD", "Simpan")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Memaksa aplikasi menggunakan mode terang
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+
         setContentView(R.layout.activity_form_laporan_harian)
 
         toolbar = findViewById(R.id.toolbar)
@@ -50,7 +61,7 @@ class FormLaporanHarianActivity : AppCompatActivity() {
             override fun onPageSelected(position: Int) {
                 super.onPageSelected(position)
                 btnSebelumnya.visibility = if (position > 0) View.VISIBLE else View.INVISIBLE
-                btnSelanjutnya.text = if (position == adapter.itemCount - 1) "Simpan Laporan" else "Selanjutnya"
+                btnSelanjutnya.text = if (position == adapter.itemCount - 1) "SIMPAN LAPORAN" else "Selanjutnya"
             }
         })
 
@@ -62,11 +73,44 @@ class FormLaporanHarianActivity : AppCompatActivity() {
 
         btnSelanjutnya.setOnClickListener {
             if (viewPager.currentItem < adapter.itemCount - 1) {
-                viewPager.currentItem += 1
+                viewPager.currentItem = viewPager.currentItem + 1
             } else {
-                Toast.makeText(this, "Laporan Harian berhasil disimpan ke database Pusdalops", Toast.LENGTH_SHORT).show()
-                finish()
+                // JIKA DI TAB TERAKHIR (TOMBOL SIMPAN DITEKAN)
+                simpanLaporanKeDatabase()
             }
         }
+    }
+
+    private fun simpanLaporanKeDatabase() {
+        btnSelanjutnya.isEnabled = false
+        btnSelanjutnya.text = "MENYIMPAN..."
+
+        val dataLaporan = sharedViewModel.laporanSementara
+        val dataLog = sharedViewModel.listLogSementara
+
+        sharedViewModel.simpanKeDatabase(
+            dao = db.laporanHarianDao(),
+            onSuccess = {
+                runOnUiThread {
+                    Toast.makeText(this, "Laporan Berhasil Disimpan! Membuka menu cetak...", Toast.LENGTH_LONG).show()
+
+                    PdfGenerator.cetakLaporanKePdf(
+                        context = this@FormLaporanHarianActivity,
+                        laporan = dataLaporan,
+                        listLog = dataLog
+                    )
+
+                    btnSelanjutnya.isEnabled = true
+                    btnSelanjutnya.text = "SIMPAN LAPORAN"
+                }
+            },
+            onError = { pesanError ->
+                runOnUiThread {
+                    Toast.makeText(this, "Gagal: $pesanError", Toast.LENGTH_LONG).show()
+                    btnSelanjutnya.isEnabled = true
+                    btnSelanjutnya.text = "SIMPAN LAPORAN"
+                }
+            }
+        )
     }
 }

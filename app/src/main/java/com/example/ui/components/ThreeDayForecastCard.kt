@@ -270,26 +270,23 @@ private fun ThreeDayColumnItem(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Black,
                     color = OrangePrimary,
-                    modifier = Modifier.weight(1f, fill = false),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    softWrap = false
                 )
                 Text(
                     text = " / ",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    modifier = Modifier.weight(0.3f, fill = false),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    softWrap = false
                 )
                 Text(
                     text = "${day.minTemp.toInt()}°",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                    modifier = Modifier.weight(0.7f, fill = false),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    softWrap = false
                 )
             }
 
@@ -313,7 +310,9 @@ private fun ThreeDayColumnItem(
                     text = "${day.rainProbabilityMax}%",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = WeatherRainBlue
+                    color = WeatherRainBlue,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
 

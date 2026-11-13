@@ -2,20 +2,31 @@ package com.example
 
 import android.os.Bundle
 import android.view.View
+import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
+import com.example.data.local.AppDatabase
 import com.example.ui.form.FormLaporanAdapter
+import com.example.ui.form.LaporanViewModel
+import com.example.util.PdfGenerator
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class FormLaporanActivity : AppCompatActivity() {
+
+    // Panggil ViewModel di level Activity
+    private val sharedViewModel: LaporanViewModel by viewModels()
+
+    // Instance Database Room
+    private val db by lazy { AppDatabase.getDatabase(this) }
 
     private lateinit var viewPager: ViewPager2
     private lateinit var tabLayout: TabLayout
@@ -24,6 +35,10 @@ class FormLaporanActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Memaksa aplikasi menggunakan mode terang
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+
         setContentView(R.layout.activity_form_laporan)
 
         // Inisialisasi View
@@ -35,8 +50,14 @@ class FormLaporanActivity : AppCompatActivity() {
 
         // Sesi Petugas Pengisi Form
         val sessionManager = com.example.util.SessionManager(this)
-        val namaPetugas = sessionManager.getNamaPetugas()
+        val namaPetugas = sessionManager.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
         toolbar.subtitle = "Diisi oleh: $namaPetugas"
+
+        val today = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+        sharedViewModel.laporanSementara = sharedViewModel.laporanSementara.copy(
+            petugasJaga = namaPetugas,
+            tanggalLaporanDibuat = sharedViewModel.laporanSementara.tanggalLaporanDibuat.ifBlank { today }
+        )
 
         // Tombol Close di Toolbar
         toolbar.setNavigationOnClickListener { finish() }
@@ -47,7 +68,7 @@ class FormLaporanActivity : AppCompatActivity() {
 
         // Hubungkan TabLayout dengan ViewPager (Scrollable agar tidak terpotong pada font besar)
         tabLayout.tabMode = TabLayout.MODE_SCROLLABLE
-        val tabTitles = arrayOf("Kejadian", "Dampak", "Log BNPB", "Simpan")
+        val tabTitles = arrayOf("Kejadian", "Dampak", "Log BPBD", "Simpan")
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = tabTitles[position]
         }.attach()
@@ -56,7 +77,8 @@ class FormLaporanActivity : AppCompatActivity() {
             if (viewPager.currentItem < adapter.itemCount - 1) {
                 viewPager.currentItem = viewPager.currentItem + 1
             } else {
-                saveLaporanAndFinish()
+                // JIKA DI TAB TERAKHIR (TOMBOL SIMPAN DITEKAN)
+                simpanLaporanKeDatabase()
             }
         }
 
@@ -79,53 +101,43 @@ class FormLaporanActivity : AppCompatActivity() {
         })
     }
 
-    private fun saveLaporanAndFinish() {
-        val db = com.example.data.local.AppDatabase.getInstance(this)
-        val now = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
-        val today = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date())
-        
-        lifecycleScope.launch(Dispatchers.IO) {
-            val prefs = dataStore.data.first()
-            val sessionManager = com.example.util.SessionManager(this@FormLaporanActivity)
-            val namaPetugas = prefs[NAMA_PETUGAS] ?: sessionManager.getNamaPetugas()
-            val nipPetugas = prefs[NIP_PETUGAS] ?: sessionManager.getNipPetugas()
-            val laporan = com.example.data.local.LaporanHarian(
-                tanggalLaporan = today,
-                jenisBencana = "Gempa Bumi Tektonik",
-                tanggalKejadian = today,
-                waktuKejadian = java.text.SimpleDateFormat("HH:mm 'WIB'", java.util.Locale.getDefault()).format(java.util.Date()),
-                kedalaman = "24 km",
-                lokasi = "Perairan Barat Daya Mukomuko, Bengkulu",
-                koordinat = "2.58 LS - 101.12 BT",
-                cakupanDampak = "Kecamatan Kota Mukomuko dan Ipuh",
-                kondisiCuaca = "Hujan Ringan",
-                upayaDilakukan = "Monitoring tim TRC, koordinasi aparatur desa pesisir",
-                kondisiMutakhir = "Kondusif, nihil kerusakan fasilitas publik",
-                korbanLuka = 0,
-                korbanMeninggal = 0,
-                kerusakan = "Nihil korban jiwa dan nihil kerusakan berat",
-                penyebab = "Aktivitas subduksi Megathrust Mentawai-Sumatera",
-                sumberInformasi = "Pusdalops PB & BMKG WRS-NTWC",
-                tanggalSurat = today,
-                tanggalTerima = today,
-                operatorName = namaPetugas,
-                stationId = "PUSDALOPS-MM-01"
-            )
-            val newId = db.laporanHarianDao().insertLaporan(laporan).toInt()
-            db.laporanHarianDao().insertLogKomunikasi(
-                com.example.data.local.LogKomunikasiEntity(
-                    laporanId = newId,
-                    waktu = java.text.SimpleDateFormat("HH:mm 'WIB'", java.util.Locale.getDefault()).format(java.util.Date()),
-                    stationIdFrom = "PUSDALOPS-MM-01",
-                    stationIdTo = "Kalaksa BPBD & Camat Kota Mukomuko",
-                    subjek = "Laporan harian tercatat resmi dalam sistem database BPBD.",
-                    operatorName = namaPetugas.ifBlank { "HITATUN ARAZAK" }
-                )
-            )
-            withContext(Dispatchers.Main) {
-                android.widget.Toast.makeText(this@FormLaporanActivity, "Laporan Harian Berhasil Disimpan ke Database!", android.widget.Toast.LENGTH_LONG).show()
-                finish()
+    private fun simpanLaporanKeDatabase() {
+        btnSelanjutnya.isEnabled = false
+        btnSelanjutnya.text = "MENYIMPAN..."
+
+        // Kita simpan data laporan dan log yang sedang diinput ke dalam variabel lokal dulu
+        // agar bisa dilempar ke fungsi PDF nanti
+        val dataLaporan = sharedViewModel.laporanSementara
+        val dataLog = sharedViewModel.listLogSementara
+
+        sharedViewModel.simpanKeDatabase(
+            dao = db.laporanHarianDao(),
+            onSuccess = {
+                runOnUiThread {
+                    Toast.makeText(this, "Laporan Berhasil Disimpan! Membuka menu cetak...", Toast.LENGTH_LONG).show()
+
+                    // --- TAMBAHKAN KODE INI UNTUK MENCETAK PDF ---
+                    PdfGenerator.cetakLaporanKePdf(
+                        context = this@FormLaporanActivity,
+                        laporan = dataLaporan,
+                        listLog = dataLog
+                    )
+                    // ---------------------------------------------
+
+                    // (Opsional) Kembali ke halaman Ruang Kerja setelah cetak
+                    // finish()
+
+                    btnSelanjutnya.isEnabled = true
+                    btnSelanjutnya.text = "SIMPAN LAPORAN"
+                }
+            },
+            onError = { pesanError ->
+                runOnUiThread {
+                    Toast.makeText(this, "Gagal: $pesanError", Toast.LENGTH_LONG).show()
+                    btnSelanjutnya.isEnabled = true
+                    btnSelanjutnya.text = "SIMPAN LAPORAN"
+                }
             }
-        }
+        )
     }
 }

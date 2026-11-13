@@ -3,4 +3,6 @@
     <item name="cardBuatLaporan" type="id" />
     <item name="btnImporLaporanWarga" type="id" />
     <item name="btnTarikLaporanWarga" type="id" />
+    <item name="tvInfoPetugas" type="id" />
+    <item name="cardInfoPetugas" type="id" />
 </resources>

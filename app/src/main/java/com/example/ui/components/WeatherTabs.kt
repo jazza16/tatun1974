@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Edit
@@ -67,6 +68,7 @@ fun WeatherTabs(
     val tabs = listOf(
         TabItem("Hari Ini", Icons.Default.WbSunny),
         TabItem("Laporan Warga", Icons.Default.Edit, badgeCount = if (reportCount > 0) reportCount else null),
+        TabItem("Statistik Bencana", Icons.Default.BarChart),
         TabItem("Prakiraan Cuaca", Icons.Default.CalendarMonth),
         TabItem("Peringatan & Gempa WRS", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
         TabItem("Peta & SOP Evakuasi", Icons.Default.Map),
@@ -176,6 +178,7 @@ fun WeatherNavigationRail(
     val tabs = listOf(
         TabItem("Hari Ini", Icons.Default.WbSunny),
         TabItem("Laporan", Icons.Default.Edit, badgeCount = if (reportCount > 0) reportCount else null),
+        TabItem("Statistik", Icons.Default.BarChart),
         TabItem("Prakiraan", Icons.Default.CalendarMonth),
         TabItem("Peringatan", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
         TabItem("Peta & SOP", Icons.Default.Map),

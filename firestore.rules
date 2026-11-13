@@ -43,6 +43,12 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    // Pusdalops & TRC Individual Officer Credentials & Custom PIN Sync
+    match /officer_credentials/{nip} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // Cloud Disaster Reports Database Backups
     match /database_backups/{backupId} {
       allow read: if true;

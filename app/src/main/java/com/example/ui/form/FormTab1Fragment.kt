@@ -10,6 +10,7 @@ import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import com.example.R
 import com.example.data.local.AppDatabase
@@ -19,6 +20,7 @@ import com.example.util.NIP_PETUGAS
 import com.example.util.SessionManager
 import com.example.util.dataStore
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
@@ -31,6 +33,9 @@ import java.util.Date
 import java.util.Locale
 
 class FormTab1Fragment : Fragment() {
+
+    // Panggil ViewModel yang sama dengan Activity
+    private val sharedViewModel: LaporanViewModel by activityViewModels()
 
     // Variabel global di Fragment untuk nanti disimpan ke Room
     var petugasAktifNama: String = "Petugas Pusdalops"
@@ -47,6 +52,7 @@ class FormTab1Fragment : Fragment() {
     private lateinit var etWaktuKejadian: TextInputEditText
     private lateinit var etLokasiBencana: TextInputEditText
     private lateinit var etKoordinat: TextInputEditText
+    private lateinit var etKedalaman: TextInputEditText
     private lateinit var btnAmbilGps: View
 
     override fun onCreateView(
@@ -69,6 +75,7 @@ class FormTab1Fragment : Fragment() {
         etWaktuKejadian = view.findViewById(R.id.etWaktuKejadian)
         etLokasiBencana = view.findViewById(R.id.etLokasiBencana)
         etKoordinat = view.findViewById(R.id.etKoordinat)
+        etKedalaman = view.findViewById(R.id.etKedalaman)
         btnAmbilGps = view.findViewById(R.id.btnAmbilGps)
         val btnTarik = view.findViewById<MaterialButton>(R.id.btnTarikLaporanWarga)
             ?: view.findViewById(R.id.btnImporLaporanWarga)
@@ -77,9 +84,11 @@ class FormTab1Fragment : Fragment() {
 
         // Inisialisasi Info Sesi Petugas
         val sessionManager = SessionManager(requireContext())
-        petugasAktifNama = sessionManager.getNamaPetugas().ifBlank { "Petugas Pusdalops" }
+        petugasAktifNama = sessionManager.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
         petugasAktifNip = sessionManager.getNipPetugas().ifBlank { "-" }
+        val tvNamaPetugas = view.findViewById<android.widget.TextView>(R.id.tvNamaPetugas)
         val tvInfoPetugas = view.findViewById<android.widget.TextView>(R.id.tvInfoPetugas)
+        tvNamaPetugas?.text = petugasAktifNama
         tvInfoPetugas?.text = "Diisi oleh: $petugasAktifNama"
 
         // Di dalam onViewCreated FormTab1Fragment:
@@ -88,7 +97,7 @@ class FormTab1Fragment : Fragment() {
             // Ambil data dari DataStore Anda
             context.dataStore.data.map { preferences ->
                 val nama = preferences[NAMA_PETUGAS]
-                    ?: sessionManager.getNamaPetugas().ifBlank { "Petugas Pusdalops" }
+                    ?: sessionManager.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
                 val nip = preferences[NIP_PETUGAS]
                     ?: sessionManager.getNipPetugas().ifBlank { "-" }
 
@@ -96,13 +105,64 @@ class FormTab1Fragment : Fragment() {
                 petugasAktifNama = nama
                 petugasAktifNip = nip
 
-                // Tampilkan di UI form: "Diisi oleh: $nama"
+                // Tampilkan di UI form
+                tvNamaPetugas?.text = nama
                 tvInfoPetugas?.text = "Diisi oleh: $nama"
             }.collect()
         }
 
         setupDropdowns()
         setupDateTimePickers()
+
+        // Gunakan SwitchMaterial, BUKAN MaterialSwitch
+        val switchKondusif = view.findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switchKondusif)
+        // Ganti 'layoutFormUtama' dengan ID LinearLayout yang membungkus form (Dropdown Bencana, dll)
+        // val layoutFormUtama = view.findViewById<LinearLayout>(R.id.layoutFormUtama)
+
+        switchKondusif.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                // Otomatis isi "Tidak Ada Bencana" dan matikan form
+                dropdownJenisBencana.setText("Tidak Ada Bencana (Kondusif)", false)
+                dropdownCuaca.setText("Cerah", false) // Default cuaca
+
+                // Sembunyikan atau nonaktifkan form yang tidak perlu
+                etTanggalKejadian.setText("-")
+                etWaktuKejadian.setText("-")
+                etLokasiBencana.setText("Kab. Mukomuko")
+                etKoordinat.setText("-")
+                etKedalaman.setText("-")
+
+                Toast.makeText(requireContext(), "Mode Kondusif Aktif", Toast.LENGTH_SHORT).show()
+            } else {
+                // Bersihkan form jika saklar dimatikan
+                dropdownJenisBencana.setText("", false)
+                dropdownCuaca.setText("", false)
+                etTanggalKejadian.setText("")
+                etWaktuKejadian.setText("")
+                etLokasiBencana.setText("")
+                etKoordinat.setText("")
+                etKedalaman.setText("")
+            }
+        }
+
+        dropdownJenisBencana.setOnItemClickListener { parent, _, position, _ ->
+            val selected = parent.getItemAtPosition(position).toString()
+
+            if (selected.contains("Kondusif", ignoreCase = true) || selected.contains("Tidak Ada", ignoreCase = true)) {
+                // Sembunyikan / nonaktifkan form kejadian
+                switchKondusif?.isChecked = true
+                etTanggalKejadian.isEnabled = false
+                etKedalaman.isEnabled = false
+                Toast.makeText(requireContext(), "Mode Kondusif diaktifkan", Toast.LENGTH_SHORT).show()
+            } else {
+                // Munculkan kembali form kejadian
+                if (switchKondusif?.isChecked == true) {
+                    switchKondusif.isChecked = false
+                }
+                etTanggalKejadian.isEnabled = true
+                etKedalaman.isEnabled = true
+            }
+        }
 
         btnTarik.setOnClickListener {
             // 1. Dapatkan tanggal hari ini (format: "09-11-2026")
@@ -138,6 +198,33 @@ class FormTab1Fragment : Fragment() {
                         Toast.makeText(requireContext(), "Data ditarik dari Laporan Warga terbaru!", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(requireContext(), "Tidak ada Laporan Warga masuk hari ini.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        val btnTarikKemarin = view.findViewById<MaterialButton>(R.id.btnTarikLaporanKemarin)
+
+        btnTarikKemarin.setOnClickListener {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val laporanKemarin = database.laporanHarianDao().getLaporanTerakhir()
+
+                withContext(Dispatchers.Main) {
+                    if (laporanKemarin != null) {
+                        // Isi form dengan data kemarin
+                        etLokasiBencana.setText(laporanKemarin.lokasiBencana)
+                        etKoordinat.setText(laporanKemarin.koordinat)
+                        etKedalaman.setText(laporanKemarin.kedalaman)
+                        dropdownJenisBencana.setText(laporanKemarin.jenisBencana, false)
+                        dropdownCuaca.setText(laporanKemarin.kondisiCuaca, false)
+
+                        Toast.makeText(
+                            requireContext(),
+                            "Data kejadian sebelumnya berhasil dimuat. Silakan update kondisi terbaru.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } else {
+                        Toast.makeText(requireContext(), "Belum ada data laporan sebelumnya.", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -272,5 +359,41 @@ class FormTab1Fragment : Fragment() {
             "Data laporan warga (${laporan.jenisBencana} - ${laporan.namaPelapor}) berhasil ditarik ke form!",
             Toast.LENGTH_SHORT
         ).show()
+    }
+
+    override fun onPause() {
+        if (::dropdownJenisBencana.isInitialized) {
+            dropdownJenisBencana.dismissDropDown()
+        }
+        if (::dropdownCuaca.isInitialized) {
+            dropdownCuaca.dismissDropDown()
+        }
+        super.onPause()
+        // Simpan data sementara ke ViewModel saat petugas pindah tab
+        if (::dropdownJenisBencana.isInitialized) {
+            simpanDataKeViewModel()
+        }
+    }
+
+    private fun simpanDataKeViewModel() {
+        sharedViewModel.laporanSementara = sharedViewModel.laporanSementara.copy(
+            jenisBencana = dropdownJenisBencana.text.toString(),
+            tanggalKejadian = etTanggalKejadian.text.toString(),
+            waktuKejadian = etWaktuKejadian.text.toString(),
+            lokasiBencana = etLokasiBencana.text.toString(),
+            koordinat = etKoordinat.text.toString(),
+            kedalaman = etKedalaman.text.toString(),
+            kondisiCuaca = dropdownCuaca.text.toString()
+        )
+    }
+
+    override fun onDestroyView() {
+        if (::dropdownJenisBencana.isInitialized) {
+            dropdownJenisBencana.dismissDropDown()
+        }
+        if (::dropdownCuaca.isInitialized) {
+            dropdownCuaca.dismissDropDown()
+        }
+        super.onDestroyView()
     }
 }

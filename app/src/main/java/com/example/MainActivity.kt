@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +41,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
@@ -151,11 +153,20 @@ import com.example.ui.theme.OrangeSecondary
 import com.example.ui.theme.WeatherGoodGreen
 import com.example.ui.viewmodel.AiWeatherViewModel
 import com.example.ui.viewmodel.WeatherViewModel
+import com.google.firebase.FirebaseApp
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize Firebase & App Check with Play Integrity provider
+        FirebaseApp.initializeApp(this)
+        FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+            PlayIntegrityAppCheckProviderFactory.getInstance()
+        )
 
         // Initialize BMKG Earthquake and Severe Weather Notification Channels
         com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
@@ -292,7 +303,7 @@ fun WeatherAppScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = WindowInsets.systemBars,
         topBar = {
             Column {
                 WeatherTopBar(
@@ -329,6 +340,7 @@ fun WeatherAppScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         ) {
             Row(modifier = Modifier.fillMaxSize()) {
                 if (isExpandedWindow) {
@@ -570,7 +582,7 @@ fun WeatherAppScreen(
                                                 item(span = { GridItemSpan(maxLineSpan) }) {
                                                     ActiveAlertCard(
                                                         alert = report.alert,
-                                                        onViewDetail = { viewModel.selectTab(3) }
+                                                        onViewDetail = { viewModel.selectTab(4) }
                                                     )
                                                 }
                                             }
@@ -600,7 +612,7 @@ fun WeatherAppScreen(
                                                 item(span = { GridItemSpan(maxLineSpan) }) {
                                                     WrsLiveEarthquakeQuickCard(
                                                         earthquake = latestEq,
-                                                        onClick = { viewModel.selectTab(3) }
+                                                        onClick = { viewModel.selectTab(4) }
                                                     )
                                                 }
                                             }
@@ -718,7 +730,27 @@ fun WeatherAppScreen(
                         }
 
                         2 -> {
-                            // Tab 2: Prakiraan Cuaca
+                            // Tab 2: Statistik & Tren Bencana Bulanan (Grafik Batang & Pie Chart Interaktif)
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("tab_monthly_disaster_analytics_list"),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                item {
+                                    com.example.ui.components.MonthlyDisasterAnalyticsSection(
+                                        reports = citizenDisasterReports,
+                                        currentDistrict = currentDistrict,
+                                        isDark = isActuallyDark,
+                                        onOpenCitizenReportTab = { viewModel.selectTab(1) }
+                                    )
+                                }
+                            }
+                        }
+
+                        3 -> {
+                            // Tab 3: Prakiraan Cuaca
                             val report = uiState.report
                             if (report != null) {
                                 LazyColumn(
@@ -752,8 +784,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        3 -> {
-                            // Tab 3: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Push Notification
+                        4 -> {
+                            // Tab 4: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Push Notification
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -778,14 +810,14 @@ fun WeatherAppScreen(
                                         onRefreshEarthquake = { viewModel.refreshEarthquakeData(context) },
                                         onCall117 = { EmergencyDialer.dial(context, "117") },
                                         onOpenCallCenterInfo = { isCallCenter117SheetOpen = true },
-                                        onOpenEvacuationGuide = { viewModel.selectTab(4) }
+                                        onOpenEvacuationGuide = { viewModel.selectTab(5) }
                                     )
                                 }
                             }
                         }
 
-                        4 -> {
-                            // Tab 4: Modul Peta Interaktif Bencana & SOP Evakuasi Mandiri
+                        5 -> {
+                            // Tab 5: Modul Peta Interaktif Bencana & SOP Evakuasi Mandiri
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -815,8 +847,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        5 -> {
-                            // Tab 5: inaRISK BNPB - Kajian Risiko Bencana Indonesia Kabupaten Mukomuko
+                        6 -> {
+                            // Tab 6: inaRISK BNPB - Kajian Risiko Bencana Indonesia Kabupaten Mukomuko
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -827,15 +859,15 @@ fun WeatherAppScreen(
                                 item {
                                     InaRiskBnpbSection(
                                         currentDistrict = currentDistrict,
-                                        onOpenEvacuationGuide = { viewModel.selectTab(4) },
+                                        onOpenEvacuationGuide = { viewModel.selectTab(5) },
                                         onCall117 = { EmergencyDialer.dial(context, "117") }
                                     )
                                 }
                             }
                         }
 
-                        6 -> {
-                            // Tab 6: Cuaca Historis
+                        7 -> {
+                            // Tab 7: Cuaca Historis
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -857,8 +889,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        7 -> {
-                            // Tab 7: Maritim & Pesisir Pantai
+                        8 -> {
+                            // Tab 8: Maritim & Pesisir Pantai
                             val report = uiState.report
                             if (report != null) {
                                 LazyColumn(
@@ -887,8 +919,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        8 -> {
-                            // Tab 8: Kualitas Udara Lengkap BMKG & Himbauan Kesehatan Masyarakat + Grafik Harian UV
+                        9 -> {
+                            // Tab 9: Kualitas Udara Lengkap BMKG & Himbauan Kesehatan Masyarakat + Grafik Harian UV
                             val report = uiState.report
                             if (report != null) {
                                 val maxUv = report.daily.firstOrNull()?.uvIndexMax ?: 8.0
@@ -910,13 +942,13 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        9 -> {
-                            // Tab 9: 15 Kecamatan
+                        10 -> {
+                            // Tab 10: 15 Kecamatan
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .testTag("tab_all_districts_list"),
-                                contentPadding = PaddingValues(16.dp),
+                                    contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 item {
@@ -954,19 +986,19 @@ fun WeatherAppScreen(
             },
             onSelectForecast = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(2)
+                viewModel.selectTab(3)
             },
             onSelectMaritimeGuide = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(7)
+                viewModel.selectTab(8)
             },
             onSelectEvacuationProcedures = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(4)
+                viewModel.selectTab(5)
             },
             onSelectDisasterMap = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(4)
+                viewModel.selectTab(5)
             },
             onCall117 = {
                 isQuickActionsFabExpanded = false
@@ -1020,8 +1052,8 @@ fun WeatherAppScreen(
             onSetThemeMode = { viewModel.setDarkMode(it) },
             onCheckUpdateOnline = { viewModel.checkForUpdatesOnline(context = context) },
             onDownloadUpdate = { viewModel.downloadAndApplyUpdate(context = context) },
-            onSimulateOlderVersion = { viewModel.simulateOlderVersionForTesting("1.4.0", context) },
-            onSimulatePublishNextVersion = { viewModel.simulatePublishNextVersion("1.6.0", context) },
+            onSimulateOlderVersion = { viewModel.simulateOlderVersionForTesting("3.6.0", context) },
+            onSimulatePublishNextVersion = { viewModel.simulatePublishNextVersion("3.8.0", context) },
             onResetLatestRelease = { viewModel.resetToLatestReleaseState() },
             onOpenOnboarding = { viewModel.setOnboardingOpen(true) },
             onOpenCompass = { viewModel.setCompassSheetOpen(true) },
@@ -1030,7 +1062,7 @@ fun WeatherAppScreen(
     }
 
     // In-App OTA Update Dialog (Prompts only once per release, persistent in DataStore)
-    if (uiState.isUpdateDialogOpen && uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated) {
+    if (!uiState.isStartupWallpaperVisible && uiState.isUpdateDialogOpen && uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateDialog(dontShowAgainForThisVersion = true) },
             icon = {
@@ -1151,7 +1183,7 @@ fun WeatherAppScreen(
     if (uiState.isCompassSheetOpen) {
         com.example.ui.components.DigitalCompassBottomSheet(
             onDismiss = { viewModel.setCompassSheetOpen(false) },
-            onOpenEvacuationMap = { viewModel.selectTab(4) },
+            onOpenEvacuationMap = { viewModel.selectTab(5) },
             onCall117 = { EmergencyDialer.dial(context, "117") }
         )
     }
@@ -1163,7 +1195,7 @@ fun WeatherAppScreen(
             (currentReport?.marine != null && (currentReport.marine.waveHeight >= 2.0 || currentReport.marine.seaCondition.contains("Tinggi", ignoreCase = true))) ||
             (activeEq != null && (activeEq.magnitude >= 5.0 || activeEq.isNearMukomuko || activeEq.potentialTsunami.contains("tsunami", ignoreCase = true)))
 
-    if (!isEmergencyPopupDismissed && hasEmergencyConditions && currentReport != null) {
+    if (!uiState.isStartupWallpaperVisible && !isEmergencyPopupDismissed && hasEmergencyConditions && currentReport != null) {
         EmergencyWarningPopupDialog(
             weatherAlert = currentReport.alert,
             marineWeather = currentReport.marine,
@@ -1173,7 +1205,7 @@ fun WeatherAppScreen(
             onDismiss = { isEmergencyPopupDismissed = true },
             onCall117 = { EmergencyDialer.dial(context, "117") },
             onOpenEvacuationMap = {
-                viewModel.selectTab(4)
+                viewModel.selectTab(5)
             }
         )
     }
@@ -1930,7 +1962,7 @@ private fun WrsLiveEarthquakeQuickCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = earthquake.region,
+                        text = com.example.ui.components.formatEarthquakeRegion(earthquake.region),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,

@@ -18,6 +18,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +47,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import coil.compose.AsyncImage
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -109,6 +112,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -406,41 +410,35 @@ fun OfficerDashboardConsoleView(
                     .testTag("officer_command_bar")
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    // Profile Header: Title RUANG KERJA persis diatas tengah semua badge
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp)
-                    ) {
-                        Text(
-                            text = "RUANG KERJA",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFFFBBF24),
-                            letterSpacing = 0.5.sp,
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "KONSOL PUSDALOPS",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF64748B),
-                            letterSpacing = 0.3.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-
-                    // Badges & Actions Row (Centered directly below title)
+                    // Profile Header: Title RUANG KERJA sejajar dan presisi dengan Badge Sesi Resmi
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.Center,
+                            .padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Column(
+                            horizontalAlignment = Alignment.Start
+                        ) {
+                            Text(
+                                text = "RUANG KERJA",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFFBBF24),
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = "KONSOL PUSDALOPS",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF64748B),
+                                letterSpacing = 0.3.sp
+                            )
+                        }
+
                         if (isOfficerLoggedIn) {
-                            // Badge Sesi Resmi (dikunci tinggi 32.dp sejajar dengan badge Personil)
+                            // Badge Sesi Resmi sejajar dan presisi dengan tulisan Ruang Kerja
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color(0xFF166534).copy(alpha = 0.85f),
@@ -449,11 +447,11 @@ fun OfficerDashboardConsoleView(
                             ) {
                                 Box(
                                     contentAlignment = Alignment.Center,
-                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                    modifier = Modifier.padding(horizontal = 10.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                                     ) {
                                         Box(
                                             modifier = Modifier
@@ -465,14 +463,53 @@ fun OfficerDashboardConsoleView(
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
                             }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF7C2D12).copy(alpha = 0.85f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(horizontal = 10.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .background(Color(0xFFEF4444), CircleShape)
+                                        )
+                                        Text(
+                                            text = "Terkunci",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
 
-                            Spacer(modifier = Modifier.width(6.dp))
-
+                    // Baris Badge Aksi: Mengisi kekosongan secara presisi dan terbagi sejajar dalam Ruang Kerja
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isOfficerLoggedIn) {
                             // Badge Personil
                             OutlinedButton(
                                 onClick = {
@@ -483,8 +520,10 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB)),
-                                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                                modifier = Modifier.height(32.dp)
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Badge,
@@ -493,10 +532,15 @@ fun OfficerDashboardConsoleView(
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "Personil", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(
+                                    text = "Personil",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
-
-                            Spacer(modifier = Modifier.width(6.dp))
 
                             // Sinkron Cloud Multi-Perangkat
                             OutlinedButton(
@@ -516,8 +560,10 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB)),
-                                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                                modifier = Modifier.height(32.dp)
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Sync,
@@ -526,10 +572,15 @@ fun OfficerDashboardConsoleView(
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "Sinkron", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(
+                                    text = "Sinkron",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
-
-                            Spacer(modifier = Modifier.width(6.dp))
 
                             // Ubah PIN
                             OutlinedButton(
@@ -537,8 +588,10 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFBBF24)),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD97706)),
-                                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                                modifier = Modifier.height(32.dp)
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
@@ -547,10 +600,15 @@ fun OfficerDashboardConsoleView(
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "Ubah PIN", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(
+                                    text = "Ubah PIN",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
-
-                            Spacer(modifier = Modifier.width(6.dp))
 
                             // Keluar
                             OutlinedButton(
@@ -558,8 +616,10 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFCA5A5)),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF991B1B)),
-                                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                                modifier = Modifier.height(32.dp)
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.LockOpen,
@@ -567,47 +627,24 @@ fun OfficerDashboardConsoleView(
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "Keluar", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(
+                                    text = "Keluar",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         } else {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF7C2D12).copy(alpha = 0.85f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier.padding(horizontal = 8.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .background(Color(0xFFEF4444), CircleShape)
-                                        )
-                                        Text(
-                                            text = "Terkunci",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(6.dp))
-
                             Button(
                                 onClick = onLoginClick,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.height(32.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Badge,
@@ -1287,14 +1324,12 @@ fun OfficerDashboardConsoleView(
                                 }
                             }
 
+                            androidx.compose.runtime.DisposableEffect(Unit) {
+                                onDispose { isDistrictDropdownExpanded = false }
+                            }
                             DropdownMenu(
                                 expanded = isDistrictDropdownExpanded,
-                                onDismissRequest = { isDistrictDropdownExpanded = false },
-                                properties = androidx.compose.ui.window.PopupProperties(
-                                    focusable = true,
-                                    dismissOnClickOutside = true,
-                                    dismissOnBackPress = true
-                                )
+                                onDismissRequest = { isDistrictDropdownExpanded = false }
                             ) {
                                 districtOptions.forEach { dist ->
                                     DropdownMenuItem(
@@ -3084,6 +3119,7 @@ private fun KpiMetricCard(
 /**
  * Kartu Insiden Petugas Responsif dengan Aksi Validasi & Auto-Pin
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OfficerIncidentReportCard(
     report: CitizenDisasterReport,
@@ -3317,6 +3353,13 @@ private fun OfficerIncidentReportCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 if (!report.photoUri.isNullOrBlank()) {
+                    val resolvedPhotoModel = remember(report.photoUri) {
+                        decodeCitizenPhotoModel(report.photoUri)
+                    }
+                    val brokenImagePainter = rememberVectorPainter(Icons.Default.BrokenImage)
+                    var isThumbError by remember(report.photoUri) {
+                        mutableStateOf(resolvedPhotoModel == null)
+                    }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { onViewPhoto(report.photoUri) }
@@ -3324,19 +3367,39 @@ private fun OfficerIncidentReportCard(
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color(0xFFE2E8F0),
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clickable { onViewPhoto(report.photoUri) }
                         ) {
-                            AsyncImage(
-                                model = report.photoUri,
-                                contentDescription = "Foto Kejadian",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                AsyncImage(
+                                    model = resolvedPhotoModel,
+                                    contentDescription = "Foto Kejadian",
+                                    placeholder = brokenImagePainter,
+                                    error = brokenImagePainter,
+                                    onSuccess = { isThumbError = false },
+                                    onError = { isThumbError = true },
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                if (isThumbError) {
+                                    Icon(
+                                        imageVector = Icons.Default.BrokenImage,
+                                        contentDescription = "Foto tidak tersedia",
+                                        tint = Color(0xFF64748B),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(text = "Foto Bukti Warga", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "Sentuh untuk zoom", fontSize = 11.sp, color = Color(0xFF15803D))
+                            Text(
+                                text = if (isThumbError) "Foto tidak tersedia" else "Sentuh untuk zoom",
+                                fontSize = 11.sp,
+                                color = if (isThumbError) Color(0xFFDC2626) else Color(0xFF15803D)
+                            )
                         }
                     }
                 } else {
@@ -3404,9 +3467,10 @@ private fun OfficerIncidentReportCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Action Buttons: Validasi, Selesai, Tindak Lanjut, Rute Maps
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 // Status buttons
                 if (!report.status.equals("Divalidasi", ignoreCase = true)) {
@@ -3414,10 +3478,8 @@ private fun OfficerIncidentReportCard(
                         onClick = { onUpdateStatus("Divalidasi") },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(34.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.heightIn(min = 40.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
@@ -3435,10 +3497,8 @@ private fun OfficerIncidentReportCard(
                         onClick = { onUpdateStatus("Selesai") },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(34.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.heightIn(min = 40.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
@@ -3453,10 +3513,8 @@ private fun OfficerIncidentReportCard(
                     OutlinedButton(
                         onClick = { onUpdateStatus("Diproses") },
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(34.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.heightIn(min = 40.dp)
                     ) {
                         Text(text = "Buka Kembali", fontSize = 11.sp)
                     }
@@ -3466,8 +3524,8 @@ private fun OfficerIncidentReportCard(
                 OutlinedButton(
                     onClick = onOpenNoteEditor,
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(34.dp)
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.heightIn(min = 40.dp)
                 ) {
                     Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(3.dp))
@@ -3486,8 +3544,8 @@ private fun OfficerIncidentReportCard(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(34.dp)
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.heightIn(min = 40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Navigation,
@@ -4125,42 +4183,55 @@ private fun SyncDiagnosticsSection(
                 }
 
                 // Card Buat Laporan Harian (Navigasi ke FormLaporanActivity)
-                Card(
-                    onClick = {
-                        val intent = Intent(context, com.example.FormLaporanActivity::class.java)
-                        context.startActivity(intent)
-                    },
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1976D2)),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("cardBuatLaporan")
+                val officerAuth = remember { OfficerAuthManager(context) }
+                val isOfficerLoggedIn = officerAuth.isOfficerLoggedIn()
+                val officerRole = officerAuth.getOfficerRole()
+                val hasSpecialAssignment = officerRole.contains("Penugasan Khusus", ignoreCase = true)
+                if (
+                    isOfficerLoggedIn && (
+                        officerRole.contains("Manajer", ignoreCase = true) ||
+                        officerRole.contains("Administrasi", ignoreCase = true) ||
+                        officerRole.contains("Operator", ignoreCase = true) ||
+                        hasSpecialAssignment
+                    )
                 ) {
-                    Row(
+                    Card(
+                        onClick = {
+                            val intent = Intent(context, com.example.FormLaporanActivity::class.java)
+                            context.startActivity(intent)
+                        },
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1976D2)),
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .testTag("cardBuatLaporan")
                     ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Assignment,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                "Buat Laporan Harian (Form Resmi)",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Assignment,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
                             )
-                            Text(
-                                "Buka FormLaporanActivity dengan 4 Tab (Kejadian, Dampak, Log, Simpan)",
-                                fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.85f)
-                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    "Buat Laporan Harian (Form Resmi)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    "Buka FormLaporanActivity dengan 4 Tab (Kejadian, Dampak, Log, Simpan)",
+                                    fontSize = 11.sp,
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                            }
                         }
                     }
                 }

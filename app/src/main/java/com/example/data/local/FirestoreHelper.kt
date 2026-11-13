@@ -5,6 +5,9 @@ import com.example.model.CitizenDisasterReport
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 /**
  * Cloud Firestore Helper for real-time bidirectional synchronization
@@ -15,17 +18,31 @@ object FirestoreHelper {
     private const val COLLECTION_OFFICERS = "officers"
     private const val COLLECTION_CITIZEN_REPORTS = "citizen_disaster_reports"
 
-    private val firestore: FirebaseFirestore? by lazy {
-        try {
+    @Volatile
+    private var cachedFirestore: FirebaseFirestore? = null
+
+    private val firestore: FirebaseFirestore?
+        get() = getFirestoreOrThrow().getOrNull()
+
+    /**
+     * Pengecekan ketat instance FirebaseFirestore agar tidak mengembalikan null secara diam-diam
+     * atau menyimpan cache null permanen jika dipanggil lebih awal.
+     */
+    private fun getFirestoreOrThrow(): Result<FirebaseFirestore> {
+        cachedFirestore?.let { return Result.success(it) }
+        return try {
             val dbId = "ai-studio-android-cuacamuk-a1e6cb6f-11e7-41ba-90f4-82c9adb67961"
-            try {
+            val instance = try {
                 FirebaseFirestore.getInstance(dbId)
             } catch (_: Exception) {
                 FirebaseFirestore.getInstance()
             }
+            requireNotNull(instance) { "FirebaseFirestore.getInstance() mengembalikan null" }
+            cachedFirestore = instance
+            Result.success(instance)
         } catch (e: Exception) {
-            Log.w(TAG, "FirebaseFirestore instance unavailable, operating in local offline mode: ${e.message}")
-            null
+            Log.e(TAG, "FirebaseFirestore instance unavailable: ${e.localizedMessage}", e)
+            Result.failure(e)
         }
     }
 
@@ -419,6 +436,49 @@ object FirestoreHelper {
 
     private const val COLLECTION_OFFICER_CREDENTIALS = "officer_credentials"
 
+    private val defaultFirestore: FirebaseFirestore?
+        get() = try {
+            FirebaseFirestore.getInstance()
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun parseCredentialDocument(doc: com.google.firebase.firestore.DocumentSnapshot): OfficerCredentialEntity? {
+        if (!doc.exists()) return null
+        val docNip = doc.getString("nip") ?: doc.id
+        val fullName = doc.getString("fullName") ?: ""
+        if (fullName.isBlank() && docNip.isBlank()) return null
+        val role = doc.getString("role") ?: OfficerRoles.OPERATOR
+        val unit = doc.getString("unit") ?: "Pusdalops BPBD Kab. Mukomuko"
+        val shift = doc.getString("shift") ?: "Shift Siaga 24 Jam"
+        val phone = doc.getString("phone") ?: ""
+        val pinHash = doc.getString("pinHash") ?: ""
+        val salt = doc.getString("salt") ?: ""
+        val isCustom = (doc.getBoolean("isPinChanged") == true) ||
+                (doc.getBoolean("isCustomPinSet") == true)
+        val initialPin = if (isCustom) "" else (doc.getString("initialSecurePin") ?: "")
+        val lastLoginAt = doc.getLong("lastLoginAt") ?: 0L
+        val lastLoginDevice = doc.getString("lastLoginDevice") ?: ""
+        val updatedAt = doc.getLong("updatedAt") ?: System.currentTimeMillis()
+
+        return OfficerCredentialEntity(
+            nip = docNip,
+            fullName = fullName,
+            role = role,
+            unit = unit,
+            shift = shift,
+            phone = phone,
+            pinHash = pinHash,
+            salt = salt,
+            isCustomPinSet = isCustom,
+            initialSecurePin = initialPin,
+            lastLoginAt = lastLoginAt,
+            lastLoginDevice = lastLoginDevice,
+            isSyncedWithCloud = true,
+            updatedAt = updatedAt
+        )
+    }
+
     /**
      * Synchronizes a single officer credential to Cloud Firestore.
      */
@@ -427,7 +487,18 @@ object FirestoreHelper {
         onSuccess: (() -> Unit)? = null,
         onFailure: ((Exception) -> Unit)? = null
     ) {
-        val db = firestore ?: return
+        val dbResult = getFirestoreOrThrow()
+        val db = dbResult.getOrNull() ?: defaultFirestore
+        if (db == null) {
+            val initErr = dbResult.exceptionOrNull()
+            onFailure?.invoke(
+                IllegalStateException(
+                    "Gagal sinkronisasi: ${initErr?.localizedMessage ?: "FirebaseFirestore instance null"}",
+                    initErr
+                )
+            )
+            return
+        }
         try {
             val data = mapOf(
                 "nip" to credential.nip,
@@ -439,7 +510,8 @@ object FirestoreHelper {
                 "pinHash" to credential.pinHash,
                 "salt" to credential.salt,
                 "isCustomPinSet" to credential.isCustomPinSet,
-                "initialSecurePin" to credential.initialSecurePin,
+                "isPinChanged" to credential.isCustomPinSet,
+                "initialSecurePin" to if (credential.isCustomPinSet) "" else credential.initialSecurePin,
                 "lastLoginAt" to credential.lastLoginAt,
                 "lastLoginDevice" to credential.lastLoginDevice,
                 "updatedAt" to credential.updatedAt
@@ -452,14 +524,186 @@ object FirestoreHelper {
                     onSuccess?.invoke()
                 }
                 .addOnFailureListener { e ->
-                    Log.w(TAG, "Failed to sync credential to Firestore", e)
-                    onFailure?.invoke(e)
+                    Log.w(TAG, "Failed to sync credential to primary Firestore, trying default DB", e)
+                    val fallbackDb = defaultFirestore
+                    if (fallbackDb != null && fallbackDb !== db) {
+                        fallbackDb.collection(COLLECTION_OFFICER_CREDENTIALS)
+                            .document(credential.nip)
+                            .set(data, SetOptions.merge())
+                            .addOnSuccessListener {
+                                onSuccess?.invoke()
+                            }
+                            .addOnFailureListener { e2 ->
+                                onFailure?.invoke(e2)
+                            }
+                    } else {
+                        onFailure?.invoke(e)
+                    }
                 }
         } catch (e: Exception) {
             Log.e(TAG, "Exception during credential cloud sync", e)
             onFailure?.invoke(e)
         }
     }
+
+    /**
+     * Suspending version of [syncCredentialToCloud] that awaits Cloud Firestore write confirmation.
+     * Used during PIN changes so updates are guaranteed to reach Cloud Firestore.
+     */
+    suspend fun syncCredentialToCloudSuspend(credential: OfficerCredentialEntity): Result<Unit> =
+        suspendCancellableCoroutine { cont ->
+            syncCredentialToCloud(
+                credential = credential,
+                onSuccess = {
+                    if (cont.isActive) cont.resume(Result.success(Unit))
+                },
+                onFailure = { e ->
+                    if (cont.isActive) {
+                        cont.resume(
+                            Result.failure(
+                                IllegalStateException(
+                                    "Gagal sinkronisasi: ${e.localizedMessage}",
+                                    e
+                                )
+                            )
+                        )
+                    }
+                }
+            )
+        }
+
+    /**
+     * Fetches a single officer's latest credential directly from the Cloud Firestore server (Source.SERVER),
+     * with automatic fallback to default database / local cache if the named database or server stream is unavailable.
+     */
+    suspend fun fetchCredentialByNipFromCloud(nip: String): Result<OfficerCredentialEntity?> =
+        suspendCancellableCoroutine { cont ->
+            val dbResult = getFirestoreOrThrow()
+            val db = dbResult.getOrNull() ?: defaultFirestore
+            if (db == null) {
+                val initErr = dbResult.exceptionOrNull()
+                if (cont.isActive) {
+                    cont.resume(
+                        Result.failure(
+                            IllegalStateException(
+                                "Gagal sinkronisasi: ${initErr?.localizedMessage ?: "FirebaseFirestore instance null"}",
+                                initErr
+                            )
+                        )
+                    )
+                }
+                return@suspendCancellableCoroutine
+            }
+            val trimmedNip = nip.trim()
+            try {
+                db.collection(COLLECTION_OFFICER_CREDENTIALS)
+                    .document(trimmedNip)
+                    .get(Source.SERVER)
+                    .addOnSuccessListener { doc ->
+                        if (!cont.isActive) return@addOnSuccessListener
+                        val parsed = if (doc != null && doc.exists()) parseCredentialDocument(doc) else null
+                        cont.resume(Result.success(parsed))
+                    }
+                    .addOnFailureListener { e ->
+                        Log.w(TAG, "Failed to fetch credential for NIP $trimmedNip from primary Firestore server", e)
+                        val fallbackDb = defaultFirestore
+                        if (fallbackDb != null && fallbackDb !== db) {
+                            fallbackDb.collection(COLLECTION_OFFICER_CREDENTIALS)
+                                .document(trimmedNip)
+                                .get(Source.DEFAULT)
+                                .addOnSuccessListener { fallbackDoc ->
+                                    if (!cont.isActive) return@addOnSuccessListener
+                                    val parsed = if (fallbackDoc != null && fallbackDoc.exists()) {
+                                        parseCredentialDocument(fallbackDoc)
+                                    } else {
+                                        null
+                                    }
+                                    cont.resume(Result.success(parsed))
+                                }
+                                .addOnFailureListener { _ ->
+                                    if (cont.isActive) {
+                                        cont.resume(
+                                            Result.failure(
+                                                IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
+                                            )
+                                        )
+                                    }
+                                }
+                        } else {
+                            if (cont.isActive) {
+                                cont.resume(
+                                    Result.failure(
+                                        IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
+                                    )
+                                )
+                            }
+                        }
+                    }
+            } catch (e: Exception) {
+                if (cont.isActive) {
+                    cont.resume(
+                        Result.failure(
+                            IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
+                        )
+                    )
+                }
+            }
+        }
+
+    /**
+     * Suspending server fetch of all registered officer credentials from Cloud Firestore.
+     */
+    suspend fun fetchAllCredentialsFromCloudSuspend(): Result<List<OfficerCredentialEntity>> =
+        suspendCancellableCoroutine { cont ->
+            val dbResult = getFirestoreOrThrow()
+            val db = dbResult.getOrNull() ?: defaultFirestore
+            if (db == null) {
+                val initErr = dbResult.exceptionOrNull()
+                if (cont.isActive) {
+                    cont.resume(
+                        Result.failure(
+                            IllegalStateException(
+                                "Gagal sinkronisasi: ${initErr?.localizedMessage ?: "FirebaseFirestore instance null"}",
+                                initErr
+                            )
+                        )
+                    )
+                }
+                return@suspendCancellableCoroutine
+            }
+            try {
+                db.collection(COLLECTION_OFFICER_CREDENTIALS)
+                    .get(Source.SERVER)
+                    .addOnSuccessListener { snapshot ->
+                        if (!cont.isActive) return@addOnSuccessListener
+                        val list = mutableListOf<OfficerCredentialEntity>()
+                        if (snapshot != null) {
+                            for (doc in snapshot.documents) {
+                                parseCredentialDocument(doc)?.let { list.add(it) }
+                            }
+                        }
+                        cont.resume(Result.success(list))
+                    }
+                    .addOnFailureListener { e ->
+                        Log.w(TAG, "Failed to fetch all credentials from Firestore server", e)
+                        if (cont.isActive) {
+                            cont.resume(
+                                Result.failure(
+                                    IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
+                                )
+                            )
+                        }
+                    }
+            } catch (e: Exception) {
+                if (cont.isActive) {
+                    cont.resume(
+                        Result.failure(
+                            IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
+                        )
+                    )
+                }
+            }
+        }
 
     /**
      * Fetches all registered officer credentials from Cloud Firestore.
@@ -473,7 +717,7 @@ object FirestoreHelper {
         }
         try {
             db.collection(COLLECTION_OFFICER_CREDENTIALS)
-                .get()
+                .get(Source.SERVER)
                 .addOnSuccessListener { snapshot ->
                     val list = mutableListOf<OfficerCredentialEntity>()
                     if (snapshot != null) {
@@ -486,8 +730,9 @@ object FirestoreHelper {
                             val phone = doc.getString("phone") ?: ""
                             val pinHash = doc.getString("pinHash") ?: ""
                             val salt = doc.getString("salt") ?: ""
-                            val isCustom = doc.getBoolean("isCustomPinSet") ?: false
-                            val initialPin = doc.getString("initialSecurePin") ?: ""
+                            val isCustom = (doc.getBoolean("isPinChanged") == true) ||
+                                    (doc.getBoolean("isCustomPinSet") == true)
+                            val initialPin = if (isCustom) "" else (doc.getString("initialSecurePin") ?: "")
                             val lastLoginAt = doc.getLong("lastLoginAt") ?: 0L
                             val lastLoginDevice = doc.getString("lastLoginDevice") ?: ""
                             val updatedAt = doc.getLong("updatedAt") ?: System.currentTimeMillis()

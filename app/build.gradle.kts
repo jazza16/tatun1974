@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.cuacamukomuko.wmzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 14
-    versionName = "3.6.0"
+    versionCode = 15
+    versionName = "3.7.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -121,6 +121,7 @@ dependencies {
   implementation(libs.play.integrity)
   implementation(libs.play.app.update)
   implementation(libs.play.app.update.ktx)
+  implementation("com.google.firebase:firebase-appcheck-playintegrity")
   implementation(libs.androidx.work.runtime.ktx)
   // implementation(libs.firebase.appcheck.recaptcha)
   // implementation(libs.firebase.appcheck.debug)
@@ -137,8 +138,11 @@ dependencies {
   implementation("androidx.recyclerview:recyclerview:1.4.0")
   implementation("androidx.viewpager2:viewpager2:1.1.0")
   implementation("androidx.fragment:fragment-ktx:1.8.5")
+  implementation("androidx.activity:activity-ktx:1.10.1")
   implementation("androidx.slidingpanelayout:slidingpanelayout:1.2.0")
   implementation("androidx.window:window:1.3.0")
+  implementation("androidx.biometric:biometric:1.4.0-alpha06")
+  implementation("androidx.biometric:biometric-compose:1.4.0-alpha06")
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

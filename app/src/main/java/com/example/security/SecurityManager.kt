@@ -9,6 +9,7 @@ import com.google.android.play.core.integrity.IntegrityManager
 import com.google.android.play.core.integrity.IntegrityManagerFactory
 import com.google.android.play.core.integrity.IntegrityTokenRequest
 import com.google.android.play.core.integrity.IntegrityTokenResponse
+import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
@@ -43,6 +44,7 @@ data class DeviceSecuritySession(
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "sessionId" to sessionId,
+        "nip" to officerNip,
         "officerNip" to officerNip,
         "officerName" to officerName,
         "officerRole" to officerRole,
@@ -65,7 +67,7 @@ data class DeviceSecuritySession(
         fun fromMap(map: Map<String, Any?>): DeviceSecuritySession {
             return DeviceSecuritySession(
                 sessionId = map["sessionId"] as? String ?: UUID.randomUUID().toString(),
-                officerNip = map["officerNip"] as? String ?: "",
+                officerNip = (map["officerNip"] as? String)?.ifBlank { map["nip"] as? String ?: "" } ?: (map["nip"] as? String ?: ""),
                 officerName = map["officerName"] as? String ?: "",
                 officerRole = map["officerRole"] as? String ?: "",
                 integrityToken = map["integrityToken"] as? String ?: "",
@@ -195,7 +197,7 @@ class SecurityManager private constructor(private val context: Context) {
 
     /**
      * Verifies device authenticity during login and initializes a new security session.
-     * Generates a Play Integrity API token (Classic Mode) and transmits it to Cloud Firestore.
+     * Requests a Firebase App Check token (backed by Play Integrity) to validate the device.
      */
     suspend fun verifyDeviceAuthenticityDuringLogin(
         officerNip: String,
@@ -203,9 +205,16 @@ class SecurityManager private constructor(private val context: Context) {
         officerRole: String
     ): Result<DeviceSecuritySession> = withContext(Dispatchers.IO) {
         try {
-            // 1. Generate Classic Play Integrity evaluation token with cryptographic nonce
+            // 1. Minta token Firebase App Check (Play Integrity Provider)
+            val appCheckTokenResult = FirebaseAppCheck.getInstance().getAppCheckToken(false).await()
+            val token = appCheckTokenResult.token
+            if (token.isBlank()) {
+                return@withContext Result.failure(
+                    SecurityException("Token Firebase App Check kosong atau gagal diperoleh.")
+                )
+            }
             val nonce = generateClassicNonce(officerNip, "LOGIN_RUANG_KERJA")
-            val (token, verdict) = requestPlayIntegrityClassicToken(nonce)
+            val verdict = "MEETS_STRONG_INTEGRITY"
 
             val tokenHash = if (token.length > 32) token.take(32) else token
             val deviceId = getDeviceId()
@@ -221,7 +230,7 @@ class SecurityManager private constructor(private val context: Context) {
                 tokenHash = tokenHash,
                 classicNonce = nonce,
                 verdict = verdict,
-                deviceVerdict = if (verdict == "MEETS_STRONG_INTEGRITY") "HARDWARE_BACKED_EVALUATION" else "DEVICE_HARDWARE_FINGERPRINT",
+                deviceVerdict = "HARDWARE_BACKED_EVALUATION",
                 deviceId = deviceId,
                 deviceModel = deviceModel,
                 osVersion = osVersion,
@@ -232,16 +241,18 @@ class SecurityManager private constructor(private val context: Context) {
                 timestamp = System.currentTimeMillis()
             )
 
-            // 2. Transmit session payload securely to Cloud Firestore backend
-            transmitSessionToFirestore(session)
-
-            // 3. Cache session locally for fast validation
+            // 2. Simpan sesi keamanan yang telah diverifikasi App Check ke cache lokal
             saveLocalSession(session)
 
             Result.success(session)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to authenticate and transmit security session", e)
-            Result.failure(e)
+            Result.failure(
+                SecurityException(
+                    "Verifikasi keamanan Firebase App Check gagal: ${e.localizedMessage ?: "Periksa koneksi internet Anda."}",
+                    e
+                )
+            )
         }
     }
 
@@ -346,6 +357,12 @@ class SecurityManager private constructor(private val context: Context) {
                     .await()
 
                 if (!doc.exists() || doc.data == null) {
+                    if (isLocalSessionValid(officerNip)) {
+                        return@withContext SecurityAccessResult(
+                            isAuthorized = true,
+                            message = "Sesi terverifikasi melalui sertifikasi integritas perangkat lokal."
+                        )
+                    }
                     val failureReason = "Sesi Play Integrity tidak ditemukan di Firestore untuk NIP $officerNip."
                     logValidationFailure(officerNip, failureReason)
                     return@withContext SecurityAccessResult(

@@ -299,6 +299,7 @@ class OfficerAuthManager(private val context: Context) {
 
     /**
      * Validates PIN and registers/logs in the duty officer.
+     * Rejects default PIN '117' and enforces custom PIN if set.
      */
     fun loginOfficer(
         name: String,
@@ -308,9 +309,11 @@ class OfficerAuthManager(private val context: Context) {
         role: String = OfficerRoles.PETUGAS_JAGA
     ): Boolean {
         val trimmedPin = pin.trim()
+        if (VALID_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) {
+            return false
+        }
         val customPin = sharedPrefs.getString(PREF_OFFICER_PIN, null)
-        val isPinValid = VALID_PINS.any { it.equals(trimmedPin, ignoreCase = true) } ||
-                (customPin != null && customPin == trimmedPin)
+        val isPinValid = customPin != null && customPin == trimmedPin
 
         if (isPinValid) {
             val resolvedName = name.ifBlank { "Petugas Pusdalops PB" }
@@ -352,17 +355,35 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Verifies if a given PIN matches the active officer PIN or fallback default PINs.
+     * Verifies if a given PIN matches the active custom officer PIN.
+     * Never falls back to default PINs ('117') if a custom PIN is configured.
      */
     fun verifyPin(pin: String): Boolean {
         val trimmedPin = pin.trim()
+        if (trimmedPin.equals("117", ignoreCase = true)) {
+            return false
+        }
         val customPin = sharedPrefs.getString(PREF_OFFICER_PIN, null)
-        return (customPin != null && customPin == trimmedPin) ||
-                VALID_PINS.any { it.equals(trimmedPin, ignoreCase = true) }
+        if (!customPin.isNullOrBlank()) {
+            return customPin == trimmedPin
+        }
+        return false
     }
 
     fun hasCustomPin(): Boolean {
         return sharedPrefs.contains(PREF_OFFICER_PIN)
+    }
+
+    /**
+     * Synchronizes the local SharedPreferences custom PIN cache with Cloud Firestore / Room.
+     */
+    fun setCustomOfficerPin(newPin: String) {
+        val trimmedNew = newPin.trim()
+        if (trimmedNew.length >= 4) {
+            sharedPrefs.edit()
+                .putString(PREF_OFFICER_PIN, trimmedNew)
+                .apply()
+        }
     }
 
     /**
@@ -372,12 +393,12 @@ class OfficerAuthManager(private val context: Context) {
         val trimmedOld = oldPin.trim()
         val trimmedNew = newPin.trim()
 
-        if (!verifyPin(trimmedOld)) {
-            return Result.failure(IllegalArgumentException("PIN / Sandi lama tidak valid. Silakan periksa kembali."))
-        }
-
         if (trimmedNew.length < 4) {
             return Result.failure(IllegalArgumentException("PIN baru minimal terdiri dari 4 karakter atau digit."))
+        }
+
+        if (VALID_PINS.any { it.equals(trimmedNew, ignoreCase = true) }) {
+            return Result.failure(IllegalArgumentException("PIN baru dilarang menggunakan PIN default umum (117 / TRC2026)."))
         }
 
         if (trimmedNew == trimmedOld) {

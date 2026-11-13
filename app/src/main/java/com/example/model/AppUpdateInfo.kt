@@ -9,8 +9,8 @@ data class VersionChangelog(
 )
 
 data class AppUpdateState(
-    val currentVersion: String = "3.6.0",
-    val latestVersion: String = "3.6.0",
+    val currentVersion: String = "3.7.0",
+    val latestVersion: String = "3.7.0",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -22,18 +22,32 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "3.6.0",
+    val lastCheckedVersion: String = "3.7.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan rilis stabil v3.6.0 Enterprise Edition terbaru secara permanen.",
-    val packageSizeMb: Float = 19.5f,
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Release Version) v3.7.0 Enterprise Edition terbaru secara permanen.",
+    val packageSizeMb: Float = 19.8f,
     val isBannerDismissed: Boolean = false,
     val isSimulationActive: Boolean = false,
     val changelogs: List<VersionChangelog> = listOf(
         VersionChangelog(
-            version = "3.6.0",
-            releaseDate = "4 November 2026",
+            version = "3.7.0",
+            releaseDate = "12 November 2026",
             isCurrent = true,
             isLatest = true,
+            highlights = listOf(
+                "Autentikasi Cepat Login Biometrik (Fingerprint / Biometric Strong): Opsi login cepat menggunakan sensor biometrik pada layar pembuka bagi petugas Pusdalops yang memiliki sesi NIP tersimpan.",
+                "Validasi Backend Play Integrity API Classic (Cloud Functions): Dekripsi dan verifikasi token Play Integrity serta one-time cryptographic nonce langsung di server Google Cloud Functions sebelum menyimpan sesi ke koleksi device_security_sessions.",
+                "Proteksi Ketat Tanpa Bypass Lokal: Penanganan kegagalan jaringan pada verifikasi keamanan perangkat secara tegas menolak sesi tanpa fallback lokal demi mencegah pembajakan kredensial.",
+                "Otorisasi Berbasis Jabatan pada Form Laporan Harian (Resmi): Kartu formulir laporan harian kini hanya ditampilkan bagi petugas aktif dengan jabatan Manajer, Koord. Administrasi, Operator, atau pemegang Penugasan Khusus.",
+                "Integrasi Penuh Form Laporan Harian 4-Tab & Cetak PDF: Penyimpanan laporan harian dan log komunikasi ke Room Database (sipagar_database) serta fitur cetak langsung dokumen PDF resmi Pusdalops BPBD.",
+                "Optimalisasi Responsivitas Input & Keyboard (IME Padding): Penyesuaian tata letak formulir laporan warga dengan dukungan penuh WindowInsets dan adjustResize."
+            )
+        ),
+        VersionChangelog(
+            version = "3.6.0",
+            releaseDate = "4 November 2026",
+            isCurrent = false,
+            isLatest = false,
             highlights = listOf(
                 "Pembaruan Wallpaper & Infografis Bencana Mukomuko: Mengintegrasikan Lambang Resmi Kabupaten Mukomuko ('Kapuang Sakti Ratau Batuah') dan Cap Resmi BPBD Kabupaten Mukomuko kualitas tinggi, menampilkan kearifan lokal Rumah Adat panggung dan budaya Sirih Carano yang adaptif terhadap gempa bumi pesisir.",
                 "Penyelarasan Zona Kegempaan Megathrust: Memperbarui penamaan seismik menjadi Zona Subduksi & Megathrust Mentawai - Bengkulu dan edukasi rumus evakuasi mandiri tsunami 20-20-20.",

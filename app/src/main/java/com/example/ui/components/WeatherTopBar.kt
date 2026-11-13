@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
@@ -75,7 +74,7 @@ fun WeatherTopBar(
     onRefreshClick: () -> Unit,
     onThemeToggle: () -> Unit,
     onOpenAppMenu: () -> Unit,
-    onCallCenter117Click: () -> Unit,
+    onCallCenter117Click: () -> Unit = {},
     onDetectLocationClick: () -> Unit = {},
     onWallpaperClick: () -> Unit = {}
 ) {
@@ -119,7 +118,7 @@ fun WeatherTopBar(
                     ) {
                         // Official BPBD Mukomuko Emblem
                         Image(
-                            painter = painterResource(id = R.drawable.ic_bpbd_logo),
+                            painter = painterResource(id = R.drawable.ic_bpbd_mukomuko_circle),
                             contentDescription = "Logo BPBD Mukomuko",
                             modifier = Modifier
                                 .size(38.dp)
@@ -154,35 +153,6 @@ fun WeatherTopBar(
                     }
                 },
                 actions = {
-                    // Call Center 117 Button
-                    Surface(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(onClick = onCallCenter117Click)
-                            .padding(end = 2.dp)
-                            .testTag("btn_topbar_call_center_117"),
-                        color = Color(0xFFDC2626)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PhoneInTalk,
-                                contentDescription = "Call Center 117",
-                                tint = Color.White,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = "117",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White
-                            )
-                        }
-                    }
-
                     // Wallpaper & Infografis Bencana Button
                     IconButton(
                         onClick = onWallpaperClick,

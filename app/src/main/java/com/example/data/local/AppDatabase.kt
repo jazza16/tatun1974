@@ -7,6 +7,9 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [
+        LaporanHarianEntity::class,
+        LogKomunikasiEntity::class,
+        LaporanWargaEntity::class,
         WeatherCacheEntity::class,
         FavoriteDistrictEntity::class,
         CommunityReportEntity::class,
@@ -17,34 +20,31 @@ import androidx.room.RoomDatabase
         PersonnelAuditLogEntity::class,
         SyncConflictLogEntity::class,
         OfficerNoteEntity::class,
-        OfficerCredentialEntity::class,
-        LaporanHarian::class,
-        LogKomunikasi::class,
-        LaporanWargaEntity::class
+        OfficerCredentialEntity::class
     ],
-    version = 13,
+    version = 1,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
+    abstract fun laporanHarianDao(): LaporanHarianDao
+    abstract fun laporanWargaDao(): LaporanWargaDao
     abstract fun weatherDao(): WeatherDao
     abstract fun personnelDao(): PersonnelDao
     abstract fun auditLogDao(): PersonnelAuditLogDao
     abstract fun syncConflictLogDao(): SyncConflictLogDao
     abstract fun noteDao(): NoteDao
     abstract fun credentialDao(): OfficerCredentialDao
-    abstract fun laporanHarianDao(): LaporanHarianDao
-    abstract fun laporanWargaDao(): LaporanWargaDao
 
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        fun getInstance(context: Context): AppDatabase {
+        fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "cuaca_mukomuko.db"
+                    "sipagar_database"
                 ).fallbackToDestructiveMigration(true)
                 .allowMainThreadQueries()
                 .addCallback(object : RoomDatabase.Callback() {
@@ -104,5 +104,7 @@ abstract class AppDatabase : RoomDatabase() {
                 instance
             }
         }
+
+        fun getInstance(context: Context): AppDatabase = getDatabase(context)
     }
 }

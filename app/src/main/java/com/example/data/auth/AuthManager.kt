@@ -73,12 +73,14 @@ class AuthManager(private val context: Context) {
     }
 
     /**
-     * Authenticate staff member using official NIP/PIN credential against BPBD Personnel database.
+     * Authenticate staff member using official NIP/PIN credential against Cloud Firestore & BPBD Personnel database.
      * Incorporates Play Integrity API (Classic mode) token validation before finalizing a user session
      * in the Ruang Kerja module. Logs any failed validation attempts to the local security audit log.
      */
     suspend fun signInOfficer(name: String, nip: String, pin: String, role: String, shift: String): Boolean {
-        if (!officerAuthManager.verifyPin(pin)) {
+        val smartAuthRepo = com.example.data.repository.SmartOfficerAuthRepository.getInstance(context)
+        val authResult = smartAuthRepo.authenticateOfficer(nip = nip, inputPin = pin)
+        if (authResult.isFailure) {
             try {
                 database.auditLogDao().insertAuditLog(
                     com.example.data.local.PersonnelAuditLogEntity(
@@ -87,7 +89,7 @@ class AuthManager(private val context: Context) {
                         role = role,
                         shift = shift,
                         action = "AUTH_PIN_VERIFICATION_FAILED",
-                        deviceInfo = "PIN salah pada otentikasi Ruang Kerja"
+                        deviceInfo = authResult.exceptionOrNull()?.message ?: "PIN salah pada otentikasi Ruang Kerja"
                     )
                 )
             } catch (_: Exception) {}
@@ -112,47 +114,25 @@ class AuthManager(private val context: Context) {
                     )
                 )
             } catch (_: Exception) {}
+            officerAuthManager.logoutOfficer()
+            _isAuthenticated.value = false
             return false
         }
 
-        // Finalize official officer session
-        val success = officerAuthManager.loginOfficer(
-            name = name,
-            badgeId = nip,
-            shift = shift,
-            pin = pin,
-            role = role
-        )
-
-        if (success) {
-            _isAuthenticated.value = true
-            try {
-                database.auditLogDao().insertAuditLog(
-                    com.example.data.local.PersonnelAuditLogEntity(
-                        nip = nip,
-                        name = name,
-                        role = role,
-                        shift = shift,
-                        action = "LOGIN_PLAY_INTEGRITY_VERIFIED",
-                        deviceInfo = "Classic Token: ${integrityResult.verdict}"
-                    )
+        _isAuthenticated.value = true
+        try {
+            database.auditLogDao().insertAuditLog(
+                com.example.data.local.PersonnelAuditLogEntity(
+                    nip = nip,
+                    name = name,
+                    role = role,
+                    shift = shift,
+                    action = "LOGIN_PLAY_INTEGRITY_VERIFIED",
+                    deviceInfo = "Classic Token: ${integrityResult.verdict}"
                 )
-            } catch (_: Exception) {}
-        } else {
-            try {
-                database.auditLogDao().insertAuditLog(
-                    com.example.data.local.PersonnelAuditLogEntity(
-                        nip = nip,
-                        name = name,
-                        role = role,
-                        shift = shift,
-                        action = "LOGIN_SESSION_FINALIZATION_FAILED",
-                        deviceInfo = "Gagal memfinalisasi sesi petugas"
-                    )
-                )
-            } catch (_: Exception) {}
-        }
-        return success
+            )
+        } catch (_: Exception) {}
+        return true
     }
 
     /**

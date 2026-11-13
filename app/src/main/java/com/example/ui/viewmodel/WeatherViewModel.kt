@@ -777,28 +777,29 @@ class WeatherViewModel(
     }
 
     /**
-     * Testing / Developer mode: Simulates a device that previously had an earlier version (e.g. v1.6.0).
-     * Immediately triggers real push notification and in-app update prompt for v1.6.1.
+     * Testing / Developer mode: Simulates a device that previously had an earlier version (e.g. v3.6.0).
+     * Immediately triggers real push notification and in-app update prompt for the latest release version.
      */
-    fun simulateOlderVersionForTesting(olderVersion: String = "1.6.0", context: android.content.Context? = null) {
+    fun simulateOlderVersionForTesting(olderVersion: String = "3.6.0", context: android.content.Context? = null) {
+        val targetRelease = com.example.data.local.AppUpdatePreferences.DEFAULT_LATEST_VERSION
         updatePreferences?.simulateEarlierInstalledVersion(olderVersion)
         val changelogs = _uiState.value.updateState.changelogs.map { log ->
             if (log.version == olderVersion) log.copy(isCurrent = true, isLatest = false)
-            else if (log.version == "1.6.1") log.copy(isCurrent = false, isLatest = true)
+            else if (log.version == targetRelease) log.copy(isCurrent = false, isLatest = true)
             else log.copy(isCurrent = false, isLatest = false)
         }
         _uiState.value = _uiState.value.copy(
             isUpdateDialogOpen = true,
             updateState = _uiState.value.updateState.copy(
                 currentVersion = olderVersion,
-                latestVersion = "1.6.1",
+                latestVersion = targetRelease,
                 isUpdateAvailable = true,
                 isUpdated = false,
                 isPermanentlyInstalled = false,
                 isSimulationActive = true,
                 isBannerDismissed = false,
                 downloadProgress = 0f,
-                updateStatusMessage = "Simulasi Aktif: Perangkat menjalankan versi sebelumnya v$olderVersion. Notifikasi update daring v1.6.1 aktif & siap dipasang.",
+                updateStatusMessage = "Simulasi Aktif: Perangkat menjalankan versi sebelumnya v$olderVersion. Notifikasi update daring v$targetRelease aktif & siap dipasang.",
                 changelogs = changelogs
             )
         )
@@ -806,18 +807,18 @@ class WeatherViewModel(
         if (context != null) {
             com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
                 context = context,
-                latestVersion = "1.6.1",
-                highlightText = "Ekspor PDF & CSV Petugas, Info Pasang Surut Dinamis, Auto-Pin Lokasi & Optimalisasi R8"
+                latestVersion = targetRelease,
+                highlightText = "Login Biometrik Petugas, Validasi Server Play Integrity Classic & Cetak PDF Laporan Harian"
             )
         }
     }
 
     /**
-     * Developer / QA simulation: Simulates the developer publishing a newer version (e.g. v1.9.0).
-     * Tests that current devices (on v1.8.0) detect the new version, receive real push notification,
+     * Developer / QA simulation: Simulates the developer publishing a newer version (e.g. v3.8.0).
+     * Tests that current devices (on v3.7.0) detect the new version, receive real push notification,
      * and can apply the OTA online update.
      */
-    fun simulatePublishNextVersion(nextVersion: String = "1.9.0", context: android.content.Context? = null) {
+    fun simulatePublishNextVersion(nextVersion: String = "3.8.0", context: android.content.Context? = null) {
         updatePreferences?.publishNewVersionRelease(nextVersion)
 
         val nextChangelog = com.example.model.VersionChangelog(
@@ -862,25 +863,26 @@ class WeatherViewModel(
     }
 
     /**
-     * Resets device to latest factory release state (v1.8.0 permanently applied).
+     * Resets device to latest official factory release state (v3.7.0 Release Version permanently applied).
      */
     fun resetToLatestReleaseState() {
+        val latestRelease = com.example.data.local.AppUpdatePreferences.DEFAULT_LATEST_VERSION
         updatePreferences?.resetToLatestReleaseState()
-        val changelogs = _uiState.value.updateState.changelogs.filter { it.version != "1.9.0" }.map { log ->
-            if (log.version == "1.8.0") log.copy(isCurrent = true, isLatest = true)
+        val changelogs = _uiState.value.updateState.changelogs.filter { it.version != "3.8.0" && it.version != "1.9.0" }.map { log ->
+            if (log.version == latestRelease) log.copy(isCurrent = true, isLatest = true)
             else log.copy(isCurrent = false, isLatest = false)
         }
         _uiState.value = _uiState.value.copy(
             isUpdateDialogOpen = false,
             updateState = _uiState.value.updateState.copy(
-                currentVersion = "1.8.0",
-                latestVersion = "1.6.1",
+                currentVersion = latestRelease,
+                latestVersion = latestRelease,
                 isUpdateAvailable = false,
                 isUpdated = true,
                 isPermanentlyInstalled = true,
                 isSimulationActive = false,
                 downloadProgress = 0f,
-                updateStatusMessage = "Aplikasi menggunakan rilis resmi v1.6.1 terbaru secara permanen.",
+                updateStatusMessage = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Release Version) v$latestRelease terbaru secara permanen.",
                 changelogs = changelogs
             )
         )

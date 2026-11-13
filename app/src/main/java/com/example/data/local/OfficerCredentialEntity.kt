@@ -41,24 +41,50 @@ data class OfficerCredentialEntity(
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     /**
+     * Alias property matching Firestore 'isPinChanged' field.
+     */
+    val isPinChanged: Boolean
+        get() = isCustomPinSet
+
+    /**
      * Helper to verify if an input PIN matches this credential.
+     * - Strictly rejects generic default PINs ('117', 'BPBD117', 'TRC2026', etc.).
+     * - Before PIN change (isCustomPinSet == false), accepts the last 6 digits of NIP as the valid initial PIN.
+     * - After PIN change (isCustomPinSet == true), strictly blocks the 6-digit NIP and ONLY accepts the custom pinHash.
      */
     fun verifyPin(inputPin: String): Boolean {
         val trimmed = inputPin.trim()
         if (trimmed.isEmpty()) return false
 
-        // Compute hash of input pin with this user's unique salt
+        // 1. Reject forbidden generic default PINs unconditionally (does NOT block 6-digit NIP)
+        val forbiddenDefaults = listOf("117", "BPBD117", "ADMIN117", "TRC2026", "PUSDALOPS117", "0000", "1234")
+        if (forbiddenDefaults.any { it.equals(trimmed, ignoreCase = true) }) {
+            return false
+        }
+
+        val sixDigitNip = generateInitialPinForNip(nip)
+        val rawLastSixNip = nip.trim().takeLast(6)
+        val isMatchingInitialNip = trimmed.equals(sixDigitNip, ignoreCase = true) ||
+            (rawLastSixNip.length == 6 && trimmed.equals(rawLastSixNip, ignoreCase = true)) ||
+            (initialSecurePin.isNotBlank() && trimmed.equals(initialSecurePin, ignoreCase = true))
+
+        // 2. If officer has ALREADY changed their PIN (isCustomPinSet == true),
+        // 6-digit NIP is strictly forbidden for login
+        if (isCustomPinSet) {
+            if (isMatchingInitialNip) {
+                return false
+            }
+            val calculatedHash = hashWithSalt(trimmed, salt)
+            return calculatedHash.equals(pinHash, ignoreCase = true)
+        }
+
+        // 3. Before officer changes PIN (isCustomPinSet == false), accept 6-digit NIP as valid initial PIN
+        if (isMatchingInitialNip) {
+            return true
+        }
+
         val calculatedHash = hashWithSalt(trimmed, salt)
-        if (calculatedHash.equals(pinHash, ignoreCase = true)) {
-            return true
-        }
-
-        // If officer has not yet customized their PIN, check against their initial secure PIN
-        if (!isCustomPinSet && initialSecurePin.isNotBlank() && trimmed == initialSecurePin) {
-            return true
-        }
-
-        return false
+        return calculatedHash.equals(pinHash, ignoreCase = true)
     }
 
     companion object {

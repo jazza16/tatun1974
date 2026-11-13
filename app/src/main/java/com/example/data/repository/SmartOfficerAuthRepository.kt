@@ -36,6 +36,10 @@ class SmartOfficerAuthRepository(private val context: Context) {
     private val officerAuthManager = OfficerAuthManager(context)
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
+    @Volatile
+    var activeCredential: OfficerCredentialEntity? = null
+        private set
+
     companion object {
         private const val TAG = "SmartOfficerAuthRepo"
 
@@ -60,13 +64,10 @@ class SmartOfficerAuthRepository(private val context: Context) {
     }
 
     /**
-     * Smart Auto-Discovery & Synchronization:
-     * Scans all known personnel sources (official ASN roster, local Room personnel table,
-     * SharedPreferences roster, and cloud Firestore).
-     * If any officer is not yet registered in the credentials database, creates and stores their
-     * unique secure credential in both SQLite and Cloud Firestore.
+     * Ensures all official BPBD Mukomuko personnel exist in local Room SQLite database
+     * with their deterministic 6-digit NIP initial PIN, even when offline.
      */
-    suspend fun harvestAndSyncAllOfficers(): Int = withContext(Dispatchers.IO) {
+    private suspend fun ensureLocalOfficersSeeded(): List<OfficerCredentialEntity> = withContext(Dispatchers.IO) {
         val existingCreds = credentialDao.getAllCredentialsList().associateBy { it.nip.lowercase().trim() }
         val newRegistrations = mutableListOf<OfficerCredentialEntity>()
 
@@ -122,16 +123,48 @@ class SmartOfficerAuthRepository(private val context: Context) {
 
         if (newRegistrations.isNotEmpty()) {
             credentialDao.insertAll(newRegistrations)
-            Log.d(TAG, "Harvested and registered ${newRegistrations.size} new officers into credentials database.")
+            Log.d(TAG, "Harvested and registered ${newRegistrations.size} new officers into local credentials database.")
+        }
+        return@withContext newRegistrations
+    }
 
-            // Push all newly registered officers to Cloud Firestore
-            for (cred in newRegistrations) {
-                FirestoreHelper.syncCredentialToCloud(cred)
+    /**
+     * Smart Auto-Discovery & Synchronization:
+     * 1. FIRST pulls all existing credentials from Cloud Firestore so a newly installed app on a new phone
+     *    receives the latest custom PINs (isPinChanged / isCustomPinSet) and NEVER overwrites Cloud Firestore
+     *    with default credentials.
+     * 2. Only creates default credentials for officers who do not yet exist in Cloud Firestore or local SQLite.
+     */
+    suspend fun harvestAndSyncAllOfficers(): Int = withContext(Dispatchers.IO) {
+        // STEP 1: Fetch latest credentials from Cloud Firestore FIRST
+        val cloudFetchResult = FirestoreHelper.fetchAllCredentialsFromCloudSuspend()
+        val cloudNipSet = mutableSetOf<String>()
+
+        if (cloudFetchResult.isSuccess) {
+            val cloudCreds = cloudFetchResult.getOrNull().orEmpty()
+            val localMap = credentialDao.getAllCredentialsList().associateBy { it.nip.lowercase().trim() }
+            for (cloud in cloudCreds) {
+                val key = cloud.nip.lowercase().trim()
+                cloudNipSet.add(key)
+                val local = localMap[key]
+                if (local == null || (cloud.isCustomPinSet && !local.isCustomPinSet) || cloud.updatedAt >= local.updatedAt) {
+                    credentialDao.insertCredential(cloud.copy(isSyncedWithCloud = true))
+                }
             }
         }
 
-        // Source 4: Fetch cloud credentials from Cloud Firestore (Multi-device smart sync)
-        pullCredentialsFromCloud()
+        val newRegistrations = ensureLocalOfficersSeeded()
+
+        if (newRegistrations.isNotEmpty() && cloudFetchResult.isSuccess) {
+            // CRITICAL: Only push newly registered default credentials to Cloud Firestore if the cloud fetch
+            // succeeded AND confirmed that the officer does not already exist in Cloud Firestore.
+            for (cred in newRegistrations) {
+                val key = cred.nip.lowercase().trim()
+                if (!cloudNipSet.contains(key)) {
+                    FirestoreHelper.syncCredentialToCloud(cred)
+                }
+            }
+        }
 
         return@withContext newRegistrations.size
     }
@@ -151,8 +184,8 @@ class SmartOfficerAuthRepository(private val context: Context) {
                         val key = cloud.nip.lowercase().trim()
                         val local = localMap[key]
 
-                        // If not in local or cloud version has custom PIN set / is newer, adopt cloud version
-                        if (local == null || (cloud.isCustomPinSet && !local.isCustomPinSet) || cloud.updatedAt > local.updatedAt) {
+                        // Always adopt cloud version if not in local, or if cloud has custom PIN set, or is newer/equal
+                        if (local == null || (cloud.isCustomPinSet && !local.isCustomPinSet) || cloud.updatedAt >= local.updatedAt) {
                             credentialDao.insertCredential(cloud.copy(isSyncedWithCloud = true))
                             updatedCount++
                         }
@@ -170,9 +203,11 @@ class SmartOfficerAuthRepository(private val context: Context) {
 
     /**
      * Smart Officer Authentication:
-     * - Rejects any generic default PIN (117, BPBD117, TRC2026).
-     * - Verifies officer identity against the unique database credential.
-     * - Verifies device and records login session locally & in Cloud Firestore.
+     * 1. Rejects any generic default PIN (117, BPBD117, TRC2026) unconditionally.
+     * 2. Always fetches the latest credential from Cloud Firestore (Source.SERVER) first when
+     *    'Verifikasi & Masuk' is pressed, updating local SQLite if found.
+     * 3. Falls back cleanly to local SQLite official credential database if Cloud Firestore is unreachable,
+     *    still strictly enforcing the 6-digit NIP initial PIN rule and custom PIN lock.
      */
     suspend fun authenticateOfficer(
         nip: String,
@@ -189,7 +224,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
             return@withContext Result.failure(IllegalArgumentException("PIN pribadi tidak boleh kosong."))
         }
 
-        // STRICT CHECK: Reject generic default PINs without exception
+        // STRICT CHECK: Reject generic default PINs ('117', 'BPBD117', 'TRC2026', etc.) without exception
         if (FORBIDDEN_DEFAULT_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) {
             auditDao.insertAuditLog(
                 PersonnelAuditLogEntity(
@@ -204,18 +239,60 @@ class SmartOfficerAuthRepository(private val context: Context) {
             return@withContext Result.failure(
                 SecurityException(
                     "PIN default '$trimmedPin' dinonaktifkan oleh sistem keamanan. " +
-                            "Wajib login menggunakan PIN pribadi yang telah tersimpan di database."
+                            "Wajib login menggunakan PIN pribadi yang telah tersimpan di Cloud Firestore."
                 )
             )
         }
 
-        // Retrieve credential from Room
-        var credential = credentialDao.getCredentialByNip(trimmedNip)
+        // 1. Panggil fetchCredentialByNipFromCloud(nip) terlebih dahulu saat 'Verifikasi & Masuk' ditekan
+        val cloudFetchResult = FirestoreHelper.fetchCredentialByNipFromCloud(trimmedNip)
+        var credential: OfficerCredentialEntity? = null
 
-        // If not in Room yet, make an inline cloud retrieval attempt (useful for new devices)
-        if (credential == null) {
-            harvestAndSyncAllOfficers()
-            credential = credentialDao.getCredentialByNip(trimmedNip)
+        if (cloudFetchResult.isSuccess) {
+            // 2. Jika berhasil ditarik dari server, simpan/update ke SQLite lokal (Room)
+            val cloudCred = cloudFetchResult.getOrNull()
+            if (cloudCred != null) {
+                val syncedCred = cloudCred.copy(isSyncedWithCloud = true)
+                credentialDao.insertCredential(syncedCred)
+                credential = syncedCred
+            } else {
+                var localCred = credentialDao.getCredentialByNip(trimmedNip)
+                if (localCred == null) {
+                    ensureLocalOfficersSeeded()
+                    localCred = credentialDao.getCredentialByNip(trimmedNip)
+                }
+                if (localCred != null) {
+                    FirestoreHelper.syncCredentialToCloud(localCred)
+                    credential = localCred.copy(isSyncedWithCloud = true)
+                    credentialDao.insertCredential(credential)
+                }
+            }
+        } else {
+            // 3. Jika sinkronisasi Cloud Firestore gagal (offline / error server):
+            // Pastikan data personil resmi lokal sudah ter-seed di SQLite (Room), lalu validasi terhadap SQLite lokal
+            ensureLocalOfficersSeeded()
+            val localCred = credentialDao.getCredentialByNip(trimmedNip)
+
+            if (localCred == null) {
+                val originalErrorMsg = cloudFetchResult.exceptionOrNull()?.message
+                    ?: "Gagal sinkronisasi, periksa koneksi internet"
+                auditDao.insertAuditLog(
+                    PersonnelAuditLogEntity(
+                        nip = trimmedNip,
+                        name = "Petugas",
+                        role = "-",
+                        shift = "-",
+                        action = "AUTH_BLOCKED_CLOUD_SYNC_FAILED",
+                        deviceInfo = "$originalErrorMsg pada $deviceModel"
+                    )
+                )
+                return@withContext Result.failure(
+                    IllegalStateException(originalErrorMsg, cloudFetchResult.exceptionOrNull())
+                )
+            }
+
+            Log.w(TAG, "Cloud sync unavailable (${cloudFetchResult.exceptionOrNull()?.message}); validating NIP $trimmedNip against local SQLite.")
+            credential = localCred
         }
 
         if (credential == null) {
@@ -224,7 +301,30 @@ class SmartOfficerAuthRepository(private val context: Context) {
             )
         }
 
-        // Validate personal PIN against salted hash or initial secure NIP key
+        val sixDigitNip = OfficerCredentialEntity.generateInitialPinForNip(credential.nip)
+        val rawLastSixNip = credential.nip.trim().takeLast(6)
+        val isInputSixDigitNip = trimmedPin.equals(sixDigitNip, ignoreCase = true) ||
+            (rawLastSixNip.length == 6 && trimmedPin.equals(rawLastSixNip, ignoreCase = true)) ||
+            (credential.initialSecurePin.isNotBlank() && trimmedPin.equals(credential.initialSecurePin, ignoreCase = true))
+
+        // Jika Petugas sudah mengganti PIN (isCustomPinSet == true), tolak penggunaan 6 digit NIP
+        if ((credential.isPinChanged || credential.isCustomPinSet) && isInputSixDigitNip) {
+            auditDao.insertAuditLog(
+                PersonnelAuditLogEntity(
+                    nip = trimmedNip,
+                    name = credential.fullName,
+                    role = credential.role,
+                    shift = credential.shift,
+                    action = "AUTH_BLOCKED_INITIAL_NIP_AFTER_PIN_CHANGED",
+                    deviceInfo = "Percobaan login memakai 6 digit NIP setelah PIN diubah pada $deviceModel"
+                )
+            )
+            return@withContext Result.failure(
+                SecurityException("PIN awal (6 digit terakhir NIP) sudah tidak berlaku karena Anda telah mengganti PIN. Wajib gunakan PIN pribadi terbaru Anda.")
+            )
+        }
+
+        // STEP 3: Validate PIN against Cloud Firestore status (isPinChanged / isCustomPinSet & pinHash)
         val isPinCorrect = credential.verifyPin(trimmedPin)
 
         if (!isPinCorrect) {
@@ -238,10 +338,11 @@ class SmartOfficerAuthRepository(private val context: Context) {
                     deviceInfo = "Percobaan PIN salah pada $deviceModel"
                 )
             )
-            val hintMessage = if (!credential.isCustomPinSet && credential.initialSecurePin.isNotBlank()) {
-                "PIN salah. Untuk login perdana pada akun baru, gunakan 6 digit akhir NIP Anda (${credential.initialSecurePin})."
+            val expectedInitialPin = credential.initialSecurePin.ifBlank { sixDigitNip }
+            val hintMessage = if (!credential.isCustomPinSet) {
+                "PIN salah. Untuk login awal sebelum ganti PIN, gunakan 6 digit terakhir NIP Anda ($expectedInitialPin)."
             } else {
-                "PIN pribadi salah untuk NIP $trimmedNip. Masukkan PIN yang telah didaftarkan sebelumnya pada perangkat Anda."
+                "PIN pribadi salah untuk NIP $trimmedNip. PIN telah diubah, wajib gunakan PIN pribadi terbaru Anda."
             }
             return@withContext Result.failure(IllegalArgumentException(hintMessage))
         }
@@ -252,8 +353,17 @@ class SmartOfficerAuthRepository(private val context: Context) {
         credentialDao.updateLoginSession(trimmedNip, now, deviceDesc)
 
         // Synchronize updated login metadata to Cloud Firestore
-        val updatedCred = credential.copy(lastLoginAt = now, lastLoginDevice = deviceDesc, updatedAt = now)
+        val updatedCred = credential.copy(
+            lastLoginAt = now,
+            lastLoginDevice = deviceDesc,
+            isSyncedWithCloud = true,
+            updatedAt = now
+        )
         FirestoreHelper.syncCredentialToCloud(updatedCred)
+        activeCredential = updatedCred
+        if (credential.isCustomPinSet) {
+            officerAuthManager.setCustomOfficerPin(trimmedPin)
+        }
 
         // Update local session in OfficerAuthManager
         officerAuthManager.loginOfficerDirectly(
@@ -289,10 +399,91 @@ class SmartOfficerAuthRepository(private val context: Context) {
     }
 
     /**
+     * Biometric Officer Authentication (Fingerprint / Face Unlock):
+     * - TIDAK memanggil verifyPin() karena autentikasi telah divalidasi oleh sensor biometrik perangkat.
+     * - Mengecek keberadaan NIP di Cloud Firestore terlebih dahulu (Cloud-First) atau SQLite lokal.
+     * - Jika NIP ditemukan, mengatur sesi aktif (activeCredential), memperbarui lastLoginAt dan lastLoginDevice
+     *   di database lokal, lalu menyinkronkan ke Cloud Firestore.
+     * - Jika NIP tidak ditemukan di database, mengembalikan Result.failure("Petugas tidak ditemukan").
+     */
+    suspend fun authenticateWithBiometric(nip: String): Result<OfficerCredentialEntity> = withContext(Dispatchers.IO) {
+        val trimmedNip = nip.trim()
+        if (trimmedNip.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Petugas tidak ditemukan"))
+        }
+
+        val cloudFetchResult = FirestoreHelper.fetchCredentialByNipFromCloud(trimmedNip)
+        var credential: OfficerCredentialEntity? = null
+
+        if (cloudFetchResult.isSuccess) {
+            val cloudCred = cloudFetchResult.getOrNull()
+            if (cloudCred != null) {
+                val syncedCred = cloudCred.copy(isSyncedWithCloud = true)
+                credentialDao.insertCredential(syncedCred)
+                credential = syncedCred
+            } else {
+                ensureLocalOfficersSeeded()
+                credential = credentialDao.getCredentialByNip(trimmedNip)
+            }
+        } else {
+            ensureLocalOfficersSeeded()
+            val localCred = credentialDao.getCredentialByNip(trimmedNip)
+            if (localCred == null) {
+                val originalErrorMsg = cloudFetchResult.exceptionOrNull()?.message
+                    ?: "Petugas tidak ditemukan"
+                return@withContext Result.failure(
+                    IllegalStateException(originalErrorMsg, cloudFetchResult.exceptionOrNull())
+                )
+            }
+            credential = localCred
+        }
+
+        val activeCred = credential
+            ?: return@withContext Result.failure(
+                IllegalArgumentException("Petugas tidak ditemukan")
+            )
+
+        val now = System.currentTimeMillis()
+        val deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
+        val deviceDesc = "$deviceModel (Android ${Build.VERSION.RELEASE} • Biometrik)"
+        credentialDao.updateLoginSession(trimmedNip, now, deviceDesc)
+
+        val updatedCred = activeCred.copy(
+            lastLoginAt = now,
+            lastLoginDevice = deviceDesc,
+            isSyncedWithCloud = true,
+            updatedAt = now
+        )
+        credentialDao.insertCredential(updatedCred)
+        activeCredential = updatedCred
+        FirestoreHelper.syncCredentialToCloud(updatedCred)
+
+        officerAuthManager.loginOfficerDirectly(
+            name = activeCred.fullName,
+            badgeId = activeCred.nip,
+            shift = activeCred.shift,
+            role = activeCred.role
+        )
+
+        auditDao.insertAuditLog(
+            PersonnelAuditLogEntity(
+                nip = trimmedNip,
+                name = activeCred.fullName,
+                role = activeCred.role,
+                shift = activeCred.shift,
+                action = "LOGIN_SUCCESSFUL_BIOMETRIC_AUTH",
+                deviceInfo = "Login Biometrik berhasil di $deviceDesc"
+            )
+        )
+
+        return@withContext Result.success(updatedCred)
+    }
+
+    /**
      * Changes personal PIN for a specific officer:
+     * - Fetches latest credential from Cloud Firestore first.
      * - Enforces non-default, non-trivial PIN (at least 4 digits, not in forbidden default list).
-     * - Hashes with unique salt and updates Room DB.
-     * - Immediately pushes to Cloud Firestore so the new device will require this exact PIN.
+     * - Hashes with unique salt, updates local SQLite Room DB and syncs with Cloud Firestore (`isPinChanged = true`, `isCustomPinSet = true`).
      */
     suspend fun changePersonalPin(
         nip: String,
@@ -303,10 +494,30 @@ class SmartOfficerAuthRepository(private val context: Context) {
         val trimmedOld = currentPin.trim()
         val trimmedNew = newPin.trim()
 
-        val credential = credentialDao.getCredentialByNip(trimmedNip)
+        // Pull latest credential from Cloud Firestore first if online
+        val cloudFetch = FirestoreHelper.fetchCredentialByNipFromCloud(trimmedNip)
+        val cloudCred = cloudFetch.getOrNull()
+        if (cloudCred != null) {
+            credentialDao.insertCredential(cloudCred.copy(isSyncedWithCloud = true))
+        }
+
+        var credential = cloudCred ?: credentialDao.getCredentialByNip(trimmedNip)
+        if (credential == null) {
+            ensureLocalOfficersSeeded()
+            credential = credentialDao.getCredentialByNip(trimmedNip)
+        }
+        val activeCred = credential
             ?: return@withContext Result.failure(IllegalArgumentException("Petugas dengan NIP '$trimmedNip' tidak ditemukan."))
 
-        if (!credential.verifyPin(trimmedOld)) {
+        // Allow verifying currentPin against activeCred.verifyPin OR legacy '117' only if custom PIN was never set yet
+        val isOldPinValid = if (activeCred.isCustomPinSet) {
+            val oldHash = OfficerCredentialEntity.hashWithSalt(trimmedOld, activeCred.salt)
+            oldHash.equals(activeCred.pinHash, ignoreCase = true)
+        } else {
+            activeCred.verifyPin(trimmedOld) || trimmedOld == "117"
+        }
+
+        if (!isOldPinValid) {
             return@withContext Result.failure(IllegalArgumentException("PIN saat ini salah."))
         }
 
@@ -320,6 +531,15 @@ class SmartOfficerAuthRepository(private val context: Context) {
             )
         }
 
+        val sixDigitNip = OfficerCredentialEntity.generateInitialPinForNip(activeCred.nip)
+        if (trimmedNew.equals(sixDigitNip, ignoreCase = true) ||
+            trimmedNew.equals(activeCred.nip.trim().takeLast(6), ignoreCase = true)
+        ) {
+            return@withContext Result.failure(
+                IllegalArgumentException("PIN pribadi baru tidak boleh menggunakan 6 digit terakhir NIP (PIN awal).")
+            )
+        }
+
         if (trimmedNew == trimmedOld) {
             return@withContext Result.failure(IllegalArgumentException("PIN baru tidak boleh sama dengan PIN saat ini."))
         }
@@ -328,32 +548,47 @@ class SmartOfficerAuthRepository(private val context: Context) {
         val newHash = OfficerCredentialEntity.hashWithSalt(trimmedNew, newSalt)
         val now = System.currentTimeMillis()
 
-        credentialDao.updatePersonalPin(trimmedNip, newHash, newSalt, now)
+        val cloudSyncResult = FirestoreHelper.syncCredentialToCloudSuspend(
+            activeCred.copy(
+                pinHash = newHash,
+                salt = newSalt,
+                isCustomPinSet = true,
+                initialSecurePin = "",
+                isSyncedWithCloud = true,
+                updatedAt = now
+            )
+        )
 
-        val updatedCred = credential.copy(
+        val updatedCred = activeCred.copy(
             pinHash = newHash,
             salt = newSalt,
             isCustomPinSet = true,
             initialSecurePin = "",
-            isSyncedWithCloud = true,
+            isSyncedWithCloud = cloudSyncResult.isSuccess,
             updatedAt = now
         )
 
-        // Push to Cloud Firestore so all other devices immediately require the new PIN
-        FirestoreHelper.syncCredentialToCloud(updatedCred)
+        // Update local SQLite Room DB & SharedPreferences
+        credentialDao.insertCredential(updatedCred)
+        activeCredential = updatedCred
+        officerAuthManager.setCustomOfficerPin(trimmedNew)
+
+        if (cloudSyncResult.isFailure) {
+            FirestoreHelper.syncCredentialToCloud(updatedCred)
+        }
 
         auditDao.insertAuditLog(
             PersonnelAuditLogEntity(
                 nip = trimmedNip,
-                name = credential.fullName,
-                role = credential.role,
-                shift = credential.shift,
+                name = activeCred.fullName,
+                role = activeCred.role,
+                shift = activeCred.shift,
                 action = "PIN_CHANGED_PERMANENT",
                 deviceInfo = "PIN pribadi diperbarui dan disinkronkan ke Cloud Firestore"
             )
         )
 
-        return@withContext Result.success("PIN pribadi untuk ${credential.fullName} berhasil diperbarui dan tersimpan aman di database!")
+        return@withContext Result.success("PIN pribadi untuk ${activeCred.fullName} berhasil diperbarui dan disinkronkan ke Cloud Firestore!")
     }
 
     /**
@@ -362,6 +597,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
      */
     suspend fun resetToInitialNipSecret(nip: String): Result<String> = withContext(Dispatchers.IO) {
         val trimmedNip = nip.trim()
+        ensureLocalOfficersSeeded()
         val cred = credentialDao.getCredentialByNip(trimmedNip)
             ?: return@withContext Result.failure(IllegalArgumentException("Petugas dengan NIP '$trimmedNip' tidak ditemukan."))
 
@@ -370,7 +606,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
         val hash = OfficerCredentialEntity.hashWithSalt(initialPin, salt)
         val now = System.currentTimeMillis()
 
-        val updated = cred.copy(
+        val syncCandidate = cred.copy(
             pinHash = hash,
             salt = salt,
             isCustomPinSet = false,
@@ -378,8 +614,14 @@ class SmartOfficerAuthRepository(private val context: Context) {
             isSyncedWithCloud = true,
             updatedAt = now
         )
+
+        val syncResult = FirestoreHelper.syncCredentialToCloudSuspend(syncCandidate)
+        val updated = syncCandidate.copy(isSyncedWithCloud = syncResult.isSuccess)
+
         credentialDao.insertCredential(updated)
-        FirestoreHelper.syncCredentialToCloud(updated)
+        if (syncResult.isFailure) {
+            FirestoreHelper.syncCredentialToCloud(updated)
+        }
 
         auditDao.insertAuditLog(
             PersonnelAuditLogEntity(
@@ -388,7 +630,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 role = cred.role,
                 shift = cred.shift,
                 action = "PIN_RESET_TO_NIP_KEY",
-                deviceInfo = "PIN di-reset ke kunci individual NIP (Bukan PIN Default umum)"
+                deviceInfo = "PIN di-reset ke kunci individual NIP di Cloud Firestore (Bukan PIN Default umum)"
             )
         )
 
@@ -399,14 +641,24 @@ class SmartOfficerAuthRepository(private val context: Context) {
      * Checks if an officer already has a personalized custom PIN set in the database.
      */
     suspend fun isCustomPinConfigured(nip: String): Boolean = withContext(Dispatchers.IO) {
-        val cred = credentialDao.getCredentialByNip(nip.trim())
+        val cred = getCredential(nip)
         return@withContext cred?.isCustomPinSet == true
     }
 
     /**
-     * Gets credential details for a specific officer.
+     * Gets credential details for a specific officer, fetching the latest version from Cloud Firestore first.
      */
     suspend fun getCredential(nip: String): OfficerCredentialEntity? = withContext(Dispatchers.IO) {
-        return@withContext credentialDao.getCredentialByNip(nip.trim())
+        val trimmedNip = nip.trim()
+        val cloudResult = FirestoreHelper.fetchCredentialByNipFromCloud(trimmedNip)
+        if (cloudResult.isSuccess) {
+            val cloudCred = cloudResult.getOrNull()
+            if (cloudCred != null) {
+                val synced = cloudCred.copy(isSyncedWithCloud = true)
+                credentialDao.insertCredential(synced)
+                return@withContext synced
+            }
+        }
+        return@withContext credentialDao.getCredentialByNip(trimmedNip)
     }
 }

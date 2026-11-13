@@ -769,7 +769,7 @@ private fun WrsParameterMatrixCard(
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = earthquake.region,
+                text = formatEarthquakeRegion(earthquake.region),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -875,7 +875,7 @@ private fun WrsParameterMatrixCard(
                         latitude = earthquake.latitude,
                         longitude = earthquake.longitude,
                         magnitude = String.format(Locale.US, "%.1f", earthquake.magnitude),
-                        wilayah = earthquake.region
+                        wilayah = formatEarthquakeRegion(earthquake.region)
                     )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
@@ -1088,7 +1088,7 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = eq.region,
+                            text = formatEarthquakeRegion(eq.region),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -1126,7 +1126,7 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
                                     latitude = eq.latitude,
                                     longitude = eq.longitude,
                                     magnitude = String.format(Locale.US, "%.1f", eq.magnitude),
-                                    wilayah = eq.region
+                                    wilayah = formatEarthquakeRegion(eq.region)
                                 )
                             },
                             modifier = Modifier.size(28.dp)

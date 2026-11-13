@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#F5F5F5"
+    android:clipToPadding="false"
     android:fillViewport="true">
 
     <LinearLayout
@@ -12,13 +13,16 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Card Container -->
+        <!-- KARTU 1: INFO PETUGAS (Dibuat Polos) -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="@android:color/white">
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp"
+            app:cardBackgroundColor="#FFFFFF"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="16dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -29,76 +33,202 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Tab 1: Informasi Dasar Kejadian Bencana"
+                    android:text="Petugas Jaga:"
+                    android:textSize="12sp"
+                    android:textColor="#757575"/>
+
+                <TextView
+                    android:id="@+id/tvNamaPetugas"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="HITATUN ARAZAK"
                     android:textSize="16sp"
                     android:textStyle="bold"
                     android:textColor="#1976D2"
-                    android:layout_marginBottom="10dp" />
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="16dp"/>
 
-                <!-- Info Petugas Pengisi Form Header -->
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/cardInfoPetugas"
+                <!-- Tombol Tarik Data Sejajar -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnTarikLaporanWarga"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        android:text="DARI WARGA"
+                        android:textSize="12sp"
+                        android:maxLines="1"
+                        app:backgroundTint="#4CAF50"
+                        app:cornerRadius="8dp"/>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnTarikLaporanKemarin"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:text="UPDATE KEJADIAN"
+                        android:textSize="12sp"
+                        android:maxLines="1"
+                        app:backgroundTint="#FF9800"
+                        app:cornerRadius="8dp"/>
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- KARTU 2: FORMULIR UTAMA -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="#FFFFFF">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Informasi Dasar Kejadian"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="#333333"
+                    android:layout_marginBottom="16dp"/>
+
+                <!-- Perbaikan Switch Kondusif -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchKondusif"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
-                    app:cardCornerRadius="8dp"
-                    app:cardElevation="0dp"
-                    app:strokeWidth="1dp"
-                    app:strokeColor="#BBDEFB"
-                    app:cardBackgroundColor="#E3F2FD">
+                    android:paddingHorizontal="4dp"
+                    android:text="Hari ini KONDUSIF (Tidak Ada Bencana)"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#4CAF50" />
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="10dp">
-
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@android:drawable/ic_menu_myplaces"
-                            app:tint="#1565C0"
-                            android:contentDescription="Petugas" />
-
-                        <TextView
-                            android:id="@+id/tvInfoPetugas"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="Diisi oleh: HITATUN ARAZAK"
-                            android:textColor="#0D47A1"
-                            android:textSize="12sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Tombol Tarik Data dari Laporan Warga Hari Ini -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnTarikLaporanWarga"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="🔄 Tarik Data dari Laporan Warga Hari Ini"
-                    android:backgroundTint="#2196F3"
-                    android:layout_marginBottom="16dp"/>
-
-                <!-- Dropdown Jenis Bencana -->
+                <!-- 1. Dropdown Jenis Bencana -->
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="Pilih Jenis Bencana"
+                    app:boxStrokeColor="#1976D2"
                     android:layout_marginBottom="12dp">
 
                     <AutoCompleteTextView
                         android:id="@+id/dropdownJenisBencana"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="none" />
+                        android:inputType="none"
+                        android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <!-- Dropdown Kondisi Cuaca -->
+                <!-- 2. Tanggal & Waktu (Berdampingan) -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="12dp">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        android:hint="Tanggal"
+                        app:endIconMode="custom"
+                        app:endIconDrawable="@android:drawable/ic_menu_my_calendar">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etTanggalKejadian"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:focusable="false"
+                            android:clickable="true"
+                            android:textColor="#333333"/>
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:hint="Waktu"
+                        app:endIconMode="custom"
+                        app:endIconDrawable="@android:drawable/ic_menu_recent_history">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etWaktuKejadian"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:focusable="false"
+                            android:clickable="true"
+                            android:textColor="#333333"/>
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+
+                <!-- 3. Lokasi Bencana -->
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Lokasi Bencana (Kecamatan / Desa)"
+                    android:layout_marginBottom="12dp">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etLokasiBencana"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:textColor="#333333"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 4. Koordinat & Tombol GPS -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="12dp"
+                    android:gravity="center_vertical">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Koordinat (Lintang, Bujur)">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etKoordinat"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="text"
+                            android:textColor="#333333"/>
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAmbilGps"
+                        android:layout_width="wrap_content"
+                        android:layout_height="56dp"
+                        android:layout_marginStart="8dp"
+                        android:text="📍 GPS"
+                        app:backgroundTint="#FF9800"
+                        app:cornerRadius="8dp"/>
+                </LinearLayout>
+
+                <!-- 5. Kondisi Cuaca (Dropdown yang sudah diperbaiki) -->
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                     android:layout_width="match_parent"
@@ -110,108 +240,32 @@
                         android:id="@+id/dropdownCuaca"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="none" />
+                        android:inputType="none"
+                        android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <!-- Tanggal & Waktu Kejadian -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:baselineAligned="false"
-                    android:layout_marginBottom="12dp">
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="6dp"
-                        android:hint="Tanggal Kejadian">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etTanggalKejadian"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:focusable="false"
-                            android:clickable="true"
-                            android:cursorVisible="false" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="6dp"
-                        android:hint="Waktu Kejadian">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etWaktuKejadian"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:focusable="false"
-                            android:clickable="true"
-                            android:cursorVisible="false" />
-                    </com.google.android.material.textfield.TextInputLayout>
-                </LinearLayout>
-
-                <!-- Lokasi Bencana -->
+                <!-- 6. Kedalaman -->
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Lokasi Kejadian (Kecamatan / Desa)"
-                    android:layout_marginBottom="12dp">
+                    android:hint="Kedalaman (Cth: 50 cm) - Kosongkan jika tidak ada">
 
                     <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/etLokasiBencana"
+                        android:id="@+id/etKedalaman"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textCapWords" />
+                        android:inputType="text"
+                        android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
-
-                <!-- Koordinat & Tombol GPS -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginBottom="8dp">
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:hint="Koordinat (Latitude, Longitude)">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etKoordinat"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="text" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnAmbilGps"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="GPS"
-                        android:backgroundTint="#FF9800" />
-                </LinearLayout>
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="*Ketuk kolom tanggal atau waktu untuk membuka kalender / pemilih jam."
-                    android:textSize="11sp"
-                    android:textColor="#757575" />
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+        
+        <!-- Spasi bawah agar tidak tertutup tombol -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="80dp"/>
 
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

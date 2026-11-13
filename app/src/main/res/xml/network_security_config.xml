@@ -3,12 +3,11 @@
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
-            <certificates src="user" />
         </trust-anchors>
     </base-config>
 
-    <!-- BMKG, Open-Meteo, and cloud endpoints -->
-    <domain-config cleartextTrafficPermitted="true">
+    <!-- BMKG, Open-Meteo, and cloud endpoints (HTTPS only) -->
+    <domain-config>
         <domain includeSubdomains="true">data.bmkg.go.id</domain>
         <domain includeSubdomains="true">api.bmkg.go.id</domain>
         <domain includeSubdomains="true">bmkg.go.id</domain>

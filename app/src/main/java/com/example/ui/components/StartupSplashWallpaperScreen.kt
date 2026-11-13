@@ -4,6 +4,10 @@ import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.widget.Toast
+import androidx.biometric.AuthenticationRequest
+import androidx.biometric.AuthenticationResult
+import androidx.biometric.BiometricManager
+import androidx.biometric.compose.rememberAuthenticationLauncher
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -29,6 +33,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,6 +47,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -89,6 +95,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.data.local.AppDatabase
+import com.example.data.local.OfficerAuthManager
+import com.example.data.repository.SmartOfficerAuthRepository
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import kotlinx.coroutines.Dispatchers
@@ -108,13 +117,56 @@ fun StartupSplashWallpaperScreen(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     onLoginAsOfficer: () -> Unit = {},
-    onEnterAsGuest: () -> Unit = onDismiss
+    onEnterAsGuest: () -> Unit = onDismiss,
+    onBiometricLoginSuccess: () -> Unit = onDismiss
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var showExplanationSheet by remember { mutableStateOf(false) }
     var isPureWallpaperMode by remember { mutableStateOf(false) }
     var isSettingWallpaper by remember { mutableStateOf(false) }
+
+    val officerAuthManager = remember { OfficerAuthManager(context) }
+    val savedNip = officerAuthManager.getOfficerBadgeId()
+    val canAuthenticateBiometric = remember(context) {
+        BiometricManager.from(context)
+            .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
+    }
+    val showBiometricButton = canAuthenticateBiometric && savedNip.isNotBlank()
+
+    val authLauncher = rememberAuthenticationLauncher { authResult ->
+        when (authResult) {
+            is AuthenticationResult.Success -> {
+                coroutineScope.launch {
+                    val smartAuthRepo = SmartOfficerAuthRepository(context)
+                    val bioResult = smartAuthRepo.authenticateWithBiometric(savedNip)
+                    if (bioResult.isSuccess) {
+                        val cred = bioResult.getOrThrow()
+                        Toast.makeText(
+                            context,
+                            "Selamat bertugas, ${cred.fullName}! (Biometrik Terverifikasi)",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        onBiometricLoginSuccess()
+                    } else {
+                        val errMsg = bioResult.exceptionOrNull()?.message ?: "Gagal memverifikasi kredensial petugas."
+                        Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
+                        // JANGAN panggil onBiometricLoginSuccess()
+                    }
+                }
+            }
+            is AuthenticationResult.Error -> {
+                Toast.makeText(
+                    context,
+                    "Biometrik gagal: ${authResult.errString}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            is AuthenticationResult.CustomFallbackSelected -> {
+                onLoginAsOfficer()
+            }
+        }
+    }
 
     AnimatedVisibility(
         visible = isVisible,
@@ -298,15 +350,21 @@ fun StartupSplashWallpaperScreen(
                 }
             } else {
                 // 3. Main Center Content: Symmetrical Proportional Spacing, Logo, Titles, Slogan & Login Menu
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    // Top proportional spacer: berbanding lurus dengan jarak bawah display ponsel
-                    Spacer(modifier = Modifier.weight(1f))
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(
+                                start = 24.dp,
+                                end = 24.dp,
+                                top = 16.dp,
+                                bottom = 72.dp
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Spacer(modifier = Modifier.height(16.dp))
 
                     // Middle Section: Logo with Pulsing Halo and App Branding
                     Column(
@@ -338,7 +396,7 @@ fun StartupSplashWallpaperScreen(
 
                             // Official BPBD Logo Image
                             Image(
-                                painter = painterResource(id = R.drawable.ic_bpbd_mukomuko_official),
+                                painter = painterResource(id = R.drawable.ic_bpbd_mukomuko_circle),
                                 contentDescription = "Logo BPBD Mukomuko",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -527,11 +585,66 @@ fun StartupSplashWallpaperScreen(
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
+
+                            if (showBiometricButton) {
+                                OutlinedButton(
+                                    onClick = {
+                                        val fallbackOption = AuthenticationRequest.Biometric.Fallback.CustomOption(
+                                            "Gunakan PIN",
+                                            AuthenticationRequest.Biometric.Fallback.ICON_TYPE_PASSWORD
+                                        )
+                                        val biometricRequest = AuthenticationRequest.Biometric.Builder(
+                                            "Login Biometrik Petugas Pusdalops",
+                                            fallbackOption
+                                        )
+                                            .setSubtitle("${officerAuthManager.getOfficerName()} ($savedNip)")
+                                            .build()
+                                        authLauncher.launch(biometricRequest)
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 16.dp)
+                                        .height(48.dp)
+                                        .testTag("btn_biometric_login"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White.copy(alpha = 0.85f)),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = Color.White.copy(alpha = 0.12f),
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Fingerprint,
+                                        contentDescription = "Login Biometrik",
+                                        tint = OrangePrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Login Biometrik",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
                         }
                     }
+                    }
 
-                    // Bottom proportional spacer: seimbang dengan jarak atas
-                    Spacer(modifier = Modifier.weight(1f))
+                    // Tagline di bagian paling bawah layar (seperti Copyright)
+                    Text(
+                        text = "Satu Data, Satu Langkah, Siaga Mukomuko",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.7f),
+                        letterSpacing = 0.5.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 32.dp)
+                            .navigationBarsPadding()
+                    )
                 }
             }
 

@@ -13,6 +13,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -56,6 +59,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -66,6 +70,7 @@ import com.example.ui.theme.OrangePrimary
  * Menampilkan logo resmi Kabupaten Mukomuko dan menjabarkan makna akronim
  * SIMAK, PAGAR, dan KITA menggunakan tipografi modern dan palet oranye khas aplikasi.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SipagarKitaAcronymCard(
     isDark: Boolean = false,
@@ -111,7 +116,7 @@ fun SipagarKitaAcronymCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_bpbd_mukomuko_official),
+                        painter = painterResource(id = R.drawable.ic_bpbd_mukomuko_circle),
                         contentDescription = "Logo BPBD Mukomuko",
                         modifier = Modifier
                             .size(38.dp)
@@ -124,24 +129,33 @@ fun SipagarKitaAcronymCard(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         Text(
                             text = "SIPAGAR KITA",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Black,
                             color = OrangePrimary,
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 0.5.sp,
+                            maxLines = 1,
+                            modifier = Modifier.align(Alignment.CenterVertically)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = OrangePrimary.copy(alpha = 0.15f)
+                            color = OrangePrimary.copy(alpha = 0.15f),
+                            modifier = Modifier
+                                .wrapContentWidth()
+                                .align(Alignment.CenterVertically)
                         ) {
                             Text(
                                 text = "KAB. MUKOMUKO",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = OrangePrimary,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }

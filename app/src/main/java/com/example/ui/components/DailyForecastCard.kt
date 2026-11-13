@@ -87,12 +87,16 @@ fun DailyForecastCard(
                         fontSize = 13.sp,
                         fontWeight = if (index == 0) FontWeight.Bold else FontWeight.Medium,
                         color = if (index == 0) OrangePrimary else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.width(78.dp)
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(72.dp)
                     )
 
-                    // Condition Icon & Label
+                    // Condition Icon & Label (tengah dengan weight(1f))
                     Row(
-                        modifier = Modifier.width(110.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         DynamicWeatherIcon(
@@ -105,13 +109,15 @@ fun DailyForecastCard(
                             text = weatherInfo.conditionText,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
                     // Rain Chance pill
                     Row(
-                        modifier = Modifier.width(55.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (day.rainProbabilityMax > 15) {
@@ -126,18 +132,20 @@ fun DailyForecastCard(
                                 text = "${day.rainProbabilityMax}%",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = WeatherRainBlue
+                                color = WeatherRainBlue,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         } else {
                             Text(
                                 text = "-",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.weight(1f))
 
                     // Temperature Range Min - Max with gradient bar
                     Row(
@@ -148,16 +156,15 @@ fun DailyForecastCard(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                            modifier = Modifier.weight(1f, fill = false),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            softWrap = false
                         )
 
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
 
                         Box(
                             modifier = Modifier
-                                .width(54.dp)
+                                .width(42.dp)
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(3.dp))
                                 .background(
@@ -171,16 +178,15 @@ fun DailyForecastCard(
                                 )
                         )
 
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
 
                         Text(
                             text = "${day.maxTemp.toInt()}°",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f, fill = false),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            softWrap = false
                         )
                     }
                 }
