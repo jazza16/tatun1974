@@ -86,7 +86,8 @@ class FormLaporanHarianActivity : AppCompatActivity() {
         btnSelanjutnya.text = "MENYIMPAN..."
 
         val dataLaporan = sharedViewModel.laporanSementara
-        val dataLog = sharedViewModel.listLogSementara
+        val dataLog = sharedViewModel.listLogSementara.toList()
+        val dataLogistik = sharedViewModel.listLogistikSementara.toList()
 
         sharedViewModel.simpanKeDatabase(
             dao = db.laporanHarianDao(),
@@ -97,7 +98,8 @@ class FormLaporanHarianActivity : AppCompatActivity() {
                     PdfGenerator.cetakLaporanKePdf(
                         context = this@FormLaporanHarianActivity,
                         laporan = dataLaporan,
-                        listLog = dataLog
+                        listLog = dataLog,
+                        listLogistik = dataLogistik
                     )
 
                     btnSelanjutnya.isEnabled = true

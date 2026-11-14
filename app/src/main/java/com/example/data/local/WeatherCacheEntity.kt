@@ -8,10 +8,13 @@ import androidx.room.PrimaryKey
 data class WeatherCacheEntity(
     @PrimaryKey
     val districtId: String,
+    val districtName: String = "",
     val temperature: Double,
     val feelsLike: Double,
     val weatherCode: Int,
+    val conditionText: String = "",
     val humidity: Int,
+    val precipitation: Double = 0.0,
     val windSpeed: Double,
     val windDirection: Int,
     val surfacePressure: Double,

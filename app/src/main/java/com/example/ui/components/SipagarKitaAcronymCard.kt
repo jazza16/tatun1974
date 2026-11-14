@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -85,18 +86,18 @@ fun SipagarKitaAcronymCard(
             .testTag("sipagar_kita_acronym_card"),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isDark) Color(0xFF1F1712) else Color(0xFFFFFFFF)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         border = BorderStroke(
             1.dp,
-            if (isDark) OrangePrimary.copy(alpha = 0.35f) else Color(0xFFFED7AA)
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp)
+                .padding(16.dp)
         ) {
             // Header: Logo Kabupaten Mukomuko & BPBD + Nama Aplikasi
             Row(
@@ -188,13 +189,13 @@ fun SipagarKitaAcronymCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Educational Tagline Banner
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = if (isDark) Color(0xFF2C1B12) else Color(0xFFFFF7ED),
-                        border = BorderStroke(1.dp, if (isDark) Color(0xFF43281C) else Color(0xFFFFEDD5)),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -212,7 +213,8 @@ fun SipagarKitaAcronymCard(
                                 text = "Mengenal Identitas & Filosofi Penamaan SIPAGAR KITA",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF9A3412)
+                                color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF9A3412),
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
@@ -254,9 +256,10 @@ fun SipagarKitaAcronymCard(
                             onClick = onDismissCard,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .heightIn(min = 48.dp)
                                 .testTag("btn_dismiss_sipagar_kita"),
                             shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, if (isDark) OrangePrimary.copy(alpha = 0.5f) else Color(0xFFFDBA74))
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Check,
@@ -269,7 +272,8 @@ fun SipagarKitaAcronymCard(
                                 text = "Sudah Paham (Sembunyikan & Simpan di Info)",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = OrangePrimary
+                                color = OrangePrimary,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                         }
                     }
@@ -289,11 +293,11 @@ private fun AcronymItemCard(
     isDark: Boolean
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = if (isDark) Color(0xFF261A13) else Color(0xFFFFFBF7),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             1.dp,
-            if (isDark) badgeColor.copy(alpha = 0.35f) else Color(0xFFFFEDD5)
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -348,15 +352,16 @@ private fun AcronymItemCard(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Makna / Filosofi
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = if (isDark) Color(0xFF1D140F) else Color(0xFFFFF3E0),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                         Text(
                             text = "Makna:",
                             fontSize = 11.sp,

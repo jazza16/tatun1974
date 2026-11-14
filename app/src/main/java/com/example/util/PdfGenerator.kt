@@ -1,193 +1,775 @@
 package com.example.util
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.graphics.pdf.PdfDocument
+import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
 import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
 import android.print.PrintManager
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import android.widget.Toast
+import com.example.data.local.DistribusiLogistikEntity
 import com.example.data.local.LaporanHarianEntity
 import com.example.data.local.LogKomunikasiEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.io.ByteArrayOutputStream
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.math.max
 
 object PdfGenerator {
 
     private const val FOOTER_ATRIBUSI_TEXT =
         "Dicetak melalui Aplikasi SIPAGAR KITA - Pusdalops PB BPBD Kabupaten Mukomuko"
 
-    /**
-     * Menghasilkan blok HTML Kop Surat Resmi terstandarisasi:
-     * - Sebelah KIRI  : Logo Kabupaten Mukomuko (transparan tanpa background, proporsional)
-     * - Bagian TENGAH : Teks Instansi Pemerintah Kabupaten Mukomuko & BPBD
-     * - Sebelah KANAN : Logo BPBD Kabupaten Mukomuko (transparan tanpa background, proporsional & sejajar)
-     */
-    private fun buildKopSuratResmiHtml(context: Context): String {
-        val leftMukomukoLogoUri = ReportExporter.getCleanLogoDataUri(context, isMukomukoShield = true)
-            .ifBlank { "file:///android_res/drawable/ic_mukomuko_logo.png" }
-        val rightBpbdLogoUri = ReportExporter.getCleanLogoDataUri(context, isMukomukoShield = false)
-            .ifBlank { "file:///android_res/drawable/ic_bpbd_mukomuko_circle.png" }
+    private const val PAGE_WIDTH = 595
+    private const val PAGE_HEIGHT = 842
+    private const val PAGE_MARGIN = 32f
 
-        return """
-            <table class="kop-table">
-                <tr>
-                    <td class="kop-logo-cell" width="14%">
-                        <img src="$leftMukomukoLogoUri" class="kop-logo" alt="Logo Kabupaten Mukomuko" />
-                    </td>
-                    <td class="kop-text-cell" width="72%">
-                        <div class="kop-instansi">PEMERINTAH KABUPATEN MUKOMUKO</div>
-                        <div class="kop-dinas">BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)</div>
-                        <div class="kop-unit">PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)</div>
-                        <div class="kop-alamat">Jl. Danau Nibung, Kompleks Perkantoran Pemkab Mukomuko • Call Center Darurat 117 • Sistem SIPAGAR KITA</div>
-                    </td>
-                    <td class="kop-logo-cell" width="14%">
-                        <img src="$rightBpbdLogoUri" class="kop-logo" alt="Logo BPBD Kabupaten Mukomuko" />
-                    </td>
-                </tr>
-            </table>
-            <div class="kop-divider-thick"></div>
-            <div class="kop-divider-thin"></div>
-        """.trimIndent()
+    private val pdfScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /**
+     * Membentuk URL OpenStreetMap Static Map berdasarkan Latitude dan Longitude kejadian.
+     */
+    fun buildOsmStaticMapUrl(lat: String, lng: String): String {
+        return "https://staticmap.openstreetmap.de/staticmap.php?center=$lat,$lng&zoom=16&size=600x400&maptype=mapnik&markers=$lat,$lng,red-pushpin"
     }
 
     /**
-     * Menghasilkan blok HTML atribusi footer resmi di bagian paling bawah halaman.
+     * Mengekstrak pasangan (Latitude, Longitude) dari string koordinat laporan.
      */
-    private fun buildFooterAtribusiResmiHtml(): String = """
-        <div class="pdf-footer">
-            $FOOTER_ATRIBUSI_TEXT
-        </div>
-    """.trimIndent()
+    private fun extractLatLng(koordinatRaw: String): Pair<String, String>? {
+        val source = koordinatRaw.ifBlank { "-2.5830, 101.1240" }
+        val matches = Regex("[-+]?\\d+(?:\\.\\d+)?").findAll(source).map { it.value }.toList()
+        return if (matches.size >= 2) {
+            Pair(matches[0], matches[1])
+        } else {
+            null
+        }
+    }
 
+    /**
+     * Mengunduh gambar peta statis dari OpenStreetMap di background thread (Dispatchers.IO).
+     * Mengembalikan Bitmap jika berhasil, atau null jika gagal (tanpa membuat aplikasi crash).
+     */
+    suspend fun downloadStaticMapBitmap(lat: String, lng: String): Bitmap? = withContext(Dispatchers.IO) {
+        withTimeoutOrNull(6000L) {
+            var connection: HttpURLConnection? = null
+            try {
+                val urlString = buildOsmStaticMapUrl(lat, lng)
+                val url = URL(urlString)
+                connection = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                    doInput = true
+                    setRequestProperty(
+                        "User-Agent",
+                        "SIPAGAR-KITA-BPBD-Mukomuko/1.0 (Android; Pusdalops-PB)"
+                    )
+                }
+                connection.connect()
+                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                    val bytes = connection.inputStream.use { it.readBytes() }
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bitmap != null && bitmap.width > 1 && bitmap.height > 1) {
+                        bitmap
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
+            } catch (_: Exception) {
+                null
+            } finally {
+                try {
+                    connection?.disconnect()
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
+    /**
+     * Menghasilkan data PDF Laporan Harian (2 Halaman) dalam bentuk ByteArray secara asynchronous
+     * di background thread (Dispatchers.IO), termasuk pengunduhan peta statis OpenStreetMap.
+     */
+    suspend fun generateLaporanPdfBytes(
+        context: Context,
+        laporan: LaporanHarianEntity,
+        listLog: List<LogKomunikasiEntity>,
+        listLogistik: List<DistribusiLogistikEntity> = emptyList()
+    ): ByteArray = withContext(Dispatchers.IO) {
+        val latLng = extractLatLng(laporan.koordinat)
+        val mapBitmap = if (latLng != null) {
+            downloadStaticMapBitmap(latLng.first, latLng.second)
+        } else {
+            null
+        }
+        buildTwoPagePdfBytes(
+            context = context,
+            laporan = laporan,
+            listLog = listLog,
+            listLogistik = listLogistik,
+            mapBitmap = mapBitmap
+        )
+    }
+
+    /**
+     * Menulis ByteArray PDF ke URI hasil pilihan pengguna (Storage Access Framework)
+     * menggunakan contentResolver.openOutputStream(uri).
+     */
+    fun writePdfBytesToUri(context: Context, uri: android.net.Uri, pdfBytes: ByteArray): Boolean {
+        return try {
+            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(pdfBytes)
+                outputStream.flush()
+            } ?: return false
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Mencetak Laporan Harian Pusdalops 2 Halaman ke PDF secara asynchronous:
+     * - Halaman 1: Kop Surat Resmi, Tabel Kejadian Bencana (termasuk Kondisi Cuaca),
+     *   Layer Citra Peta OpenStreetMap (dengan bingkai tipis & fallback aman), dan Tabel Komunikasi.
+     * - Halaman 2: Tanpa Kop Surat, Tabel Distribusi Logistik / Aset Bantuan, dan
+     *   Blok Tanda Tangan Piramida Terbalik 3 Kolom (Tata Naskah Dinas).
+     */
     fun cetakLaporanKePdf(
         context: Context,
         laporan: LaporanHarianEntity,
-        listLog: List<LogKomunikasiEntity>
+        listLog: List<LogKomunikasiEntity>,
+        listLogistik: List<DistribusiLogistikEntity> = emptyList()
     ) {
-        // 1. Susun teks HTML berdasarkan data dari Database
-        val htmlContent = """
-            <html>
-            <head>
-                <style>
-                    body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; padding-bottom: 40px; }
-                    h2 { text-align: center; font-size: 15px; margin-top: 14px; margin-bottom: 5px; }
-                    p { text-align: justify; margin-bottom: 15px; }
-                    h3 { font-size: 14px; margin-top: 20px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; table-layout: fixed; word-wrap: break-word; }
-                    th, td { border: 1px solid black; padding: 8px; text-align: left; vertical-align: top; word-break: break-word; overflow-wrap: break-word; }
-                    .no-border { border: none; }
-                    .signature-table td { border: none; text-align: center; padding-top: 30px; }
-                    .log-table th { background-color: #f2f2f2; text-align: center; }
-                    .kop-table { width: 100%; border: none; margin-top: 0; margin-bottom: 6px; background: transparent; }
-                    .kop-table td { border: none; padding: 2px 4px; vertical-align: middle; background: transparent; }
-                    .kop-logo-cell { text-align: center; vertical-align: middle; background: transparent; }
-                    .kop-logo { height: 60px; width: auto; max-width: 64px; object-fit: contain; background: transparent; display: inline-block; vertical-align: middle; }
-                    .kop-text-cell { text-align: center; line-height: 1.35; vertical-align: middle; }
-                    .kop-instansi { font-size: 14px; font-weight: bold; color: #0F172A; }
-                    .kop-dinas { font-size: 14px; font-weight: bold; color: #0F172A; }
-                    .kop-unit { font-size: 11px; font-weight: bold; color: #C2410C; margin-top: 2px; }
-                    .kop-alamat { font-size: 9.5px; color: #334155; margin-top: 2px; }
-                    .kop-divider-thick { border-top: 2.5px solid #0F172A; margin-top: 4px; }
-                    .kop-divider-thin { border-top: 1px solid #64748B; margin-top: 2px; margin-bottom: 12px; }
-                    .pdf-footer {
-                        position: fixed;
-                        bottom: 0;
-                        left: 0;
-                        right: 0;
-                        border-top: 1px solid #CBD5E1;
-                        padding-top: 5px;
-                        font-size: 9.5px;
-                        color: #64748B;
-                        text-align: center;
-                    }
-                </style>
-            </head>
-            <body>
-                ${buildKopSuratResmiHtml(context)}
-                <h2>LAPORAN HARIAN PUSDALOPS</h2>
-                <p>Dilaporkan kejadian alam dan bencana di Kabupaten Mukomuko publik 08.00 WIB, sampai dengan pukul 08.00 WIB, yang diperoleh Pusdalops-PB BPBD Kabupaten Mukomuko sebagai berikut :</p>
-                
-                <h3>I. Kejadian Bencana</h3>
-                <table>
-                    <tr><td width="30%"><b>Jenis Bencana</b></td><td>${laporan.jenisBencana}</td></tr>
-                    <tr><td><b>Tanggal / Waktu</b></td><td>${laporan.tanggalKejadian} / ${laporan.waktuKejadian}</td></tr>
-                    <tr><td><b>Kedalaman</b></td><td>${laporan.kedalaman}</td></tr>
-                    <tr><td><b>Lokasi Bencana</b></td><td>${laporan.lokasiBencana}</td></tr>
-                    <tr><td><b>Koordinat</b></td><td>${laporan.koordinat}</td></tr>
-                    <tr><td><b>Cakupan Dampak</b></td><td>${laporan.cakupanDampak}</td></tr>
-                    <tr><td><b>Kondisi Cuaca</b></td><td>${laporan.kondisiCuaca}</td></tr>
-                    <tr><td><b>Upaya Dilakukan</b></td><td>${laporan.upayaDilakukan}</td></tr>
-                    <tr><td><b>Kondisi Mutakhir</b></td><td>${laporan.kondisiMutakhir}</td></tr>
-                    <tr><td><b>Korban</b></td><td>Luka: ${laporan.korbanLuka} Org, Meninggal: ${laporan.korbanMeninggal} Org</td></tr>
-                    <tr><td><b>Kerusakan</b></td><td>${laporan.kerusakan}</td></tr>
-                    <tr><td><b>Penyebab</b></td><td>${laporan.penyebab}</td></tr>
-                    <tr><td><b>Sumber Informasi</b></td><td>${laporan.sumberInformasi}</td></tr>
-                </table>
+        pdfScope.launch {
+            try {
+                // 1. Unduh citra peta statis OSM dan susun dokumen PDF 2 halaman di background thread
+                val pdfBytes = generateLaporanPdfBytes(
+                    context = context,
+                    laporan = laporan,
+                    listLog = listLog,
+                    listLogistik = listLogistik
+                )
 
-                <h3>II. Komunikasi Pelaporan ke BPBD / BNPB</h3>
-                <table class="log-table">
-                    <tr>
-                        <th width="15%">WAKTU</th>
-                        <th width="25%">DARI (STATION ID)</th>
-                        <th width="25%">TUJUAN (STATION ID)</th>
-                        <th width="35%">SUBJEK / PESAN</th>
-                    </tr>
-                    <!-- Looping data log di sini -->
-                    ${generateLogRows(listLog)}
-                </table>
+                // 2. Tampilkan dialog cetak / simpan PDF di Main Thread menggunakan PrintDocumentAdapter native
+                val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
+                if (printManager != null) {
+                    val sanitizedDate = laporan.tanggalKejadian.replace("/", "-").ifBlank { "Harian" }
+                    val jobName = "Laporan_Harian_Pusdalops_$sanitizedDate"
+                    val printAttributes = PrintAttributes.Builder()
+                        .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                        .setResolution(PrintAttributes.Resolution("pdf", "PDF", 300, 300))
+                        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                        .build()
 
-                <!-- Bagian Tanda Tangan -->
-                <br><br>
-                <table class="signature-table" width="100%">
-                    <tr>
-                        <td width="33%">
-                            Manager Pusdalops-PB<br>BPBD Mukomuko<br><br><br><br>
-                            <b><u>HITATUN</u></b><br>
-                            NIP. 197401282006041006
-                        </td>
-                        <td width="33%">
-                            Koordinator Administrasi<br>Pusdalops-PB<br><br><br><br>
-                            <b><u>AAN FITRADINATA, SE</u></b><br>
-                            NIP. 197903122006041007
-                        </td>
-                        <td width="33%">
-                            Kepala Pelaksana<br>BPBD Mukomuko<br><br><br><br>
-                            <b><u>RURI IRWANDI, ST.MT</u></b><br>
-                            NIP. 197906072006041011
-                        </td>
-                    </tr>
-                </table>
-                ${buildFooterAtribusiResmiHtml()}
-            </body>
-            </html>
-        """.trimIndent()
-
-        // 2. Proses Mencetak ke PDF
-        val webView = WebView(context)
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
-                val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
-                val printAdapter = view?.createPrintDocumentAdapter("Laporan_Harian_Pusdalops") ?: return
-
-                val jobName = "Laporan_Harian_Pusdalops_${laporan.tanggalKejadian.replace("/", "-")}"
-                printManager.print(jobName, printAdapter, PrintAttributes.Builder().build())
+                    printManager.print(
+                        jobName,
+                        PdfBytesPrintAdapter(jobName, pdfBytes, pageCount = 2),
+                        printAttributes
+                    )
+                } else {
+                    Toast.makeText(
+                        context,
+                        "Layanan cetak PDF tidak tersedia pada perangkat ini.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(
+                    context,
+                    "Gagal menyiapkan dokumen PDF: ${e.localizedMessage ?: "Kesalahan tidak diketahui"}",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
-        webView.loadDataWithBaseURL("file:///android_res/drawable/", htmlContent, "text/HTML", "UTF-8", null)
     }
 
-    // Fungsi bantuan untuk membuat baris tabel log secara dinamis
-    private fun generateLogRows(logs: List<LogKomunikasiEntity>): String {
-        if (logs.isEmpty()) return "<tr><td colspan='4' style='text-align:center;'>Tidak ada catatan komunikasi</td></tr>"
+    private fun buildTwoPagePdfBytes(
+        context: Context,
+        laporan: LaporanHarianEntity,
+        listLog: List<LogKomunikasiEntity>,
+        listLogistik: List<DistribusiLogistikEntity>,
+        mapBitmap: Bitmap?
+    ): ByteArray {
+        val pdfDocument = PdfDocument()
+        try {
+            // ==================== HALAMAN 1 (DENGAN KOP SURAT) ====================
+            val page1Info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create()
+            val page1 = pdfDocument.startPage(page1Info)
+            drawPage1(context, page1.canvas, laporan, listLog, mapBitmap)
+            pdfDocument.finishPage(page1)
 
-        val sb = StringBuilder()
-        for (log in logs) {
-            sb.append("""
-                <tr>
-                    <td>${log.waktu}</td>
-                    <td>${log.stationIdFrom}</td>
-                    <td>${log.stationIdTo}</td>
-                    <td>${log.subjek}</td>
-                </tr>
-            """)
+            // ==================== HALAMAN 2 (TANPA KOP SURAT) ====================
+            val page2Info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 2).create()
+            val page2 = pdfDocument.startPage(page2Info)
+            drawPage2(context, page2.canvas, listLogistik)
+            pdfDocument.finishPage(page2)
+
+            val outputStream = ByteArrayOutputStream()
+            pdfDocument.writeTo(outputStream)
+            return outputStream.toByteArray()
+        } finally {
+            pdfDocument.close()
         }
-        return sb.toString()
+    }
+
+    private fun drawPage1(
+        context: Context,
+        canvas: Canvas,
+        laporan: LaporanHarianEntity,
+        listLog: List<LogKomunikasiEntity>,
+        mapBitmap: Bitmap?
+    ) {
+        val margin = PAGE_MARGIN
+        val contentWidth = PAGE_WIDTH - (margin * 2f)
+
+        val koordinatTampil = laporan.koordinat.ifBlank { "-2.5830, 101.1240" }
+        val lokasiTampil = laporan.lokasiBencana.ifBlank { "Wilayah Kabupaten Mukomuko" }
+        val rawCuaca = laporan.cuacaSaatKejadian.trim().ifBlank { laporan.kondisiCuaca.trim() }
+        val cuacaTerformat = if (
+            rawCuaca.isBlank() ||
+            rawCuaca == "-" ||
+            rawCuaca.equals("Data cuaca tidak tersedia", ignoreCase = true)
+        ) {
+            "Data cuaca tidak tersedia"
+        } else {
+            rawCuaca.removePrefix("Kondisi Cuaca:").trim()
+        }
+
+        // 1. Kop Surat Resmi (HANYA di Halaman 1)
+        var y = ReportExporter.drawKopSuratResmi(
+            context = context,
+            canvas = canvas,
+            pageWidth = PAGE_WIDTH,
+            margin = margin,
+            pageNumber = 1
+        )
+
+        // 2. Judul Laporan & Paragraf Pengantar
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 11.5f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+        y += 4f
+        canvas.drawText("LAPORAN HARIAN PUSDALOPS", PAGE_WIDTH / 2f, y, titlePaint)
+        y += 10f
+
+        val introText =
+            "Dilaporkan kejadian alam dan bencana di Kabupaten Mukomuko pukul 08.00 WIB sampai dengan pukul 08.00 WIB, yang diperoleh Pusdalops-PB BPBD Kabupaten Mukomuko sebagai berikut :"
+        val bodyTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 8.2f
+        }
+        val introLayout = StaticLayout.Builder
+            .obtain(introText, 0, introText.length, bodyTextPaint, contentWidth.toInt())
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setLineSpacing(0f, 1.05f)
+            .setIncludePad(false)
+            .build()
+        canvas.save()
+        canvas.translate(margin, y)
+        introLayout.draw(canvas)
+        canvas.restore()
+        y += introLayout.height + 7f
+
+        // 3. Bagian I: Kejadian Bencana
+        val sectionTitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 9.5f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        canvas.drawText("I. Kejadian Bencana", margin, y + 8f, sectionTitlePaint)
+        y += 12f
+
+        val infoRows = listOf(
+            "Jenis Bencana" to laporan.jenisBencana.ifBlank { "-" },
+            "Tanggal / Waktu" to "${laporan.tanggalKejadian.ifBlank { "-" }} / ${laporan.waktuKejadian.ifBlank { "-" }}",
+            "Lokasi Kejadian" to lokasiTampil,
+            "Kondisi Cuaca" to "Kondisi Cuaca: $cuacaTerformat",
+            "Koordinat" to koordinatTampil,
+            "Kedalaman" to laporan.kedalaman.ifBlank { "-" },
+            "Cakupan Dampak" to laporan.cakupanDampak.ifBlank { "-" },
+            "Upaya Dilakukan" to laporan.upayaDilakukan.ifBlank { "-" },
+            "Kondisi Mutakhir" to laporan.kondisiMutakhir.ifBlank { "-" },
+            "Korban" to "Luka: ${laporan.korbanLuka} Org, Meninggal: ${laporan.korbanMeninggal} Org",
+            "Kerusakan" to laporan.kerusakan.ifBlank { "-" },
+            "Penyebab" to laporan.penyebab.ifBlank { "-" },
+            "Sumber Informasi" to laporan.sumberInformasi.ifBlank { "-" }
+        )
+
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(30, 41, 59)
+            style = Paint.Style.STROKE
+            strokeWidth = 0.8f
+        }
+        val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 8.0f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val valuePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 8.0f
+        }
+
+        val labelColWidth = contentWidth * 0.28f
+        val valueColWidth = contentWidth - labelColWidth
+
+        for ((label, rawValue) in infoRows) {
+            val cleanValue = rawValue.replace("\n", " ").trim().let {
+                if (it.length > 135) it.take(132) + "..." else it
+            }
+            val valLayout = StaticLayout.Builder
+                .obtain(cleanValue, 0, cleanValue.length, valuePaint, (valueColWidth - 10f).toInt().coerceAtLeast(40))
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setMaxLines(2)
+                .setIncludePad(false)
+                .build()
+            val rowHeight = max(14.5f, valLayout.height + 6f)
+
+            canvas.drawRect(margin, y, margin + labelColWidth, y + rowHeight, borderPaint)
+            canvas.drawRect(margin + labelColWidth, y, margin + contentWidth, y + rowHeight, borderPaint)
+
+            canvas.drawText(label, margin + 5f, y + 10f, labelPaint)
+            canvas.save()
+            canvas.translate(margin + labelColWidth + 5f, y + 3f)
+            valLayout.draw(canvas)
+            canvas.restore()
+
+            y += rowHeight
+        }
+
+        // 4. Bagian II: Layer Gambar Citra Satelit / Peta Lokasi Kejadian (OpenStreetMap Static Map)
+        y += 8f
+        canvas.drawText("II. Layer Gambar Citra Satelit / Peta Lokasi Kejadian", margin, y + 8f, sectionTitlePaint)
+        y += 12f
+
+        val mapContainerHeight = 148f
+        val mapContainerRect = RectF(margin, y, margin + contentWidth, y + mapContainerHeight)
+        val mapContainerBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(248, 250, 252)
+            style = Paint.Style.FILL
+        }
+        val mapContainerBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(71, 85, 105)
+            style = Paint.Style.STROKE
+            strokeWidth = 0.9f
+        }
+        canvas.drawRoundRect(mapContainerRect, 4f, 4f, mapContainerBgPaint)
+        canvas.drawRoundRect(mapContainerRect, 4f, 4f, mapContainerBorderPaint)
+
+        // Kotak peta di dalam container dengan bingkai tipis di sekeliling gambar peta
+        val mapFrameWidth = 240f
+        val mapFrameHeight = 120f
+        val mapFrameLeft = margin + (contentWidth - mapFrameWidth) / 2f
+        val mapFrameTop = y + 6f
+        val mapFrameRect = RectF(mapFrameLeft, mapFrameTop, mapFrameLeft + mapFrameWidth, mapFrameTop + mapFrameHeight)
+
+        val thinFramePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(30, 41, 59)
+            style = Paint.Style.STROKE
+            strokeWidth = 1.0f
+        }
+        val whiteFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+        }
+        canvas.drawRect(mapFrameRect, whiteFillPaint)
+
+        if (mapBitmap != null && !mapBitmap.isRecycled && mapBitmap.width > 1 && mapBitmap.height > 1) {
+            val innerImageRect = RectF(
+                mapFrameRect.left + 1.5f,
+                mapFrameRect.top + 1.5f,
+                mapFrameRect.right - 1.5f,
+                mapFrameRect.bottom - 1.5f
+            )
+            val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            canvas.drawBitmap(mapBitmap, null, innerImageRect, bitmapPaint)
+            canvas.drawRect(mapFrameRect, thinFramePaint)
+        } else {
+            // Fallback jika gagal mengunduh gambar peta (offline / server OSM down)
+            canvas.drawRect(mapFrameRect, thinFramePaint)
+            val fallbackPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(71, 85, 105)
+                textSize = 8.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+            }
+            val fallbackMsg = "Peta lokasi tidak dapat dimuat. Harap lampirkan foto manual."
+            val fbLayout = StaticLayout.Builder
+                .obtain(fallbackMsg, 0, fallbackMsg.length, fallbackPaint, (mapFrameWidth - 20f).toInt())
+                .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                .setIncludePad(false)
+                .build()
+            canvas.save()
+            canvas.translate(
+                mapFrameRect.left + 10f,
+                mapFrameRect.centerY() - (fbLayout.height / 2f)
+            )
+            fbLayout.draw(canvas)
+            canvas.restore()
+        }
+
+        // Teks kecil di bawah peta
+        val captionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(51, 65, 85)
+            textSize = 8.0f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(
+            "Peta Lokasi Kejadian (Radius 100m) - OpenStreetMap",
+            PAGE_WIDTH / 2f,
+            mapFrameRect.bottom + 13f,
+            captionPaint
+        )
+
+        y += mapContainerHeight + 8f
+
+        // 5. Bagian III: Komunikasi Pelaporan ke BPBD / BNPB
+        canvas.drawText("III. Komunikasi Pelaporan ke BPBD / BNPB", margin, y + 8f, sectionTitlePaint)
+        y += 12f
+
+        val logColWeights = floatArrayOf(0.15f, 0.25f, 0.25f, 0.35f)
+        val logHeaders = arrayOf("WAKTU", "DARI (STATION ID)", "TUJUAN (STATION ID)", "SUBJEK / PESAN")
+        val tableHeaderBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(226, 232, 240)
+            style = Paint.Style.FILL
+        }
+        val tableHeaderTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 7.8f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+
+        val logHeaderHeight = 16f
+        var colX = margin
+        for (i in logHeaders.indices) {
+            val colW = contentWidth * logColWeights[i]
+            canvas.drawRect(colX, y, colX + colW, y + logHeaderHeight, tableHeaderBgPaint)
+            canvas.drawRect(colX, y, colX + colW, y + logHeaderHeight, borderPaint)
+            canvas.drawText(logHeaders[i], colX + colW / 2f, y + 11f, tableHeaderTextPaint)
+            colX += colW
+        }
+        y += logHeaderHeight
+
+        if (listLog.isEmpty()) {
+            val emptyRowH = 18f
+            canvas.drawRect(margin, y, margin + contentWidth, y + emptyRowH, borderPaint)
+            val emptyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(71, 85, 105)
+                textSize = 8.0f
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("Tidak ada catatan komunikasi", PAGE_WIDTH / 2f, y + 12f, emptyPaint)
+            y += emptyRowH
+        } else {
+            val maxLogRows = listLog.take(7)
+            for (log in maxLogRows) {
+                if (y + 16f > PAGE_HEIGHT - 36f) break
+                val rowH = 15.5f
+                val cells = arrayOf(
+                    log.waktu.ifBlank { "-" },
+                    log.stationIdFrom.ifBlank { "-" },
+                    log.stationIdTo.ifBlank { "-" },
+                    log.subjek.ifBlank { "-" }
+                )
+                var cellX = margin
+                for (i in cells.indices) {
+                    val colW = contentWidth * logColWeights[i]
+                    canvas.drawRect(cellX, y, cellX + colW, y + rowH, borderPaint)
+                    val text = cells[i].let { if (it.length > 36) it.take(33) + "..." else it }
+                    canvas.drawText(text, cellX + 4f, y + 10.5f, valuePaint)
+                    cellX += colW
+                }
+                y += rowH
+            }
+        }
+
+        drawPageFooter(canvas)
+    }
+
+    private fun drawPage2(
+        context: Context,
+        canvas: Canvas,
+        listLogistik: List<DistribusiLogistikEntity>
+    ) {
+        val margin = PAGE_MARGIN
+        val contentWidth = PAGE_WIDTH - (margin * 2f)
+
+        // Halaman 2 dimulai langsung dari konten TANPA Kop Surat
+        var y = ReportExporter.drawKopSuratResmi(
+            context = context,
+            canvas = canvas,
+            pageWidth = PAGE_WIDTH,
+            margin = margin,
+            pageNumber = 2
+        )
+
+        val sectionTitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 10.5f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(30, 41, 59)
+            textSize = 8.5f
+        }
+
+        y += 8f
+        canvas.drawText("IV. Distribusi Logistik / Aset Bantuan", margin, y, sectionTitlePaint)
+        y += 14f
+        canvas.drawText(
+            "Daftar penyaluran logistik darurat dan aset bantuan penanggulangan bencana pada kejadian ini:",
+            margin,
+            y,
+            subtitlePaint
+        )
+        y += 10f
+
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(30, 41, 59)
+            style = Paint.Style.STROKE
+            strokeWidth = 0.8f
+        }
+        val tableHeaderBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(226, 232, 240)
+            style = Paint.Style.FILL
+        }
+        val tableHeaderTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 8.2f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+        val cellTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 8.2f
+        }
+        val cellCenterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 8.2f
+            textAlign = Paint.Align.CENTER
+        }
+
+        val logistikWeights = floatArrayOf(0.08f, 0.32f, 0.14f, 0.16f, 0.30f)
+        val logistikHeaders = arrayOf("NO", "NAMA BARANG / ASET BANTUAN", "JUMLAH", "SATUAN", "KETERANGAN")
+        val headerHeight = 20f
+
+        var colX = margin
+        for (i in logistikHeaders.indices) {
+            val colW = contentWidth * logistikWeights[i]
+            canvas.drawRect(colX, y, colX + colW, y + headerHeight, tableHeaderBgPaint)
+            canvas.drawRect(colX, y, colX + colW, y + headerHeight, borderPaint)
+            canvas.drawText(logistikHeaders[i], colX + colW / 2f, y + 13f, tableHeaderTextPaint)
+            colX += colW
+        }
+        y += headerHeight
+
+        if (listLogistik.isEmpty()) {
+            val emptyRowH = 22f
+            canvas.drawRect(margin, y, margin + contentWidth, y + emptyRowH, borderPaint)
+            val emptyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(71, 85, 105)
+                textSize = 8.5f
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText(
+                "Belum ada distribusi logistik / aset bantuan yang dicatat",
+                PAGE_WIDTH / 2f,
+                y + 14f,
+                emptyPaint
+            )
+            y += emptyRowH
+        } else {
+            listLogistik.forEachIndexed { index, item ->
+                if (y + 20f > PAGE_HEIGHT - 240f) return@forEachIndexed
+                val rowH = 19f
+                var cellX = margin
+
+                // Kolom 1: NO
+                val w0 = contentWidth * logistikWeights[0]
+                canvas.drawRect(cellX, y, cellX + w0, y + rowH, borderPaint)
+                canvas.drawText("${index + 1}", cellX + w0 / 2f, y + 13f, cellCenterPaint)
+                cellX += w0
+
+                // Kolom 2: NAMA BARANG
+                val w1 = contentWidth * logistikWeights[1]
+                canvas.drawRect(cellX, y, cellX + w1, y + rowH, borderPaint)
+                val nama = item.namaBarang.ifBlank { "-" }.let { if (it.length > 32) it.take(29) + "..." else it }
+                canvas.drawText(nama, cellX + 5f, y + 13f, cellTextPaint)
+                cellX += w1
+
+                // Kolom 3: JUMLAH
+                val w2 = contentWidth * logistikWeights[2]
+                canvas.drawRect(cellX, y, cellX + w2, y + rowH, borderPaint)
+                canvas.drawText(item.jumlah.ifBlank { "0" }, cellX + w2 / 2f, y + 13f, cellCenterPaint)
+                cellX += w2
+
+                // Kolom 4: SATUAN
+                val w3 = contentWidth * logistikWeights[3]
+                canvas.drawRect(cellX, y, cellX + w3, y + rowH, borderPaint)
+                canvas.drawText(item.satuan.ifBlank { "-" }, cellX + w3 / 2f, y + 13f, cellCenterPaint)
+                cellX += w3
+
+                // Kolom 5: KETERANGAN
+                val w4 = contentWidth * logistikWeights[4]
+                canvas.drawRect(cellX, y, cellX + w4, y + rowH, borderPaint)
+                val ket = item.keterangan.ifBlank { "-" }.let { if (it.length > 30) it.take(27) + "..." else it }
+                canvas.drawText(ket, cellX + 5f, y + 13f, cellTextPaint)
+
+                y += rowH
+            }
+        }
+
+        // Blok Tanda Tangan Pejabat (Tata Naskah Dinas — Piramida Terbalik 3 Kolom)
+        val sigStartY = max(y + 36f, 230f)
+        drawBlokTandaTanganPiramidaTerbalik(canvas, PAGE_WIDTH, sigStartY, margin)
+
+        drawPageFooter(canvas)
+    }
+
+    /**
+     * Menggambar Blok Tanda Tangan Pejabat sesuai Tata Naskah Dinas (Piramida Terbalik 3 Kolom):
+     * - Baris 1 Kolom Kiri  : Koord. Administrasi Pusdalops-PB (AAN FITRADINATA, SE)
+     * - Baris 1 Kolom Kanan : Manajer Pusdalops PB BPBD Mukomuko (HITATUN)
+     * - Baris 2 Tengah      : Pengawas / Kepala Pelaksana BPBD Mukomuko (RURI IRWANDI, ST.MT)
+     */
+    private fun drawBlokTandaTanganPiramidaTerbalik(
+        canvas: Canvas,
+        pageWidth: Int,
+        startY: Float,
+        margin: Float
+    ) {
+        val contentWidth = pageWidth - (margin * 2f)
+        val colWidth = contentWidth / 3f
+        val leftColCenterX = margin + (colWidth * 0.5f)
+        val centerColCenterX = margin + (colWidth * 1.5f)
+        val rightColCenterX = margin + (colWidth * 2.5f)
+
+        val rolePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 9.0f
+            textAlign = Paint.Align.CENTER
+        }
+        val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 9.2f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isUnderlineText = true
+            textAlign = Paint.Align.CENTER
+        }
+        val nipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(30, 41, 59)
+            textSize = 8.5f
+            textAlign = Paint.Align.CENTER
+        }
+
+        // Baris 1: Kiri (Koord. Administrasi) & Kanan (Manajer Pusdalops)
+        val row1TopY = startY
+        canvas.drawText("Koord. Administrasi", leftColCenterX, row1TopY, rolePaint)
+        canvas.drawText("Pusdalops-PB", leftColCenterX, row1TopY + 12f, rolePaint)
+        canvas.drawText("AAN FITRADINATA, SE", leftColCenterX, row1TopY + 62f, namePaint)
+        canvas.drawText("NIP. 197903122006041007", leftColCenterX, row1TopY + 74f, nipPaint)
+
+        canvas.drawText("Manajer Pusdalops PB", rightColCenterX, row1TopY, rolePaint)
+        canvas.drawText("BPBD Mukomuko", rightColCenterX, row1TopY + 12f, rolePaint)
+        canvas.drawText("HITATUN", rightColCenterX, row1TopY + 62f, namePaint)
+        canvas.drawText("NIP. 197401282006041006", rightColCenterX, row1TopY + 74f, nipPaint)
+
+        // Baris 2: Bawah Tengah (Pengawas / Kepala Pelaksana BPBD Mukomuko)
+        val row2TopY = row1TopY + 102f
+        canvas.drawText("Pengawas", centerColCenterX, row2TopY, rolePaint)
+        canvas.drawText("Kepala Pelaksana BPBD Mukomuko", centerColCenterX, row2TopY + 12f, rolePaint)
+        canvas.drawText("RURI IRWANDI, ST.MT", centerColCenterX, row2TopY + 62f, namePaint)
+        canvas.drawText("NIP. 197906072006041011", centerColCenterX, row2TopY + 74f, nipPaint)
+    }
+
+    private fun drawPageFooter(canvas: Canvas) {
+        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(203, 213, 225)
+            strokeWidth = 0.8f
+        }
+        val footerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(100, 116, 139)
+            textSize = 7.5f
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawLine(PAGE_MARGIN, PAGE_HEIGHT - 28f, PAGE_WIDTH - PAGE_MARGIN, PAGE_HEIGHT - 28f, linePaint)
+        canvas.drawText(FOOTER_ATRIBUSI_TEXT, PAGE_WIDTH / 2f, PAGE_HEIGHT - 17f, footerTextPaint)
+    }
+
+    /**
+     * Adapter PrintManager native berbasis ByteArray PdfDocument sehingga tidak memerlukan WebView/Chromium.
+     */
+    private class PdfBytesPrintAdapter(
+        private val jobName: String,
+        private val pdfBytes: ByteArray,
+        private val pageCount: Int
+    ) : PrintDocumentAdapter() {
+
+        override fun onLayout(
+            oldAttributes: PrintAttributes?,
+            newAttributes: PrintAttributes,
+            cancellationSignal: CancellationSignal?,
+            callback: LayoutResultCallback,
+            extras: Bundle?
+        ) {
+            if (cancellationSignal?.isCanceled == true) {
+                callback.onLayoutCancelled()
+                return
+            }
+            val info = PrintDocumentInfo.Builder("$jobName.pdf")
+                .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                .setPageCount(pageCount)
+                .build()
+            callback.onLayoutFinished(info, true)
+        }
+
+        override fun onWrite(
+            pages: Array<out PageRange>?,
+            destination: ParcelFileDescriptor,
+            cancellationSignal: CancellationSignal?,
+            callback: WriteResultCallback
+        ) {
+            if (cancellationSignal?.isCanceled == true) {
+                callback.onWriteCancelled()
+                return
+            }
+            try {
+                FileOutputStream(destination.fileDescriptor).use { out ->
+                    out.write(pdfBytes)
+                    out.flush()
+                }
+                callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+            } catch (e: Exception) {
+                callback.onWriteFailed(e.localizedMessage ?: "Gagal menulis dokumen PDF")
+            }
+        }
     }
 }

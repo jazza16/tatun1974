@@ -2,6 +2,7 @@ package com.example.ui.form
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.local.DistribusiLogistikEntity
 import com.example.data.local.LaporanHarianDao
 import com.example.data.local.LaporanHarianEntity
 import com.example.data.local.LogKomunikasiEntity
@@ -18,7 +19,8 @@ class LaporanViewModel : ViewModel() {
         lokasiBencana = "",
         koordinat = "",
         cakupanDampak = "",
-        kondisiCuaca = "",
+        kondisiCuaca = "Data cuaca tidak tersedia",
+        cuacaSaatKejadian = "Data cuaca tidak tersedia",
         upayaDilakukan = "",
         kondisiMutakhir = "",
         korbanLuka = 0,
@@ -35,7 +37,10 @@ class LaporanViewModel : ViewModel() {
     // 2. Wadah untuk Log BPBD / BNPB (bisa lebih dari 1)
     var listLogSementara = mutableListOf<LogKomunikasiEntity>()
 
-    // 3. Fungsi untuk menyimpan ke Database Room
+    // 3. Wadah untuk Distribusi Logistik / Aset Bantuan (bisa lebih dari 1)
+    var listLogistikSementara = mutableListOf<DistribusiLogistikEntity>()
+
+    // 4. Fungsi untuk menyimpan ke Database Room
     fun simpanKeDatabase(dao: LaporanHarianDao, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
@@ -48,6 +53,12 @@ class LaporanViewModel : ViewModel() {
                     dao.insertLog(logDenganId)
                 }
 
+                // Simpan semua Distribusi Logistik yang ada di dalam list
+                for (item in listLogistikSementara) {
+                    val itemDenganId = item.copy(laporanId = laporanId)
+                    dao.insertLogistik(itemDenganId)
+                }
+
                 onSuccess()
             } catch (e: Exception) {
                 onError(e.message ?: "Gagal menyimpan data")
@@ -55,3 +66,4 @@ class LaporanViewModel : ViewModel() {
         }
     }
 }
+

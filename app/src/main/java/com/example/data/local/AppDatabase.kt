@@ -20,9 +20,10 @@ import androidx.room.RoomDatabase
         PersonnelAuditLogEntity::class,
         SyncConflictLogEntity::class,
         OfficerNoteEntity::class,
-        OfficerCredentialEntity::class
+        OfficerCredentialEntity::class,
+        DistribusiLogistikEntity::class
     ],
-    version = 1,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -60,12 +61,12 @@ abstract class AppDatabase : RoomDatabase() {
                         val sqlLaporan = """
                             INSERT OR IGNORE INTO laporan_harian (
                                 id, tanggalLaporan, jenisBencana, tanggalKejadian, waktuKejadian, kedalaman, lokasi, koordinat,
-                                cakupanDampak, kondisiCuaca, upayaDilakukan, kondisiMutakhir, korbanLuka, korbanMeninggal,
+                                cakupanDampak, kondisiCuaca, cuacaSaatKejadian, upayaDilakukan, kondisiMutakhir, korbanLuka, korbanMeninggal,
                                 kerusakan, penyebab, sumberInformasi, tanggalSurat, tanggalTerima, operatorName, stationId
                             ) VALUES (
                                 1, '09 November 2026', 'Gempa Bumi Tektonik', '09 November 2026', '06:15:20 WIB', '15 km',
                                 'Pesisir Samudra Hindia, Kec. Kota Mukomuko', '-2.5830, 101.1240',
-                                '3 Desa pesisir merasakan guncangan skala III MMI', 'Cerah Berawan',
+                                '3 Desa pesisir merasakan guncangan skala III MMI', '29°C, Cerah Berawan', '29°C, Cerah Berawan',
                                 'Pusdalops BPBD Mukomuko melakukan diseminasi informasi dan patroli TRC ke bibir pantai',
                                 'Kondisi kondusif, tidak ada potensi tsunami, warga tetap beraktivitas normal',
                                 0, 0, 'Nihil kerusakan berat (retak rambut pada 1 pos ronda)',

@@ -12,5 +12,11 @@ data class LaporanHarianWithLogKomunikasi(
         parentColumn = "id",
         entityColumn = "laporanId"
     )
-    val logs: List<LogKomunikasi> = emptyList()
+    val logs: List<LogKomunikasi> = emptyList(),
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "laporanId"
+    )
+    val logistik: List<DistribusiLogistikEntity> = emptyList()
 )
+

@@ -89,11 +89,11 @@ fun DeveloperInfoCard(
             .testTag("developer_info_column_card"),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isDark) Color(0xFF1E140E) else Color(0xFFFFFFFF)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         border = androidx.compose.foundation.BorderStroke(
-            1.2.dp,
-            if (isDark) OrangePrimary.copy(alpha = 0.4f) else Color(0xFFFED7AA)
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {

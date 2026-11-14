@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -308,9 +309,11 @@ private fun EvacuationHeaderCard(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Quick Tool Buttons (Whistle Siren & 117 Call)
-                Row(
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Sinyal Suara / Peluit Darurat
                     Button(
@@ -322,7 +325,7 @@ private fun EvacuationHeaderCard(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         modifier = Modifier
                             .weight(1.1f)
-                            .height(42.dp)
+                            .heightIn(min = 42.dp)
                             .testTag("btn_toggle_emergency_whistle")
                     ) {
                         Icon(
@@ -348,7 +351,7 @@ private fun EvacuationHeaderCard(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         modifier = Modifier
                             .weight(0.9f)
-                            .height(42.dp)
+                            .heightIn(min = 42.dp)
                             .testTag("btn_evac_header_117")
                     ) {
                         Icon(
@@ -378,8 +381,8 @@ private fun Rule202020Card() {
             .fillMaxWidth()
             .testTag("card_rule_202020"),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED)),
-        border = BorderStroke(1.5.dp, Color(0xFFF97316)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1139,8 +1142,8 @@ private fun EvacuationEmergencyContactsCard(
             .fillMaxWidth()
             .testTag("card_evac_emergency_contacts"),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
-        border = BorderStroke(1.5.dp, Color(0xFFFCA5A5)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

@@ -15,6 +15,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -72,6 +75,7 @@ import com.example.model.TidalDataHelper
  * Dilengkapi animasi ombak air dinamis, indikator status waktu nyata,
  * dan panduan interaktif pop-up untuk nelayan & warga pesisir.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TidalInformationCard(
     district: District,
@@ -196,7 +200,7 @@ fun TidalInformationCard(
                     .border(1.dp, Color(0xFF334155), RoundedCornerShape(16.dp))
             ) {
                 // Animated Water Wave Canvas
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                Canvas(modifier = Modifier.matchParentSize()) {
                     val width = size.width
                     val height = size.height
 
@@ -238,19 +242,19 @@ fun TidalInformationCard(
                 // Overlay Status & Numbers
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
                         .padding(12.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = if (tidalData.isRisingTide) Color(0xFF166534).copy(alpha = 0.9f) else Color(0xFF7C2D12).copy(alpha = 0.9f),
-                            modifier = Modifier.weight(1f, fill = false)
+                            modifier = Modifier.wrapContentWidth()
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -267,88 +271,75 @@ fun TidalInformationCard(
                                     text = tidalData.tideMovementText,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
+                                    color = Color.White
                                 )
                             }
                         }
-
-                        Spacer(modifier = Modifier.width(8.dp))
 
                         Text(
                             text = tidalData.lunarPhaseName,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFFFDE68A),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            softWrap = false
+                            modifier = Modifier.align(Alignment.CenterVertically)
                         )
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Ketinggian Muka Air Saat Ini",
-                                fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.8f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                softWrap = false
-                            )
-                            Row(verticalAlignment = Alignment.Bottom) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Ketinggian Muka Air Saat Ini",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.Bottom,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
                                 Text(
                                     text = "${tidalData.currentWaterLevelMeters}",
                                     fontSize = 28.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White,
-                                    modifier = Modifier.weight(1f, fill = false),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    color = Color.White
                                 )
                                 Text(
                                     text = " meter",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF38BDF8),
-                                    modifier = Modifier.padding(bottom = 3.dp, start = 2.dp).weight(0.5f, fill = false),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    modifier = Modifier.padding(bottom = 3.dp, start = 2.dp)
                                 )
                             }
-                        }
 
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color.Black.copy(alpha = 0.45f)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                horizontalAlignment = Alignment.End
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color.Black.copy(alpha = 0.45f),
+                                modifier = Modifier.wrapContentWidth()
                             ) {
-                                Text(
-                                    text = "Event Berikutnya:",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF64748B),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    softWrap = false
-                                )
-                                Text(
-                                    text = "${tidalData.nextEventTime} (${tidalData.nextEventType})",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF38BDF8),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    softWrap = false
-                                )
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    horizontalAlignment = Alignment.Start
+                                ) {
+                                    Text(
+                                        text = "Event Berikutnya:",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                    Text(
+                                        text = "${tidalData.nextEventTime} (${tidalData.nextEventType})",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF38BDF8)
+                                    )
+                                }
                             }
                         }
                     }

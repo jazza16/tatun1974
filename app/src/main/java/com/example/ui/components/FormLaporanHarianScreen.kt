@@ -67,6 +67,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -85,18 +86,29 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.AppDatabase
+import com.example.data.local.DistribusiLogistikEntity
 import com.example.data.local.LaporanHarian
 import com.example.data.local.LogKomunikasi
 import com.example.data.local.OfficialAsnBpbdPersonnel
+import com.example.data.repository.WeatherRepository
+import com.example.model.MukomukoDistricts
+import com.example.model.WeatherCodeHelper
+import com.example.util.PdfGenerator
 import com.example.util.SessionManager
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
+import android.app.Activity
+import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * Komponen Jetpack Compose Form Laporan Harian Pusdalops BPBD Mukomuko
@@ -132,9 +144,42 @@ fun FormLaporanHarianScreen(
     var tanggalKejadian by remember { mutableStateOf(todayFormatted) }
     var waktuKejadian by remember { mutableStateOf(timeFormatted) }
     var kedalaman by remember { mutableStateOf("10 km") }
+    var selectedKecamatan by remember { mutableStateOf("Kota Mukomuko") }
     var lokasi by remember { mutableStateOf("Kecamatan Kota Mukomuko, Pesisir Samudra Hindia") }
     var koordinat by remember { mutableStateOf("-2.5830, 101.1240") }
-    var kondisiCuaca by remember { mutableStateOf("Berawan") }
+    var cuacaSaatKejadian by remember { mutableStateOf("Data cuaca tidak tersedia") }
+    var kondisiCuaca by remember { mutableStateOf("Data cuaca tidak tersedia") }
+
+    // Ambil cuaca terkini otomatis saat Kecamatan dipilih dari modul cuaca 15 Kecamatan
+    val weatherRepository = remember { WeatherRepository(database.weatherDao()) }
+    LaunchedEffect(selectedKecamatan) {
+        val district = MukomukoDistricts.list.firstOrNull {
+            it.name.equals(selectedKecamatan.trim(), ignoreCase = true)
+        }
+        val weatherText = if (district == null) {
+            "Data cuaca tidak tersedia"
+        } else {
+            withContext(Dispatchers.IO) {
+                try {
+                    val cached = database.weatherDao().getCachedWeather(district.id)
+                    if (cached != null) {
+                        val tempInt = cached.temperature.roundToInt()
+                        val condition = WeatherCodeHelper.getWeatherInfo(cached.weatherCode).conditionText
+                        "${tempInt}°C, $condition"
+                    } else {
+                        val report = weatherRepository.fetchWeatherReport(district)
+                        val tempInt = report.current.temperature.roundToInt()
+                        val condition = WeatherCodeHelper.getWeatherInfo(report.current.weatherCode).conditionText
+                        "${tempInt}°C, $condition"
+                    }
+                } catch (_: Exception) {
+                    "Data cuaca tidak tersedia"
+                }
+            }
+        }
+        cuacaSaatKejadian = weatherText
+        kondisiCuaca = weatherText
+    }
 
     // --- State Step 2: Dampak & Korban ---
     var cakupanDampak by remember { mutableStateOf("3 Desa pesisir terdampak getaran dan genangan pasang air laut") }
@@ -172,10 +217,96 @@ fun FormLaporanHarianScreen(
         )
     }
 
+    // Temporary list for Distribusi Logistik / Aset Bantuan (Relasi One-to-Many)
+    val logistikList = remember {
+        mutableStateListOf<DistribusiLogistikEntity>()
+    }
+
     var isAddingLogDialog by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var saveSuccessDialog by remember { mutableStateOf(false) }
     var savedId by remember { mutableIntStateOf(0) }
+    var pendingPdfBytesToSave by remember { mutableStateOf<ByteArray?>(null) }
+
+    val savePdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
+        val bytes = pendingPdfBytesToSave
+        if (result.resultCode == Activity.RESULT_OK && uri != null && bytes != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(bytes)
+                    outputStream.flush()
+                } ?: throw IllegalStateException("OutputStream null")
+                Toast.makeText(context, "Laporan berhasil disimpan", Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                Toast.makeText(context, "Gagal menyimpan laporan", Toast.LENGTH_SHORT).show()
+            }
+        } else if (result.resultCode != Activity.RESULT_CANCELED) {
+            Toast.makeText(context, "Gagal menyimpan laporan", Toast.LENGTH_SHORT).show()
+        }
+        pendingPdfBytesToSave = null
+    }
+
+    fun buildCurrentLaporan(): LaporanHarian {
+        val safeCuaca = cuacaSaatKejadian.ifBlank { "Data cuaca tidak tersedia" }
+        return LaporanHarian(
+            id = savedId,
+            tanggalLaporan = tanggalLaporan,
+            jenisBencana = jenisBencana,
+            tanggalKejadian = tanggalKejadian,
+            waktuKejadian = waktuKejadian,
+            kedalaman = kedalaman,
+            lokasi = lokasi,
+            koordinat = koordinat,
+            cakupanDampak = cakupanDampak,
+            kondisiCuaca = safeCuaca,
+            cuacaSaatKejadian = safeCuaca,
+            upayaDilakukan = upayaDilakukan,
+            kondisiMutakhir = kondisiMutakhir,
+            korbanLuka = korbanLuka,
+            korbanMeninggal = korbanMeninggal,
+            kerusakan = kerusakan,
+            penyebab = penyebab,
+            sumberInformasi = sumberInformasi,
+            tanggalSurat = tanggalSurat,
+            tanggalTerima = tanggalTerima,
+            operatorName = operatorName,
+            stationId = stationId
+        )
+    }
+
+    fun savePdfToDevice() {
+        val currentLaporan = buildCurrentLaporan()
+        val currentLogs = logsList.toList()
+        val currentLogistik = logistikList.toList()
+        val cleanDate = tanggalKejadian
+            .replace("/", "-")
+            .replace(" ", "_")
+            .ifBlank { SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date()) }
+        val defaultFileName = "Laporan_BPBD_$cleanDate.pdf"
+
+        scope.launch {
+            try {
+                val pdfBytes = PdfGenerator.generateLaporanPdfBytes(
+                    context = context,
+                    laporan = currentLaporan,
+                    listLog = currentLogs,
+                    listLogistik = currentLogistik
+                )
+                pendingPdfBytesToSave = pdfBytes
+                val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_TITLE, defaultFileName)
+                }
+                savePdfLauncher.launch(intent)
+            } catch (_: Exception) {
+                Toast.makeText(context, "Gagal menyimpan laporan", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     val commonDisasterTypes = listOf(
         "Gempa Bumi Tektonik",
@@ -267,6 +398,7 @@ fun FormLaporanHarianScreen(
                                 // Save to Room Database
                                 isSaving = true
                                 scope.launch(Dispatchers.IO) {
+                                    val safeCuaca = cuacaSaatKejadian.ifBlank { "Data cuaca tidak tersedia" }
                                     val newLaporan = LaporanHarian(
                                         tanggalLaporan = tanggalLaporan,
                                         jenisBencana = jenisBencana,
@@ -276,7 +408,8 @@ fun FormLaporanHarianScreen(
                                         lokasi = lokasi,
                                         koordinat = koordinat,
                                         cakupanDampak = cakupanDampak,
-                                        kondisiCuaca = kondisiCuaca,
+                                        kondisiCuaca = safeCuaca,
+                                        cuacaSaatKejadian = safeCuaca,
                                         upayaDilakukan = upayaDilakukan,
                                         kondisiMutakhir = kondisiMutakhir,
                                         korbanLuka = korbanLuka,
@@ -297,6 +430,14 @@ fun FormLaporanHarianScreen(
                                     }
                                     if (logEntities.isNotEmpty()) {
                                         database.laporanHarianDao().insertLogKomunikasiList(logEntities)
+                                    }
+
+                                    // Insert associated logistics distribution items
+                                    val logistikEntities = logistikList.map {
+                                        it.copy(id = 0, laporanId = insertedLaporanId)
+                                    }
+                                    if (logistikEntities.isNotEmpty()) {
+                                        database.laporanHarianDao().insertLogistikList(logistikEntities)
                                     }
 
                                     withContext(Dispatchers.Main) {
@@ -393,13 +534,20 @@ fun FormLaporanHarianScreen(
                         onWaktuKejadianChange = { waktuKejadian = it },
                         kedalaman = kedalaman,
                         onKedalamanChange = { kedalaman = it },
+                        selectedKecamatan = selectedKecamatan,
+                        onSelectedKecamatanChange = { kec ->
+                            selectedKecamatan = kec
+                            val dist = MukomukoDistricts.list.firstOrNull { it.name == kec }
+                            if (dist != null) {
+                                lokasi = "Kecamatan ${dist.name}, ${dist.landmark}"
+                                koordinat = "${dist.latitude}, ${dist.longitude}"
+                            }
+                        },
                         lokasi = lokasi,
                         onLokasiChange = { lokasi = it },
                         koordinat = koordinat,
                         onKoordinatChange = { koordinat = it },
-                        kondisiCuaca = kondisiCuaca,
-                        onKondisiCuacaChange = { kondisiCuaca = it },
-                        weatherOptions = weatherOptions
+                        cuacaSaatKejadian = cuacaSaatKejadian
                     )
                     1 -> Step2DampakDanKorban(
                         cakupanDampak = cakupanDampak,
@@ -432,7 +580,22 @@ fun FormLaporanHarianScreen(
                         onStationIdChange = { stationId = it },
                         logsList = logsList,
                         onAddLogClick = { isAddingLogDialog = true },
-                        onDeleteLog = { logsList.remove(it) }
+                        onDeleteLog = { logsList.remove(it) },
+                        logistikList = logistikList,
+                        onAddLogistik = { logistikList.add(it) },
+                        onDeleteLogistik = { logistikList.remove(it) },
+                        onCetakPdfClick = {
+                            val currentLaporan = buildCurrentLaporan()
+                            PdfGenerator.cetakLaporanKePdf(
+                                context = context,
+                                laporan = currentLaporan,
+                                listLog = logsList.toList(),
+                                listLogistik = logistikList.toList()
+                            )
+                        },
+                        onSimpanPdfClick = {
+                            savePdfToDevice()
+                        }
                     )
                 }
             }
@@ -468,10 +631,34 @@ fun FormLaporanHarianScreen(
             text = {
                 Column {
                     Text(
-                        text = "Laporan harian berhasil disimpan ke Room Database lokal Pusdalops dengan ID #$savedId, beserta ${logsList.size} log komunikasi kedaruratan.",
+                        text = "Laporan harian berhasil disimpan ke Room Database lokal Pusdalops dengan ID #$savedId, beserta ${logsList.size} log komunikasi dan ${logistikList.size} item distribusi logistik.",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                     )
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val currentLaporan = buildCurrentLaporan()
+                            PdfGenerator.cetakLaporanKePdf(
+                                context = context,
+                                laporan = currentLaporan,
+                                listLog = logsList.toList(),
+                                listLogistik = logistikList.toList()
+                            )
+                        }
+                    ) {
+                        Text("Cetak PDF", fontSize = 12.sp)
+                    }
+                    OutlinedButton(
+                        onClick = { savePdfToDevice() }
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Simpan PDF", fontSize = 12.sp)
+                    }
                 }
             },
             confirmButton = {
@@ -508,13 +695,13 @@ private fun Step1DataKejadian(
     onWaktuKejadianChange: (String) -> Unit,
     kedalaman: String,
     onKedalamanChange: (String) -> Unit,
+    selectedKecamatan: String,
+    onSelectedKecamatanChange: (String) -> Unit,
     lokasi: String,
     onLokasiChange: (String) -> Unit,
     koordinat: String,
     onKoordinatChange: (String) -> Unit,
-    kondisiCuaca: String,
-    onKondisiCuacaChange: (String) -> Unit,
-    weatherOptions: List<String>
+    cuacaSaatKejadian: String
 ) {
     Column(
         modifier = Modifier
@@ -583,10 +770,37 @@ private fun Step1DataKejadian(
                     )
                 }
 
+                Text(text = "Pilih Kecamatan (15 Kecamatan Mukomuko):", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF4B5563))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    MukomukoDistricts.list.forEach { dist ->
+                        FilterChip(
+                            selected = selectedKecamatan == dist.name,
+                            onClick = { onSelectedKecamatanChange(dist.name) },
+                            label = {
+                                Text(
+                                    text = dist.name,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFF0284C7),
+                                selectedLabelColor = Color.White
+                            )
+                        )
+                    }
+                }
+
                 OutlinedTextField(
                     value = lokasi,
                     onValueChange = onLokasiChange,
-                    label = { Text("Lokasi Kejadian (Kecamatan / Desa)") },
+                    label = { Text("Detail Lokasi Kejadian (Kecamatan / Desa)") },
                     modifier = Modifier.fillMaxWidth(),
                     leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFDC2626)) }
                 )
@@ -608,28 +822,20 @@ private fun Step1DataKejadian(
                     )
                 }
 
-                Text(text = "Kondisi Cuaca Saat Kejadian:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF4B5563))
-                FlowRow(
+                OutlinedTextField(
+                    value = cuacaSaatKejadian.ifBlank { "Data cuaca tidak tersedia" },
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Kondisi Cuaca Saat Kejadian (Read-Only Otomatis)") },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    weatherOptions.forEach { cuaca ->
-                        FilterChip(
-                            selected = kondisiCuaca == cuaca,
-                            onClick = { onKondisiCuacaChange(cuaca) },
-                            label = {
-                                Text(
-                                    text = cuaca,
-                                    fontSize = 11.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    softWrap = false
-                                )
-                            }
-                        )
-                    }
-                }
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFF0F9FF),
+                        unfocusedContainerColor = Color(0xFFF0F9FF),
+                        focusedBorderColor = Color(0xFF0284C7),
+                        unfocusedBorderColor = Color(0xFF7DD3FC)
+                    )
+                )
             }
         }
     }
@@ -811,8 +1017,18 @@ private fun Step4AdministrasiDanKomunikasi(
     onStationIdChange: (String) -> Unit,
     logsList: List<LogKomunikasi>,
     onAddLogClick: () -> Unit,
-    onDeleteLog: (LogKomunikasi) -> Unit
+    onDeleteLog: (LogKomunikasi) -> Unit,
+    logistikList: List<DistribusiLogistikEntity> = emptyList(),
+    onAddLogistik: (DistribusiLogistikEntity) -> Unit = {},
+    onDeleteLogistik: (DistribusiLogistikEntity) -> Unit = {},
+    onCetakPdfClick: () -> Unit = {},
+    onSimpanPdfClick: () -> Unit = {}
 ) {
+    var namaBarangInput by remember { mutableStateOf("") }
+    var jumlahInput by remember { mutableStateOf("") }
+    var satuanInput by remember { mutableStateOf("") }
+    var keteranganInput by remember { mutableStateOf("") }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -860,6 +1076,135 @@ private fun Step4AdministrasiDanKomunikasi(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+            }
+        }
+
+        // Seksi Distribusi Logistik / Aset Bantuan (Form Dinamis)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Distribusi Logistik / Aset Bantuan",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF047857)
+                )
+                Text(
+                    text = "Daftar bantuan darurat yang terikat dengan ID Laporan (${logistikList.size} item)",
+                    fontSize = 11.sp,
+                    color = Color(0xFF6B7280)
+                )
+
+                OutlinedTextField(
+                    value = namaBarangInput,
+                    onValueChange = { namaBarangInput = it },
+                    label = { Text("Nama Barang (cth: Tenda Gulung, Beras, Air Mineral)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = jumlahInput,
+                        onValueChange = { jumlahInput = it },
+                        label = { Text("Jumlah", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = satuanInput,
+                        onValueChange = { satuanInput = it },
+                        label = { Text("Satuan (Unit/Karung/Dus)", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                OutlinedTextField(
+                    value = keteranganInput,
+                    onValueChange = { keteranganInput = it },
+                    label = { Text("Keterangan (cth: Diserahkan ke Kecamatan X)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Button(
+                    onClick = {
+                        if (namaBarangInput.isNotBlank()) {
+                            onAddLogistik(
+                                DistribusiLogistikEntity(
+                                    namaBarang = namaBarangInput.trim(),
+                                    jumlah = jumlahInput.trim().ifBlank { "1" },
+                                    satuan = satuanInput.trim().ifBlank { "Unit" },
+                                    keterangan = keteranganInput.trim().ifBlank { "-" }
+                                )
+                            )
+                            namaBarangInput = ""
+                            jumlahInput = ""
+                            satuanInput = ""
+                            keteranganInput = ""
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Tambah Barang Logistik", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                if (logistikList.isNotEmpty()) {
+                    logistikList.forEachIndexed { idx, item ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5)),
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA7F3D0))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${idx + 1}. ${item.namaBarang} (${item.jumlah} ${item.satuan})",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF065F46)
+                                    )
+                                    Text(
+                                        text = "Keterangan: ${item.keterangan}",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF334155)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onDeleteLogistik(item) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Hapus Barang",
+                                        tint = Color(0xFFDC2626),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -983,6 +1328,49 @@ private fun Step4AdministrasiDanKomunikasi(
                                 )
                             }
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onCetakPdfClick,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("btn_cetak_pdf"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "Cetak PDF",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Button(
+                        onClick = onSimpanPdfClick,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("btn_simpan_pdf"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF047857)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = "Simpan PDF",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Simpan PDF",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
                     }
                 }
             }

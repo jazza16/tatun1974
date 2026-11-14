@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -524,7 +525,7 @@ fun StartupSplashWallpaperScreen(
                                 onClick = onEnterAsGuest,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .heightIn(min = 48.dp)
                                     .testTag("btn_enter_guest"),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = OrangePrimary,
@@ -558,7 +559,7 @@ fun StartupSplashWallpaperScreen(
                                 onClick = onLoginAsOfficer,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .heightIn(min = 48.dp)
                                     .testTag("btn_enter_officer"),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF15803D),
@@ -592,7 +593,7 @@ fun StartupSplashWallpaperScreen(
                                 onClick = onOpenEvacuationGuide,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(46.dp)
+                                    .heightIn(min = 46.dp)
                                     .testTag("btn_startup_sop_evakuasi"),
                                 shape = RoundedCornerShape(12.dp),
                                 border = androidx.compose.foundation.BorderStroke(1.5.dp, OrangePrimary),
@@ -634,7 +635,7 @@ fun StartupSplashWallpaperScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(top = 16.dp)
-                                        .height(48.dp)
+                                        .heightIn(min = 48.dp)
                                         .testTag("btn_biometric_login"),
                                     shape = RoundedCornerShape(12.dp),
                                     border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White.copy(alpha = 0.85f)),
@@ -845,7 +846,7 @@ fun MukomukoDisasterDetailSheet(onDismiss: () -> Unit) {
                 onClick = onDismiss,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp),
+                    .heightIn(min = 44.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                 shape = RoundedCornerShape(10.dp)
             ) {

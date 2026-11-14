@@ -47,7 +47,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.WeatherFullReport
+import com.example.ui.theme.geminiGradientBorder
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
+
+private fun formatHeroTimestamp(timestampMs: Long): String {
+    if (timestampMs <= 0L) return ""
+    return try {
+        val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm 'WIB'", Locale("id", "ID"))
+        sdf.format(Date(timestampMs))
+    } catch (_: Exception) {
+        ""
+    }
+}
 
 @Composable
 fun HeroWeatherCard(
@@ -57,13 +70,16 @@ fun HeroWeatherCard(
     val current = report.current
     val district = report.district
     val weatherInfo = current.weatherInfo
+    val formattedUpdatedTime = formatHeroTimestamp(report.lastUpdated)
+    val cardShape = RoundedCornerShape(24.dp)
 
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .geminiGradientBorder(borderWidth = 2.dp, shape = cardShape)
             .testTag("hero_weather_card"),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        shape = cardShape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
             modifier = Modifier
@@ -113,6 +129,27 @@ fun HeroWeatherCard(
                             fontSize = 12.sp,
                             color = Color.White.copy(alpha = 0.9f)
                         )
+                        if (formattedUpdatedTime.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (report.isFromCache) {
+                                        "Data Terakhir (Offline): $formattedUpdatedTime"
+                                    } else {
+                                        "Diperbarui: $formattedUpdatedTime"
+                                    },
+                                    fontSize = 11.sp,
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
                     }
 
                     if (report.isFromCache) {

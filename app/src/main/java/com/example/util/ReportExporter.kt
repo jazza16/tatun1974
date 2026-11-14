@@ -217,8 +217,13 @@ object ReportExporter {
         context: Context,
         canvas: Canvas,
         pageWidth: Int,
-        margin: Float = 30f
+        margin: Float = 30f,
+        pageNumber: Int = 1
     ): Float {
+        // Kop surat hanya dicetak pada Halaman 1; halaman 2 dst langsung dimulai dari konten.
+        if (pageNumber > 1) {
+            return margin
+        }
         val targetLogoHeight = 44f
         val logoCenterY = 41f
         val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -339,6 +344,79 @@ object ReportExporter {
 
         canvas.drawLine(margin, footerLineY, pageWidth - margin, footerLineY, linePaint)
         canvas.drawText(FOOTER_ATRIBUSI_TEXT, pageWidth / 2f, footerTextY, footerPaint)
+    }
+
+    /**
+     * Menggambar blok tanda tangan Tata Naskah Dinas dengan formasi Piramida Terbalik (3 Kolom):
+     * - Baris 1 Kolom 1 (Kiri)  : Koord. Administrasi Pusdalops-PB (Rata Tengah)
+     * - Baris 1 Kolom 3 (Kanan) : Manajer Pusdalops PB (Rata Tengah)
+     * - Baris 2 (Merge 3 Kolom) : Pengawas di bawah tengah (Rata Tengah)
+     *
+     * @return Posisi Y akhir setelah blok tanda tangan.
+     */
+    fun drawBlokTandaTanganPiramidaTerbalik(
+        canvas: Canvas,
+        pageWidth: Int,
+        startY: Float,
+        margin: Float = 36f
+    ): Float {
+        val usableWidth = pageWidth - (margin * 2f)
+        val colWidth = usableWidth / 3f
+
+        // Titik tengah masing-masing kolom (3 kolom: Kiri, Tengah, Kanan)
+        val leftColCenterX = margin + (colWidth * 0.5f)
+        val centerColCenterX = pageWidth / 2f
+        val rightColCenterX = pageWidth - margin - (colWidth * 0.5f)
+
+        val rolePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(30, 41, 59)
+            textSize = 8.5f
+            textAlign = Paint.Align.CENTER
+        }
+        val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 8.8f
+            isFakeBoldText = true
+            isUnderlineText = true
+            textAlign = Paint.Align.CENTER
+        }
+        val nipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(51, 65, 85)
+            textSize = 8f
+            textAlign = Paint.Align.CENTER
+        }
+
+        // --- BARIS 1: Kiri (Koord. Administrasi) & Kanan (Manajer Pusdalops PB) ---
+        var yRow1 = startY
+        canvas.drawText("Koord. Administrasi", leftColCenterX, yRow1, rolePaint)
+        canvas.drawText("Manajer Pusdalops PB", rightColCenterX, yRow1, rolePaint)
+
+        yRow1 += 11f
+        canvas.drawText("Pusdalops-PB", leftColCenterX, yRow1, rolePaint)
+        canvas.drawText("BPBD Mukomuko", rightColCenterX, yRow1, rolePaint)
+
+        // Ruang tanda tangan basah/stempel
+        yRow1 += 38f
+        canvas.drawText("AAN FITRADINATA, SE", leftColCenterX, yRow1, namePaint)
+        canvas.drawText("HITATUN", rightColCenterX, yRow1, namePaint)
+
+        yRow1 += 11f
+        canvas.drawText("NIP. 197903122006041007", leftColCenterX, yRow1, nipPaint)
+        canvas.drawText("NIP. 197401282006041006", rightColCenterX, yRow1, nipPaint)
+
+        // --- BARIS 2 (Merge 3 Kolom - Bawah Tengah): Pengawas ---
+        var yRow2 = yRow1 + 22f
+        canvas.drawText("Pengawas", centerColCenterX, yRow2, rolePaint)
+        yRow2 += 11f
+        canvas.drawText("Kepala Pelaksana BPBD Mukomuko", centerColCenterX, yRow2, rolePaint)
+
+        // Ruang tanda tangan Pengawas
+        yRow2 += 38f
+        canvas.drawText("RURI IRWANDI, ST.MT", centerColCenterX, yRow2, namePaint)
+        yRow2 += 11f
+        canvas.drawText("NIP. 197906072006041011", centerColCenterX, yRow2, nipPaint)
+
+        return yRow2 + 8f
     }
 
     /**
@@ -466,10 +544,33 @@ object ReportExporter {
             canvas.drawText("Catatan Tindak Lanjut TRC", 445f, y + 12f, boldPaint)
             y += 20f
 
-            // Render Rows dengan word-wrap otomatis menggunakan StaticLayout
-            val maxTableBottomY = pageHeight - 115f
-            reports.take(18).forEachIndexed { idx, rep ->
-                if (y > maxTableBottomY) return@forEachIndexed
+            var currentPageNumber = 1
+            var currentPage = page
+            var currentCanvas = canvas
+
+            // Render Rows dengan word-wrap otomatis & multi-halaman (Halaman 2+ tanpa kop surat)
+            val maxRowBottomY = pageHeight - 52f
+            reports.forEachIndexed { idx, rep ->
+                if (y > maxRowBottomY - 40f) {
+                    drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f)
+                    pdfDoc.finishPage(currentPage)
+
+                    currentPageNumber += 1
+                    val nextPageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, currentPageNumber).create()
+                    currentPage = pdfDoc.startPage(nextPageInfo)
+                    currentCanvas = currentPage.canvas
+
+                    // Halaman 2+ langsung dimulai dari konten tabel tanpa Kop Surat
+                    y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = 36f, pageNumber = currentPageNumber)
+                    currentCanvas.drawRect(36f, y, (pageWidth - 36).toFloat(), y + 18f, headerBoxPaint)
+                    currentCanvas.drawText("No", 42f, y + 12f, boldPaint)
+                    currentCanvas.drawText("ID Laporan", 68f, y + 12f, boldPaint)
+                    currentCanvas.drawText("Bencana", 145f, y + 12f, boldPaint)
+                    currentCanvas.drawText("Wilayah", 245f, y + 12f, boldPaint)
+                    currentCanvas.drawText("Status", 370f, y + 12f, boldPaint)
+                    currentCanvas.drawText("Catatan Tindak Lanjut TRC", 445f, y + 12f, boldPaint)
+                    y += 20f
+                }
 
                 val rowTopY = y + 2f
                 val wilayahText = buildString {
@@ -480,11 +581,11 @@ object ReportExporter {
                 }
                 val noteText = rep.additionalNotes.ifBlank { "-" }
 
-                canvas.drawText("${idx + 1}.", 42f, rowTopY + 8f, textPaint)
-                canvas.drawText("#${rep.id.takeLast(7)}", 68f, rowTopY + 8f, boldPaint)
+                currentCanvas.drawText("${idx + 1}.", 42f, rowTopY + 8f, textPaint)
+                currentCanvas.drawText("#${rep.id.takeLast(7)}", 68f, rowTopY + 8f, boldPaint)
 
                 val hBencana = drawWrappedText(
-                    canvas = canvas,
+                    canvas = currentCanvas,
                     text = rep.disasterType,
                     x = 145f,
                     topY = rowTopY,
@@ -493,7 +594,7 @@ object ReportExporter {
                     maxLines = 3
                 )
                 val hWilayah = drawWrappedText(
-                    canvas = canvas,
+                    canvas = currentCanvas,
                     text = wilayahText,
                     x = 245f,
                     topY = rowTopY,
@@ -502,7 +603,7 @@ object ReportExporter {
                     maxLines = 3
                 )
                 val hStatus = drawWrappedText(
-                    canvas = canvas,
+                    canvas = currentCanvas,
                     text = rep.status,
                     x = 370f,
                     topY = rowTopY,
@@ -511,7 +612,7 @@ object ReportExporter {
                     maxLines = 2
                 )
                 val hNote = drawWrappedText(
-                    canvas = canvas,
+                    canvas = currentCanvas,
                     text = noteText,
                     x = 445f,
                     topY = rowTopY,
@@ -522,24 +623,14 @@ object ReportExporter {
 
                 val rowHeight = max(max(hBencana, hWilayah), max(hStatus, hNote)).coerceAtLeast(12f)
                 y = rowTopY + rowHeight + 5f
-                canvas.drawLine(36f, y, (pageWidth - 36).toFloat(), y, linePaint)
+                currentCanvas.drawLine(36f, y, (pageWidth - 36).toFloat(), y, linePaint)
                 y += 4f
             }
 
-            // Signature Footer
-            y = (pageHeight - 102).toFloat()
-            canvas.drawText("Mukomuko, $printDate", (pageWidth - 190).toFloat(), y, textPaint)
-            y += 12f
-            canvas.drawText("Petugas Jaga Siaga Pusdalops BPBD,", (pageWidth - 190).toFloat(), y, textPaint)
-            y += 36f
-            canvas.drawText(officerName, (pageWidth - 190).toFloat(), y, boldPaint)
-            y += 10f
-            val nipText = if (officerNip.isNotBlank()) "NIP: $officerNip" else "NIP: 197401282006041006"
-            canvas.drawText(nipText, (pageWidth - 190).toFloat(), y, textPaint)
+            // Tanpa blok tanda tangan pejabat (khusus Rekapitulasi Laporan Warga)
+            drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f)
 
-            drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin = 36f)
-
-            pdfDoc.finishPage(page)
+            pdfDoc.finishPage(currentPage)
 
             // Save PDF to cache directory
             val pdfFile = File(context.cacheDir, "Laporan_Bencana_Pusdalops_BPBD_Mukomuko.pdf")
@@ -815,18 +906,8 @@ object ReportExporter {
 
         // Sumber Informasi di bagian bawah konten laporan
         canvas.drawText("Sumber Data & Informasi: Stasiun Meteorologi BMKG Fatmawati Bengkulu & Jaringan Sensor Telemetri BPBD Mukomuko", margin, y, textPaint.apply { color = Color.rgb(100, 116, 139) })
-        y += 16f
 
-        // Tanda tangan Pengesahan Petugas Pusdalops
-        val sigX = pageWidth - margin - 180f
-        canvas.drawText("Mukomuko, ${SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("id-ID")).format(Date())}", sigX, y, textPaint.apply { color = Color.rgb(15, 23, 42) })
-        y += 12f
-        canvas.drawText("Petugas Operator Siaga Pusdalops-PB,", sigX, y, boldTextPaint)
-        y += 42f
-        canvas.drawText("( PUSDALOPS-PB BPBD MUKOMUKO )", sigX, y, boldTextPaint)
-        y += 11f
-        canvas.drawText("Sistem Informasi Cuaca SiPagarKita Terintegrasi", sigX, y, textPaint)
-
+        // Tanpa blok tanda tangan pejabat (khusus Peta Cuaca 15 Kecamatan)
         drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin)
 
         pdfDoc.finishPage(page)
@@ -1308,21 +1389,10 @@ object ReportExporter {
                 maxLines = 3
             )
 
-            y += 46f
+            y += 42f
 
-            // Kiri Bawah: Keterangan Arsip Digital
-            canvas.drawText("Dokumen Resmi Terverifikasi Sistem Informasi SiPagarKita", margin, y + 10f, cellBoldPaint)
-            canvas.drawText("Pusdalops-PB BPBD Kabupaten Mukomuko • Provinsi Bengkulu", margin, y + 21f, cellPaint)
-            canvas.drawText("Status Integritas Data: Sinkronisasi Cloud & Database Lokal Aktif", margin, y + 32f, cellPaint)
-
-            // Kanan Bawah: Blok Tanda Tangan Petugas
-            val sigX = pageWidth - margin - 185f
-            val dateOnlyStr = SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("id-ID")).format(Date())
-            canvas.drawText("Mukomuko, $dateOnlyStr", sigX, y, cellPaint)
-            canvas.drawText("Petugas Jaga / Operator Pusdalops-PB,", sigX, y + 11f, cellBoldPaint)
-            canvas.drawText(rawOfficerName, sigX, y + 46f, cellBoldPaint)
-            val nipPrefix = if (rawOfficerNip.startsWith("TRC", ignoreCase = true)) "Reg. TRC" else "NIP"
-            canvas.drawText("$nipPrefix: $rawOfficerNip", sigX, y + 56f, cellPaint)
+            // Keterangan Arsip Digital (tanpa blok tanda tangan pejabat)
+            canvas.drawText("Dokumen Resmi Terverifikasi Sistem Informasi SiPagarKita • Pusdalops-PB BPBD Kabupaten Mukomuko", margin, y, cellBoldPaint)
 
             drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin)
 

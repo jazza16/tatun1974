@@ -161,11 +161,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize Firebase & App Check with Play Integrity provider
+        // Initialize Firebase & App Check with Play Integrity provider on physical devices
         FirebaseApp.initializeApp(this)
-        FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
-            PlayIntegrityAppCheckProviderFactory.getInstance()
-        )
+        val isEmulator = android.os.Build.FINGERPRINT.startsWith("generic") ||
+            android.os.Build.MODEL.contains("sdk_gphone") ||
+            android.os.Build.MODEL.contains("Emulator") ||
+            android.os.Build.HARDWARE.contains("ranchu") ||
+            android.os.Build.HARDWARE.contains("goldfish")
+        if (!isEmulator) {
+            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                PlayIntegrityAppCheckProviderFactory.getInstance()
+            )
+        }
 
         // Initialize BMKG Earthquake and Severe Weather Notification Channels
         com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
@@ -1265,12 +1272,12 @@ private fun QuickEvacuationPreparednessBanner(
     isDark: Boolean,
     onOpenGuide: () -> Unit
 ) {
-    val containerBg = if (isDark) Color(0xFF2E1515) else Color(0xFFFFF1F2)
+    val containerBg = MaterialTheme.colorScheme.surface
     val titleCol = if (isDark) Color(0xFFFEE2E2) else Color(0xFF991B1B)
     val descCol = if (isDark) Color(0xFFFECACA) else Color(0xFF7F1D1D)
     val borderStroke = androidx.compose.foundation.BorderStroke(
         1.dp,
-        if (isDark) Color(0xFFDC2626).copy(alpha = 0.5f) else Color(0xFFFECDD3)
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     )
 
     Card(
@@ -1358,10 +1365,13 @@ private fun QuickGeminiAdvisorBanner(
     isDark: Boolean,
     onAskAi: () -> Unit
 ) {
-    val containerBg = if (isDark) Color(0xFF2B1834) else Color(0xFFFDF4FF)
+    val containerBg = MaterialTheme.colorScheme.surface
     val titleCol = if (isDark) Color(0xFFF3E8FF) else Color(0xFF581C87)
     val descCol = if (isDark) Color(0xFFE9D5FF) else Color(0xFF7E22CE)
-    val borderStroke = if (isDark) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF9333EA).copy(alpha = 0.5f)) else null
+    val borderStroke = androidx.compose.foundation.BorderStroke(
+        1.dp,
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    )
 
     Card(
         modifier = Modifier
@@ -1556,8 +1566,9 @@ private fun ActiveAlertCard(
             .clickable(onClick = onViewDetail)
             .testTag("card_active_alert"),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFEF2F2)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
@@ -1631,6 +1642,7 @@ private fun SunAndAtmosphereCard(
             .testTag("sun_astro_card"),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1700,9 +1712,9 @@ private fun SunAndAtmosphereCard(
                 // Sunrise
                 Surface(
                     modifier = Modifier.weight(1f),
-                    color = Color(0xFFFFF7ED),
+                    color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFEDD5))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
@@ -1742,9 +1754,9 @@ private fun SunAndAtmosphereCard(
                 // Sunset
                 Surface(
                     modifier = Modifier.weight(1f),
-                    color = Color(0xFFFEF2F2),
+                    color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFEE2E2))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
@@ -1902,11 +1914,11 @@ private fun WrsLiveEarthquakeQuickCard(
             .testTag("live_earthquake_quick_banner"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isTsunami) Color(0xFFFEF2F2) else Color(0xFFFFFBEB)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         border = androidx.compose.foundation.BorderStroke(
-            1.2.dp,
-            if (isTsunami) Color(0xFFFCA5A5) else Color(0xFFFDE68A)
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.5.dp)
     ) {

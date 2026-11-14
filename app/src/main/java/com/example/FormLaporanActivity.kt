@@ -108,7 +108,8 @@ class FormLaporanActivity : AppCompatActivity() {
         // Kita simpan data laporan dan log yang sedang diinput ke dalam variabel lokal dulu
         // agar bisa dilempar ke fungsi PDF nanti
         val dataLaporan = sharedViewModel.laporanSementara
-        val dataLog = sharedViewModel.listLogSementara
+        val dataLog = sharedViewModel.listLogSementara.toList()
+        val dataLogistik = sharedViewModel.listLogistikSementara.toList()
 
         sharedViewModel.simpanKeDatabase(
             dao = db.laporanHarianDao(),
@@ -120,7 +121,8 @@ class FormLaporanActivity : AppCompatActivity() {
                     PdfGenerator.cetakLaporanKePdf(
                         context = this@FormLaporanActivity,
                         laporan = dataLaporan,
-                        listLog = dataLog
+                        listLog = dataLog,
+                        listLogistik = dataLogistik
                     )
                     // ---------------------------------------------
 

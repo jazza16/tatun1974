@@ -54,9 +54,9 @@ fun ThreeDayForecastCard(
     val threeDays = dailyList.take(3)
     if (threeDays.isEmpty()) return
 
-    val cardBg = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+    val cardBg = MaterialTheme.colorScheme.surface
     val titleColor = if (isDark) Color(0xFFFFEDD5) else Color(0xFF9A3412)
-    val borderColor = if (isDark) OrangePrimary.copy(alpha = 0.3f) else OrangePrimary.copy(alpha = 0.2f)
+    val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
 
     Card(
         modifier = modifier
@@ -204,16 +204,12 @@ private fun ThreeDayColumnItem(
     modifier: Modifier = Modifier
 ) {
     val weatherInfo = day.weatherInfo
-    val itemBg = if (isToday) {
-        if (isDark) OrangePrimary.copy(alpha = 0.18f) else Color(0xFFFFF7ED)
-    } else {
-        if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f) else Color(0xFFF9FAFB)
-    }
+    val itemBg = MaterialTheme.colorScheme.surface
 
     val itemBorder = if (isToday) {
         androidx.compose.foundation.BorderStroke(1.5.dp, OrangePrimary)
     } else {
-        androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF374151) else Color(0xFFE5E7EB))
+        androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     }
 
     Surface(

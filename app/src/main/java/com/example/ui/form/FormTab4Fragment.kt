@@ -19,9 +19,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import android.app.Activity
+import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -36,24 +42,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import com.example.data.local.DistribusiLogistikEntity
 import com.example.data.local.LogKomunikasi
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Fragment untuk Tab 4: Administrasi Stasiun & Simpan Laporan.
+ * Fragment untuk Tab 4: Administrasi Stasiun, Distribusi Logistik & Simpan Laporan.
  */
 class FormTab4Fragment : Fragment() {
     private val sharedViewModel: LaporanViewModel by activityViewModels()
@@ -119,6 +129,88 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
                         operatorNip = session.getNipPetugas()
                     )
                 )
+            }
+        }
+    }
+
+    // State daftar Distribusi Logistik / Aset Bantuan
+    val logistikList = remember {
+        mutableStateListOf<DistribusiLogistikEntity>().apply {
+            val vmLogistik = sharedViewModel?.listLogistikSementara
+            if (!vmLogistik.isNullOrEmpty()) {
+                addAll(vmLogistik)
+            }
+        }
+    }
+    var namaBarangInput by remember { mutableStateOf("") }
+    var jumlahInput by remember { mutableStateOf("") }
+    var satuanInput by remember { mutableStateOf("") }
+    var keteranganInput by remember { mutableStateOf("") }
+
+    val coroutineScope = rememberCoroutineScope()
+    var pendingPdfBytesToSave by remember { mutableStateOf<ByteArray?>(null) }
+
+    val savePdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
+        val bytes = pendingPdfBytesToSave
+        if (result.resultCode == Activity.RESULT_OK && uri != null && bytes != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(bytes)
+                    outputStream.flush()
+                } ?: throw IllegalStateException("OutputStream null")
+                Toast.makeText(context, "Laporan berhasil disimpan", Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                Toast.makeText(context, "Gagal menyimpan laporan", Toast.LENGTH_SHORT).show()
+            }
+        } else if (result.resultCode != Activity.RESULT_CANCELED) {
+            Toast.makeText(context, "Gagal menyimpan laporan", Toast.LENGTH_SHORT).show()
+        }
+        pendingPdfBytesToSave = null
+    }
+
+    fun savePdfToDevice() {
+        val laporan = sharedViewModel?.laporanSementara ?: com.example.data.local.LaporanHarianEntity(
+            tanggalSurat = tanggalSurat,
+            tanggalTerima = tanggalTerima,
+            petugasJaga = operatorName,
+            stationId = stationId
+        )
+        val listLog = if (!sharedViewModel?.listLogSementara.isNullOrEmpty()) {
+            sharedViewModel?.listLogSementara ?: emptyList()
+        } else {
+            logsList.toList()
+        }
+        val listLogistik = if (!sharedViewModel?.listLogistikSementara.isNullOrEmpty()) {
+            sharedViewModel?.listLogistikSementara ?: emptyList()
+        } else {
+            logistikList.toList()
+        }
+        val cleanDate = laporan.tanggalKejadian
+            .replace("/", "-")
+            .replace(" ", "_")
+            .ifBlank { SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date()) }
+        val defaultFileName = "Laporan_BPBD_$cleanDate.pdf"
+
+        coroutineScope.launch {
+            try {
+                val pdfBytes = com.example.util.PdfGenerator.generateLaporanPdfBytes(
+                    context = context,
+                    laporan = laporan,
+                    listLog = listLog,
+                    listLogistik = listLogistik
+                )
+                pendingPdfBytesToSave = pdfBytes
+                val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_TITLE, defaultFileName)
+                }
+                savePdfLauncher.launch(intent)
+            } catch (_: Exception) {
+                Toast.makeText(context, "Gagal menyimpan laporan", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -199,6 +291,139 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
             }
         }
 
+        // Card Distribusi Logistik / Aset Bantuan (Form Dinamis)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Distribusi Logistik / Aset Bantuan",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF047857)
+                )
+                Text(
+                    text = "Input daftar bantuan/aset darurat untuk dicetak pada Halaman 2 PDF (${logistikList.size} item)",
+                    fontSize = 11.sp,
+                    color = Color(0xFF6B7280)
+                )
+
+                OutlinedTextField(
+                    value = namaBarangInput,
+                    onValueChange = { namaBarangInput = it },
+                    label = { Text("Nama Barang (cth: Tenda Gulung, Beras, Air Mineral)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = jumlahInput,
+                        onValueChange = { jumlahInput = it },
+                        label = { Text("Jumlah") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = satuanInput,
+                        onValueChange = { satuanInput = it },
+                        label = { Text("Satuan (Unit/Karung/Dus)") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                OutlinedTextField(
+                    value = keteranganInput,
+                    onValueChange = { keteranganInput = it },
+                    label = { Text("Keterangan (cth: Diserahkan ke Kecamatan X)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Button(
+                    onClick = {
+                        if (namaBarangInput.isNotBlank()) {
+                            val newItem = DistribusiLogistikEntity(
+                                namaBarang = namaBarangInput.trim(),
+                                jumlah = jumlahInput.trim().ifBlank { "1" },
+                                satuan = satuanInput.trim().ifBlank { "Unit" },
+                                keterangan = keteranganInput.trim().ifBlank { "-" }
+                            )
+                            logistikList.add(newItem)
+                            sharedViewModel?.listLogistikSementara?.add(newItem)
+                            namaBarangInput = ""
+                            jumlahInput = ""
+                            satuanInput = ""
+                            keteranganInput = ""
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = "TAMBAH BARANG LOGISTIK", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                if (logistikList.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    logistikList.forEachIndexed { idx, item ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5)),
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA7F3D0))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${idx + 1}. ${item.namaBarang} (${item.jumlah} ${item.satuan})",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF065F46)
+                                    )
+                                    Text(
+                                        text = "Keterangan: ${item.keterangan}",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF334155)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        logistikList.remove(item)
+                                        sharedViewModel?.listLogistikSementara?.remove(item)
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Hapus Barang",
+                                        tint = Color(0xFFDC2626),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Card Log Komunikasi
         Card(
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -256,35 +481,73 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Button(
-                    onClick = {
-                        val laporan = sharedViewModel?.laporanSementara ?: com.example.data.local.LaporanHarianEntity(
-                            tanggalSurat = tanggalSurat,
-                            tanggalTerima = tanggalTerima,
-                            petugasJaga = operatorName,
-                            stationId = stationId
-                        )
-                        val listLog = if (!sharedViewModel?.listLogSementara.isNullOrEmpty()) {
-                            sharedViewModel?.listLogSementara ?: emptyList()
-                        } else {
-                            logsList.toList()
-                        }
-                        com.example.util.PdfGenerator.cetakLaporanKePdf(
-                            context = context,
-                            laporan = laporan,
-                            listLog = listLog
-                        )
-                    },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                    shape = RoundedCornerShape(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "CETAK LAPORAN KE PDF",
-                        fontWeight = FontWeight.Bold
-                    )
+                    Button(
+                        onClick = {
+                            val laporan = sharedViewModel?.laporanSementara ?: com.example.data.local.LaporanHarianEntity(
+                                tanggalSurat = tanggalSurat,
+                                tanggalTerima = tanggalTerima,
+                                petugasJaga = operatorName,
+                                stationId = stationId
+                            )
+                            val listLog = if (!sharedViewModel?.listLogSementara.isNullOrEmpty()) {
+                                sharedViewModel?.listLogSementara ?: emptyList()
+                            } else {
+                                logsList.toList()
+                            }
+                            val listLogistik = if (!sharedViewModel?.listLogistikSementara.isNullOrEmpty()) {
+                                sharedViewModel?.listLogistikSementara ?: emptyList()
+                            } else {
+                                logistikList.toList()
+                            }
+                            com.example.util.PdfGenerator.cetakLaporanKePdf(
+                                context = context,
+                                laporan = laporan,
+                                listLog = listLog,
+                                listLogistik = listLogistik
+                            )
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("btn_cetak_pdf_tab4"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "Cetak PDF",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            savePdfToDevice()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("btn_simpan_pdf_tab4"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF047857)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = "Simpan PDF",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Simpan PDF",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
             }
         }
     }
 }
+

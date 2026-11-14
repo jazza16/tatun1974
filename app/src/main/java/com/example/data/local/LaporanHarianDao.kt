@@ -90,4 +90,25 @@ interface LaporanHarianDao {
 
     @Query("DELETE FROM log_komunikasi WHERE laporanId = :laporanId")
     suspend fun deleteLogsForLaporan(laporanId: Int)
+
+    // === Distribusi Logistik / Aset Bantuan Queries ===
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLogistik(item: DistribusiLogistikEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLogistikList(items: List<DistribusiLogistikEntity>)
+
+    @Query("SELECT * FROM distribusi_logistik WHERE laporanId = :laporanId ORDER BY id ASC")
+    fun getLogistikForLaporan(laporanId: Int): Flow<List<DistribusiLogistikEntity>>
+
+    @Query("SELECT * FROM distribusi_logistik WHERE laporanId = :laporanId ORDER BY id ASC")
+    suspend fun getLogistikForLaporanSync(laporanId: Int): List<DistribusiLogistikEntity>
+
+    @Query("DELETE FROM distribusi_logistik WHERE id = :id")
+    suspend fun deleteLogistikById(id: Int)
+
+    @Query("DELETE FROM distribusi_logistik WHERE laporanId = :laporanId")
+    suspend fun deleteLogistikForLaporan(laporanId: Int)
 }
+

@@ -140,6 +140,19 @@ class WeatherViewModel(
         }
 
         viewModelScope.launch {
+            repository.seedInitial15DistrictsWeatherCacheIfEmpty()
+            val cachedAll = repository.getCachedAll15DistrictsSummary()
+            if (cachedAll.isNotEmpty() && _uiState.value.allDistrictsSummary.isEmpty()) {
+                _uiState.value = _uiState.value.copy(allDistrictsSummary = cachedAll)
+            }
+            repository.observeAllDistrictsWeatherCache().collect { cachedReports ->
+                if (cachedReports.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(allDistrictsSummary = cachedReports)
+                }
+            }
+        }
+
+        viewModelScope.launch {
             repository.seedInitialCommunityReportsIfEmpty()
             repository.seedInitialCitizenDisasterReportsIfEmpty()
             repository.ensureHazardZonesSeeded()
@@ -274,6 +287,7 @@ class WeatherViewModel(
                     isLoading = false,
                     errorMessage = null
                 )
+                loadAllDistrictsSummary()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isRefreshing = false,
@@ -339,6 +353,7 @@ class WeatherViewModel(
                     isLoading = false,
                     errorMessage = null
                 )
+                loadAllDistrictsSummary()
                 weatherSuccess = true
             } catch (e: Exception) {
                 // Keep local cached weather report
@@ -461,19 +476,28 @@ class WeatherViewModel(
     private fun loadAllDistrictsSummary() {
         _uiState.value = _uiState.value.copy(isLoadingAllDistricts = true)
         viewModelScope.launch {
+            repository.seedInitial15DistrictsWeatherCacheIfEmpty()
+            val cachedInitial = repository.getCachedAll15DistrictsSummary()
+            if (cachedInitial.isNotEmpty() && _uiState.value.allDistrictsSummary.isEmpty()) {
+                _uiState.value = _uiState.value.copy(allDistrictsSummary = cachedInitial)
+            }
             val list = mutableListOf<WeatherFullReport>()
             for (dist in MukomukoDistricts.list) {
                 try {
                     val report = repository.fetchWeatherReport(dist)
                     list.add(report)
                 } catch (_: Exception) {
-                    // skip or continue
+                    cachedInitial.find { it.district.id == dist.id }?.let { list.add(it) }
                 }
             }
-            _uiState.value = _uiState.value.copy(
-                allDistrictsSummary = list,
-                isLoadingAllDistricts = false
-            )
+            if (list.isNotEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    allDistrictsSummary = list,
+                    isLoadingAllDistricts = false
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(isLoadingAllDistricts = false)
+            }
         }
     }
 

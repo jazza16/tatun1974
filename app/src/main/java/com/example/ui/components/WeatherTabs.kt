@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -81,6 +83,7 @@ fun WeatherTabs(
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         shadowElevation = 2.dp
     ) {
         ScrollableTabRow(
@@ -109,7 +112,8 @@ fun WeatherTabs(
                     selected = isSelected,
                     onClick = { onTabSelected(index) },
                     modifier = Modifier
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                        .heightIn(min = 44.dp)
+                        .padding(horizontal = 4.dp, vertical = 4.dp)
                         .testTag("tab_item_$index"),
                     text = {
                         Row(

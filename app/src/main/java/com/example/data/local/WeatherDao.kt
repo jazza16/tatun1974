@@ -11,11 +11,20 @@ interface WeatherDao {
     @Query("SELECT * FROM weather_cache WHERE districtId = :districtId LIMIT 1")
     suspend fun getCachedWeather(districtId: String): WeatherCacheEntity?
 
-    @Query("SELECT * FROM weather_cache")
+    @Query("SELECT * FROM weather_cache WHERE districtId = :districtId LIMIT 1")
+    fun observeCachedWeather(districtId: String): Flow<WeatherCacheEntity?>
+
+    @Query("SELECT * FROM weather_cache ORDER BY districtId ASC")
     suspend fun getAllCached(): List<WeatherCacheEntity>
+
+    @Query("SELECT * FROM weather_cache ORDER BY districtId ASC")
+    fun observeAllCachedWeather(): Flow<List<WeatherCacheEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCache(entity: WeatherCacheEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllCache(entities: List<WeatherCacheEntity>)
 
     @Query("SELECT districtId FROM favorite_districts WHERE isFavorite = 1")
     fun getFavoriteDistrictIds(): Flow<List<String>>

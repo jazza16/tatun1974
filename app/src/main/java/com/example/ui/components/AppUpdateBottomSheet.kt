@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -132,7 +133,10 @@ fun AppUpdateBottomSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_bpbd_logo),
                         contentDescription = "Logo BPBD Mukomuko",
@@ -142,7 +146,7 @@ fun AppUpdateBottomSheet(
                             .border(1.5.dp, OrangePrimary, CircleShape)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Pusat Pembaruan Aplikasi",
                             fontSize = 18.sp,
@@ -188,6 +192,7 @@ fun AppUpdateBottomSheet(
                     .testTag("guide_and_tools_card"),
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -217,6 +222,7 @@ fun AppUpdateBottomSheet(
                             },
                             modifier = Modifier
                                 .weight(1f)
+                                .heightIn(min = 48.dp)
                                 .testTag("btn_reopen_onboarding"),
                             shape = RoundedCornerShape(10.dp)
                         ) {
@@ -237,6 +243,7 @@ fun AppUpdateBottomSheet(
                             },
                             modifier = Modifier
                                 .weight(1f)
+                                .heightIn(min = 48.dp)
                                 .testTag("btn_open_compass_from_sheet"),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
                             shape = RoundedCornerShape(10.dp)
@@ -258,6 +265,7 @@ fun AppUpdateBottomSheet(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .heightIn(min = 48.dp)
                                 .testTag("btn_open_sop_evakuasi_from_sheet"),
                             colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                             shape = RoundedCornerShape(10.dp)
@@ -277,11 +285,12 @@ fun AppUpdateBottomSheet(
 
                     // Preserved Wallpaper HD Badges (migrated from Login Screen)
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -300,19 +309,23 @@ fun AppUpdateBottomSheet(
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Lanskap Alam & Mitigasi",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            Row(
+                            @OptIn(ExperimentalLayoutApi::class)
+                            FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Button(
                                     onClick = {
@@ -321,6 +334,7 @@ fun AppUpdateBottomSheet(
                                     },
                                     modifier = Modifier
                                         .weight(1f)
+                                        .heightIn(min = 44.dp)
                                         .testTag("btn_view_full_photo_info"),
                                     colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                                     shape = RoundedCornerShape(8.dp),
@@ -352,6 +366,7 @@ fun AppUpdateBottomSheet(
                                     },
                                     modifier = Modifier
                                         .weight(1f)
+                                        .heightIn(min = 44.dp)
                                         .testTag("btn_set_wallpaper_info"),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
@@ -436,8 +451,9 @@ private fun ThemeToggleCard(
             .testTag("theme_mode_card"),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -463,7 +479,7 @@ private fun ThemeToggleCard(
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Mode Tampilan Aplikasi",
                         fontSize = 15.sp,
@@ -621,12 +637,14 @@ private fun OnlineUpdateCard(
     onSimulatePublishNextVersion: () -> Unit = {},
     onResetLatestRelease: () -> Unit = {}
 ) {
+    @OptIn(ExperimentalLayoutApi::class)
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("online_update_card"),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -635,7 +653,10 @@ private fun OnlineUpdateCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -654,7 +675,7 @@ private fun OnlineUpdateCard(
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Status Versi & Rilis",
                             fontSize = 15.sp,
@@ -756,7 +777,7 @@ private fun OnlineUpdateCard(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (updateState.isPermanentlyInstalled && updateState.isUpdated) {
                                 "Perangkat Berada Pada Rilis Terbaru (Tetap & Permanen)"
@@ -849,23 +870,26 @@ private fun OnlineUpdateCard(
                             text = "Aplikasi berhasil diperbarui ke versi ${updateState.currentVersion} secara daring dan tersimpan permanen!",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFF16A34A)
+                            color = Color(0xFF16A34A),
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Action Buttons
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
                     onClick = onCheckUpdate,
                     modifier = Modifier
                         .weight(1f)
+                        .heightIn(min = 48.dp)
                         .testTag("btn_check_update_online"),
                     enabled = !updateState.isCheckingOnline && !updateState.isDownloading
                 ) {
@@ -893,6 +917,7 @@ private fun OnlineUpdateCard(
                         onClick = onApplyUpdate,
                         modifier = Modifier
                             .weight(1.3f)
+                            .heightIn(min = 48.dp)
                             .testTag("btn_download_update"),
                         colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                         enabled = !updateState.isDownloading
@@ -910,10 +935,11 @@ private fun OnlineUpdateCard(
             }
 
             // Developer / QA Simulation Section
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
@@ -923,7 +949,7 @@ private fun OnlineUpdateCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(3.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Sistem menggunakan Semantic Versioning (AppVersionHelper) untuk mendeteksi perangkat versi sebelumnya (v3.6.0) guna memicu notifikasi update ke Rilis Resmi v3.7.0, serta otomatis berlaku untuk versi berikutnya (v3.8.0, dst) saat dirilis pengembang.",
                         fontSize = 11.sp,
@@ -931,14 +957,16 @@ private fun OnlineUpdateCard(
                         lineHeight = 14.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
                             onClick = onSimulateOlderVersion,
                             modifier = Modifier
                                 .weight(1f)
+                                .heightIn(min = 40.dp)
                                 .testTag("btn_simulate_v140"),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         ) {
@@ -953,6 +981,7 @@ private fun OnlineUpdateCard(
                             onClick = onSimulatePublishNextVersion,
                             modifier = Modifier
                                 .weight(1f)
+                                .heightIn(min = 40.dp)
                                 .testTag("btn_simulate_v160"),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         ) {
@@ -967,6 +996,7 @@ private fun OnlineUpdateCard(
                             onClick = onResetLatestRelease,
                             modifier = Modifier
                                 .weight(0.9f)
+                                .heightIn(min = 40.dp)
                                 .testTag("btn_reset_latest_release"),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (updateState.isUpdated && updateState.isPermanentlyInstalled) Color(0xFF16A34A) else OrangePrimary
@@ -1000,20 +1030,23 @@ private fun NewFeaturesExplanationSection(
             .testTag("new_features_explanation_card"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isDark) Color(0xFF2B1D16) else Color(0xFFFFFBEB)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (isDark) OrangePrimary.copy(alpha = 0.5f) else Color(0xFFFDE68A)
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(32.dp)
@@ -1030,7 +1063,7 @@ private fun NewFeaturesExplanationSection(
 
                     Spacer(modifier = Modifier.width(10.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Panduan Fitur & Rilis Resmi v$currentVersion",
                             fontSize = 14.sp,
@@ -1145,14 +1178,14 @@ private fun FeatureDetailItem(
     ) {
         Text(text = emoji, fontSize = 20.sp)
         Spacer(modifier = Modifier.width(10.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF7C2D12)
             )
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = desc,
                 fontSize = 11.sp,
@@ -1199,11 +1232,11 @@ private fun CollapsibleVersionCard(
             .clickable { isExpanded = !isExpanded },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         border = androidx.compose.foundation.BorderStroke(
-            0.8.dp,
-            if (isExpanded) OrangePrimary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -1212,7 +1245,10 @@ private fun CollapsibleVersionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text(
                         text = "Versi ${log.version}",
                         fontSize = 13.sp,
@@ -1292,7 +1328,8 @@ private fun CollapsibleVersionCard(
                                 text = item,
                                 fontSize = 11.sp,
                                 lineHeight = 15.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }

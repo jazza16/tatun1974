@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.LocationCity
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +41,20 @@ import com.example.model.WeatherCodeHelper
 import com.example.model.WeatherFullReport
 import com.example.ui.theme.OrangePrimary
 import com.example.ui.theme.WeatherSunGold
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private fun formatWeatherTimestamp(timestampMs: Long, shortFormat: Boolean = false): String {
+    if (timestampMs <= 0L) return "-"
+    return try {
+        val pattern = if (shortFormat) "dd/MM HH:mm 'WIB'" else "dd MMM yyyy, HH:mm 'WIB'"
+        val sdf = SimpleDateFormat(pattern, Locale("id", "ID"))
+        sdf.format(Date(timestampMs))
+    } catch (_: Exception) {
+        "-"
+    }
+}
 
 @Composable
 fun AllDistrictsView(
@@ -47,6 +64,13 @@ fun AllDistrictsView(
     onSelectDistrict: (District) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val latestTimestamp = remember(districtsSummary) {
+        districtsSummary.maxOfOrNull { it.lastUpdated } ?: 0L
+    }
+    val isAnyFromOfflineCache = remember(districtsSummary) {
+        districtsSummary.isNotEmpty() && districtsSummary.any { it.isFromCache }
+    }
+
     androidx.compose.foundation.layout.BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
@@ -71,42 +95,88 @@ fun AllDistrictsView(
                 shape = RoundedCornerShape(20.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(OrangePrimary.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationCity,
-                            contentDescription = null,
-                            tint = OrangePrimary,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(OrangePrimary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationCity,
+                                contentDescription = null,
+                                tint = OrangePrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "15 Kecamatan di Kabupaten Mukomuko",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Prakiraan cuaca spesifik pesisir & hulu Taman Nasional Kerinci Seblat",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                lineHeight = 16.sp,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "15 Kecamatan di Kabupaten Mukomuko",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Prakiraan cuaca spesifik pesisir & hulu Taman Nasional Kerinci Seblat",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                            lineHeight = 16.sp,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+
+                    if (latestTimestamp > 0L) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isAnyFromOfflineCache) {
+                                OrangePrimary.copy(alpha = 0.10f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isAnyFromOfflineCache) Icons.Default.CloudOff else Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        tint = if (isAnyFromOfflineCache) OrangePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isAnyFromOfflineCache) {
+                                            "Cache Offline Room • Data terakhir: ${formatWeatherTimestamp(latestTimestamp)}"
+                                        } else {
+                                            "Tersimpan di Room • Diperbarui: ${formatWeatherTimestamp(latestTimestamp)}"
+                                        },
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isAnyFromOfflineCache) OrangePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -125,6 +195,8 @@ fun AllDistrictsView(
                         val isFav = favoriteDistricts.contains(dist.id)
                         val weatherInfo = report?.current?.weatherInfo ?: WeatherCodeHelper.getWeatherInfo(1)
                         val tempDisplay = report?.current?.temperature?.toInt()?.toString() ?: "30"
+                        val timestampText = report?.lastUpdated?.let { formatWeatherTimestamp(it, shortFormat = true) }
+                        val isFromCache = report?.isFromCache == true
 
                         Box(modifier = Modifier.weight(1f)) {
                             DistrictCardItem(
@@ -133,6 +205,8 @@ fun AllDistrictsView(
                                 isFav = isFav,
                                 weatherInfo = weatherInfo,
                                 tempDisplay = tempDisplay,
+                                timestampText = timestampText,
+                                isFromCache = isFromCache,
                                 onSelectDistrict = onSelectDistrict
                             )
                         }
@@ -156,6 +230,8 @@ private fun DistrictCardItem(
     isFav: Boolean,
     weatherInfo: com.example.model.WeatherInfo,
     tempDisplay: String,
+    timestampText: String?,
+    isFromCache: Boolean,
     onSelectDistrict: (District) -> Unit
 ) {
     Card(
@@ -205,20 +281,41 @@ private fun DistrictCardItem(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = OrangePrimary.copy(alpha = 0.12f)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = dist.category,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = OrangePrimary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        softWrap = false
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = OrangePrimary.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            text = dist.category,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = OrangePrimary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
+                        )
+                    }
+
+                    if (isFromCache) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = "Cache",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -231,6 +328,26 @@ private fun DistrictCardItem(
                     overflow = TextOverflow.Ellipsis,
                     softWrap = false
                 )
+
+                if (!timestampText.isNullOrBlank() && timestampText != "-") {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Update: $timestampText",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.width(8.dp))

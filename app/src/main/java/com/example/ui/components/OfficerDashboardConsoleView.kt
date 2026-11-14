@@ -445,7 +445,7 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color(0xFF166534).copy(alpha = 0.85f),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22C55E)),
-                                modifier = Modifier.height(32.dp)
+                                modifier = Modifier.heightIn(min = 32.dp)
                             ) {
                                 Box(
                                     contentAlignment = Alignment.Center,
@@ -476,7 +476,7 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color(0xFF7C2D12).copy(alpha = 0.85f),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
-                                modifier = Modifier.height(32.dp)
+                                modifier = Modifier.heightIn(min = 32.dp)
                             ) {
                                 Box(
                                     contentAlignment = Alignment.Center,
@@ -506,10 +506,10 @@ fun OfficerDashboardConsoleView(
                     }
 
                     // Baris Badge Aksi: Mengisi kekosongan secara presisi dan terbagi sejajar dalam Ruang Kerja
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (isOfficerLoggedIn) {
                             // Badge Personil
@@ -525,7 +525,7 @@ fun OfficerDashboardConsoleView(
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(32.dp)
+                                    .heightIn(min = 32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Badge,
@@ -565,7 +565,7 @@ fun OfficerDashboardConsoleView(
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(32.dp)
+                                    .heightIn(min = 32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Sync,
@@ -593,7 +593,7 @@ fun OfficerDashboardConsoleView(
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(32.dp)
+                                    .heightIn(min = 32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
@@ -621,7 +621,7 @@ fun OfficerDashboardConsoleView(
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(32.dp)
+                                    .heightIn(min = 32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.LockOpen,
@@ -646,7 +646,7 @@ fun OfficerDashboardConsoleView(
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(32.dp)
+                                    .heightIn(min = 32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Badge,
@@ -1193,7 +1193,7 @@ fun OfficerDashboardConsoleView(
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
                                         shape = RoundedCornerShape(6.dp),
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(28.dp)
+                                        modifier = Modifier.heightIn(min = 28.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Navigation,
@@ -1216,8 +1216,8 @@ fun OfficerDashboardConsoleView(
         item {
             Card(
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
@@ -1227,7 +1227,7 @@ fun OfficerDashboardConsoleView(
                         onValueChange = { searchQuery = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .heightIn(min = 48.dp)
                             .testTag("officer_search_input"),
                         placeholder = { Text("Cari ID, jenis bencana, desa, atau pelapor...", fontSize = 11.sp) },
                         leadingIcon = {
@@ -2128,7 +2128,7 @@ fun OfficerDashboardConsoleView(
                                 textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(48.dp)
+                                    .heightIn(min = 48.dp)
                             )
 
                             Button(
@@ -2139,7 +2139,7 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.height(48.dp)
+                                modifier = Modifier.heightIn(min = 48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PersonAdd,
@@ -3429,7 +3429,7 @@ private fun OfficerIncidentReportCard(
                     onClick = onInspectMapPin,
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(30.dp)
+                    modifier = Modifier.heightIn(min = 30.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.MyLocation,
@@ -3633,7 +3633,7 @@ private fun SyncDiagnosticsSection(
                             }
                         }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Keamanan Perangkat & Sesi (Play Integrity Classic)",
                                 fontSize = 12.sp,
@@ -3807,7 +3807,7 @@ private fun SyncDiagnosticsSection(
                                             ),
                                             shape = RoundedCornerShape(6.dp),
                                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                            modifier = Modifier.height(28.dp)
+                                            modifier = Modifier.heightIn(min = 28.dp)
                                         ) {
                                             Icon(
                                                 imageVector = if (session.accessGranted) Icons.Default.Lock else Icons.Default.LockOpen,
