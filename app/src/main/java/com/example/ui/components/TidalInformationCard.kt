@@ -110,14 +110,17 @@ fun TidalInformationCard(
             .fillMaxWidth()
             .testTag("tidal_information_card")
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             // Header Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = Color(0xFF0284C7).copy(alpha = 0.25f),
@@ -132,21 +135,27 @@ fun TidalInformationCard(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Info Pasang Surut Air Laut",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Pesisir ${district.name} • Samudra Hindia",
                             fontSize = 11.sp,
-                            color = Color(0xFF64748B)
+                            color = Color(0xFF64748B),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }
+                Spacer(modifier = Modifier.width(8.dp))
 
                 // Interactive Guide Button
                 OutlinedButton(
@@ -155,7 +164,7 @@ fun TidalInformationCard(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFBBF24)),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B)),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
+                    modifier = Modifier.heightIn(min = 36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.MenuBook,
@@ -164,11 +173,18 @@ fun TidalInformationCard(
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Panduan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Panduan",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // DYNAMIC WATER LEVEL WAVE ANIMATION BOX
             Box(
@@ -223,7 +239,7 @@ fun TidalInformationCard(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(14.dp),
+                        .padding(12.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
@@ -267,7 +283,8 @@ fun TidalInformationCard(
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFFFDE68A),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
 
@@ -276,11 +293,14 @@ fun TidalInformationCard(
                         verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Ketinggian Muka Air Saat Ini",
                                 fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.8f)
+                                color = Color.White.copy(alpha = 0.8f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                             Row(verticalAlignment = Alignment.Bottom) {
                                 Text(
@@ -315,13 +335,19 @@ fun TidalInformationCard(
                                 Text(
                                     text = "Event Berikutnya:",
                                     fontSize = 11.sp,
-                                    color = Color(0xFF64748B)
+                                    color = Color(0xFF64748B),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                                 Text(
                                     text = "${tidalData.nextEventTime} (${tidalData.nextEventType})",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF38BDF8)
+                                    color = Color(0xFF38BDF8),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -329,7 +355,7 @@ fun TidalInformationCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // 4-GRID TIDAL EVENTS TODAY (PASANG NAIK & SURUT)
             Row(
@@ -390,12 +416,15 @@ fun TidalInformationCard(
                             tint = Color(0xFF38BDF8),
                             modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Kondisi Muara & Perahu Nelayan:",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFF1F5F9)
+                            color = Color(0xFFF1F5F9),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -403,7 +432,8 @@ fun TidalInformationCard(
                         text = tidalData.estuarineCrossingAdvice,
                         fontSize = 11.sp,
                         color = Color(0xFFCBD5E1),
-                        lineHeight = 15.sp
+                        lineHeight = 16.sp,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -519,20 +549,28 @@ private fun TidalEventPill(
                 text = title,
                 fontSize = 11.sp,
                 color = Color(0xFF94A3B8),
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = time,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
             Text(
                 text = height,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isHigh) Color(0xFF38BDF8) else Color(0xFFFBBF24)
+                color = if (isHigh) Color(0xFF38BDF8) else Color(0xFFFBBF24),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
         }
     }

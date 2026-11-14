@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -166,6 +167,7 @@ import kotlinx.coroutines.launch
  * 5. Modul 'Arsip' untuk memisahkan laporan berstatus 'Selesai'
  * 6. Validasi status ('Diproses', 'Divalidasi', 'Selesai') dengan toast notifikasi
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OfficerDashboardConsoleView(
     reports: List<CitizenDisasterReport>,
@@ -738,10 +740,11 @@ fun OfficerDashboardConsoleView(
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B)),
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .wrapContentHeight()
                                     .clickable { showChangePinDialog = true }
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
@@ -760,7 +763,7 @@ fun OfficerDashboardConsoleView(
                                             text = "PIN Anda masih menggunakan kunci awal 6-digit NIP. Buat PIN pribadi sekarang agar tersimpan aman di database & Cloud Firestore untuk login multi-perangkat.",
                                             fontSize = 11.sp,
                                             color = Color(0xFFFEF3C7),
-                                            lineHeight = 13.sp
+                                            lineHeight = 15.sp
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -782,14 +785,14 @@ fun OfficerDashboardConsoleView(
                             officerRole.contains("Operator", ignoreCase = true)
                         )
                         if (isExportAuthorized) {
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                            Row(
+                            FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 // PDF Export Button
                                 Button(
@@ -800,10 +803,8 @@ fun OfficerDashboardConsoleView(
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(34.dp)
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.heightIn(min = 40.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.PictureAsPdf,
@@ -822,10 +823,8 @@ fun OfficerDashboardConsoleView(
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(34.dp)
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.heightIn(min = 40.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.TableChart,
@@ -1042,7 +1041,9 @@ fun OfficerDashboardConsoleView(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     KpiMetricCard(
@@ -1052,7 +1053,7 @@ fun OfficerDashboardConsoleView(
                         bgColor = Color(0xFFFFFBEB),
                         borderColor = Color(0xFFFDE68A),
                         subtitle = "Butuh Validasi",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).wrapContentHeight()
                     )
                     KpiMetricCard(
                         title = "Divalidasi",
@@ -1061,7 +1062,7 @@ fun OfficerDashboardConsoleView(
                         bgColor = Color(0xFFF0FDF4),
                         borderColor = Color(0xFFBBF7D0),
                         subtitle = "Tim TRC Meluncur",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).wrapContentHeight()
                     )
                     KpiMetricCard(
                         title = "Selesai",
@@ -1070,7 +1071,7 @@ fun OfficerDashboardConsoleView(
                         bgColor = Color(0xFFEFF6FF),
                         borderColor = Color(0xFFBFDBFE),
                         subtitle = "Tuntas / Arsip",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).wrapContentHeight()
                     )
                 }
             }
@@ -1086,12 +1087,15 @@ fun OfficerDashboardConsoleView(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(end = 76.dp)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.MyLocation,
                                     contentDescription = null,
@@ -1108,14 +1112,17 @@ fun OfficerDashboardConsoleView(
                             }
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = Color(0xFF0284C7)
+                                color = Color(0xFF0284C7),
+                                modifier = Modifier.align(Alignment.TopEnd)
                             ) {
                                 Text(
                                     text = "#${rep.id.takeLast(7)}",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
                         }
@@ -3087,10 +3094,13 @@ private fun KpiMetricCard(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = bgColor),
         border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
-        modifier = modifier
+        modifier = modifier.wrapContentHeight()
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -3353,6 +3363,7 @@ private fun OfficerIncidentReportCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 if (!report.photoUri.isNullOrBlank()) {
+                    val thumbContext = LocalContext.current
                     val resolvedPhotoModel = remember(report.photoUri) {
                         decodeCitizenPhotoModel(report.photoUri)
                     }
@@ -3373,7 +3384,10 @@ private fun OfficerIncidentReportCard(
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 AsyncImage(
-                                    model = resolvedPhotoModel,
+                                    model = coil.request.ImageRequest.Builder(thumbContext)
+                                        .data(resolvedPhotoModel)
+                                        .crossfade(true)
+                                        .build(),
                                     contentDescription = "Foto Kejadian",
                                     placeholder = brokenImagePainter,
                                     error = brokenImagePainter,
@@ -3594,13 +3608,16 @@ private fun SyncDiagnosticsSection(
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
             modifier = Modifier.fillMaxWidth().testTag("card_play_integrity_sessions")
         ) {
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    ) {
                         Surface(
                             shape = CircleShape,
                             color = Color(0xFF15803D).copy(alpha = 0.15f),
@@ -3667,10 +3684,14 @@ private fun SyncDiagnosticsSection(
                         shape = RoundedCornerShape(10.dp),
                         color = Color(0xFFF8FAFC),
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
                     ) {
                         Column(
-                            modifier = Modifier.padding(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 18.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
@@ -3679,12 +3700,13 @@ private fun SyncDiagnosticsSection(
                                 tint = Color(0xFF94A3B8),
                                 modifier = Modifier.size(28.dp)
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "Belum ada sesi Play Integrity tersimpan di backend Firestore.\nPetugas akan divalidasi dan dicatat otomatis saat login.",
                                 fontSize = 11.sp,
                                 color = Color(0xFF64748B),
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
+                                lineHeight = 16.sp
                             )
                         }
                     }

@@ -74,7 +74,10 @@ fun ThreeDayForecastCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
                             .size(34.dp)
@@ -89,22 +92,29 @@ fun ThreeDayForecastCard(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Prakiraan Cuaca 3 Hari",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = titleColor
+                            color = titleColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Kecamatan ${district.name}, Mukomuko",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Surface(
                     color = OrangePrimary,
@@ -123,12 +133,12 @@ fun ThreeDayForecastCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // 3-Day Cards Grid / Columns
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 threeDays.forEachIndexed { index, day ->
                     val dayLabel = when (index) {
@@ -148,7 +158,7 @@ fun ThreeDayForecastCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Summary Info Strip for Farmers & Coastal Communities
             Surface(
@@ -175,7 +185,9 @@ fun ThreeDayForecastCard(
                         text = "Ringkasan: Suhu rerata 24°–32°C. Perhatikan potensi angin sore pesisir Mukomuko.",
                         fontSize = 11.sp,
                         color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF9A3412),
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -213,7 +225,7 @@ private fun ThreeDayColumnItem(
         border = itemBorder
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Day Badge
@@ -221,12 +233,18 @@ private fun ThreeDayColumnItem(
                 text = dayLabel,
                 fontSize = 12.sp,
                 fontWeight = if (isToday) FontWeight.ExtraBold else FontWeight.Bold,
-                color = if (isToday) OrangePrimary else MaterialTheme.colorScheme.onSurface
+                color = if (isToday) OrangePrimary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
             Text(
                 text = day.date.takeLast(5),
                 fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -248,14 +266,16 @@ private fun ThreeDayColumnItem(
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = weatherInfo.conditionText,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -290,7 +310,7 @@ private fun ThreeDayColumnItem(
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Rain Probability Pill
             Row(
@@ -305,7 +325,7 @@ private fun ThreeDayColumnItem(
                     tint = WeatherRainBlue,
                     modifier = Modifier.size(11.dp)
                 )
-                Spacer(modifier = Modifier.width(3.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "${day.rainProbabilityMax}%",
                     fontSize = 11.sp,
@@ -316,7 +336,7 @@ private fun ThreeDayColumnItem(
                 )
             }
 
-            Spacer(modifier = Modifier.height(5.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Wind Speed
             Row(
@@ -328,12 +348,15 @@ private fun ThreeDayColumnItem(
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                     modifier = Modifier.size(11.dp)
                 )
-                Spacer(modifier = Modifier.width(3.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "${day.windSpeedMax.toInt()} km/j",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
                 )
             }
         }

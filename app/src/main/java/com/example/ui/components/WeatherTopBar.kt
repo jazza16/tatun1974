@@ -52,6 +52,7 @@ import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import com.example.ui.theme.WeatherSunGold
 
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Landscape
@@ -64,35 +65,21 @@ import androidx.compose.material3.CircularProgressIndicator
 @Composable
 fun WeatherTopBar(
     district: District,
-    isFavorite: Boolean,
-    isRefreshing: Boolean,
+    isFavorite: Boolean = false,
+    isRefreshing: Boolean = false,
     isDarkMode: Boolean,
     isUpdateAvailable: Boolean = false,
     isDetectingLocation: Boolean = false,
     onDistrictClick: () -> Unit,
-    onFavoriteToggle: () -> Unit,
-    onRefreshClick: () -> Unit,
+    onFavoriteToggle: () -> Unit = {},
+    onRefreshClick: () -> Unit = {},
     onThemeToggle: () -> Unit,
     onOpenAppMenu: () -> Unit,
+    onEvacuationGuideClick: () -> Unit = {},
     onCallCenter117Click: () -> Unit = {},
     onDetectLocationClick: () -> Unit = {},
     onWallpaperClick: () -> Unit = {}
 ) {
-    val rotation by if (isRefreshing) {
-        val transition = rememberInfiniteTransition(label = "refreshRotation")
-        transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(800, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "spin"
-        )
-    } else {
-        androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-    }
-
     val barContainerColor = if (isDarkMode) Color(0xFF1E1712) else OrangePrimary
     val barContentColor = if (isDarkMode) Color(0xFFFFEDD5) else OrangeOnPrimary
 
@@ -179,6 +166,40 @@ fun WeatherTopBar(
                         )
                     }
 
+                    // Tombol Menu "SOP Evakuasi" di dekat menu Info
+                    Surface(
+                        color = if (isDarkMode) OrangePrimary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.20f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isDarkMode) OrangePrimary else Color.White.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier
+                            .padding(horizontal = 2.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable(onClick = onEvacuationGuideClick)
+                            .testTag("btn_evacuation_guide_shortcut")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                contentDescription = "SOP Evakuasi",
+                                tint = barContentColor,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "SOP Evakuasi",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = barContentColor
+                            )
+                        }
+                    }
+
                     // App Menu & Online OTA Update Button
                     Box(contentAlignment = Alignment.TopEnd) {
                         IconButton(
@@ -200,32 +221,6 @@ fun WeatherTopBar(
                                     .background(Color(0xFFEF4444), CircleShape)
                             )
                         }
-                    }
-
-                    // Favorite District Toggle Button
-                    IconButton(
-                        onClick = onFavoriteToggle,
-                        modifier = Modifier.size(34.dp).testTag("btn_favorite_toggle")
-                    ) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Default.Star else Icons.Outlined.StarBorder,
-                            contentDescription = if (isFavorite) "Hapus Favorit" else "Tambah Favorit",
-                            tint = if (isFavorite) WeatherSunGold else barContentColor,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-
-                    // Refresh Button
-                    IconButton(
-                        onClick = onRefreshClick,
-                        modifier = Modifier.size(34.dp).testTag("btn_refresh_weather")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Segarkan Cuaca",
-                            tint = barContentColor,
-                            modifier = Modifier.rotate(rotation).size(19.dp)
-                        )
                     }
                 }
             )

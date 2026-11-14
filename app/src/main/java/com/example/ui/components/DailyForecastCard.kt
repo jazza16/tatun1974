@@ -66,11 +66,14 @@ fun DailyForecastCard(
                     text = "Prakiraan Cuaca 7 Hari ke Depan",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             dailyList.forEachIndexed { index, day ->
                 val weatherInfo = day.weatherInfo
@@ -89,6 +92,7 @@ fun DailyForecastCard(
                         color = if (index == 0) OrangePrimary else MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        softWrap = false,
                         modifier = Modifier.width(72.dp)
                     )
 
@@ -104,20 +108,21 @@ fun DailyForecastCard(
                             isDay = true,
                             size = 24.dp
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = weatherInfo.conditionText,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            softWrap = false,
                             modifier = Modifier.weight(1f)
                         )
                     }
 
                     // Rain Chance pill
                     Row(
-                        modifier = Modifier.padding(horizontal = 6.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (day.rainProbabilityMax > 15) {
@@ -127,7 +132,7 @@ fun DailyForecastCard(
                                 tint = WeatherRainBlue,
                                 modifier = Modifier.size(12.dp)
                             )
-                            Spacer(modifier = Modifier.width(2.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "${day.rainProbabilityMax}%",
                                 fontSize = 11.sp,
@@ -160,7 +165,7 @@ fun DailyForecastCard(
                             softWrap = false
                         )
 
-                        Spacer(modifier = Modifier.width(5.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
 
                         Box(
                             modifier = Modifier
@@ -178,7 +183,7 @@ fun DailyForecastCard(
                                 )
                         )
 
-                        Spacer(modifier = Modifier.width(5.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
 
                         Text(
                             text = "${day.maxTemp.toInt()}°",

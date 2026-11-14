@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.District
@@ -59,7 +60,7 @@ fun AllDistrictsView(
 
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -89,18 +90,22 @@ fun AllDistrictsView(
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "15 Kecamatan di Kabupaten Mukomuko",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Prakiraan cuaca spesifik pesisir & hulu Taman Nasional Kerinci Seblat",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            lineHeight = 16.sp,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -112,7 +117,7 @@ fun AllDistrictsView(
             chunkedDistricts.forEach { rowItems ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     rowItems.forEach { dist ->
                         val report = districtsSummary.find { it.district.id == dist.id }
@@ -161,18 +166,18 @@ private fun DistrictCardItem(
             .testTag("district_item_${dist.id}"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isCurrentSelected) OrangePrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (isCurrentSelected) OrangePrimary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            width = if (isCurrentSelected) 2.dp else 1.dp,
+            color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isCurrentSelected) 3.dp else 1.5.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -180,9 +185,12 @@ private fun DistrictCardItem(
                     Text(
                         text = dist.name,
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = if (isCurrentSelected) FontWeight.ExtraBold else FontWeight.Bold,
                         color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     if (isFav) {
                         Spacer(modifier = Modifier.width(4.dp))
@@ -195,7 +203,7 @@ private fun DistrictCardItem(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Surface(
                     shape = RoundedCornerShape(4.dp),
@@ -206,20 +214,26 @@ private fun DistrictCardItem(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = OrangePrimary,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                        maxLines = 1
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
                     text = dist.landmark,
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
                 )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
 
             // Condition icon & text
             Row(
@@ -236,13 +250,16 @@ private fun DistrictCardItem(
                     text = "$tempDisplay°C",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
                 )
-                Spacer(modifier = Modifier.width(2.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    tint = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                     modifier = Modifier.size(16.dp)
                 )
             }

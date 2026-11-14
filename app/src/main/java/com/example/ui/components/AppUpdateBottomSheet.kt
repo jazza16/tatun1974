@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -105,6 +106,7 @@ fun AppUpdateBottomSheet(
     onResetLatestRelease: () -> Unit = {},
     onOpenOnboarding: () -> Unit = {},
     onOpenCompass: () -> Unit = {},
+    onOpenEvacuationGuide: () -> Unit = {},
     onShowStartupWallpaper: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -247,6 +249,27 @@ fun AppUpdateBottomSheet(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Kompas Digital", fontSize = 11.sp, color = Color.White)
+                        }
+
+                        Button(
+                            onClick = {
+                                onDismiss()
+                                onOpenEvacuationGuide()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_open_sop_evakuasi_from_sheet"),
+                            colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("SOP Evakuasi (Panduan Offline)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
 

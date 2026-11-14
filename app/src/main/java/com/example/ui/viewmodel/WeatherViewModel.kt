@@ -11,6 +11,8 @@ import com.example.model.HistoricalWeatherRecord
 import com.example.model.MukomukoDistricts
 import com.example.model.WeatherFullReport
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.example.util.EarthquakeNotificationHelper
 import com.example.util.WeatherAlertSettings
 import com.example.util.WeatherNotificationHelper
@@ -76,6 +78,10 @@ class WeatherViewModel(
 
     private val _uiState = MutableStateFlow(WeatherUiState())
     val uiState: StateFlow<WeatherUiState> = _uiState.asStateFlow()
+
+    private var autoRefreshJob: kotlinx.coroutines.Job? = null
+    private var lastAutoSyncTimestampMs: Long = System.currentTimeMillis()
+    private var hasPerformedInitialGpsAutoSelect = false
 
     val favoriteDistricts: StateFlow<List<String>> = repository.getFavoriteDistrictIds()
         .stateIn(
@@ -178,6 +184,18 @@ class WeatherViewModel(
         _uiState.value = _uiState.value.copy(isDistrictSheetOpen = open)
     }
 
+    /**
+     * Dipanggil otomatis saat aplikasi pertama kali dibuka untuk mendeteksi GPS
+     * dan langsung memilih Kecamatan terdekat di Kabupaten Mukomuko tanpa menekan tombol.
+     */
+    fun autoSelectDistrictViaGpsOnStartup(context: Context) {
+        if (hasPerformedInitialGpsAutoSelect) return
+        if (com.example.util.LocationHelper.hasLocationPermission(context)) {
+            hasPerformedInitialGpsAutoSelect = true
+            detectCurrentLocation(context = context.applicationContext, isAutoDetect = true)
+        }
+    }
+
     fun detectCurrentLocation(
         context: Context,
         isAutoDetect: Boolean = false,
@@ -266,9 +284,49 @@ class WeatherViewModel(
     }
 
     /**
-     * Manual sync: updates BMKG weather and uploads offline citizen reports.
+     * Memeriksa ketersediaan koneksi internet aktif pada perangkat.
+     */
+    private fun isInternetAvailable(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    /**
+     * Menjalankan Auto-Refresh otomatis setiap 30 menit menggunakan viewModelScope
+     * jika terdapat koneksi internet.
+     */
+    fun startAutoRefresh30Minutes(context: Context) {
+        if (autoRefreshJob?.isActive == true) return
+        val appCtx = context.applicationContext
+        autoRefreshJob = viewModelScope.launch {
+            while (isActive) {
+                delay(30 * 60 * 1000L) // 30 menit
+                if (isInternetAvailable(appCtx)) {
+                    syncAllDataOnline(appCtx)
+                }
+            }
+        }
+    }
+
+    /**
+     * Dipanggil secara kondisional saat aplikasi dibuka kembali dari background (ON_RESUME).
+     * Menyinkronkan data otomatis apabila ada koneksi internet dan tidak sedang proses refresh.
+     */
+    fun onAppResumedFromBackground(context: Context) {
+        val appCtx = context.applicationContext
+        val now = System.currentTimeMillis()
+        if (isInternetAvailable(appCtx) && !_uiState.value.isRefreshing && (now - lastAutoSyncTimestampMs >= 60_000L)) {
+            syncAllDataOnline(appCtx)
+        }
+    }
+
+    /**
+     * Manual/Auto sync: updates BMKG weather and uploads offline citizen reports.
      */
     fun syncAllDataOnline(context: Context, onComplete: ((Boolean, String) -> Unit)? = null) {
+        lastAutoSyncTimestampMs = System.currentTimeMillis()
         val currentDistrict = _uiState.value.selectedDistrict
         _uiState.value = _uiState.value.copy(isRefreshing = true, errorMessage = null)
         viewModelScope.launch {

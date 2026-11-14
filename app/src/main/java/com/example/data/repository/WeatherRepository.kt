@@ -1,5 +1,9 @@
 package com.example.data.repository
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
 import com.example.data.api.NetworkClient
 import com.example.data.api.OpenMeteoAirQualityResponse
 import com.example.data.api.OpenMeteoForecastResponse
@@ -24,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -267,33 +272,101 @@ class WeatherRepository(
         weatherDao.insertAllCitizenDisasterReports(entities)
     }
 
+    /**
+     * Mengunggah Bitmap foto laporan warga ke Supabase Storage (bucket `reports`)
+     * dan mengembalikan URL publik `https://`.
+     */
+    suspend fun uploadPhotoToSupabase(bitmap: Bitmap, reportId: String): Result<String> =
+        com.example.data.api.SupabaseClient.uploadPhotoToSupabase(bitmap, reportId)
+
+    /**
+     * Mendekode sumber foto lokal (file://, path absolut, atau Base64) menjadi Bitmap
+     * agar siap diunggah ke Firebase Storage.
+     */
+    private fun decodeLocalPhotoBitmap(photoSource: String?): Bitmap? {
+        if (photoSource.isNullOrBlank()) return null
+        val trimmed = photoSource.trim()
+        if (trimmed.startsWith("http://", ignoreCase = true) ||
+            trimmed.startsWith("https://", ignoreCase = true)
+        ) {
+            return null
+        }
+        return try {
+            when {
+                trimmed.startsWith("file://", ignoreCase = true) -> {
+                    val path = Uri.parse(trimmed).path ?: return null
+                    val file = File(path)
+                    if (file.exists() && file.length() > 0L) BitmapFactory.decodeFile(file.absolutePath) else null
+                }
+                trimmed.startsWith("/") -> {
+                    val file = File(trimmed)
+                    if (file.exists() && file.length() > 0L) BitmapFactory.decodeFile(file.absolutePath) else null
+                }
+                trimmed.startsWith("data:image", ignoreCase = true) || trimmed.contains("base64,", ignoreCase = true) -> {
+                    val base64Part = trimmed.substringAfter("base64,", trimmed)
+                    val bytes = Base64.decode(base64Part, Base64.DEFAULT)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+                else -> null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     suspend fun submitCitizenDisasterReport(report: CitizenDisasterReport) = withContext(databaseWriteDispatcher) {
+        // 1. Jika ada foto lokal, unggah terlebih dahulu ke Supabase Storage untuk mendapatkan URL publik https://
+        var uploadedPublicUrl: String? = null
+        val existingOrLocalPhotoUri: String? = if (!report.photoUri.isNullOrBlank()) {
+            val trimmedUri = report.photoUri.trim()
+            if (trimmedUri.startsWith("https://", ignoreCase = true) ||
+                trimmedUri.startsWith("http://", ignoreCase = true)
+            ) {
+                uploadedPublicUrl = trimmedUri
+                trimmedUri
+            } else {
+                val bitmap = decodeLocalPhotoBitmap(trimmedUri)
+                if (bitmap != null) {
+                    val supabaseUrl = uploadPhotoToSupabase(bitmap, report.id).getOrNull()
+                    uploadedPublicUrl = supabaseUrl
+                    supabaseUrl ?: report.photoUri
+                } else {
+                    report.photoUri
+                }
+            }
+        } else {
+            null
+        }
+
+        val finalLocalReport = report.copy(photoUri = existingOrLocalPhotoUri)
+        val finalCloudReport = report.copy(photoUri = uploadedPublicUrl)
+
         val entity = CitizenDisasterReportEntity(
-            id = report.id,
-            disasterType = report.disasterType,
-            incidentTime = report.incidentTime,
-            incidentLocation = report.incidentLocation,
-            district = report.district,
-            village = report.village,
-            latitude = report.latitude,
-            longitude = report.longitude,
-            gpsAccuracyMeters = report.gpsAccuracyMeters,
-            isGpsVerified = report.isGpsVerified,
-            casualtiesDead = report.casualtiesDead,
-            casualtiesInjured = report.casualtiesInjured,
-            casualtiesMissing = report.casualtiesMissing,
-            photoUri = report.photoUri,
-            reporterName = report.reporterName,
-            reporterPhone = report.reporterPhone,
-            additionalNotes = report.additionalNotes,
-            timestamp = report.timestamp,
-            status = report.status
+            id = finalLocalReport.id,
+            disasterType = finalLocalReport.disasterType,
+            incidentTime = finalLocalReport.incidentTime,
+            incidentLocation = finalLocalReport.incidentLocation,
+            district = finalLocalReport.district,
+            village = finalLocalReport.village,
+            latitude = finalLocalReport.latitude,
+            longitude = finalLocalReport.longitude,
+            gpsAccuracyMeters = finalLocalReport.gpsAccuracyMeters,
+            isGpsVerified = finalLocalReport.isGpsVerified,
+            casualtiesDead = finalLocalReport.casualtiesDead,
+            casualtiesInjured = finalLocalReport.casualtiesInjured,
+            casualtiesMissing = finalLocalReport.casualtiesMissing,
+            photoUri = finalLocalReport.photoUri,
+            reporterName = finalLocalReport.reporterName,
+            reporterPhone = finalLocalReport.reporterPhone,
+            additionalNotes = finalLocalReport.additionalNotes,
+            timestamp = finalLocalReport.timestamp,
+            status = finalLocalReport.status
         )
         weatherDao.insertCitizenDisasterReport(entity)
 
         // Push to Firestore and Cloud container so all devices see the new report
         try {
-            com.example.data.local.FirestoreHelper.syncReportToCloud(report)
+            com.example.data.local.FirestoreHelper.syncReportToCloud(finalCloudReport)
         } catch (_: Exception) {}
         try {
             val allLocal = weatherDao.getAllCitizenDisasterReportsSync().map { e ->

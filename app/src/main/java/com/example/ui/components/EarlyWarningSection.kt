@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -56,6 +57,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.DetailedEarlyWarning
@@ -170,7 +172,7 @@ fun EarlyWarningSection(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Peringatan Dini Cuaca & Bencana",
                         fontSize = 17.sp,
@@ -206,7 +208,7 @@ fun EarlyWarningSection(
                 elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     // Title & Severity Badge
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -217,7 +219,7 @@ fun EarlyWarningSection(
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -231,7 +233,10 @@ fun EarlyWarningSection(
                                     text = warning.severity,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = severityColor
+                                    color = severityColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -261,9 +266,9 @@ fun EarlyWarningSection(
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = warning.title,
                                 fontSize = 15.sp,
@@ -285,7 +290,8 @@ fun EarlyWarningSection(
                         text = warning.description,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                        lineHeight = 17.sp
+                        lineHeight = 18.sp,
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -298,11 +304,11 @@ fun EarlyWarningSection(
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         warning.affectedDistricts.forEach { distName ->
                             Surface(
@@ -314,13 +320,16 @@ fun EarlyWarningSection(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Safety instructions list
                     Surface(
@@ -341,10 +350,11 @@ fun EarlyWarningSection(
                                     text = "Langkah Mitigasi & Keselamatan:",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = severityColor
+                                    color = severityColor,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             warning.safetyInstructions.forEach { instruction ->
                                 Row(
                                     modifier = Modifier.padding(vertical = 2.dp),
@@ -360,7 +370,8 @@ fun EarlyWarningSection(
                                         text = instruction,
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                        lineHeight = 15.sp
+                                        lineHeight = 16.sp,
+                                        modifier = Modifier.weight(1f)
                                     )
                                 }
                             }
@@ -439,7 +450,7 @@ private fun WeatherAlertNotificationSettingsCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFDBA74))
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             // Header with Orange Theme
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -485,7 +496,10 @@ private fun WeatherAlertNotificationSettingsCard(
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Black,
                                     color = OrangeOnPrimary,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -512,13 +526,11 @@ private fun WeatherAlertNotificationSettingsCard(
                         checkedThumbColor = Color.White,
                         checkedTrackColor = OrangePrimary
                     ),
-                    modifier = Modifier
-                        .scale(0.8f)
-                        .testTag("switch_weather_alert_master")
+                    modifier = Modifier.testTag("switch_weather_alert_master")
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Sub-category filters description
             Text(
@@ -604,7 +616,7 @@ private fun WeatherAlertNotificationSettingsCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Location Relevance Selection Strip
             Surface(
@@ -629,7 +641,7 @@ private fun WeatherAlertNotificationSettingsCard(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Lokasi Peringatan Relevan",
                                 fontSize = 12.sp,
@@ -662,7 +674,7 @@ private fun WeatherAlertNotificationSettingsCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Test Notification Trigger Button (Orange theme with preview info)
             Button(
@@ -677,6 +689,7 @@ private fun WeatherAlertNotificationSettingsCard(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 48.dp)
                     .testTag("btn_test_weather_alert_notification"),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary)
@@ -696,7 +709,7 @@ private fun WeatherAlertNotificationSettingsCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Sudden Severe Weather Push Notification Button
             OutlinedButton(
@@ -711,6 +724,7 @@ private fun WeatherAlertNotificationSettingsCard(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 48.dp)
                     .testTag("btn_test_sudden_weather_push_notification"),
                 shape = RoundedCornerShape(12.dp),
                 border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFDC2626)),

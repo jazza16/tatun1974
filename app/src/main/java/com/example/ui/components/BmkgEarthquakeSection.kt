@@ -19,6 +19,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -79,6 +81,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.BmkgEarthquake
@@ -238,7 +241,10 @@ private fun WrsConsoleHeaderCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
                             .size(42.dp)
@@ -253,9 +259,9 @@ private fun WrsConsoleHeaderCard(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "WRS-NTWC",
@@ -274,7 +280,10 @@ private fun WrsConsoleHeaderCard(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -348,9 +357,7 @@ private fun WrsConsoleHeaderCard(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = OrangePrimary
                             ),
-                            modifier = Modifier
-                                .size(36.dp)
-                                .testTag("switch_earthquake_notifications")
+                            modifier = Modifier.testTag("switch_earthquake_notifications")
                         )
                     }
                 }
@@ -533,13 +540,16 @@ private fun WrsTsunamiThreatCard(earthquake: BmkgEarthquake) {
         border = androidx.compose.foundation.BorderStroke(1.2.dp, warningBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(
                         imageVector = if (isTsunamiPotential) Icons.Default.Waves else Icons.Default.CheckCircle,
                         contentDescription = null,
@@ -551,7 +561,8 @@ private fun WrsTsunamiThreatCard(earthquake: BmkgEarthquake) {
                         text = "STATUS ANCAMAN TSUNAMI:",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = warningTextCol.copy(alpha = 0.85f)
+                        color = warningTextCol.copy(alpha = 0.85f),
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
@@ -564,7 +575,10 @@ private fun WrsTsunamiThreatCard(earthquake: BmkgEarthquake) {
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = warningTextCol,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
             }
@@ -620,7 +634,7 @@ private fun WrsParameterMatrixCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             // Header: OT & Region Tag
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -636,15 +650,21 @@ private fun WrsParameterMatrixCard(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = OrangePrimary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
                     text = "${earthquake.date} • ${earthquake.timeWib}",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -732,27 +752,36 @@ private fun WrsParameterMatrixCard(
                     )
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = "JARAK KE MUKOMUKO",
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (earthquake.isNearMukomuko) Color(0xFF92400E) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                            color = if (earthquake.isNearMukomuko) Color(0xFF92400E) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "~${earthquake.distanceKmToMukomuko} km",
-                            fontSize = 19.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Black,
-                            color = if (earthquake.isNearMukomuko) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurface
+                            color = if (earthquake.isNearMukomuko) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = if (earthquake.isNearMukomuko) "Radius Dekat" else "Radius Aman",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (earthquake.isNearMukomuko) Color(0xFFB45309) else Color.Gray
+                            color = if (earthquake.isNearMukomuko) Color(0xFFB45309) else Color.Gray,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -770,10 +799,11 @@ private fun WrsParameterMatrixCard(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = formatEarthquakeRegion(earthquake.region),
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
-                lineHeight = 18.sp
+                lineHeight = 16.sp,
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -978,6 +1008,7 @@ private fun WrsShakemapSection(earthquake: BmkgEarthquake) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
     val context = LocalContext.current
@@ -1010,7 +1041,8 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
                     text = "Daftar 15 Kejadian (WRS Event List)",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = "${filteredList.size} Kejadian",
@@ -1019,12 +1051,13 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Filter Chips
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterChip(
                     selected = filterType == "ALL",
@@ -1092,7 +1125,8 @@ private fun WrsRecentEventListCard(earthquakes: List<BmkgEarthquake>) {
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1
+                            lineHeight = 16.sp,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -166,7 +167,10 @@ fun DatabaseExplorerScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     IconButton(
                         onClick = onClose,
                         modifier = Modifier.testTag("btn_close_db_explorer")
@@ -178,7 +182,7 @@ fun DatabaseExplorerScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.Storage,
@@ -191,13 +195,15 @@ fun DatabaseExplorerScreen(
                                 text = "Database Explorer (Room SQLite)",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.White,
+                                modifier = Modifier.padding(end = 16.dp)
                             )
                         }
                         Text(
                             text = "Inspeksi tabel lokal, status WAL & resolusi data",
                             fontSize = 11.sp,
-                            color = Color(0xFF94A3B8)
+                            color = Color(0xFF94A3B8),
+                            modifier = Modifier.padding(end = 16.dp)
                         )
                     }
                 }
@@ -299,7 +305,7 @@ fun DatabaseExplorerScreen(
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp)
+                        .heightIn(min = 52.dp)
                         .testTag("input_db_search")
                 )
             }
@@ -495,28 +501,39 @@ fun DatabaseExplorerScreen(
                                             // Log Komunikasi (Relasi One-to-Many)
                                             if (item.logs.isNotEmpty()) {
                                                 Spacer(modifier = Modifier.height(4.dp))
-                                                Text(
-                                                    text = "📡 Log Komunikasi (${item.logs.size} Riwayat):",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color(0xFFD97706)
-                                                )
-                                                item.logs.forEach { log ->
-                                                    Row(
-                                                        modifier = Modifier.padding(top = 2.dp, start = 4.dp),
-                                                        verticalAlignment = Alignment.Top
-                                                    ) {
-                                                        Text(
-                                                            text = "• [${log.waktuKomunikasi} | ${log.saluran}] ",
-                                                            fontSize = 10.sp,
-                                                            fontWeight = FontWeight.SemiBold,
-                                                            color = Color(0xFFB45309)
-                                                        )
-                                                        Text(
-                                                            text = "${log.pihakDihubungi}: \"${log.pesan}\" (Arahan: ${log.arahanTindakan})",
-                                                            fontSize = 10.sp,
-                                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                                                        )
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(end = 4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "📡 Log Komunikasi (${item.logs.size} Riwayat):",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFFD97706),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                    item.logs.forEach { log ->
+                                                        Row(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .padding(top = 3.dp, start = 4.dp),
+                                                            verticalAlignment = Alignment.Top
+                                                        ) {
+                                                            Text(
+                                                                text = "• [${log.waktuKomunikasi} | ${log.saluran}] ",
+                                                                fontSize = 10.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = Color(0xFFB45309)
+                                                            )
+                                                            Text(
+                                                                text = "${log.pihakDihubungi}: \"${log.pesan}\" (Arahan: ${log.arahanTindakan})",
+                                                                fontSize = 10.sp,
+                                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                                                lineHeight = 14.sp,
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }

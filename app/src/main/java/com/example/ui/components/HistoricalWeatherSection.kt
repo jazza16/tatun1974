@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.District
@@ -110,7 +112,7 @@ fun HistoricalWeatherSection(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Arsip Cuaca Historis",
                         fontSize = 18.sp,
@@ -153,7 +155,7 @@ fun HistoricalWeatherSection(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -167,7 +169,10 @@ fun HistoricalWeatherSection(
                                 text = label,
                                 fontSize = 12.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) OrangeOnPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isSelected) OrangeOnPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -196,11 +201,11 @@ fun HistoricalWeatherSection(
                 )
             )
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             Surface(
                 modifier = Modifier
-                    .height(56.dp)
+                    .heightIn(min = 56.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .clickable {
                         if (customDateInput.isNotBlank()) {
@@ -211,7 +216,7 @@ fun HistoricalWeatherSection(
                 color = OrangePrimary
             ) {
                 Box(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -229,12 +234,12 @@ fun HistoricalWeatherSection(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp),
+                    .heightIn(min = 180.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = OrangePrimary)
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "Memuat arsip cuaca historis Mukomuko...",
                         fontSize = 12.sp,
@@ -252,14 +257,14 @@ fun HistoricalWeatherSection(
                 elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     // Header with Date and Condition
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Tanggal: ${record.date}",
                                 fontSize = 16.sp,
@@ -273,12 +278,13 @@ fun HistoricalWeatherSection(
                             )
                         }
 
+                        Spacer(modifier = Modifier.width(8.dp))
                         Surface(
                             color = OrangePrimary.copy(alpha = 0.15f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -292,7 +298,10 @@ fun HistoricalWeatherSection(
                                     text = weatherInfo.conditionText,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = OrangePrimary
+                                    color = OrangePrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -357,7 +366,7 @@ fun HistoricalWeatherSection(
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
@@ -370,22 +379,26 @@ fun HistoricalWeatherSection(
                                     text = "Ringkasan Catatan Klimatologis",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = record.summaryText,
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 16.sp
+                                lineHeight = 16.sp,
+                                modifier = Modifier.fillMaxWidth()
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "Analisis: ${record.comparisonWithAverage}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = OrangePrimary
+                                color = OrangePrimary,
+                                lineHeight = 16.sp,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
@@ -422,7 +435,10 @@ private fun HistoricalMetricBox(
                     text = label,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
@@ -437,7 +453,9 @@ private fun HistoricalMetricBox(
                 text = subText,
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
         }
     }

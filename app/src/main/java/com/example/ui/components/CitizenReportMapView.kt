@@ -770,6 +770,9 @@ private fun ReportInspectionCard(
 
             // Photo Preview if available
             if (!report.photoUri.isNullOrBlank()) {
+                val resolvedMapPhotoModel = remember(report.photoUri) {
+                    decodeCitizenPhotoModel(report.photoUri)
+                }
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = Color(0xFF1E293B),
@@ -780,7 +783,7 @@ private fun ReportInspectionCard(
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         AsyncImage(
-                            model = report.photoUri,
+                            model = resolvedMapPhotoModel,
                             contentDescription = "Foto Laporan Bencana",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()

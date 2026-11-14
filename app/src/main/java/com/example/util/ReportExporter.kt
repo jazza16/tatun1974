@@ -3,15 +3,21 @@ package com.example.util
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.os.Build
+import android.util.Base64
 import android.os.Environment
 import android.provider.MediaStore
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.data.local.OfficerAuthManager
@@ -19,11 +25,13 @@ import com.example.model.CitizenDisasterReport
 import com.example.ui.components.DisasterChartCategory
 import com.example.ui.components.MonthlyDisasterSummary
 import com.example.ui.components.PieSliceData
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -33,6 +41,338 @@ import kotlin.math.roundToInt
  * lampiran laporan resmi harian, dan analisis data spreadsheet (Excel).
  */
 object ReportExporter {
+
+    private const val FOOTER_ATRIBUSI_TEXT =
+        "Dicetak melalui Aplikasi SIPAGAR KITA - Pusdalops PB BPBD Kabupaten Mukomuko"
+
+    @Volatile
+    private var cachedMukomukoLogo: Bitmap? = null
+
+    @Volatile
+    private var cachedBpbdLogo: Bitmap? = null
+
+    /**
+     * Memuat dan membersihkan background pada Logo Kabupaten Mukomuko (perisai) atau Logo BPBD (lingkaran)
+     * sehingga 100% transparan (ARGB_8888 tanpa background warna/kotak apapun) serta di-crop tepat
+     * pada batas tepi logo agar ukurannya proporsional dan sejajar saat digambar di kop surat.
+     */
+    fun getCleanTransparentLogo(context: Context, isMukomukoShield: Boolean): Bitmap? {
+        if (isMukomukoShield) {
+            cachedMukomukoLogo?.let { return it }
+        } else {
+            cachedBpbdLogo?.let { return it }
+        }
+
+        return try {
+            val resId = if (isMukomukoShield) {
+                com.example.R.drawable.ic_mukomuko_logo
+            } else {
+                com.example.R.drawable.ic_bpbd_mukomuko_circle
+            }
+            val opts = BitmapFactory.Options().apply {
+                inScaled = false
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            val src = BitmapFactory.decodeResource(context.resources, resId, opts) ?: return null
+            val w = src.width
+            val h = src.height
+            val pixels = IntArray(w * h)
+            src.getPixels(pixels, 0, w, 0, 0, w, h)
+
+            val visited = BooleanArray(w * h)
+            val queue = IntArray(w * h)
+            var head = 0
+            var tail = 0
+
+            fun enqueue(x: Int, y: Int) {
+                val idx = y * w + x
+                if (!visited[idx]) {
+                    visited[idx] = true
+                    queue[tail++] = idx
+                }
+            }
+
+            for (x in 0 until w) {
+                enqueue(x, 0)
+                enqueue(x, h - 1)
+            }
+            for (y in 0 until h) {
+                enqueue(0, y)
+                enqueue(w - 1, y)
+            }
+
+            fun isBackgroundPixel(color: Int): Boolean {
+                val a = (color ushr 24) and 0xFF
+                if (a < 30) return true
+                val r = (color ushr 16) and 0xFF
+                val g = (color ushr 8) and 0xFF
+                val b = color and 0xFF
+                return if (isMukomukoShield) {
+                    // Menghapus background luar di sekitar garis tepi hitam perisai Kab. Mukomuko
+                    (r + g + b) > 260 && abs(r - g) < 28 && abs(g - b) < 28
+                } else {
+                    // Menghapus background luar di sekitar cincin gelap luar lingkaran BPBD
+                    r > 195 && g > 195 && b > 195
+                }
+            }
+
+            while (head < tail) {
+                val idx = queue[head++]
+                val color = pixels[idx]
+                if (isBackgroundPixel(color)) {
+                    pixels[idx] = Color.TRANSPARENT
+                    val x = idx % w
+                    val y = idx / w
+                    if (x > 0) enqueue(x - 1, y)
+                    if (x < w - 1) enqueue(x + 1, y)
+                    if (y > 0) enqueue(x, y - 1)
+                    if (y < h - 1) enqueue(x, y + 1)
+                }
+            }
+
+            // Haluskan piksel tepi luar yang berbatasan langsung dengan area transparan
+            for (y in 1 until h - 1) {
+                for (x in 1 until w - 1) {
+                    val idx = y * w + x
+                    if (pixels[idx] != Color.TRANSPARENT && isBackgroundPixel(pixels[idx])) {
+                        if (pixels[idx - 1] == Color.TRANSPARENT ||
+                            pixels[idx + 1] == Color.TRANSPARENT ||
+                            pixels[idx - w] == Color.TRANSPARENT ||
+                            pixels[idx + w] == Color.TRANSPARENT
+                        ) {
+                            pixels[idx] = Color.TRANSPARENT
+                        }
+                    }
+                }
+            }
+
+            // Cari bounding box ketat dari piksel non-transparan agar rasio aspek logo akurat
+            var minX = w
+            var minY = h
+            var maxX = 0
+            var maxY = 0
+            for (y in 0 until h) {
+                for (x in 0 until w) {
+                    val alpha = (pixels[y * w + x] ushr 24) and 0xFF
+                    if (alpha > 16) {
+                        if (x < minX) minX = x
+                        if (x > maxX) maxX = x
+                        if (y < minY) minY = y
+                        if (y > maxY) maxY = y
+                    }
+                }
+            }
+
+            val cleanedFull = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            cleanedFull.setPixels(pixels, 0, w, 0, 0, w, h)
+
+            val trimmed = if (maxX > minX && maxY > minY) {
+                Bitmap.createBitmap(
+                    cleanedFull,
+                    minX,
+                    minY,
+                    (maxX - minX + 1).coerceAtLeast(1),
+                    (maxY - minY + 1).coerceAtLeast(1)
+                )
+            } else {
+                cleanedFull
+            }
+
+            if (isMukomukoShield) {
+                cachedMukomukoLogo = trimmed
+            } else {
+                cachedBpbdLogo = trimmed
+            }
+            trimmed
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Menghasilkan Data URI Base64 PNG transparan (`data:image/png;base64,...`)
+     * untuk digunakan pada kop surat HTML cetak PDF (`PdfGenerator`).
+     */
+    fun getCleanLogoDataUri(context: Context, isMukomukoShield: Boolean): String {
+        return try {
+            val bmp = getCleanTransparentLogo(context, isMukomukoShield) ?: return ""
+            val baos = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, baos)
+            val base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+            "data:image/png;base64,$base64"
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    /**
+     * Menggambar Kop Surat Resmi Pemerintah Kabupaten Mukomuko secara terstandarisasi:
+     * - Sebelah KIRI  : Logo Kabupaten Mukomuko (tanpa background warna, proporsional perisai)
+     * - Bagian TENGAH : Teks Instansi Pemkab Mukomuko, BPBD, Pusdalops-PB & Alamat Resmi
+     * - Sebelah KANAN : Logo BPBD Kabupaten Mukomuko (tanpa background warna, proporsional lingkaran)
+     *
+     * @return Posisi koordinat Y berikutnya setelah garis ganda kop surat.
+     */
+    fun drawKopSuratResmi(
+        context: Context,
+        canvas: Canvas,
+        pageWidth: Int,
+        margin: Float = 30f
+    ): Float {
+        val targetLogoHeight = 44f
+        val logoCenterY = 41f
+        val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+        // 1. Logo KIRI: Kabupaten Mukomuko (Perisai proporsional, transparan tanpa background)
+        try {
+            val leftLogo = getCleanTransparentLogo(context, isMukomukoShield = true)
+            if (leftLogo != null && leftLogo.height > 0) {
+                val aspect = leftLogo.width.toFloat() / leftLogo.height.toFloat()
+                val leftWidth = targetLogoHeight * aspect
+                val top = logoCenterY - (targetLogoHeight / 2f)
+                val dstLeft = RectF(margin, top, margin + leftWidth, top + targetLogoHeight)
+                canvas.drawBitmap(leftLogo, null, dstLeft, bitmapPaint)
+            }
+        } catch (_: Exception) {}
+
+        // 2. Logo KANAN: BPBD Kabupaten Mukomuko (Lingkaran proporsional, sejajar & transparan tanpa background)
+        try {
+            val rightLogo = getCleanTransparentLogo(context, isMukomukoShield = false)
+            if (rightLogo != null && rightLogo.height > 0) {
+                val aspect = rightLogo.width.toFloat() / rightLogo.height.toFloat()
+                val rightWidth = targetLogoHeight * aspect
+                val top = logoCenterY - (targetLogoHeight / 2f)
+                val dstRight = RectF(
+                    pageWidth - margin - rightWidth,
+                    top,
+                    pageWidth - margin,
+                    top + targetLogoHeight
+                )
+                canvas.drawBitmap(rightLogo, null, dstRight, bitmapPaint)
+            }
+        } catch (_: Exception) {}
+
+        // 3. Teks Instansi di Tengah (sejajar secara vertikal dengan titik tengah kedua logo)
+        val headerTitlePaint = Paint().apply {
+            color = Color.rgb(15, 23, 42)
+            textSize = 11.5f
+            isFakeBoldText = true
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+        }
+        val headerSubtitlePaint = Paint().apply {
+            color = Color.rgb(194, 65, 12)
+            textSize = 9f
+            isFakeBoldText = true
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+        }
+        val headerAddressPaint = Paint().apply {
+            color = Color.rgb(51, 65, 85)
+            textSize = 7.4f
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+        }
+
+        var y = 29f
+        val centerX = pageWidth / 2f
+        canvas.drawText("PEMERINTAH KABUPATEN MUKOMUKO", centerX, y, headerTitlePaint)
+        y += 13f
+        canvas.drawText("BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)", centerX, y, headerTitlePaint)
+        y += 12f
+        canvas.drawText(
+            "PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)",
+            centerX,
+            y,
+            headerSubtitlePaint
+        )
+        y += 11f
+        canvas.drawText(
+            "Jl. Danau Nibung, Kompleks Perkantoran Pemkab Mukomuko • Call Center Darurat 117 • Sistem SIPAGAR KITA",
+            centerX,
+            y,
+            headerAddressPaint
+        )
+
+        // 4. Garis Penutup Kop Surat Ganda Resmi
+        y += 9f
+        val thickLinePaint = Paint().apply {
+            color = Color.rgb(15, 23, 42)
+            strokeWidth = 1.8f
+            isAntiAlias = true
+        }
+        val thinLinePaint = Paint().apply {
+            color = Color.rgb(100, 116, 139)
+            strokeWidth = 0.7f
+            isAntiAlias = true
+        }
+        canvas.drawLine(margin, y, pageWidth - margin, y, thickLinePaint)
+        y += 2.5f
+        canvas.drawLine(margin, y, pageWidth - margin, y, thinLinePaint)
+
+        return y + 15f
+    }
+
+    /**
+     * Menggambar atribusi footer resmi di bagian paling bawah setiap halaman PDF.
+     */
+    fun drawFooterAtribusiResmi(
+        canvas: Canvas,
+        pageWidth: Int,
+        pageHeight: Int,
+        margin: Float = 30f
+    ) {
+        val footerLineY = pageHeight - 28f
+        val footerTextY = pageHeight - 16f
+
+        val linePaint = Paint().apply {
+            color = Color.rgb(203, 213, 225)
+            strokeWidth = 0.6f
+            isAntiAlias = true
+        }
+        val footerPaint = Paint().apply {
+            color = Color.rgb(100, 116, 139)
+            textSize = 7.2f
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+        }
+
+        canvas.drawLine(margin, footerLineY, pageWidth - margin, footerLineY, linePaint)
+        canvas.drawText(FOOTER_ATRIBUSI_TEXT, pageWidth / 2f, footerTextY, footerPaint)
+    }
+
+    /**
+     * Menggambar teks multi-baris secara otomatis (word-wrap) menggunakan StaticLayout
+     * agar teks deskripsi/catatan yang panjang turun ke baris berikutnya dan tidak keluar batas.
+     *
+     * @return Tinggi total (height) dari blok teks yang digambar dalam satuan point.
+     */
+    private fun drawWrappedText(
+        canvas: Canvas,
+        text: String,
+        x: Float,
+        topY: Float,
+        maxWidth: Int,
+        paint: Paint,
+        maxLines: Int = Int.MAX_VALUE
+    ): Float {
+        val safeText = text.ifBlank { "-" }
+        val textPaint = TextPaint(paint).apply { isAntiAlias = true }
+        val staticLayout = StaticLayout.Builder
+            .obtain(safeText, 0, safeText.length, textPaint, maxWidth.coerceAtLeast(20))
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setLineSpacing(1.5f, 1.0f)
+            .setIncludePad(false)
+            .setMaxLines(maxLines)
+            .build()
+
+        canvas.save()
+        canvas.translate(x, topY)
+        staticLayout.draw(canvas)
+        canvas.restore()
+
+        return staticLayout.height.toFloat()
+    }
 
     /**
      * Menghasilkan dokumen PDF resmi A4 berisi rekapitulasi laporan bencana tervalidasi.
@@ -93,34 +433,7 @@ object ReportExporter {
             val sdf = SimpleDateFormat("dd MMMM yyyy, HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
             val printDate = sdf.format(Date())
 
-            var y = 45f
-
-            // Dual Agency Logos (Left: Pemkab Mukomuko / BPBD, Right: Logo BPBD)
-            try {
-                val leftLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_bpbd_mukomuko)
-                if (leftLogo != null) {
-                    val dstLeft = RectF(36f, 30f, 76f, 70f)
-                    canvas.drawBitmap(leftLogo, null, dstLeft, null)
-                }
-            } catch (_: Exception) {}
-
-            try {
-                val rightLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_mukomuko_logo)
-                if (rightLogo != null) {
-                    val dstRight = RectF((pageWidth - 76).toFloat(), 30f, (pageWidth - 36).toFloat(), 70f)
-                    canvas.drawBitmap(rightLogo, null, dstRight, null)
-                }
-            } catch (_: Exception) {}
-
-            // Official Header
-            canvas.drawText("PEMERINTAH KABUPATEN MUKOMUKO", (pageWidth / 2).toFloat(), y, titlePaint)
-            y += 15f
-            canvas.drawText("BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)", (pageWidth / 2).toFloat(), y, titlePaint)
-            y += 14f
-            canvas.drawText("Pusat Pengendalian Operasi (Pusdalops) & Tim Reaksi Cepat (TRC)", (pageWidth / 2).toFloat(), y, subtitlePaint)
-            y += 12f
-            canvas.drawLine(36f, y, (pageWidth - 36).toFloat(), y, linePaint)
-            y += 15f
+            var y = drawKopSuratResmi(context, canvas, pageWidth, margin = 36f)
 
             // Document Title
             canvas.drawText("REKAPITULASI RESMI LAPORAN BENCANA WARGA TERVALIDASI", (pageWidth / 2).toFloat(), y, titlePaint)
@@ -151,25 +464,70 @@ object ReportExporter {
             canvas.drawText("Wilayah", 245f, y + 12f, boldPaint)
             canvas.drawText("Status", 370f, y + 12f, boldPaint)
             canvas.drawText("Catatan Tindak Lanjut TRC", 445f, y + 12f, boldPaint)
-            y += 24f
+            y += 20f
 
-            // Render Rows (up to fit A4 page cleanly)
+            // Render Rows dengan word-wrap otomatis menggunakan StaticLayout
+            val maxTableBottomY = pageHeight - 115f
             reports.take(18).forEachIndexed { idx, rep ->
-                canvas.drawText("${idx + 1}.", 42f, y, textPaint)
-                canvas.drawText("#${rep.id.takeLast(7)}", 68f, y, boldPaint)
-                canvas.drawText(rep.disasterType.take(18), 145f, y, textPaint)
-                canvas.drawText("${rep.village.take(12)}, ${rep.district.take(10)}", 245f, y, textPaint)
-                canvas.drawText(rep.status, 370f, y, boldPaint)
-                val note = if (rep.additionalNotes.isNotBlank()) rep.additionalNotes.take(24) else "-"
-                canvas.drawText(note, 445f, y, textPaint)
+                if (y > maxTableBottomY) return@forEachIndexed
 
-                y += 6f
+                val rowTopY = y + 2f
+                val wilayahText = buildString {
+                    append("${rep.village}, ${rep.district}")
+                    if (rep.incidentLocation.isNotBlank()) {
+                        append(" (${rep.incidentLocation})")
+                    }
+                }
+                val noteText = rep.additionalNotes.ifBlank { "-" }
+
+                canvas.drawText("${idx + 1}.", 42f, rowTopY + 8f, textPaint)
+                canvas.drawText("#${rep.id.takeLast(7)}", 68f, rowTopY + 8f, boldPaint)
+
+                val hBencana = drawWrappedText(
+                    canvas = canvas,
+                    text = rep.disasterType,
+                    x = 145f,
+                    topY = rowTopY,
+                    maxWidth = 94,
+                    paint = textPaint,
+                    maxLines = 3
+                )
+                val hWilayah = drawWrappedText(
+                    canvas = canvas,
+                    text = wilayahText,
+                    x = 245f,
+                    topY = rowTopY,
+                    maxWidth = 118,
+                    paint = textPaint,
+                    maxLines = 3
+                )
+                val hStatus = drawWrappedText(
+                    canvas = canvas,
+                    text = rep.status,
+                    x = 370f,
+                    topY = rowTopY,
+                    maxWidth = 68,
+                    paint = boldPaint,
+                    maxLines = 2
+                )
+                val hNote = drawWrappedText(
+                    canvas = canvas,
+                    text = noteText,
+                    x = 445f,
+                    topY = rowTopY,
+                    maxWidth = (pageWidth - 36) - 445,
+                    paint = textPaint,
+                    maxLines = 4
+                )
+
+                val rowHeight = max(max(hBencana, hWilayah), max(hStatus, hNote)).coerceAtLeast(12f)
+                y = rowTopY + rowHeight + 5f
                 canvas.drawLine(36f, y, (pageWidth - 36).toFloat(), y, linePaint)
-                y += 16f
+                y += 4f
             }
 
             // Signature Footer
-            y = (pageHeight - 90).toFloat()
+            y = (pageHeight - 102).toFloat()
             canvas.drawText("Mukomuko, $printDate", (pageWidth - 190).toFloat(), y, textPaint)
             y += 12f
             canvas.drawText("Petugas Jaga Siaga Pusdalops BPBD,", (pageWidth - 190).toFloat(), y, textPaint)
@@ -178,6 +536,8 @@ object ReportExporter {
             y += 10f
             val nipText = if (officerNip.isNotBlank()) "NIP: $officerNip" else "NIP: 197401282006041006"
             canvas.drawText(nipText, (pageWidth - 190).toFloat(), y, textPaint)
+
+            drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin = 36f)
 
             pdfDoc.finishPage(page)
 
@@ -330,41 +690,8 @@ object ReportExporter {
             color = Color.rgb(241, 245, 249)
         }
 
-        var y = 35f
         val margin = 30f
-
-        // Top Header Dual Logos (Left: Pemkab / BPBD Mukomuko, Right: Logo BPBD)
-        try {
-            val leftLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_bpbd_mukomuko)
-            if (leftLogo != null) {
-                val dstLeft = RectF(margin, 22f, margin + 42f, 64f)
-                canvas.drawBitmap(leftLogo, null, dstLeft, null)
-            }
-        } catch (_: Exception) {}
-
-        try {
-            val rightLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_mukomuko_logo)
-            if (rightLogo != null) {
-                val dstRight = RectF(pageWidth - margin - 42f, 22f, pageWidth - margin, 64f)
-                canvas.drawBitmap(rightLogo, null, dstRight, null)
-            }
-        } catch (_: Exception) {}
-
-        // Kop Lembaga
-        canvas.drawText("PEMERINTAH KABUPATEN MUKOMUKO", pageWidth / 2f, y, titlePaint)
-        y += 14f
-        canvas.drawText("BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)", pageWidth / 2f, y, titlePaint)
-        y += 13f
-        canvas.drawText("PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)", pageWidth / 2f, y, subtitlePaint)
-        y += 11f
-        canvas.drawText("Jl. Danau Nibung, Kompleks Perkantoran Pemkab Mukomuko - Call Center 117 (Bebas Pulsa)", pageWidth / 2f, y, textPaint.apply { textAlign = Paint.Align.CENTER })
-        textPaint.textAlign = Paint.Align.LEFT
-
-        y += 12f
-        canvas.drawLine(margin, y, pageWidth - margin, y, linePaint.apply { strokeWidth = 2f; color = Color.rgb(15, 23, 42) })
-        y += 3f
-        canvas.drawLine(margin, y, pageWidth - margin, y, linePaint.apply { strokeWidth = 0.8f; color = Color.rgb(100, 116, 139) })
-        y += 18f
+        var y = drawKopSuratResmi(context, canvas, pageWidth, margin)
 
         // Judul Dokumen
         val docTitlePaint = Paint().apply {
@@ -464,16 +791,27 @@ object ReportExporter {
 
         y += 16f
 
-        // Catatan SOP Peringatan Dini
-        val noteRect = android.graphics.RectF(margin, y, pageWidth - margin, y + 42f)
+        // Catatan SOP Peringatan Dini (menggunakan StaticLayout agar teks otomatis wrap)
+        val sopTextWidth = (pageWidth - margin * 2 - 20f).toInt()
+        val sopNoteText =
+            "1. Wilayah pesisir (Kota Mukomuko, Teramang Jaya, Ipuh, Air Rami) mewaspadai pasang surut air laut dan angin kencang.\n" +
+            "2. Wilayah perbukitan (V Koto, Malin Deman, Selagan Raya) mewaspadai potensi longsor bila curah hujan >15 mm/jam berturut-turut."
+        val noteRect = android.graphics.RectF(margin, y, pageWidth - margin, y + 48f)
         canvas.drawRoundRect(noteRect, 6f, 6f, Paint().apply { color = Color.rgb(255, 251, 235) })
         canvas.drawRoundRect(noteRect, 6f, 6f, Paint().apply { color = Color.rgb(253, 230, 138); style = Paint.Style.STROKE; strokeWidth = 1f })
 
         canvas.drawText("PETUNJUK KESIAPSIAGAAN & DISPOSISI KEBENCANAAN:", margin + 10f, y + 13f, boldTextPaint.apply { color = Color.rgb(180, 83, 9) })
-        canvas.drawText("1. Wilayah pesisir (Kota Mukomuko, Teramang Jaya, Ipuh, Air Rami) mewaspadai pasang surut air laut dan angin kencang.", margin + 10f, y + 24f, textPaint.apply { color = Color.rgb(120, 53, 15) })
-        canvas.drawText("2. Wilayah perbukitan (V Koto, Malin Deman, Selagan Raya) mewaspadai potensi longsor bila curah hujan >15 mm/jam berturut-turut.", margin + 10f, y + 35f, textPaint)
+        drawWrappedText(
+            canvas = canvas,
+            text = sopNoteText,
+            x = margin + 10f,
+            topY = y + 17f,
+            maxWidth = sopTextWidth,
+            paint = Paint(textPaint).apply { color = Color.rgb(120, 53, 15) },
+            maxLines = 4
+        )
 
-        y += 50f
+        y += 54f
 
         // Sumber Informasi di bagian bawah konten laporan
         canvas.drawText("Sumber Data & Informasi: Stasiun Meteorologi BMKG Fatmawati Bengkulu & Jaringan Sensor Telemetri BPBD Mukomuko", margin, y, textPaint.apply { color = Color.rgb(100, 116, 139) })
@@ -488,6 +826,8 @@ object ReportExporter {
         canvas.drawText("( PUSDALOPS-PB BPBD MUKOMUKO )", sigX, y, boldTextPaint)
         y += 11f
         canvas.drawText("Sistem Informasi Cuaca SiPagarKita Terintegrasi", sigX, y, textPaint)
+
+        drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin)
 
         pdfDoc.finishPage(page)
 
@@ -589,41 +929,8 @@ object ReportExporter {
                 isAntiAlias = true
             }
 
-            var y = 32f
-
-            // 1. Kop Surat Resmi & Logo Ganda (BPBD & Pemkab Mukomuko)
-            try {
-                val leftLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_bpbd_mukomuko)
-                if (leftLogo != null) {
-                    canvas.drawBitmap(leftLogo, null, RectF(margin, 20f, margin + 40f, 60f), null)
-                }
-            } catch (_: Exception) {}
-
-            try {
-                val rightLogo = BitmapFactory.decodeResource(context.resources, com.example.R.drawable.ic_mukomuko_logo)
-                if (rightLogo != null) {
-                    canvas.drawBitmap(rightLogo, null, RectF(pageWidth - margin - 40f, 20f, pageWidth - margin, 60f), null)
-                }
-            } catch (_: Exception) {}
-
-            canvas.drawText("PEMERINTAH KABUPATEN MUKOMUKO", pageWidth / 2f, y, titlePaint)
-            y += 13f
-            canvas.drawText("BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)", pageWidth / 2f, y, titlePaint)
-            y += 12f
-            canvas.drawText("PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)", pageWidth / 2f, y, subtitlePaint)
-            y += 11f
-            val addressPaint = Paint(textPaint).apply { textAlign = Paint.Align.CENTER; textSize = 7.2f }
-            canvas.drawText(
-                "Jl. Danau Nibung, Kompleks Perkantoran Pemkab Mukomuko • Call Center Darurat 117 • Sistem SiPagarKita",
-                pageWidth / 2f,
-                y,
-                addressPaint
-            )
-            y += 9f
-            canvas.drawLine(margin, y, pageWidth - margin, y, Paint(linePaint).apply { strokeWidth = 1.8f; color = Color.rgb(15, 23, 42) })
-            y += 2.5f
-            canvas.drawLine(margin, y, pageWidth - margin, y, Paint(linePaint).apply { strokeWidth = 0.7f; color = Color.rgb(100, 116, 139) })
-            y += 14f
+            // 1. Kop Surat Resmi Terstandarisasi (Kiri: Kab. Mukomuko, Kanan: BPBD)
+            var y = drawKopSuratResmi(context, canvas, pageWidth, margin)
 
             // 2. Judul Dokumen & Metadata
             val docTitlePaint = Paint(titlePaint).apply {
@@ -991,17 +1298,14 @@ object ReportExporter {
                 y + 11f,
                 Paint(boldTextPaint).apply { color = Color.rgb(180, 83, 9); textSize = 7.2f }
             )
-            canvas.drawText(
-                "Dokumen statistik bulanan ini dihasilkan otomatis dari basis data terpadu SiPagarKita BPBD Mukomuko sebagai lampiran",
-                margin + 8f,
-                y + 21f,
-                cellPaint
-            )
-            canvas.drawText(
-                "resmi laporan harian Pusdalops-PB untuk evaluasi kesiapsiagaan personil TRC dan distribusi logistik kebencanaan.",
-                margin + 8f,
-                y + 30f,
-                cellPaint
+            drawWrappedText(
+                canvas = canvas,
+                text = "Dokumen statistik bulanan ini dihasilkan otomatis dari basis data terpadu SiPagarKita BPBD Mukomuko sebagai lampiran resmi laporan harian Pusdalops-PB untuk evaluasi kesiapsiagaan personil TRC dan distribusi logistik kebencanaan.",
+                x = margin + 8f,
+                topY = y + 14f,
+                maxWidth = (pageWidth - margin * 2 - 16f).toInt(),
+                paint = cellPaint,
+                maxLines = 3
             )
 
             y += 46f
@@ -1019,6 +1323,8 @@ object ReportExporter {
             canvas.drawText(rawOfficerName, sigX, y + 46f, cellBoldPaint)
             val nipPrefix = if (rawOfficerNip.startsWith("TRC", ignoreCase = true)) "Reg. TRC" else "NIP"
             canvas.drawText("$nipPrefix: $rawOfficerNip", sigX, y + 56f, cellPaint)
+
+            drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin)
 
             pdfDoc.finishPage(page)
 

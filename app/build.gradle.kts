@@ -59,6 +59,7 @@ android {
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
+    isCoreLibraryDesugaringEnabled = true
   }
   buildFeatures {
     compose = true
@@ -115,6 +116,13 @@ dependencies {
   implementation(libs.firebase.ai)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
+  // implementation("com.google.firebase:firebase-storage")
+  // Supabase Storage & Postgrest
+  implementation(platform("io.github.jan-tennert.supabase:bom:3.1.4"))
+  implementation("io.github.jan-tennert.supabase:storage-kt")
+  implementation("io.github.jan-tennert.supabase:postgrest-kt")
+  implementation("io.ktor:ktor-client-android:3.1.2")
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)

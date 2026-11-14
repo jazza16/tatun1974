@@ -10,12 +10,15 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -78,6 +81,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.AppDatabase
@@ -195,7 +199,9 @@ fun FormLaporanHarianScreen(
                         text = "Form Laporan Harian",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {
@@ -234,13 +240,20 @@ fun FormLaporanHarianScreen(
                             onClick = { currentStep -= 1 },
                             modifier = Modifier
                                 .weight(1f)
+                                .heightIn(min = 44.dp)
                                 .padding(end = 8.dp)
                                 .testTag("btnSebelumnya"),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "Kembali", fontSize = 14.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Kembali",
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
+                            )
                         }
                     } else {
                         Spacer(modifier = Modifier.weight(1f).padding(end = 8.dp))
@@ -296,6 +309,7 @@ fun FormLaporanHarianScreen(
                         },
                         modifier = Modifier
                             .weight(1f)
+                            .heightIn(min = 44.dp)
                             .padding(start = 8.dp)
                             .testTag("btnSelanjutnya"),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
@@ -305,9 +319,12 @@ fun FormLaporanHarianScreen(
                             text = if (currentStep == 3) "Simpan Laporan" else "Selanjutnya",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Icon(
                             imageVector = if (currentStep == 3) Icons.Default.Save else Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = null,
@@ -477,6 +494,7 @@ fun FormLaporanHarianScreen(
 // Sub-Komponen Form Setiap Tahapan
 // ==========================================
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Step1DataKejadian(
     tanggalLaporan: String,
@@ -510,7 +528,7 @@ private fun Step1DataKejadian(
             shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(text = "Informasi Dasar Bencana", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
 
                 OutlinedTextField(
@@ -522,12 +540,24 @@ private fun Step1DataKejadian(
                 )
 
                 Text(text = "Jenis Bencana:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF4B5563))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(commonDisasterTypes) { type ->
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    commonDisasterTypes.forEach { type ->
                         FilterChip(
                             selected = jenisBencana == type,
                             onClick = { onJenisBencanaChange(type) },
-                            label = { Text(type, fontSize = 11.sp) },
+                            label = {
+                                Text(
+                                    text = type,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
+                                )
+                            },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Color(0xFFFF9800),
                                 selectedLabelColor = Color.White
@@ -540,14 +570,14 @@ private fun Step1DataKejadian(
                     OutlinedTextField(
                         value = tanggalKejadian,
                         onValueChange = onTanggalKejadianChange,
-                        label = { Text("Tanggal", maxLines = 1) },
+                        label = { Text("Tanggal", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = waktuKejadian,
                         onValueChange = onWaktuKejadianChange,
-                        label = { Text("Waktu", maxLines = 1) },
+                        label = { Text("Waktu", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -565,26 +595,38 @@ private fun Step1DataKejadian(
                     OutlinedTextField(
                         value = koordinat,
                         onValueChange = onKoordinatChange,
-                        label = { Text("Koordinat GPS") },
+                        label = { Text("Koordinat GPS", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = kedalaman,
                         onValueChange = onKedalamanChange,
-                        label = { Text("Kedalaman") },
+                        label = { Text("Kedalaman", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
                         modifier = Modifier.weight(0.7f),
                         singleLine = true
                     )
                 }
 
                 Text(text = "Kondisi Cuaca Saat Kejadian:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF4B5563))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(weatherOptions) { cuaca ->
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    weatherOptions.forEach { cuaca ->
                         FilterChip(
                             selected = kondisiCuaca == cuaca,
                             onClick = { onKondisiCuacaChange(cuaca) },
-                            label = { Text(cuaca, fontSize = 11.sp) }
+                            label = {
+                                Text(
+                                    text = cuaca,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
+                                )
+                            }
                         )
                     }
                 }
@@ -635,13 +677,21 @@ private fun Step2DampakDanKorban(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Korban Meninggal", fontSize = 11.sp, color = Color(0xFF991B1B), fontWeight = FontWeight.SemiBold)
+                        Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Korban Meninggal",
+                                fontSize = 11.sp,
+                                color = Color(0xFF991B1B),
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
+                            )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = { if (korbanMeninggal > 0) onKorbanMeninggalChange(korbanMeninggal - 1) }) {
                                     Text("-", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 }
-                                Text("$korbanMeninggal", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                                Text("$korbanMeninggal", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626), maxLines = 1, softWrap = false)
                                 IconButton(onClick = { onKorbanMeninggalChange(korbanMeninggal + 1) }) {
                                     Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 }
@@ -654,13 +704,21 @@ private fun Step2DampakDanKorban(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Korban Luka-Luka", fontSize = 11.sp, color = Color(0xFF92400E), fontWeight = FontWeight.SemiBold)
+                        Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Korban Luka-Luka",
+                                fontSize = 11.sp,
+                                color = Color(0xFF92400E),
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
+                            )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = { if (korbanLuka > 0) onKorbanLukaChange(korbanLuka - 1) }) {
                                     Text("-", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 }
-                                Text("$korbanLuka", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
+                                Text("$korbanLuka", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706), maxLines = 1, softWrap = false)
                                 IconButton(onClick = { onKorbanLukaChange(korbanLuka + 1) }) {
                                     Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 }
@@ -767,21 +825,21 @@ private fun Step4AdministrasiDanKomunikasi(
             shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(text = "Administrasi Stasiun & Operator", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0284C7))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = tanggalSurat,
                         onValueChange = onTanggalSuratChange,
-                        label = { Text("Tanggal Surat") },
+                        label = { Text("Tanggal Surat", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = tanggalTerima,
                         onValueChange = onTanggalTerimaChange,
-                        label = { Text("Tanggal Terima") },
+                        label = { Text("Tanggal Terima", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -817,23 +875,46 @@ private fun Step4AdministrasiDanKomunikasi(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text(text = "Log Komunikasi Kedaruratan", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
-                        Text(text = "Relasi One-to-Many (${logsList.size} Riwayat)", fontSize = 11.sp, color = Color(0xFF6B7280))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Log Komunikasi Kedaruratan",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFD97706),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Relasi One-to-Many (${logsList.size} Riwayat)",
+                            fontSize = 11.sp,
+                            color = Color(0xFF6B7280),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
+                        )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = onAddLogClick,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.heightIn(min = 36.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Tambah Log", fontSize = 12.sp, color = Color.White)
+                        Text(
+                            text = "Tambah Log",
+                            fontSize = 12.sp,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 if (logsList.isEmpty()) {
                     Box(
@@ -855,7 +936,7 @@ private fun Step4AdministrasiDanKomunikasi(
                             shape = RoundedCornerShape(8.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A))
                         ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
+                            Column(modifier = Modifier.padding(12.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -865,7 +946,10 @@ private fun Step4AdministrasiDanKomunikasi(
                                         text = "${log.waktuKomunikasi} • ${log.saluran}",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp,
-                                        color = Color(0xFFB45309)
+                                        color = Color(0xFFB45309),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
                                     )
                                     IconButton(
                                         onClick = { onDeleteLog(log) },
@@ -874,9 +958,29 @@ private fun Step4AdministrasiDanKomunikasi(
                                         Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
                                     }
                                 }
-                                Text(text = "Tujuan: ${log.pihakDihubungi}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1E293B))
-                                Text(text = "Subjek: \"${log.pesan}\"", fontSize = 11.sp, color = Color(0xFF334155))
-                                Text(text = "Petugas: ${log.operatorNama} (NIP: ${log.operatorNip})", fontSize = 11.sp, color = Color(0xFF047857), fontWeight = FontWeight.Medium)
+                                Text(
+                                    text = "Tujuan: ${log.pihakDihubungi}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF1E293B),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "Subjek: \"${log.pesan}\"",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF334155),
+                                    lineHeight = 16.sp,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Text(
+                                    text = "Petugas: ${log.operatorNama} (NIP: ${log.operatorNip})",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF047857),
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
                     }

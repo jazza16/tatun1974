@@ -146,7 +146,7 @@ fun HeroWeatherCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.Top) {
                             Text(
                                 text = "${current.temperature.toInt()}",
@@ -268,7 +268,7 @@ fun HeroWeatherCard(
                         icon = Icons.Default.Surfing,
                         label = "Gelombang",
                         value = "${report.marine.waveHeight} m",
-                        subLabel = report.marine.seaCondition.take(6),
+                        subLabel = report.marine.seaCondition,
                         indicatorRatio = (report.marine.waveHeight.toFloat() / 4.0f).coerceIn(0f, 1f),
                         indicatorColor = if (report.marine.waveHeight >= 2.0f) Color(0xFFEF4444) else Color(0xFF38BDF8),
                         modifier = Modifier.weight(1f)
@@ -308,7 +308,8 @@ fun HeroWeatherCard(
                             text = "Arah Angin: ${current.windDirectionCompass} (${current.windDirection}°) • Kecepatan: ${current.windSpeed.toInt()} km/j • Kelembapan: ${current.humidity}%",
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.95f),
-                            lineHeight = 14.sp
+                            lineHeight = 16.sp,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
@@ -347,14 +348,19 @@ private fun StatPillWithIndicator(
                 text = value,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
             Text(
                 text = label,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.White.copy(alpha = 0.85f),
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
             Spacer(modifier = Modifier.height(4.dp))
             // Visual Mini Gauge / Progress Track
@@ -380,7 +386,9 @@ private fun StatPillWithIndicator(
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = indicatorColor,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
         }
     }
@@ -421,7 +429,9 @@ private fun StatPillWindDirection(
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.White.copy(alpha = 0.85f),
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(

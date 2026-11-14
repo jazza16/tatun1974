@@ -26,10 +26,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -83,6 +85,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -279,7 +282,10 @@ fun InteractiveDisasterMapSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -294,22 +300,28 @@ fun InteractiveDisasterMapSection(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "Peta Interaktif Bencana & SOP Evakuasi",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                         Text(
                             text = "Kabupaten Mukomuko • Berbasis Geospasial BPBD",
                             fontSize = 11.sp,
                             color = OrangePrimary,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }
@@ -319,8 +331,8 @@ fun InteractiveDisasterMapSection(
 
             // Category Filter Chips
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 DisasterCategory.values().forEach { cat ->
@@ -333,7 +345,9 @@ fun InteractiveDisasterMapSection(
                                 text = cat.label,
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(
@@ -347,7 +361,7 @@ fun InteractiveDisasterMapSection(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Map Container with Canvas, Pan & Zoom Controls
             Box(
@@ -541,14 +555,19 @@ fun InteractiveDisasterMapSection(
                                     color = (if (isDark) Color(0xFF0F172A) else Color.White).copy(alpha = 0.9f),
                                     shape = RoundedCornerShape(4.dp),
                                     shadowElevation = 2.dp,
-                                    modifier = Modifier.padding(top = 2.dp)
+                                    modifier = Modifier
+                                        .padding(top = 4.dp)
+                                        .widthIn(max = 110.dp)
                                 ) {
                                     Text(
-                                        text = point.name.take(14) + "...",
+                                        text = point.name,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -669,13 +688,16 @@ fun InteractiveDisasterMapSection(
                         shape = RoundedCornerShape(14.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.4f))
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Box(
                                         modifier = Modifier
                                             .size(28.dp)
@@ -690,18 +712,23 @@ fun InteractiveDisasterMapSection(
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = point.name,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             text = "Status: ${point.riskLevel} • Ketinggian ${point.altitudeMeters} mdpl",
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = point.category.color
+                                            color = point.category.color,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            softWrap = false
                                         )
                                     }
                                 }
@@ -724,17 +751,19 @@ fun InteractiveDisasterMapSection(
                             Text(
                                 text = point.description,
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                lineHeight = 16.sp,
+                                modifier = Modifier.fillMaxWidth()
                             )
 
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
                             Surface(
                                 color = OrangePrimary.copy(alpha = 0.1f),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -743,21 +772,23 @@ fun InteractiveDisasterMapSection(
                                         tint = OrangePrimary,
                                         modifier = Modifier.size(14.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = "SOP: ${point.sopInstruction}",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
-                                        color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF9A3412)
+                                        color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF9A3412),
+                                        lineHeight = 16.sp,
+                                        modifier = Modifier.weight(1f)
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Button(
                                     onClick = {
@@ -772,24 +803,38 @@ fun InteractiveDisasterMapSection(
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
                                     shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.weight(1.1f).height(36.dp),
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                    modifier = Modifier.weight(1.1f).heightIn(min = 36.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(13.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text("Rute Maps", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Rute Maps",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
+                                    )
                                 }
 
                                 Button(
                                     onClick = onOpenSopEvacuation,
                                     colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                                     shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.weight(1f).height(36.dp),
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                    modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(13.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text("SOP Evakuasi", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "SOP Evakuasi",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
+                                    )
                                 }
 
                                 OutlinedButton(
@@ -797,12 +842,19 @@ fun InteractiveDisasterMapSection(
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626)),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
                                     shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.height(36.dp),
+                                    modifier = Modifier.heightIn(min = 36.dp),
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(13.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text("117", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "117",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
+                                    )
                                 }
                             }
                         }

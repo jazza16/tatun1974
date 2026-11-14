@@ -13,11 +13,14 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,6 +51,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -57,6 +61,7 @@ import com.example.ui.theme.OrangePrimary
  * Startup banner shown prominently when the app starts, informing the user that
  * the application is developed by PUSDALOPS-PB BPBD Kabupaten Mukomuko.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PusdalopsStartupBanner(
     isVisible: Boolean,
@@ -106,7 +111,7 @@ fun PusdalopsStartupBanner(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(bgGradient)
-                    .padding(14.dp)
+                    .padding(16.dp)
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // Header Row: Badges & Close Button
@@ -115,9 +120,10 @@ fun PusdalopsStartupBanner(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        FlowRow(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             // Official PUSDALOPS-PB Badge
                             Surface(
@@ -125,7 +131,7 @@ fun PusdalopsStartupBanner(
                                 shape = RoundedCornerShape(6.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -140,7 +146,10 @@ fun PusdalopsStartupBanner(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color.White,
-                                        letterSpacing = 0.5.sp
+                                        letterSpacing = 0.5.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -155,7 +164,10 @@ fun PusdalopsStartupBanner(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF334155),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -176,7 +188,7 @@ fun PusdalopsStartupBanner(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Main Content Row: Logo + Prominent Text
                     Row(
@@ -202,7 +214,9 @@ fun PusdalopsStartupBanner(
                                 fontWeight = FontWeight.Black,
                                 color = titleColor,
                                 lineHeight = 19.sp,
-                                modifier = Modifier.testTag("text_pusdalops_banner_title")
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("text_pusdalops_banner_title")
                             )
 
                             Spacer(modifier = Modifier.height(4.dp))
@@ -212,8 +226,10 @@ fun PusdalopsStartupBanner(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Normal,
                                 color = bodyColor,
-                                lineHeight = 15.sp,
-                                modifier = Modifier.testTag("text_pusdalops_banner_subtitle")
+                                lineHeight = 16.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("text_pusdalops_banner_subtitle")
                             )
                         }
                     }
@@ -221,10 +237,10 @@ fun PusdalopsStartupBanner(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Action buttons
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
                             onClick = onCallCenter117,
@@ -232,7 +248,7 @@ fun PusdalopsStartupBanner(
                             border = BorderStroke(1.dp, Color(0xFFDC2626)),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                             modifier = Modifier
-                                .height(36.dp)
+                                .heightIn(min = 40.dp)
                                 .testTag("btn_banner_call_center_117")
                         ) {
                             Icon(
@@ -241,7 +257,7 @@ fun PusdalopsStartupBanner(
                                 tint = Color(0xFFDC2626),
                                 modifier = Modifier.size(13.dp)
                             )
-                            Spacer(modifier = Modifier.width(5.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Call Center 117",
                                 fontSize = 11.sp,
@@ -250,15 +266,13 @@ fun PusdalopsStartupBanner(
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
-
                         Button(
                             onClick = onDismiss,
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                             modifier = Modifier
-                                .height(36.dp)
+                                .heightIn(min = 40.dp)
                                 .testTag("btn_understand_pusdalops_banner")
                         ) {
                             Text(

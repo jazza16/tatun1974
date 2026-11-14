@@ -133,7 +133,6 @@ import com.example.ui.components.HistoricalWeatherSection
 import com.example.ui.components.HourlyForecastCard
 import com.example.ui.components.SipagarKitaAcronymCard
 import com.example.ui.components.InAppUpdateBannerCard
-import com.example.ui.components.InAppUpdateSuccessCard
 import com.example.ui.components.InaRiskBnpbSection
 import com.example.ui.components.InteractiveDisasterMapSection
 import com.example.ui.components.InteractiveTemperatureMapCard
@@ -224,6 +223,7 @@ fun WeatherAppScreen(
     var isQuickActionsFabExpanded by remember { mutableStateOf(false) }
     var isEmergencyPopupDismissed by remember { mutableStateOf(false) }
     var isSipagarKitaDismissed by remember { mutableStateOf(false) }
+    var isPanduanEvakuasiOpen by remember { mutableStateOf(false) }
     var pendingOfficerLoginPrompt by remember { mutableStateOf(false) }
 
     val currentDistrict = uiState.selectedDistrict
@@ -284,7 +284,7 @@ fun WeatherAppScreen(
         val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
         val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (fineGranted || coarseGranted) {
-            viewModel.detectCurrentLocation(context)
+            viewModel.detectCurrentLocation(context, isAutoDetect = true)
         }
     }
 
@@ -301,6 +301,38 @@ fun WeatherAppScreen(
         }
     }
 
+    // Auto-Select Kecamatan via GPS saat pertama kali dibuka & Auto-Refresh setiap 30 menit
+    LaunchedEffect(Unit) {
+        viewModel.startAutoRefresh30Minutes(context)
+        if (com.example.util.LocationHelper.hasLocationPermission(context)) {
+            viewModel.autoSelectDistrictViaGpsOnStartup(context)
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    // Auto-Refresh kondisional saat aplikasi dibuka kembali dari background (ON_RESUME)
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        var isFirstResume = true
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                if (isFirstResume) {
+                    isFirstResume = false
+                } else {
+                    viewModel.onAppResumedFromBackground(context)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets.systemBars,
@@ -308,20 +340,13 @@ fun WeatherAppScreen(
             Column {
                 WeatherTopBar(
                     district = currentDistrict,
-                    isFavorite = isFavorite,
-                    isRefreshing = uiState.isRefreshing,
                     isDarkMode = isActuallyDark,
                     isUpdateAvailable = uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated,
                     isDetectingLocation = uiState.isDetectingLocation,
                     onDistrictClick = { viewModel.setDistrictSheetOpen(true) },
-                    onFavoriteToggle = { viewModel.toggleFavorite(currentDistrict.id) },
-                    onRefreshClick = {
-                        viewModel.syncAllDataOnline(context) { _, msg ->
-                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    },
                     onThemeToggle = { viewModel.toggleDarkMode(isActuallyDark) },
                     onOpenAppMenu = { viewModel.setAppUpdateSheetOpen(true) },
+                    onEvacuationGuideClick = { isPanduanEvakuasiOpen = true },
                     onCallCenter117Click = { isCallCenter117SheetOpen = true },
                     onDetectLocationClick = triggerLocationDetection
                 )
@@ -597,13 +622,6 @@ fun WeatherAppScreen(
                                                         onDismiss = { viewModel.dismissUpdateBanner() }
                                                     )
                                                 }
-                                            } else if (uiState.updateState.isUpdated && !uiState.updateState.isBannerDismissed) {
-                                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                                    InAppUpdateSuccessCard(
-                                                        version = uiState.updateState.currentVersion,
-                                                        onDismiss = { viewModel.dismissUpdateBanner() }
-                                                    )
-                                                }
                                             }
 
                                             // Real-Time WRS-NTWC BMKG Earthquake Quick Banner
@@ -841,7 +859,8 @@ fun WeatherAppScreen(
                                         currentDistrict = currentDistrict,
                                         onCall117 = { EmergencyDialer.dial(context, "117") },
                                         onTestTsunamiAlert = { viewModel.triggerTestTsunamiNotification(it) },
-                                        onTestSevereWeatherAlert = { viewModel.triggerSuddenSevereWeatherPushNotification(it) }
+                                        onTestSevereWeatherAlert = { viewModel.triggerSuddenSevereWeatherPushNotification(it) },
+                                        onOpenEvacuationGuide = { isPanduanEvakuasiOpen = true }
                                     )
                                 }
                             }
@@ -994,7 +1013,7 @@ fun WeatherAppScreen(
             },
             onSelectEvacuationProcedures = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(5)
+                isPanduanEvakuasiOpen = true
             },
             onSelectDisasterMap = {
                 isQuickActionsFabExpanded = false
@@ -1016,6 +1035,19 @@ fun WeatherAppScreen(
             parentMaxHeight = this.maxHeight,
             isDark = isActuallyDark
         )
+        }
+    }
+
+    // Layar Penuh SOP Evakuasi Mandiri (Offline) — Fase Pra-Bencana
+    if (isPanduanEvakuasiOpen) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { isPanduanEvakuasiOpen = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            com.example.ui.components.PanduanEvakuasiScreen(
+                onBackClick = { isPanduanEvakuasiOpen = false },
+                onCall117 = { EmergencyDialer.dial(context, "117") }
+            )
         }
     }
 
@@ -1057,6 +1089,7 @@ fun WeatherAppScreen(
             onResetLatestRelease = { viewModel.resetToLatestReleaseState() },
             onOpenOnboarding = { viewModel.setOnboardingOpen(true) },
             onOpenCompass = { viewModel.setCompassSheetOpen(true) },
+            onOpenEvacuationGuide = { isPanduanEvakuasiOpen = true },
             onShowStartupWallpaper = { viewModel.showStartupWallpaper() }
         )
     }
@@ -1215,6 +1248,10 @@ fun WeatherAppScreen(
         isVisible = uiState.isStartupWallpaperVisible,
         onDismiss = { viewModel.dismissStartupWallpaper() },
         onEnterAsGuest = { viewModel.dismissStartupWallpaper() },
+        onOpenEvacuationGuide = {
+            viewModel.dismissStartupWallpaper()
+            isPanduanEvakuasiOpen = true
+        },
         onLoginAsOfficer = {
             viewModel.dismissStartupWallpaper()
             pendingOfficerLoginPrompt = true
@@ -1247,7 +1284,7 @@ private fun QuickEvacuationPreparednessBanner(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -1298,15 +1335,19 @@ private fun QuickEvacuationPreparednessBanner(
                     text = "Refleks Drop-Cover-Hold On & Rumus 20-20-20 Tsunami Pesisir",
                     fontSize = 11.sp,
                     color = descCol,
-                    maxLines = 1
+                    lineHeight = 15.sp,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Panduan >",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isDark) Color(0xFFF87171) else Color(0xFFDC2626)
+                color = if (isDark) Color(0xFFF87171) else Color(0xFFDC2626),
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
@@ -1418,7 +1459,7 @@ private fun QuickEmergency117Strip(
             .testTag("quick_emergency_117_strip")
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1520,7 +1561,7 @@ private fun ActiveAlertCard(
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -1541,14 +1582,18 @@ private fun ActiveAlertCard(
                     text = alert.message,
                     fontSize = 11.sp,
                     color = Color(0xFF7F1D1D),
-                    maxLines = 2
+                    lineHeight = 16.sp,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Lihat >",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFDC2626)
+                color = Color(0xFFDC2626),
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
@@ -1595,7 +1640,10 @@ private fun SunAndAtmosphereCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -1610,7 +1658,7 @@ private fun SunAndAtmosphereCard(
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Matahari & Atmosfer",
                             fontSize = 15.sp,
@@ -1862,13 +1910,16 @@ private fun WrsLiveEarthquakeQuickCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.5.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
                             .size(34.dp)
@@ -1885,7 +1936,7 @@ private fun WrsLiveEarthquakeQuickCard(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "WRS-NTWC BMKG",
@@ -1913,11 +1964,15 @@ private fun WrsLiveEarthquakeQuickCard(
                         Text(
                             text = "${earthquake.date} • ${earthquake.timeWib}",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
                 Surface(
                     color = if (isTsunami) Color(0xFFDC2626).copy(alpha = 0.15f) else Color(0xFF16A34A).copy(alpha = 0.12f),
                     shape = RoundedCornerShape(6.dp)

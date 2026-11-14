@@ -44,6 +44,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Explore
@@ -118,6 +119,7 @@ fun StartupSplashWallpaperScreen(
     modifier: Modifier = Modifier,
     onLoginAsOfficer: () -> Unit = {},
     onEnterAsGuest: () -> Unit = onDismiss,
+    onOpenEvacuationGuide: () -> Unit = {},
     onBiometricLoginSuccess: () -> Unit = onDismiss
 ) {
     val context = LocalContext.current
@@ -583,6 +585,34 @@ fun StartupSplashWallpaperScreen(
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(14.dp)
+                                )
+                            }
+
+                            OutlinedButton(
+                                onClick = onOpenEvacuationGuide,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(46.dp)
+                                    .testTag("btn_startup_sop_evakuasi"),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.5.dp, OrangePrimary),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color.Black.copy(alpha = 0.45f),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                    contentDescription = "SOP Evakuasi",
+                                    tint = OrangePrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "SOP Evakuasi (100% Offline)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
                                 )
                             }
 

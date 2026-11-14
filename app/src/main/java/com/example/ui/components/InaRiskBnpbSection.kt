@@ -451,20 +451,15 @@ fun InaRiskBnpbSection(
 
                             Spacer(modifier = Modifier.width(10.dp))
 
-                            Column {
-                                Text(
-                                    text = hazard.name,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = hazard.affectedArea,
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                    maxLines = 1
-                                )
-                            }
+                            Text(
+                                text = hazard.name,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp)
+                            )
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -492,9 +487,18 @@ fun InaRiskBnpbSection(
                         }
                     }
 
+                    // Sub-judul wilayah terdampak diletakkan tepat di atas garis pemisah (divider) agar tidak menabrak badge
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = hazard.affectedArea,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     // Expanded Details
                     AnimatedVisibility(visible = isExpanded) {
-                        Column(modifier = Modifier.padding(top = 12.dp)) {
+                        Column(modifier = Modifier.padding(top = 8.dp)) {
                             HorizontalDivider(
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                                 modifier = Modifier.padding(vertical = 8.dp)
@@ -755,14 +759,16 @@ private fun VulnerabilityMetric(
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = label,
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(

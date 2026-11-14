@@ -1462,7 +1462,7 @@ fun CitizenReportScreen(
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(50.dp)
+                                    .heightIn(min = 50.dp)
                                     .testTag("btn_submit_citizen_report")
                             ) {
                                 Icon(
@@ -1536,7 +1536,8 @@ fun CitizenReportScreen(
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color(0xFF14532D),
                                                 maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f)
                                             )
                                         }
                                     } else {
@@ -1583,7 +1584,7 @@ fun CitizenReportScreen(
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(34.dp)
+                                                .heightIn(min = 36.dp)
                                         ) {
                                             Icon(
                                                 imageVector = if (isOfficerLoggedIn) Icons.Default.Shield else Icons.Default.Lock,
@@ -1622,7 +1623,7 @@ fun CitizenReportScreen(
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(34.dp)
+                                                .heightIn(min = 36.dp)
                                         ) {
                                             Icon(
                                                 imageVector = if (isOfficerLoggedIn) Icons.Default.LockOpen else Icons.Default.Lock,
@@ -2769,8 +2770,8 @@ fun CitizenReportScreen(
                                     }
                                 },
                                 shape = RoundedCornerShape(6.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(32.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.heightIn(min = 36.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.CloudSync,
@@ -2798,8 +2799,8 @@ fun CitizenReportScreen(
                                     }
                                 },
                                 shape = RoundedCornerShape(6.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(32.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.heightIn(min = 36.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
@@ -2851,11 +2852,11 @@ fun CitizenReportScreen(
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedButton(
                                             onClick = { showAdminPromptForAdd = false },
-                                            modifier = Modifier.weight(1f).height(32.dp),
-                                            contentPadding = PaddingValues(2.dp)
+                                            modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                                            contentPadding = PaddingValues(4.dp)
                                         ) {
                                             Text("Batal", fontSize = 11.sp)
                                         }
@@ -2869,9 +2870,9 @@ fun CitizenReportScreen(
                                                     adminPinErrorMsg = "PIN/Sandi Admin salah. Akses ditolak demi keamanan."
                                                 }
                                             },
-                                            modifier = Modifier.weight(1f).height(32.dp),
+                                            modifier = Modifier.weight(1f).heightIn(min = 36.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                                            contentPadding = PaddingValues(2.dp)
+                                            contentPadding = PaddingValues(4.dp)
                                         ) {
                                             Text("Verifikasi", fontSize = 11.sp)
                                         }
@@ -3007,7 +3008,7 @@ fun CitizenReportScreen(
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(42.dp)
+                                .heightIn(min = 44.dp)
                                 .testTag("officer_biometric_login_button")
                         ) {
                             Icon(
@@ -3432,6 +3433,7 @@ fun CitizenReportScreen(
                             .background(Color(0xFF111827)),
                         contentAlignment = Alignment.Center
                     ) {
+                        val zoomContext = LocalContext.current
                         val fullPhotoModel = remember(previewPhotoUri) {
                             decodeCitizenPhotoModel(previewPhotoUri)
                         }
@@ -3441,7 +3443,10 @@ fun CitizenReportScreen(
                         }
 
                         AsyncImage(
-                            model = fullPhotoModel,
+                            model = coil.request.ImageRequest.Builder(zoomContext)
+                                .data(fullPhotoModel)
+                                .crossfade(true)
+                                .build(),
                             contentDescription = "Foto Bencana Resolusi Penuh",
                             placeholder = brokenImagePainter,
                             error = brokenImagePainter,
@@ -3522,7 +3527,7 @@ fun CitizenReportScreen(
                                 destName = "${activeRep.disasterType} - ${activeRep.village}"
                             )
                         },
-                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                     ) {
@@ -3708,24 +3713,30 @@ private fun CitizenReportItemCard(
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             // Header Row: ID, Time & Status Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = report.id,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF6B7280)
+                        color = Color(0xFF6B7280),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                     Text(
                         text = report.incidentTime,
                         fontSize = 11.sp,
-                        color = Color(0xFF6B7280)
+                        color = Color(0xFF6B7280),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
 
@@ -3823,7 +3834,8 @@ private fun CitizenReportItemCard(
                     text = "${report.village}, Kec. ${report.district}",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF374151)
+                    color = Color(0xFF374151),
+                    modifier = Modifier.weight(1f)
                 )
             }
 
@@ -3831,11 +3843,13 @@ private fun CitizenReportItemCard(
                 text = "Detail: ${report.incidentLocation}",
                 fontSize = 11.sp,
                 color = Color(0xFF6B7280),
-                modifier = Modifier.padding(top = 2.dp)
+                lineHeight = 16.sp,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
             )
 
             // PHOTO DISPLAY: Captured Photo with BPBD GPS Watermark
             if (!report.photoUri.isNullOrBlank()) {
+                val cardContext = LocalContext.current
                 val resolvedPhotoModel = remember(report.photoUri) {
                     decodeCitizenPhotoModel(report.photoUri)
                 }
@@ -3861,7 +3875,10 @@ private fun CitizenReportItemCard(
                         contentAlignment = Alignment.Center
                     ) {
                         AsyncImage(
-                            model = resolvedPhotoModel,
+                            model = coil.request.ImageRequest.Builder(cardContext)
+                                .data(resolvedPhotoModel)
+                                .crossfade(true)
+                                .build(),
                             contentDescription = "Foto Bencana di Lokasi",
                             placeholder = brokenImagePainter,
                             error = brokenImagePainter,
@@ -3982,11 +3999,12 @@ private fun CitizenReportItemCard(
             }
 
             // Casualties Breakdown
-            Row(
+            FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 CasualtyBadge(label = "Meninggal", count = report.casualtiesDead, color = Color(0xFFDC2626))
                 CasualtyBadge(label = "Luka", count = report.casualtiesInjured, color = Color(0xFFD97706))
@@ -4024,7 +4042,7 @@ private fun CitizenReportItemCard(
                             destName = "${report.disasterType} - ${report.village}"
                         )
                     },
-                    modifier = Modifier.weight(1.3f).height(36.dp),
+                    modifier = Modifier.weight(1.3f).heightIn(min = 40.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
@@ -4053,7 +4071,7 @@ private fun CitizenReportItemCard(
                             label = "${report.disasterType} (${report.village})"
                         )
                     },
-                    modifier = Modifier.weight(1f).height(36.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 40.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1D4ED8)),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF93C5FD)),

@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -108,6 +109,7 @@ fun EarthquakeEvacuationPreparednessSection(
     onCall117: () -> Unit,
     onTestTsunamiAlert: (Context) -> Unit,
     onTestSevereWeatherAlert: (Context) -> Unit,
+    onOpenEvacuationGuide: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -310,6 +312,8 @@ fun EarthquakeEvacuationPreparednessSection(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .clickable(onClick = onOpenEvacuationGuide)
                 .testTag("card_evacuation_hero_header"),
             shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(
@@ -317,13 +321,16 @@ fun EarthquakeEvacuationPreparednessSection(
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_bpbd_logo),
                             contentDescription = "Logo BPBD Mukomuko",
@@ -332,8 +339,8 @@ fun EarthquakeEvacuationPreparednessSection(
                                 .clip(CircleShape)
                                 .border(1.5.dp, Color.White, CircleShape)
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Surface(
                                 color = Color.White.copy(alpha = 0.2f),
                                 shape = RoundedCornerShape(6.dp)
@@ -358,6 +365,7 @@ fun EarthquakeEvacuationPreparednessSection(
                         }
                     }
 
+                    Spacer(modifier = Modifier.width(8.dp))
                     // Direct Call 117 Button
                     Button(
                         onClick = onCall117,
@@ -385,13 +393,14 @@ fun EarthquakeEvacuationPreparednessSection(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = "Pedoman praktis dan langkah mandiri keselamatan warga saat menghadapi guncangan gempa bumi bumi dan ancaman tsunami di Kabupaten Mukomuko, Bengkulu.",
                     fontSize = 12.sp,
-                    lineHeight = 17.sp,
-                    color = Color.White.copy(alpha = 0.9f)
+                    lineHeight = 18.sp,
+                    color = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -415,7 +424,15 @@ fun EarthquakeEvacuationPreparednessSection(
                         text = "Panduan Kesiapsiagaan Mandiri Bencana Gempa & Tsunami",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = Color.White,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Default.ArrowForward,
+                        contentDescription = "Buka Panduan SOP Evakuasi",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -456,10 +473,10 @@ fun EarthquakeEvacuationPreparednessSection(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Surface(
                                 color = OrangePrimary,
@@ -479,8 +496,7 @@ fun EarthquakeEvacuationPreparednessSection(
                             Text(
                                 text = "Tindakan seketika saat bumi mulai berguncang",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                maxLines = 1
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
                     }
@@ -966,10 +982,10 @@ fun EarthquakeEvacuationPreparednessSection(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Surface(
                                 color = Color(0xFF16A34A).copy(alpha = 0.15f),
@@ -989,8 +1005,7 @@ fun EarthquakeEvacuationPreparednessSection(
                             Text(
                                 text = "Lokasi kumpul aman per kecamatan di Mukomuko",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                maxLines = 1
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
                     }

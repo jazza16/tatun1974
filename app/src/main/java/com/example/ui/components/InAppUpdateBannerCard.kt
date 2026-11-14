@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -99,15 +100,18 @@ fun InAppUpdateBannerCard(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "Versi Terbaru Tersedia",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E3A8A)
+                                color = Color(0xFF1E3A8A),
+                                modifier = Modifier.weight(1f, fill = false),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
@@ -119,7 +123,10 @@ fun InAppUpdateBannerCard(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -127,7 +134,8 @@ fun InAppUpdateBannerCard(
                             text = "Instal langsung tanpa perlu update offline atau unduh manual",
                             fontSize = 11.sp,
                             color = Color(0xFF1E40AF),
-                            lineHeight = 14.sp
+                            lineHeight = 16.sp,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -207,7 +215,7 @@ fun InAppUpdateBannerCard(
                         onClick = onUpdateNow,
                         modifier = Modifier
                             .weight(1.3f)
-                            .height(40.dp)
+                            .heightIn(min = 44.dp)
                             .testTag("btn_banner_update_now"),
                         colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                         shape = RoundedCornerShape(10.dp)
@@ -231,7 +239,7 @@ fun InAppUpdateBannerCard(
                         onClick = onViewDetails,
                         modifier = Modifier
                             .weight(0.9f)
-                            .height(40.dp)
+                            .heightIn(min = 44.dp)
                             .testTag("btn_banner_view_details"),
                         shape = RoundedCornerShape(10.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3B82F6))

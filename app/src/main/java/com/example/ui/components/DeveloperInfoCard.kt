@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -471,7 +472,7 @@ fun DeveloperInfoCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(10.dp),
+                    modifier = Modifier.padding(12.dp),
                     verticalAlignment = Alignment.Top
                 ) {
                     Icon(
@@ -482,10 +483,12 @@ fun DeveloperInfoCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Aplikasi ini didedikasikan oleh pengembang \"$developerName\" untuk kemudahan akses informasi prakiraan cuaca, kualitas udara ISPU, dan peringatan dini bencana gempa/tsunami bagi masyarakat Kabupaten Mukomuko.",
-                        fontSize = 11.sp,
+                        text = "Aplikasi ini bukan sekadar barisan kode dan desain. Ia adalah wujud ikhtiar kecil, berangkat dari sebuah keterbatasan, yang didedikasikan untuk memastikan bahwa di saat bencana datang, tak ada satu pun warga Mukomuko yang tertinggal tanpa informasi. Karena satu nyawa yang terselamatkan, adalah segalanya. Dengan harapan teknologi ini menjadi jembatan bagi masyarakat dengan pemerintah, agar alarm peringatan dini dapat berbunyi lebih cepat daripada guncangan dan gelombang.",
+                        fontSize = 11.5.sp,
+                        fontStyle = FontStyle.Italic,
                         color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
-                        lineHeight = 15.sp
+                        lineHeight = 18.sp,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }

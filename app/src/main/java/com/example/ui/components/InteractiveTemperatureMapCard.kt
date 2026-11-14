@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -271,7 +272,7 @@ fun InteractiveTemperatureMapCard(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
-                            .height(32.dp)
+                            .heightIn(min = 36.dp)
                             .testTag("btn_export_weather_map_pdf")
                     ) {
                         Icon(
@@ -330,7 +331,7 @@ fun InteractiveTemperatureMapCard(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Tertinggi",
                                 fontSize = 11.sp,
@@ -344,9 +345,11 @@ fun InteractiveTemperatureMapCard(
                                 color = Color(0xFFDC2626)
                             )
                             Text(
-                                text = maxTempItem?.district?.name?.take(9) ?: "-",
+                                text = maxTempItem?.district?.name ?: "-",
                                 fontSize = 11.sp,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
@@ -413,7 +416,7 @@ fun InteractiveTemperatureMapCard(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Tersejuk",
                                 fontSize = 11.sp,
@@ -427,9 +430,11 @@ fun InteractiveTemperatureMapCard(
                                 color = Color(0xFF0284C7)
                             )
                             Text(
-                                text = minTempItem?.district?.name?.take(9) ?: "-",
+                                text = minTempItem?.district?.name ?: "-",
                                 fontSize = 11.sp,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
@@ -1031,7 +1036,7 @@ fun InteractiveTemperatureMapCard(
                             onClick = { onSelectDistrict(inspectedData.district) },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(44.dp)
+                                .heightIn(min = 48.dp)
                                 .testTag("btn_select_inspected_district"),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = OrangePrimary,
