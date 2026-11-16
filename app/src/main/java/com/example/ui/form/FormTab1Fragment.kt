@@ -58,6 +58,12 @@ class FormTab1Fragment : Fragment() {
     private lateinit var etLokasiBencana: TextInputEditText
     private lateinit var etKoordinat: TextInputEditText
     private lateinit var etKedalaman: TextInputEditText
+    private lateinit var etCakupanDampak: TextInputEditText
+    private lateinit var etUpayaDilakukan: TextInputEditText
+    private lateinit var etKondisiMutakhir: TextInputEditText
+    private lateinit var etKerusakan: TextInputEditText
+    private lateinit var etPenyebab: TextInputEditText
+    private lateinit var etSumberInformasi: TextInputEditText
     private lateinit var btnAmbilGps: View
 
     private var cuacaSaatKejadianTerkini: String = "Data cuaca tidak tersedia"
@@ -85,6 +91,12 @@ class FormTab1Fragment : Fragment() {
         etLokasiBencana = view.findViewById(R.id.etLokasiBencana)
         etKoordinat = view.findViewById(R.id.etKoordinat)
         etKedalaman = view.findViewById(R.id.etKedalaman)
+        etCakupanDampak = view.findViewById(R.id.etCakupanDampak)
+        etUpayaDilakukan = view.findViewById(R.id.etUpayaDilakukan)
+        etKondisiMutakhir = view.findViewById(R.id.etKondisiMutakhir)
+        etKerusakan = view.findViewById(R.id.etKerusakan)
+        etPenyebab = view.findViewById(R.id.etPenyebab)
+        etSumberInformasi = view.findViewById(R.id.etSumberInformasi)
         btnAmbilGps = view.findViewById(R.id.btnAmbilGps)
         val btnTarik = view.findViewById<MaterialButton>(R.id.btnTarikLaporanWarga)
             ?: view.findViewById(R.id.btnImporLaporanWarga)
@@ -145,6 +157,13 @@ class FormTab1Fragment : Fragment() {
                 etLokasiBencana.setText("Kab. Mukomuko (Kec. Kota Mukomuko)")
                 etKoordinat.setText("-")
                 etKedalaman.setText("-")
+                etCakupanDampak.setText("Seluruh 15 Kecamatan Kabupaten Mukomuko dalam keadaan aman dan terkendali")
+                etUpayaDilakukan.setText("Pusdalops-PB BPBD Mukomuko melaksanakan pemantauan rutin cuaca, piket siaga 24 jam, dan komunikasi radio VHF seluruh kecamatan")
+                etKondisiMutakhir.setText("Situasi wilayah Kabupaten Mukomuko terpantau aman, kondusif, dan terkendali")
+                etKerusakan.setText("Nihil kerusakan fasilitas maupun infrastruktur")
+                etPenyebab.setText("-")
+                etSumberInformasi.setText("Pantauan Pusdalops-PB BPBD Mukomuko & Stasiun BMKG")
+                simpanDataKeViewModel()
 
                 Toast.makeText(requireContext(), "Mode Kondusif Aktif", Toast.LENGTH_SHORT).show()
             } else {
@@ -156,6 +175,13 @@ class FormTab1Fragment : Fragment() {
                 etLokasiBencana.setText("")
                 etKoordinat.setText("")
                 etKedalaman.setText("")
+                etCakupanDampak.setText("")
+                etUpayaDilakukan.setText("")
+                etKondisiMutakhir.setText("")
+                etKerusakan.setText("")
+                etPenyebab.setText("")
+                etSumberInformasi.setText("")
+                simpanDataKeViewModel()
             }
         }
 
@@ -218,6 +244,12 @@ class FormTab1Fragment : Fragment() {
                         etKoordinat.setText(laporanKemarin.koordinat)
                         etKedalaman.setText(laporanKemarin.kedalaman)
                         dropdownJenisBencana.setText(laporanKemarin.jenisBencana, false)
+                        etCakupanDampak.setText(laporanKemarin.cakupanDampak)
+                        etUpayaDilakukan.setText(laporanKemarin.upayaDilakukan)
+                        etKondisiMutakhir.setText(laporanKemarin.kondisiMutakhir)
+                        etKerusakan.setText(laporanKemarin.kerusakan)
+                        etPenyebab.setText(laporanKemarin.penyebab)
+                        etSumberInformasi.setText(laporanKemarin.sumberInformasi)
 
                         val matchedDistrict = MukomukoDistricts.list.firstOrNull {
                             laporanKemarin.lokasiBencana.contains(it.name, ignoreCase = true)
@@ -231,6 +263,7 @@ class FormTab1Fragment : Fragment() {
                             }
                             setCuacaReadOnly(savedWeather)
                         }
+                        simpanDataKeViewModel()
 
                         Toast.makeText(
                             requireContext(),
@@ -247,6 +280,36 @@ class FormTab1Fragment : Fragment() {
         btnAmbilGps.setOnClickListener {
             Toast.makeText(requireContext(), "Fitur GPS sedang disiapkan...", Toast.LENGTH_SHORT).show()
         }
+
+        // Pulihkan nilai awal dari ViewModel bila sudah ada dan pasang TextWatcher agar langsung tersinkronisasi
+        val existing = sharedViewModel.laporanSementara
+        if (existing.cakupanDampak.isNotBlank()) etCakupanDampak.setText(existing.cakupanDampak)
+        if (existing.upayaDilakukan.isNotBlank()) etUpayaDilakukan.setText(existing.upayaDilakukan)
+        if (existing.kondisiMutakhir.isNotBlank()) etKondisiMutakhir.setText(existing.kondisiMutakhir)
+        if (existing.kerusakan.isNotBlank()) etKerusakan.setText(existing.kerusakan)
+        if (existing.penyebab.isNotBlank()) etPenyebab.setText(existing.penyebab)
+        if (existing.sumberInformasi.isNotBlank()) etSumberInformasi.setText(existing.sumberInformasi)
+
+        val liveSyncWatcher = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                simpanDataKeViewModel()
+            }
+        }
+        listOf(
+            etTanggalKejadian,
+            etWaktuKejadian,
+            etLokasiBencana,
+            etKoordinat,
+            etKedalaman,
+            etCakupanDampak,
+            etUpayaDilakukan,
+            etKondisiMutakhir,
+            etKerusakan,
+            etPenyebab,
+            etSumberInformasi
+        ).forEach { it.addTextChangedListener(liveSyncWatcher) }
     }
 
     private fun setupDropdowns() {
@@ -428,6 +491,15 @@ class FormTab1Fragment : Fragment() {
         } else {
             setCuacaReadOnly("Data cuaca tidak tersedia")
         }
+        if (laporan.deskripsi.isNotBlank()) {
+            etCakupanDampak.setText(detailLokasi)
+            etKondisiMutakhir.setText(laporan.deskripsi)
+        }
+        etSumberInformasi.setText("Laporan Warga (${laporan.namaPelapor})")
+        if (etUpayaDilakukan.text.isNullOrBlank()) {
+            etUpayaDilakukan.setText("Tim Reaksi Cepat (TRC) Pusdalops BPBD Mukomuko melakukan verifikasi lapangan dan kaji cepat.")
+        }
+        simpanDataKeViewModel()
 
         Toast.makeText(
             requireContext(),
@@ -461,16 +533,23 @@ class FormTab1Fragment : Fragment() {
             else -> lokasiInput
         }
         val cuacaFinal = cuacaSaatKejadianTerkini.ifBlank { "Data cuaca tidak tersedia" }
+        val prev = sharedViewModel.laporanSementara
 
-        sharedViewModel.laporanSementara = sharedViewModel.laporanSementara.copy(
-            jenisBencana = dropdownJenisBencana.text.toString(),
-            tanggalKejadian = etTanggalKejadian.text.toString(),
-            waktuKejadian = etWaktuKejadian.text.toString(),
-            lokasiBencana = lokasiGabungan,
-            koordinat = etKoordinat.text.toString(),
-            kedalaman = etKedalaman.text.toString(),
+        sharedViewModel.laporanSementara = prev.copy(
+            jenisBencana = dropdownJenisBencana.text.toString().ifBlank { prev.jenisBencana },
+            tanggalKejadian = etTanggalKejadian.text.toString().ifBlank { prev.tanggalKejadian },
+            waktuKejadian = etWaktuKejadian.text.toString().ifBlank { prev.waktuKejadian },
+            lokasiBencana = lokasiGabungan.ifBlank { prev.lokasiBencana },
+            koordinat = etKoordinat.text.toString().ifBlank { prev.koordinat },
+            kedalaman = etKedalaman.text.toString().ifBlank { prev.kedalaman },
             kondisiCuaca = cuacaFinal,
-            cuacaSaatKejadian = cuacaFinal
+            cuacaSaatKejadian = cuacaFinal,
+            cakupanDampak = etCakupanDampak.text?.toString()?.trim()?.ifBlank { prev.cakupanDampak } ?: prev.cakupanDampak,
+            upayaDilakukan = etUpayaDilakukan.text?.toString()?.trim()?.ifBlank { prev.upayaDilakukan } ?: prev.upayaDilakukan,
+            kondisiMutakhir = etKondisiMutakhir.text?.toString()?.trim()?.ifBlank { prev.kondisiMutakhir } ?: prev.kondisiMutakhir,
+            kerusakan = etKerusakan.text?.toString()?.trim()?.ifBlank { prev.kerusakan } ?: prev.kerusakan,
+            penyebab = etPenyebab.text?.toString()?.trim()?.ifBlank { prev.penyebab } ?: prev.penyebab,
+            sumberInformasi = etSumberInformasi.text?.toString()?.trim()?.ifBlank { prev.sumberInformasi } ?: prev.sumberInformasi
         )
     }
 

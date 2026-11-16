@@ -541,20 +541,27 @@ fun DatabaseExplorerScreen(
                                                         Row(
                                                             modifier = Modifier
                                                                 .fillMaxWidth()
-                                                                .padding(top = 3.dp, start = 4.dp),
+                                                                .padding(top = 4.dp, start = 4.dp),
+                                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                                                             verticalAlignment = Alignment.Top
                                                         ) {
                                                             Text(
-                                                                text = "• [${log.waktuKomunikasi} | ${log.saluran}] ",
+                                                                text = "• [${log.waktuKomunikasi} | ${log.saluran}]",
                                                                 fontSize = 10.sp,
                                                                 fontWeight = FontWeight.SemiBold,
-                                                                color = Color(0xFFB45309)
+                                                                color = Color(0xFFB45309),
+                                                                lineHeight = 14.sp,
+                                                                maxLines = 2,
+                                                                overflow = TextOverflow.Ellipsis,
+                                                                modifier = Modifier.weight(0.4f)
                                                             )
                                                             Text(
                                                                 text = "${log.pihakDihubungi}: \"${log.pesan}\" (Arahan: ${log.arahanTindakan})",
                                                                 fontSize = 10.sp,
                                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                                                 lineHeight = 14.sp,
+                                                                maxLines = 4,
+                                                                overflow = TextOverflow.Ellipsis,
                                                                 modifier = Modifier.weight(1f)
                                                             )
                                                         }
@@ -685,13 +692,42 @@ fun DatabaseExplorerScreen(
                                         Column(modifier = Modifier.padding(12.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.Top
                                             ) {
-                                                Text(text = a.action, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0369A1))
-                                                Text(text = dateStr, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                                Text(
+                                                    text = a.action,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp,
+                                                    lineHeight = 16.sp,
+                                                    color = Color(0xFF0369A1),
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .padding(end = 8.dp)
+                                                )
+                                                Text(
+                                                    text = dateStr,
+                                                    fontSize = 11.sp,
+                                                    lineHeight = 15.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                                )
                                             }
-                                            Text(text = "${a.name} (${a.nip}) • ${a.role}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
-                                            Text(text = "Perangkat: ${a.deviceInfo}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "${a.name} (${a.nip}) • ${a.role}",
+                                                fontSize = 11.sp,
+                                                lineHeight = 16.sp,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "Perangkat: ${a.deviceInfo}",
+                                                fontSize = 11.sp,
+                                                lineHeight = 15.sp,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
                                         }
                                     }
                                 }

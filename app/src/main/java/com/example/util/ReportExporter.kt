@@ -1423,7 +1423,39 @@ object ReportExporter {
             activeMonthlyData.sumOf { it.countsByCategory[cat] ?: 0 }
         }.maxByOrNull { it.value }
 
-        val kpiRect = RectF(margin, y, pageWidth - margin, y + 40f)
+        val kpiColWidth = ((pageWidth - 2f * margin - 28f) / 2f).toInt()
+        val kpiBodyPaint = Paint(textPaint).apply {
+            textSize = 7.0f
+        }
+        val leftKpiText =
+            "• Total Kejadian: $totalAnnual kejadian (Rata-rata ${String.format(Locale.getDefault(), "%.1f", avgMonthly)}/bln)\n" +
+            "• Bulan Puncak Kejadian: ${peakMonth.monthFull} (${peakMonth.totalIncidents} kejadian - Dominan Kec. ${peakMonth.topDistrict})"
+        val rightKpiText =
+            "• Bencana Dominan: ${domCatEntry?.key?.shortLabel ?: "Banjir"} (${domCatEntry?.value ?: 0} kejadian)\n" +
+            "• Penanganan Tuntas TRC: $totalResolved/$totalAnnual selesai ($resolvedPct%) • Terdampak: $totalAffected jiwa"
+
+        val leftKpiLayout = buildAutoFitStaticLayout(
+            text = leftKpiText,
+            maxWidth = kpiColWidth,
+            paint = kpiBodyPaint,
+            maxLines = 4,
+            minTextSize = 5.6f,
+            lineSpacingExtra = 1.5f,
+            lineSpacingMultiplier = 1.12f
+        )
+        val rightKpiLayout = buildAutoFitStaticLayout(
+            text = rightKpiText,
+            maxWidth = kpiColWidth,
+            paint = kpiBodyPaint,
+            maxLines = 4,
+            minTextSize = 5.6f,
+            lineSpacingExtra = 1.5f,
+            lineSpacingMultiplier = 1.12f
+        )
+
+        val kpiContentHeight = max(leftKpiLayout.height, rightKpiLayout.height).toFloat()
+        val kpiBoxHeight = 18f + kpiContentHeight + 7f
+        val kpiRect = RectF(margin, y, pageWidth - margin, y + kpiBoxHeight)
         canvas.drawRoundRect(kpiRect, 6f, 6f, Paint().apply { color = Color.rgb(239, 246, 255) })
         canvas.drawRoundRect(kpiRect, 6f, 6f, Paint().apply {
             color = Color.rgb(147, 197, 253)
@@ -1436,34 +1468,20 @@ object ReportExporter {
             "I. RINGKASAN EKSEKUTIF STATISTIK KEBENCANAAN TAHUN $selectedYear (JANUARI – $lastMonthNameUpper)",
             margin + 10f,
             y + 12f,
-            Paint(boldTextPaint).apply { color = Color.rgb(30, 64, 175) }
-        )
-        canvas.drawText(
-            "• Total Kejadian: $totalAnnual kejadian (Rata-rata ${String.format(Locale.getDefault(), "%.1f", avgMonthly)}/bln)",
-            margin + 10f,
-            y + 24f,
-            textPaint
-        )
-        canvas.drawText(
-            "• Bulan Puncak Kejadian: ${peakMonth.monthFull} (${peakMonth.totalIncidents} kejadian - Dominan Kec. ${peakMonth.topDistrict})",
-            margin + 10f,
-            y + 34f,
-            textPaint
-        )
-        canvas.drawText(
-            "• Bencana Dominan: ${domCatEntry?.key?.shortLabel ?: "Banjir"} (${domCatEntry?.value ?: 0} kejadian)",
-            margin + 280f,
-            y + 24f,
-            textPaint
-        )
-        canvas.drawText(
-            "• Penanganan Tuntas TRC: $totalResolved/$totalAnnual selesai ($resolvedPct%) • Terdampak: $totalAffected jiwa",
-            margin + 280f,
-            y + 34f,
-            textPaint
+            Paint(boldTextPaint).apply { color = Color.rgb(30, 64, 175); textSize = 7.4f }
         )
 
-        y += 64f
+        canvas.save()
+        canvas.translate(margin + 10f, y + 17f)
+        leftKpiLayout.draw(canvas)
+        canvas.restore()
+
+        canvas.save()
+        canvas.translate(margin + 18f + kpiColWidth, y + 17f)
+        rightKpiLayout.draw(canvas)
+        canvas.restore()
+
+        y += kpiBoxHeight + 18f
 
         // 4. Visualisasi Grafik Batang & Pie Chart Proporsi Bencana
         canvas.drawText(
@@ -1475,8 +1493,8 @@ object ReportExporter {
         y += 8f
 
         val chartBoxHeight = 142f
-        val barBoxRect = RectF(margin, y, margin + 324f, y + chartBoxHeight)
-        val pieBoxRect = RectF(margin + 332f, y, pageWidth - margin, y + chartBoxHeight)
+        val barBoxRect = RectF(margin, y, margin + 306f, y + chartBoxHeight)
+        val pieBoxRect = RectF(margin + 314f, y, pageWidth - margin, y + chartBoxHeight)
 
         // Kotak Kiri: Grafik Batang Bulanan (Jan s/d Bulan Berjalan)
         canvas.drawRoundRect(barBoxRect, 6f, 6f, Paint().apply { color = Color.rgb(248, 250, 252) })
@@ -1564,10 +1582,10 @@ object ReportExporter {
         )
 
         val pieOval = RectF(
-            pieBoxRect.left + 10f,
-            pieBoxRect.top + 26f,
-            pieBoxRect.left + 86f,
-            pieBoxRect.top + 102f
+            pieBoxRect.left + 8f,
+            pieBoxRect.top + 28f,
+            pieBoxRect.left + 76f,
+            pieBoxRect.top + 96f
         )
         var startAng = -90f
         pieSlices.forEachIndexed { idx, slice ->
@@ -1584,7 +1602,7 @@ object ReportExporter {
         canvas.drawCircle(
             pieOval.centerX(),
             pieOval.centerY(),
-            19f,
+            17f,
             Paint().apply { color = Color.rgb(248, 250, 252); isAntiAlias = true }
         )
         canvas.drawText(
@@ -1595,20 +1613,26 @@ object ReportExporter {
         )
 
         // Legenda Persentase Pie Chart di sebelah kanan Donut
-        var pLegY = pieBoxRect.top + 30f
-        val pLegX = pieBoxRect.left + 94f
-        val smallLegPaint = Paint(textPaint).apply { textSize = 6.6f }
-        val smallBoldPaint = Paint(boldTextPaint).apply { textSize = 6.6f }
+        var pLegY = pieBoxRect.top + 26f
+        val pLegX = pieBoxRect.left + 82f
+        val maxLegendTextWidth = (pieBoxRect.right - (pLegX + 8f) - 5f).toInt()
+        val smallLegPaint = Paint(textPaint).apply { textSize = 6.2f }
+        val smallBoldPaint = Paint(boldTextPaint).apply { textSize = 6.0f }
         pieSlices.take(6).forEachIndexed { idx, slice ->
             val cRgb = getSliceRgbColor(slice.shortLabel, idx)
-            canvas.drawRect(pLegX, pLegY - 5f, pLegX + 6f, pLegY + 1f, Paint().apply { color = cRgb })
+            canvas.drawRect(pLegX, pLegY + 1f, pLegX + 5.5f, pLegY + 6.5f, Paint().apply { color = cRgb })
             val pctStr = "${String.format(Locale.getDefault(), "%.1f", slice.percentage)}%"
-            canvas.drawText(
-                "${slice.shortLabel.take(12)}: ${slice.count} ($pctStr)",
-                pLegX + 9f,
-                pLegY,
-                smallBoldPaint
+            val legendItemLayout = buildAutoFitStaticLayout(
+                text = "${slice.shortLabel.take(12)}: ${slice.count} ($pctStr)",
+                maxWidth = maxLegendTextWidth,
+                paint = smallBoldPaint,
+                maxLines = 1,
+                minTextSize = 5.0f
             )
+            canvas.save()
+            canvas.translate(pLegX + 8f, pLegY)
+            legendItemLayout.draw(canvas)
+            canvas.restore()
             pLegY += 15f
         }
         canvas.drawText(

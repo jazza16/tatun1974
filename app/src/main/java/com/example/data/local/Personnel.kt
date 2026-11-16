@@ -1,8 +1,12 @@
 package com.example.data.local
 
+import android.content.Context
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Room Database Entity for Official BPBD Mukomuko Personnel.
@@ -46,6 +50,44 @@ object OfficialAsnBpbdPersonnel {
     const val ROLE_KOORD_ADMINISTRASI = "Koord. Administrasi"
     const val ROLE_MANAJER = "Manajer Pusdalops-PB"
     const val ROLE_OPERATOR = "Operator Pusdalops"
+    const val ROLE_STAF_LOGISTIK_TRC = "Staf Logistik/TRC"
+
+    val ASN_MUKOMUKO_2026_LIST: List<Pair<String, String>> = listOf(
+        "A. RAHMAN" to "197906132005021002",
+        "AAN FITRADINATA, SE" to "197903122006041007",
+        "AHMAD HIDAYAT SYAH" to "197302182006041005",
+        "AINUN MARDIATI CANIAGO, S.Pd" to "198812302025212141",
+        "AMRI KURNIADI" to "197608122011011003",
+        "ANDIKA JAYA PUTRA" to "199311282025211115",
+        "ARIF WIJOYO, S.E" to "198606282025211024",
+        "DAVID HARIYANTO, S.I.P" to "199303302025211135",
+        "DESTRI GANDALIA, S.STP, M.A.P" to "198812242010102001",
+        "DHUHAN PUTRA YUNARDI, S.M." to "200005282025211058",
+        "DORI FRANCISKO, S.Pd." to "199512162025061002",
+        "ELI SAHWATI" to "199604122025212113",
+        "ERI YANTO" to "198912102025211038",
+        "FEBRIZA RAHMADI" to "199502082024211009",
+        "FERAHANDAYANI" to "197806182025212030",
+        "FIRMANSYAH" to "199305102025211171",
+        "HARI KURNIAWAN" to "198607092015021001",
+        "HERMANDAHLI" to "197106092025211033",
+        "HITATUN" to "197401282006041006",
+        "LISMIE NOVTRIANTI" to "199711282025212144",
+        "MECCA RIZKA, S.M." to "199908042025212096",
+        "MEI SAHPUTRA" to "199405252019031005",
+        "MUHAMMAD RIGAN JASWARI, S.Akun." to "200201252025211014",
+        "NITA KUSWANI" to "197809192010012010",
+        "NOKI PRADINATA, S.Agr" to "199211292025211127",
+        "NOVRANDA EKA PUTRA" to "199011042019031006",
+        "PUTRI MAYANG SARI" to "199906302025212010",
+        "ROMI YANTI, S.Pd" to "199108092025212036",
+        "RURI IRWANDI" to "197906072006041011",
+        "SAMSUL BAHRI" to "198306102009041001",
+        "SATRIA AMANDA PUTRA, S.M." to "200003112025211067",
+        "SUMARNI" to "197502102009042001",
+        "YESSY TRIYANI" to "198005042011012004",
+        "YUDHA SOFRIANTO, S.A.P." to "199807202025061002"
+    )
 
     val LEADERSHIP = listOf(
         Personnel(
@@ -137,7 +179,21 @@ object OfficialAsnBpbdPersonnel {
         )
     )
 
-    val ALL_OFFICIAL_PERSONNEL = LEADERSHIP + OPERATORS
+    val STAF_LOGISTIK_TRC: List<Personnel> = ASN_MUKOMUKO_2026_LIST
+        .filter { (_, nip) ->
+            (LEADERSHIP + OPERATORS).none { it.nip.equals(nip, ignoreCase = true) }
+        }
+        .map { (name, nip) ->
+            Personnel(
+                name = name,
+                nip = nip,
+                role = ROLE_STAF_LOGISTIK_TRC,
+                unit = "BPBD Kab. Mukomuko",
+                shift = "Shift Siaga 24 Jam"
+            )
+        }
+
+    val ALL_OFFICIAL_PERSONNEL = LEADERSHIP + OPERATORS + STAF_LOGISTIK_TRC
 
     fun toOfficerProfiles(): List<OfficerProfile> {
         return ALL_OFFICIAL_PERSONNEL.map {
@@ -169,6 +225,62 @@ object OfficialAsnBpbdPersonnel {
                 Pair(androidx.compose.ui.graphics.Color(0xFFFEE2E2), androidx.compose.ui.graphics.Color(0xFFB91C1C)) // Merah Siaga
             else ->
                 Pair(androidx.compose.ui.graphics.Color(0xFFF1F5F9), androidx.compose.ui.graphics.Color(0xFF475569)) // Netral Slate
+        }
+    }
+}
+
+/**
+ * Seeding 34 data ASN BPBD Kabupaten Mukomuko ke dalam tabel `personnel` dan `officer_credentials`.
+ * - Mengecek keberadaan NIP terlebih dahulu di database Room.
+ * - Jika NIP belum terdaftar, menyimpan entitas baru dengan Role default 'Staf Logistik/TRC'
+ *   dan PIN default 6 digit terakhir NIP.
+ * - Jika NIP sudah terdaftar, dilewati (skip) agar tidak terjadi duplikasi atau menimpa PIN yang sudah diubah.
+ */
+fun seedDataAsnMukomuko2026(context: Context) {
+    val appContext = context.applicationContext
+    CoroutineScope(Dispatchers.IO).launch {
+        val db = AppDatabase.getInstance(appContext)
+        val personnelDao = db.personnelDao()
+        val credentialDao = db.credentialDao()
+
+        for ((rawName, rawNip) in OfficialAsnBpbdPersonnel.ASN_MUKOMUKO_2026_LIST) {
+            val name = rawName.trim()
+            val nip = rawNip.trim()
+            if (name.isEmpty() || nip.isEmpty()) continue
+
+            // 1. Cek dan masukkan ke tabel personnel jika NIP belum terdaftar
+            val existingPersonnel = personnelDao.getPersonnelByNip(nip)
+            if (existingPersonnel == null) {
+                personnelDao.insertPersonnel(
+                    Personnel(
+                        name = name,
+                        nip = nip,
+                        role = OfficialAsnBpbdPersonnel.ROLE_STAF_LOGISTIK_TRC,
+                        unit = "BPBD Kab. Mukomuko",
+                        shift = "Shift Siaga 24 Jam"
+                    )
+                )
+            }
+
+            // 2. Cek dan masukkan ke tabel officer_credentials jika NIP belum terdaftar
+            val existingCredential = credentialDao.getCredentialByNip(nip)
+            if (existingCredential == null) {
+                val defaultPin = nip.takeLast(6)
+                val salt = OfficerCredentialEntity.generateCryptographicSalt()
+                val newCredential = OfficerCredentialEntity(
+                    nip = nip,
+                    fullName = name,
+                    role = existingPersonnel?.role ?: OfficialAsnBpbdPersonnel.ROLE_STAF_LOGISTIK_TRC,
+                    unit = existingPersonnel?.unit ?: "BPBD Kab. Mukomuko",
+                    shift = existingPersonnel?.shift ?: "Shift Siaga 24 Jam",
+                    phone = existingPersonnel?.phone ?: "",
+                    pinHash = OfficerCredentialEntity.hashWithSalt(defaultPin, salt),
+                    salt = salt,
+                    isCustomPinSet = false,
+                    initialSecurePin = defaultPin
+                )
+                credentialDao.insertCredential(newCredential)
+            }
         }
     }
 }

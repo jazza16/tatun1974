@@ -558,7 +558,19 @@ fun FormLaporanHarianScreen(
                         onLokasiChange = { lokasi = it },
                         koordinat = koordinat,
                         onKoordinatChange = { koordinat = it },
-                        cuacaSaatKejadian = cuacaSaatKejadian
+                        cuacaSaatKejadian = cuacaSaatKejadian,
+                        cakupanDampak = cakupanDampak,
+                        onCakupanDampakChange = { cakupanDampak = it },
+                        upayaDilakukan = upayaDilakukan,
+                        onUpayaDilakukanChange = { upayaDilakukan = it },
+                        kondisiMutakhir = kondisiMutakhir,
+                        onKondisiMutakhirChange = { kondisiMutakhir = it },
+                        kerusakan = kerusakan,
+                        onKerusakanChange = { kerusakan = it },
+                        penyebab = penyebab,
+                        onPenyebabChange = { penyebab = it },
+                        sumberInformasi = sumberInformasi,
+                        onSumberInformasiChange = { sumberInformasi = it }
                     )
                     1 -> Step2DampakDanKorban(
                         cakupanDampak = cakupanDampak,
@@ -712,7 +724,19 @@ private fun Step1DataKejadian(
     onLokasiChange: (String) -> Unit,
     koordinat: String,
     onKoordinatChange: (String) -> Unit,
-    cuacaSaatKejadian: String
+    cuacaSaatKejadian: String,
+    cakupanDampak: String,
+    onCakupanDampakChange: (String) -> Unit,
+    upayaDilakukan: String,
+    onUpayaDilakukanChange: (String) -> Unit,
+    kondisiMutakhir: String,
+    onKondisiMutakhirChange: (String) -> Unit,
+    kerusakan: String,
+    onKerusakanChange: (String) -> Unit,
+    penyebab: String,
+    onPenyebabChange: (String) -> Unit,
+    sumberInformasi: String,
+    onSumberInformasiChange: (String) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -844,6 +868,54 @@ private fun Step1DataKejadian(
                         focusedBorderColor = Color(0xFF0284C7),
                         unfocusedBorderColor = Color(0xFF7DD3FC)
                     )
+                )
+
+                OutlinedTextField(
+                    value = cakupanDampak,
+                    onValueChange = onCakupanDampakChange,
+                    label = { Text("Cakupan Dampak (Wilayah / Desa / KK Terdampak)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+
+                OutlinedTextField(
+                    value = upayaDilakukan,
+                    onValueChange = onUpayaDilakukanChange,
+                    label = { Text("Upaya Dilakukan (Penanganan BPBD / TRC)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+
+                OutlinedTextField(
+                    value = kondisiMutakhir,
+                    onValueChange = onKondisiMutakhirChange,
+                    label = { Text("Kondisi Mutakhir Lapangan") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+
+                OutlinedTextField(
+                    value = kerusakan,
+                    onValueChange = onKerusakanChange,
+                    label = { Text("Kerusakan (Rumah / Fasilitas / Infrastruktur)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+
+                OutlinedTextField(
+                    value = penyebab,
+                    onValueChange = onPenyebabChange,
+                    label = { Text("Penyebab Terjadinya Bencana") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+
+                OutlinedTextField(
+                    value = sumberInformasi,
+                    onValueChange = onSumberInformasiChange,
+                    label = { Text("Sumber Informasi") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
             }
         }

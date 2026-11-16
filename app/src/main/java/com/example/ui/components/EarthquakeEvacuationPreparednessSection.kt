@@ -332,7 +332,7 @@ fun EarthquakeEvacuationPreparednessSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Image(
-                            painter = painterResource(id = R.drawable.ic_bpbd_logo),
+                            painter = painterResource(id = R.drawable.ic_bpbd_mukomuko_official),
                             contentDescription = "Logo BPBD Mukomuko",
                             modifier = Modifier
                                 .size(44.dp)

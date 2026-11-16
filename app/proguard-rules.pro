@@ -65,3 +65,9 @@
 -keepclassmembers class * {
     @androidx.annotation.Keep *;
 }
+
+# Aturan Anti-Rusak untuk Support Library Lama (AppUpdater)
+-dontwarn android.support.**
+-keep class android.support.** { *; }
+-keep interface android.support.** { *; }
+-keep class com.github.javiersantos.appupdater.** { *; }

@@ -55,7 +55,6 @@ import com.example.ui.theme.WeatherSunGold
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NewReleases
@@ -140,19 +139,6 @@ fun WeatherTopBar(
                     }
                 },
                 actions = {
-                    // Wallpaper & Infografis Bencana Button
-                    IconButton(
-                        onClick = onWallpaperClick,
-                        modifier = Modifier.size(34.dp).testTag("btn_topbar_wallpaper")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Landscape,
-                            contentDescription = "Wallpaper Alam & Bencana",
-                            tint = barContentColor,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-
                     // UI Toggle Light / Dark Mode Button
                     IconButton(
                         onClick = onThemeToggle,

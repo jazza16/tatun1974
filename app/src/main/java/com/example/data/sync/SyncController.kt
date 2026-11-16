@@ -98,6 +98,17 @@ class SyncController(
         null
     }
 
+    private fun resolveOwnerUid(): String {
+        val uid = currentUid()
+        if (!uid.isNullOrBlank()) return uid
+        val officerNip = try {
+            OfficerAuthManager(context).getOfficerBadgeId().trim()
+        } catch (_: Exception) {
+            ""
+        }
+        return officerNip.ifBlank { deviceId }
+    }
+
     private val conflictHandler = SyncConflictHandler(context, database)
     private val weatherDao = database.weatherDao()
 
@@ -153,19 +164,15 @@ class SyncController(
         createNotificationChannel()
         setupNetworkCallback()
         attachRealtimeReportsListener()
+        startHeartbeatAndLatencyMonitoring()
+        attachRealtimeHeartbeatsListener()
         try {
             val firebaseAuth = com.google.firebase.auth.FirebaseAuth.getInstance()
             val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { auth ->
-                if (auth.currentUser != null) {
-                    startHeartbeatAndLatencyMonitoring()
-                    attachRealtimeReportsListener()
-                    attachRealtimeHeartbeatsListener()
-                } else {
-                    heartbeatsListener?.remove()
-                    heartbeatsListener = null
-                    heartbeatJob?.cancel()
-                    heartbeatJob = null
-                }
+                startHeartbeatAndLatencyMonitoring()
+                attachRealtimeReportsListener()
+                attachRealtimeHeartbeatsListener()
+                sendHeartbeatNow()
             }
             authStateListener = listener
             firebaseAuth.addAuthStateListener(listener)
@@ -226,7 +233,7 @@ class SyncController(
      * Measures network latency towards Cloud Firestore and triggers Slow Network warning if > 3000ms.
      */
     suspend fun measureLatency(): Long = withContext(Dispatchers.IO) {
-        val uid = currentUid() ?: return@withContext -1L
+        val uid = resolveOwnerUid()
         val db = firestore ?: return@withContext -1L
         val startTime = System.currentTimeMillis()
         try {
@@ -275,7 +282,7 @@ class SyncController(
      */
     fun sendHeartbeatNow() {
         scope.launch {
-            if (currentUid() != null && heartbeatsListener == null) {
+            if (heartbeatsListener == null) {
                 attachRealtimeHeartbeatsListener()
             }
             sendHeartbeat()
@@ -289,23 +296,21 @@ class SyncController(
         val now = System.currentTimeMillis()
         val currentStatus = if (_isSlowNetwork.value) "SLOW_NET" else "ONLINE"
 
-        if (isOfficerActive || currentUid() != null) {
-            val localHeartbeat = DeviceHeartbeat(
-                deviceId = deviceId,
-                deviceModel = deviceModel,
-                officerName = officerName,
-                lastSeen = now,
-                latencyMs = _latencyMs.value.coerceAtLeast(0L),
-                status = currentStatus
-            )
-            val merged = _activeDevices.value
-                .filterNot { it.deviceId == deviceId }
-                .toMutableList()
-            merged.add(0, localHeartbeat)
-            _activeDevices.value = merged.sortedByDescending { it.lastSeen }
-        }
+        val localHeartbeat = DeviceHeartbeat(
+            deviceId = deviceId,
+            deviceModel = deviceModel,
+            officerName = officerName,
+            lastSeen = now,
+            latencyMs = _latencyMs.value.coerceAtLeast(0L),
+            status = currentStatus
+        )
+        val merged = _activeDevices.value
+            .filterNot { it.deviceId == deviceId }
+            .toMutableList()
+        merged.add(0, localHeartbeat)
+        _activeDevices.value = merged.sortedByDescending { it.lastSeen }
 
-        val uid = currentUid() ?: return@withContext
+        val uid = resolveOwnerUid()
         val db = firestore ?: return@withContext
         try {
             val heartbeat = mapOf(
@@ -327,11 +332,9 @@ class SyncController(
     }
 
     private fun attachRealtimeHeartbeatsListener() {
-        val uid = currentUid() ?: return
         val db = firestore ?: return
         heartbeatsListener?.remove()
         heartbeatsListener = db.collection("device_heartbeats")
-            .whereEqualTo("ownerUid", uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
                 val list = mutableListOf<DeviceHeartbeat>()

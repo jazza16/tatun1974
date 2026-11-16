@@ -85,6 +85,18 @@ fun FormTab2Content(sharedViewModel: LaporanViewModel? = null) {
         )
     }
 
+    androidx.compose.runtime.LaunchedEffect(cakupanDampak, korbanLuka, korbanMeninggal, kerusakan, penyebab) {
+        sharedViewModel?.let { vm ->
+            vm.laporanSementara = vm.laporanSementara.copy(
+                cakupanDampak = cakupanDampak,
+                korbanLuka = korbanLuka,
+                korbanMeninggal = korbanMeninggal,
+                kerusakan = kerusakan,
+                penyebab = penyebab
+            )
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()

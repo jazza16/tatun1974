@@ -317,49 +317,28 @@ service cloud.firestore {
 
     // 7. Multi-Device Heartbeats for Real-Time Sync
     match /device_heartbeats/{deviceId} {
-      allow get: if isSignedIn() && isValidId(deviceId) && existing().ownerUid == request.auth.uid;
-      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
-      allow create: if isSignedIn()
-                    && isValidId(deviceId)
-                    && incoming().ownerUid == request.auth.uid
+      allow read: if true;
+      allow create, update: if isValidId(deviceId)
                     && incoming().keys().hasAll(['deviceId', 'ownerUid', 'status'])
                     && incoming().keys().hasOnly(['deviceId', 'ownerUid', 'deviceModel', 'officerName', 'lastSeen', 'latencyMs', 'status'])
                     && isValidDeviceHeartbeat(incoming());
-      allow update: if isSignedIn()
-                    && isValidId(deviceId)
-                    && isValidDeviceHeartbeat(incoming())
-                    && existing().ownerUid == request.auth.uid
-                    && incoming().ownerUid == existing().ownerUid
-                    && incoming().diff(existing()).affectedKeys().hasOnly(['deviceModel', 'officerName', 'lastSeen', 'latencyMs', 'status']);
-      allow delete: if isSignedIn() && isValidId(deviceId) && existing().ownerUid == request.auth.uid;
+      allow delete: if isValidId(deviceId);
     }
 
     // 8. Network Latency Pings
     match /network_pings/{deviceId} {
-      allow get: if isSignedIn() && isValidId(deviceId) && existing().ownerUid == request.auth.uid;
-      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
-      allow create: if isSignedIn()
-                    && isValidId(deviceId)
-                    && incoming().ownerUid == request.auth.uid
+      allow read: if true;
+      allow create, update: if isValidId(deviceId)
                     && incoming().keys().hasAll(['deviceId', 'ownerUid', 'pingTimestamp'])
                     && incoming().keys().hasOnly(['deviceId', 'ownerUid', 'pingTimestamp'])
                     && isValidNetworkPing(incoming());
-      allow update: if isSignedIn()
-                    && isValidId(deviceId)
-                    && isValidNetworkPing(incoming())
-                    && existing().ownerUid == request.auth.uid
-                    && incoming().ownerUid == existing().ownerUid
-                    && incoming().diff(existing()).affectedKeys().hasOnly(['pingTimestamp']);
-      allow delete: if isSignedIn() && isValidId(deviceId) && existing().ownerUid == request.auth.uid;
+      allow delete: if isValidId(deviceId);
     }
 
     // 9. Play Integrity Classic Device Security Sessions (Ruang Kerja Access Gating)
     match /device_security_sessions/{officerNip} {
-      allow get: if isSignedIn() && isValidId(officerNip) && existing().ownerUid == request.auth.uid;
-      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
-      allow create: if isSignedIn()
-                    && isValidId(officerNip)
-                    && incoming().ownerUid == request.auth.uid
+      allow read: if true;
+      allow create, update: if isValidId(officerNip)
                     && incoming().keys().hasAll(['sessionId', 'ownerUid', 'officerNip', 'accessGranted', 'timestamp'])
                     && incoming().keys().hasOnly([
                          'sessionId', 'ownerUid', 'nip', 'officerNip', 'officerName', 'officerRole',
@@ -368,23 +347,7 @@ service cloud.firestore {
                          'isVerified', 'accessGranted', 'targetModule', 'timestamp'
                        ])
                     && isValidDeviceSecuritySession(incoming());
-      allow update: if isSignedIn()
-                    && isValidId(officerNip)
-                    && isValidDeviceSecuritySession(incoming())
-                    && existing().ownerUid == request.auth.uid
-                    && incoming().ownerUid == existing().ownerUid
-                    && (
-                      // Action: Toggle remote access permission
-                      incoming().diff(existing()).affectedKeys().hasOnly(['accessGranted'])
-                      // Action: Refresh verified device session
-                      || incoming().diff(existing()).affectedKeys().hasOnly([
-                           'sessionId', 'nip', 'officerNip', 'officerName', 'officerRole',
-                           'integrityToken', 'tokenHash', 'classicNonce', 'verdict', 'deviceVerdict',
-                           'deviceId', 'deviceModel', 'osVersion', 'sdkInt',
-                           'isVerified', 'accessGranted', 'targetModule', 'timestamp'
-                         ])
-                    );
-      allow delete: if isSignedIn() && isValidId(officerNip) && existing().ownerUid == request.auth.uid;
+      allow delete: if isValidId(officerNip);
     }
 
     // 10. Play Integrity Security Audit & Validation Failures Logging (Append-Only)

@@ -449,15 +449,16 @@ class SecurityManager private constructor(private val context: Context) {
         } catch (_: Exception) {
             null
         }
-        if (currentUser == null) {
-            return@withContext false
-        }
         val db = firestore ?: return@withContext false
         try {
+            val fallbackOwnerUid = normalizedSession.officerNip.trim().ifBlank {
+                normalizedSession.deviceId.trim().ifBlank { getDeviceId() }
+            }
+            val resolvedOwnerUid = currentUser?.uid?.takeIf { it.isNotBlank() } ?: fallbackOwnerUid
             val payload = normalizedSession.toMap()
                 .filterValues { it != null }
                 .toMutableMap()
-            payload["ownerUid"] = currentUser.uid
+            payload["ownerUid"] = resolvedOwnerUid
             val docId = sanitizeDocumentId(normalizedSession.officerNip)
             db.collection(COLLECTION_SECURITY_SESSIONS)
                 .document(docId)
@@ -542,12 +543,7 @@ class SecurityManager private constructor(private val context: Context) {
             )
         }
 
-        val currentUser = try {
-            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        } catch (_: Exception) {
-            null
-        }
-        val db = if (currentUser != null) firestore else null
+        val db = firestore
         val currentDeviceId = getDeviceId()
 
         if (db != null) {
@@ -656,22 +652,12 @@ class SecurityManager private constructor(private val context: Context) {
     fun listenSecuritySessionsRealtime(
         onUpdate: (List<DeviceSecuritySession>) -> Unit
     ): ListenerRegistration? {
-        val currentUser = try {
-            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        } catch (_: Exception) {
-            null
-        }
-        if (currentUser == null) {
-            onUpdate(getLocalCachedSessions())
-            return null
-        }
         val db = firestore ?: run {
             onUpdate(getLocalCachedSessions())
             return null
         }
         return try {
             db.collection(COLLECTION_SECURITY_SESSIONS)
-                .whereEqualTo("ownerUid", currentUser.uid)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.w(TAG, "Security sessions listener fallback: ${error.message}")
@@ -679,10 +665,15 @@ class SecurityManager private constructor(private val context: Context) {
                         return@addSnapshotListener
                     }
                     if (snapshot != null) {
-                        val list = snapshot.documents.mapNotNull { doc ->
+                        val remoteList = snapshot.documents.mapNotNull { doc ->
                             doc.data?.let { DeviceSecuritySession.fromMap(it) }
-                        }.sortedByDescending { it.timestamp }
-                        onUpdate(list)
+                        }
+                        val localList = getLocalCachedSessions()
+                        val merged = (remoteList + localList)
+                            .groupBy { it.officerNip.trim().uppercase() }
+                            .mapNotNull { (_, group) -> group.maxByOrNull { it.timestamp } }
+                            .sortedByDescending { it.timestamp }
+                        onUpdate(merged)
                     }
                 }
         } catch (e: Exception) {
@@ -697,23 +688,21 @@ class SecurityManager private constructor(private val context: Context) {
      * falling back to local verified sessions if Firestore/Auth is unavailable.
      */
     suspend fun fetchSecuritySessions(): List<DeviceSecuritySession> = withContext(Dispatchers.IO) {
-        val currentUser = try {
-            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        } catch (_: Exception) {
-            null
-        }
         val db = firestore
-        if (currentUser != null && db != null) {
+        if (db != null) {
             try {
                 val snapshot = db.collection(COLLECTION_SECURITY_SESSIONS)
-                    .whereEqualTo("ownerUid", currentUser.uid)
                     .get()
                     .await()
                 val remoteList = snapshot.documents.mapNotNull { doc ->
                     doc.data?.let { DeviceSecuritySession.fromMap(it) }
                 }.sortedByDescending { it.timestamp }
                 if (remoteList.isNotEmpty()) {
-                    return@withContext remoteList
+                    val localList = getLocalCachedSessions()
+                    return@withContext (remoteList + localList)
+                        .groupBy { it.officerNip.trim().uppercase() }
+                        .mapNotNull { (_, group) -> group.maxByOrNull { it.timestamp } }
+                        .sortedByDescending { it.timestamp }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to fetch security sessions from Firestore: ${e.message}")
@@ -751,12 +740,6 @@ class SecurityManager private constructor(private val context: Context) {
      * Allows Admin to remotely grant or revoke access for a specific officer/device.
      */
     suspend fun updateAccessPermission(officerNip: String, accessGranted: Boolean): Boolean = withContext(Dispatchers.IO) {
-        val currentUser = try {
-            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        } catch (_: Exception) {
-            null
-        }
-        if (currentUser == null) return@withContext false
         val db = firestore ?: return@withContext false
         try {
             db.collection(COLLECTION_SECURITY_SESSIONS)
@@ -779,15 +762,7 @@ class SecurityManager private constructor(private val context: Context) {
         if (trimmedNip.isBlank()) return@withContext false
         removeLocalCachedSession(trimmedNip)
 
-        val currentUser = try {
-            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        } catch (_: Exception) {
-            null
-        }
-        val db = firestore
-        if (currentUser == null || db == null) {
-            return@withContext true
-        }
+        val db = firestore ?: return@withContext true
         return@withContext try {
             val sanitizedId = sanitizeDocumentId(trimmedNip)
             db.collection(COLLECTION_SECURITY_SESSIONS)

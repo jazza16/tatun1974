@@ -157,6 +157,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -244,6 +245,21 @@ private val VILLAGES_MAP = mapOf(
     "Air Rami" to listOf("Desa Air Rami", "Desa Bukit Harapan", "Desa Rami Mulya", "Desa Talang Rio"),
     "Air Manjunto" to listOf("Desa Manjunto Jaya", "Desa Tirta Makmur", "Desa Agung Jaya", "Desa Sinar Jaya")
 )
+
+/**
+ * Memasking 6 digit terakhir NIP untuk menjaga privasi pada tampilan UI Login Petugas.
+ * Menampilkan 12 digit pertama dan mengganti 6 digit terakhir dengan "******".
+ * Contoh: "197401282006041006" -> "197401282006******"
+ */
+fun maskNipLast6(nip: String): String {
+    val trimmed = nip.trim()
+    if (trimmed.isEmpty()) return "-"
+    return when {
+        trimmed.length >= 12 -> trimmed.take(12) + "******"
+        trimmed.length > 6 -> trimmed.dropLast(6) + "******"
+        else -> "******"
+    }
+}
 
 /**
  * Tab 9: Layanan Terpadu Laporan Warga Bencana Kabupaten Mukomuko
@@ -767,15 +783,8 @@ fun CitizenReportScreen(
                         contentPadding = PaddingValues(vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        // Card Buat Laporan Harian (Navigasi ke FormLaporanActivity)
-                        if (
-                            isOfficerLoggedIn && (
-                                officerRole.contains("Manajer", ignoreCase = true) ||
-                                officerRole.contains("Administrasi", ignoreCase = true) ||
-                                officerRole.contains("Operator", ignoreCase = true) ||
-                                hasSpecialAssignment
-                            )
-                        ) {
+                        if (isOfficerLoggedIn) {
+                            // Mode Petugas Aktif: Sembunyikan form laporan warga, tampilkan Kartu Pengarah Besar ke Form Laporan Harian Pusdalops
                             item {
                                 Card(
                                     onClick = {
@@ -783,57 +792,121 @@ fun CitizenReportScreen(
                                         context.startActivity(intent)
                                     },
                                     colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-                                    shape = RoundedCornerShape(12.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                                    shape = RoundedCornerShape(18.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF93C5FD)),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .testTag("cardBuatLaporan")
                                 ) {
-                                    Row(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .padding(20.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
                                         Surface(
-                                            shape = RoundedCornerShape(8.dp),
+                                            shape = RoundedCornerShape(14.dp),
                                             color = Color(0xFF1976D2),
-                                            modifier = Modifier.size(38.dp)
+                                            modifier = Modifier.size(56.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
                                                 Icon(
                                                     Icons.AutoMirrored.Filled.Assignment,
                                                     contentDescription = null,
                                                     tint = Color.White,
-                                                    modifier = Modifier.size(20.dp)
+                                                    modifier = Modifier.size(30.dp)
                                                 )
                                             }
                                         }
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
+                                        Spacer(modifier = Modifier.height(14.dp))
+                                        Surface(
+                                            color = Color(0xFFDBEAFE),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
                                             Text(
-                                                text = "Form Laporan Harian (Resmi)",
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF1E3A8A)
-                                            )
-                                            Text(
-                                                text = "Buka form multi-tab Pusdalops (Kejadian, Dampak, Log, Simpan)",
+                                                text = "MODE PETUGAS PUSDALOPS AKTIF",
                                                 fontSize = 11.sp,
-                                                color = Color(0xFF3B82F6)
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color(0xFF1E40AF),
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                             )
                                         }
-                                        Icon(
-                                            Icons.AutoMirrored.Filled.ArrowForward,
-                                            contentDescription = null,
-                                            tint = Color(0xFF1976D2),
-                                            modifier = Modifier.size(16.dp)
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            text = "Form Laporan Harian Pusdalops",
+                                            fontSize = 17.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFF1E3A8A),
+                                            textAlign = TextAlign.Center
                                         )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "Saat sesi Petugas aktif ($officerName), formulir aduan warga dinonaktifkan agar data pelaporan masyarakat dan laporan resmi petugas tetap terpisah.",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF334155),
+                                            textAlign = TextAlign.Center,
+                                            lineHeight = 18.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Button(
+                                            onClick = {
+                                                val intent = Intent(context, com.example.FormLaporanActivity::class.java)
+                                                context.startActivity(intent)
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(min = 48.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.Assignment,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "BUKA FORM LAPORAN HARIAN (MULTI-TAB)",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        OutlinedButton(
+                                            onClick = { selectedTab = 4 },
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(min = 44.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Shield,
+                                                contentDescription = null,
+                                                tint = Color(0xFF15803D),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Ke Ruang Kerja & Konsol Petugas",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF15803D)
+                                            )
+                                        }
                                     }
                                 }
                             }
-                        }
-
+                        } else {
                         // SECTION 1: DATA BENCANA (as in screenshot)
                         item {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
@@ -1491,6 +1564,7 @@ fun CitizenReportScreen(
                                     color = Color.White
                                 )
                             }
+                        }
                         }
                     }
                 }
@@ -2214,7 +2288,7 @@ fun CitizenReportScreen(
                                 val cred = bioResult.getOrThrow()
                                 selectedCredential = cred
                                 val nipPrefix = if (cred.nip.startsWith("TRC", ignoreCase = true)) "Reg TRC" else "NIP"
-                                val formattedLabel = "${cred.fullName} ($nipPrefix: ${cred.nip})"
+                                val formattedLabel = "${cred.fullName} ($nipPrefix: ${maskNipLast6(cred.nip)})"
 
                                 val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
                                     officerNip = cred.nip,
@@ -2503,8 +2577,9 @@ fun CitizenReportScreen(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
-                                            text = "NIP: ${selectedOfficer?.nip ?: "-"} • ${selectedOfficer?.role ?: "-"}",
+                                            text = "NIP: ${selectedOfficer?.nip?.let { maskNipLast6(it) } ?: "-"} • ${selectedOfficer?.role ?: "-"}",
                                             fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace,
                                             color = Color(0xFF1E40AF)
                                         )
                                     }
@@ -2546,8 +2621,9 @@ fun CitizenReportScreen(
                                                             color = if (isCurrent) Color(0xFF1D4ED8) else Color(0xFF0F172A)
                                                         )
                                                         Text(
-                                                            text = "NIP: ${off.nip} • ${off.role}",
+                                                            text = "NIP: ${maskNipLast6(off.nip)} • ${off.role}",
                                                             fontSize = 11.sp,
+                                                            fontFamily = FontFamily.Monospace,
                                                             color = Color(0xFF64748B)
                                                         )
                                                     }
@@ -2634,10 +2710,14 @@ fun CitizenReportScreen(
 
                         // Kolom Terpisah 2: NIP Pegawai ASN (Read-Only)
                         OutlinedTextField(
-                            value = selectedOfficer?.nip ?: "",
+                            value = selectedOfficer?.nip?.let { maskNipLast6(it) } ?: "",
                             onValueChange = {}, // Read-only: mencegah input manual pihak tak berwenang
                             readOnly = true,
                             enabled = false,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp
+                            ),
                             label = { Text("Kolom NIP Pegawai ASN (18 Digit)", fontSize = 11.sp) },
                             leadingIcon = {
                                 Icon(
@@ -3042,7 +3122,7 @@ fun CitizenReportScreen(
                                     "Login Biometrik Petugas Pusdalops",
                                     fallbackOption
                                 )
-                                    .setSubtitle("${officer.fullName} (${officer.nip})")
+                                    .setSubtitle("${officer.fullName} (${maskNipLast6(officer.nip)})")
                                     .build()
                                 authLauncher.launch(biometricRequest)
                             },
@@ -3371,13 +3451,13 @@ fun CitizenReportScreen(
                                         onUpdateReportStatus(targetId, targetStatus)
                                         Toast.makeText(
                                             context,
-                                            "Terverifikasi sebagai ${profile.formattedLabel()}. Status laporan diperbarui menjadi '$targetStatus'",
+                                            "Terverifikasi sebagai ${profile.fullName} (NIP: ${maskNipLast6(profile.nip)}). Status laporan diperbarui menjadi '$targetStatus'",
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
                                         Toast.makeText(
                                             context,
-                                            "Selamat bertugas, ${profile.formattedLabel()}! (Kredensial Database Terverifikasi)",
+                                            "Selamat bertugas, ${profile.fullName} (NIP: ${maskNipLast6(profile.nip)})! (Kredensial Database Terverifikasi)",
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }

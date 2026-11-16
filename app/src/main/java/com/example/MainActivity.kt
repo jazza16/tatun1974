@@ -236,6 +236,9 @@ class MainActivity : ComponentActivity() {
         configureAppCheck(this, intent)
         notificationIntentFlow.value = intent
 
+        // Seed 34 data ASN BPBD Kabupaten Mukomuko (hanya jika NIP belum terdaftar)
+        com.example.data.local.seedDataAsnMukomuko2026(this)
+
         // Initialize BMKG Earthquake and Severe Weather Notification Channels
         com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
         com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
@@ -295,6 +298,13 @@ class MainActivity : ComponentActivity() {
  */
 fun checkForAppUpdates(context: Context) {
     try {
+        val appUpdater = AppUpdater(context)
+            .setUpdateFrom(UpdateFrom.GITHUB)
+            .setGitHubUserAndRepo("jazza16", "tatun1974")
+            .setDisplay(Display.DIALOG) // Opsi tampilan: DIALOG, SNACKBAR, atau NOTIFICATION
+
+        appUpdater.start() // Memulai pengecekan di latar belakang
+
         val appUpdaterUtils = AppUpdaterUtils(context)
             .setUpdateFrom(UpdateFrom.GITHUB)
             .setGitHubUserAndRepo("jazza16", "tatun1974")
@@ -307,8 +317,6 @@ fun checkForAppUpdates(context: Context) {
                             !context.packageManager.canRequestPackageInstalls()
                         ) {
                             showRequestInstallPackagesDialog(context, update)
-                        } else {
-                            showUpdateDialog(context, update)
                         }
                     }
                 }

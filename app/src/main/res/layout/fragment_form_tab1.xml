@@ -293,10 +293,111 @@
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
                     android:hint="Kedalaman (Cth: 50 cm) - Kosongkan jika tidak ada">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etKedalaman"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:textColor="#333333"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 7. Cakupan Dampak -->
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:hint="Cakupan Dampak (Wilayah / Desa / KK Terdampak)">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etCakupanDampak"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textMultiLine"
+                        android:minLines="2"
+                        android:textColor="#333333"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 8. Upaya Dilakukan -->
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:hint="Upaya Dilakukan (Penanganan BPBD / TRC / Instansi)">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etUpayaDilakukan"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textMultiLine"
+                        android:minLines="2"
+                        android:textColor="#333333"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 9. Kondisi Mutakhir -->
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:hint="Kondisi Mutakhir Lapangan">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etKondisiMutakhir"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textMultiLine"
+                        android:minLines="2"
+                        android:textColor="#333333"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 10. Kerusakan -->
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:hint="Kerusakan (Rumah / Fasilitas Umum / Infrastruktur)">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etKerusakan"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textMultiLine"
+                        android:minLines="2"
+                        android:textColor="#333333"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 11. Penyebab -->
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:hint="Penyebab Kejadian Bencana">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etPenyebab"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textMultiLine"
+                        android:minLines="2"
+                        android:textColor="#333333"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 12. Sumber Informasi -->
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Sumber Informasi (Cth: BMKG / Camat / TRC BPBD)">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etSumberInformasi"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="text"

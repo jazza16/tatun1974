@@ -132,6 +132,16 @@ fun FormTab3Content(
         )
     }
 
+    androidx.compose.runtime.LaunchedEffect(upayaDilakukan, kondisiMutakhir, sumberInformasi) {
+        sharedViewModel?.let { vm ->
+            vm.laporanSementara = vm.laporanSementara.copy(
+                upayaDilakukan = upayaDilakukan,
+                kondisiMutakhir = kondisiMutakhir,
+                sumberInformasi = sumberInformasi
+            )
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
