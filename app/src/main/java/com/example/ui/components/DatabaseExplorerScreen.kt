@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -163,13 +164,15 @@ fun DatabaseExplorerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF0F172A))
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 ) {
                     IconButton(
                         onClick = onClose,
@@ -181,9 +184,12 @@ fun DatabaseExplorerScreen(
                             tint = Color.White
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Storage,
                                 contentDescription = null,
@@ -193,17 +199,21 @@ fun DatabaseExplorerScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Database Explorer (Room SQLite)",
-                                fontSize = 16.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
-                                modifier = Modifier.padding(end = 16.dp)
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                         Text(
                             text = "Inspeksi tabel lokal, status WAL & resolusi data",
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             color = Color(0xFF94A3B8),
-                            modifier = Modifier.padding(end = 16.dp)
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -221,7 +231,14 @@ fun DatabaseExplorerScreen(
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Input Form", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Input Form",
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
 
@@ -242,8 +259,8 @@ fun DatabaseExplorerScreen(
             LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF1E293B))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .background(Color(0xFF1E293B)),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(RoomTable.values()) { table ->
@@ -263,7 +280,10 @@ fun DatabaseExplorerScreen(
                             Text(
                                 text = "${table.label} ($count)",
                                 fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         },
                         leadingIcon = {
@@ -347,18 +367,22 @@ fun DatabaseExplorerScreen(
                                                     text = p.name,
                                                     fontWeight = FontWeight.Bold,
                                                     fontSize = 13.sp,
-                                                    color = MaterialTheme.colorScheme.onSurface
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                                                 )
                                                 Surface(
                                                     shape = RoundedCornerShape(20.dp),
                                                     color = badgeBg,
-                                                    border = androidx.compose.foundation.BorderStroke(0.8.dp, badgeText.copy(alpha = 0.35f))
+                                                    border = androidx.compose.foundation.BorderStroke(0.8.dp, badgeText.copy(alpha = 0.35f)),
+                                                    modifier = Modifier.wrapContentWidth()
                                                 ) {
                                                     Text(
                                                         text = p.role.uppercase(),
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         color = badgeText,
+                                                        maxLines = 1,
+                                                        softWrap = false,
                                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
                                                     )
                                                 }
@@ -594,18 +618,22 @@ fun DatabaseExplorerScreen(
                                                     text = "[${r.id}] ${r.disasterType}",
                                                     fontWeight = FontWeight.Bold,
                                                     fontSize = 12.sp,
-                                                    color = OrangePrimary
+                                                    color = OrangePrimary,
+                                                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                                                 )
                                                 Surface(
                                                     shape = RoundedCornerShape(20.dp),
                                                     color = repBg,
-                                                    border = androidx.compose.foundation.BorderStroke(0.8.dp, repColor.copy(alpha = 0.35f))
+                                                    border = androidx.compose.foundation.BorderStroke(0.8.dp, repColor.copy(alpha = 0.35f)),
+                                                    modifier = Modifier.wrapContentWidth()
                                                 ) {
                                                     Text(
                                                         text = r.status.uppercase(),
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         color = repColor,
+                                                        maxLines = 1,
+                                                        softWrap = false,
                                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
                                                     )
                                                 }

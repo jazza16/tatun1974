@@ -42,9 +42,19 @@ class SmartOfficerAuthRepository(private val context: Context) {
 
     companion object {
         private const val TAG = "SmartOfficerAuthRepo"
+        private const val MAX_FAILED_ATTEMPTS = 5
+        private const val LOCKOUT_DURATION_MS = 5 * 60 * 1000L
+
+        private data class FailedAttemptState(val count: Int, val lockedUntilMs: Long)
+        private val failedAttemptMap = java.util.concurrent.ConcurrentHashMap<String, FailedAttemptState>()
 
         // Default PINs that are strictly forbidden for officer login under the smart login scheme
         val FORBIDDEN_DEFAULT_PINS = listOf("117", "BPBD117", "ADMIN117", "TRC2026", "PUSDALOPS117", "0000", "1234")
+
+        private fun maskNip(nip: String): String {
+            val t = nip.trim()
+            return if (t.length <= 4) "***" else "***${t.takeLast(4)}"
+        }
 
         @Volatile
         private var INSTANCE: SmartOfficerAuthRepository? = null
@@ -220,6 +230,15 @@ class SmartOfficerAuthRepository(private val context: Context) {
         if (trimmedNip.isBlank()) {
             return@withContext Result.failure(IllegalArgumentException("NIP / Nomor Registrasi tidak boleh kosong."))
         }
+        val lockoutKey = trimmedNip.lowercase()
+        val nowCheck = System.currentTimeMillis()
+        val existingLockState = failedAttemptMap[lockoutKey]
+        if (existingLockState != null && existingLockState.lockedUntilMs > nowCheck) {
+            val remSec = (existingLockState.lockedUntilMs - nowCheck + 999L) / 1000L
+            return@withContext Result.failure(
+                SecurityException("Akun terkunci sementara selama $remSec detik akibat terlalu banyak percobaan PIN salah.")
+            )
+        }
         if (trimmedPin.isBlank()) {
             return@withContext Result.failure(IllegalArgumentException("PIN pribadi tidak boleh kosong."))
         }
@@ -291,7 +310,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 )
             }
 
-            Log.w(TAG, "Cloud sync unavailable (${cloudFetchResult.exceptionOrNull()?.message}); validating NIP $trimmedNip against local SQLite.")
+            Log.w(TAG, "Cloud sync unavailable (${cloudFetchResult.exceptionOrNull()?.message}); validating NIP ${maskNip(trimmedNip)} against local SQLite.")
             credential = localCred
         }
 
@@ -328,26 +347,34 @@ class SmartOfficerAuthRepository(private val context: Context) {
         val isPinCorrect = credential.verifyPin(trimmedPin)
 
         if (!isPinCorrect) {
+            val currentFailures = (failedAttemptMap[lockoutKey]?.takeIf { it.lockedUntilMs <= System.currentTimeMillis() }?.count ?: 0) + 1
+            val lockUntil = if (currentFailures >= MAX_FAILED_ATTEMPTS) System.currentTimeMillis() + LOCKOUT_DURATION_MS else 0L
+            failedAttemptMap[lockoutKey] = FailedAttemptState(
+                count = if (currentFailures >= MAX_FAILED_ATTEMPTS) 0 else currentFailures,
+                lockedUntilMs = lockUntil
+            )
             auditDao.insertAuditLog(
                 PersonnelAuditLogEntity(
                     nip = trimmedNip,
                     name = credential.fullName,
                     role = credential.role,
                     shift = credential.shift,
-                    action = "AUTH_INVALID_PIN",
-                    deviceInfo = "Percobaan PIN salah pada $deviceModel"
+                    action = if (lockUntil > 0L) "AUTH_LOCKED_OUT_BRUTE_FORCE" else "AUTH_INVALID_PIN",
+                    deviceInfo = "Percobaan PIN salah ($currentFailures/$MAX_FAILED_ATTEMPTS) pada $deviceModel"
                 )
             )
-            val expectedInitialPin = credential.initialSecurePin.ifBlank { sixDigitNip }
-            val hintMessage = if (!credential.isCustomPinSet) {
-                "PIN salah. Untuk login awal sebelum ganti PIN, gunakan 6 digit terakhir NIP Anda ($expectedInitialPin)."
+            val hintMessage = if (lockUntil > 0L) {
+                "Terlalu banyak percobaan gagal. Akun dikunci sementara selama 5 menit demi keamanan."
+            } else if (!credential.isCustomPinSet) {
+                "PIN salah. Untuk aktivasi awal akun yang belum diganti PIN-nya, masukkan 6 digit terakhir NIP Anda. (Sisa percobaan: ${MAX_FAILED_ATTEMPTS - currentFailures})"
             } else {
-                "PIN pribadi salah untuk NIP $trimmedNip. PIN telah diubah, wajib gunakan PIN pribadi terbaru Anda."
+                "PIN pribadi salah untuk NIP ${maskNip(trimmedNip)}. Wajib gunakan PIN pribadi terbaru Anda. (Sisa percobaan: ${MAX_FAILED_ATTEMPTS - currentFailures})"
             }
             return@withContext Result.failure(IllegalArgumentException(hintMessage))
         }
 
-        // Authentication Successful: Record device & timestamp
+        // Authentication Successful: Reset failure tracker and record device & timestamp
+        failedAttemptMap.remove(lockoutKey)
         val now = System.currentTimeMillis()
         val deviceDesc = "$deviceModel (Android ${Build.VERSION.RELEASE})"
         credentialDao.updateLoginSession(trimmedNip, now, deviceDesc)
@@ -509,12 +536,11 @@ class SmartOfficerAuthRepository(private val context: Context) {
         val activeCred = credential
             ?: return@withContext Result.failure(IllegalArgumentException("Petugas dengan NIP '$trimmedNip' tidak ditemukan."))
 
-        // Allow verifying currentPin against activeCred.verifyPin OR legacy '117' only if custom PIN was never set yet
+        // Verify currentPin against activeCred strictly (legacy '117' never accepted)
         val isOldPinValid = if (activeCred.isCustomPinSet) {
-            val oldHash = OfficerCredentialEntity.hashWithSalt(trimmedOld, activeCred.salt)
-            oldHash.equals(activeCred.pinHash, ignoreCase = true)
+            OfficerCredentialEntity.verifyHash(trimmedOld, activeCred.salt, activeCred.pinHash)
         } else {
-            activeCred.verifyPin(trimmedOld) || trimmedOld == "117"
+            activeCred.verifyPin(trimmedOld)
         }
 
         if (!isOldPinValid) {
@@ -544,7 +570,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
             return@withContext Result.failure(IllegalArgumentException("PIN baru tidak boleh sama dengan PIN saat ini."))
         }
 
-        val newSalt = java.util.UUID.randomUUID().toString().take(12)
+        val newSalt = OfficerCredentialEntity.generateCryptographicSalt()
         val newHash = OfficerCredentialEntity.hashWithSalt(trimmedNew, newSalt)
         val now = System.currentTimeMillis()
 
@@ -602,7 +628,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
             ?: return@withContext Result.failure(IllegalArgumentException("Petugas dengan NIP '$trimmedNip' tidak ditemukan."))
 
         val initialPin = OfficerCredentialEntity.generateInitialPinForNip(cred.nip)
-        val salt = java.util.UUID.randomUUID().toString().take(12)
+        val salt = OfficerCredentialEntity.generateCryptographicSalt()
         val hash = OfficerCredentialEntity.hashWithSalt(initialPin, salt)
         val now = System.currentTimeMillis()
 
@@ -634,7 +660,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
             )
         )
 
-        return@withContext Result.success("PIN akun ${cred.fullName} di-reset ke 6 digit NIP ($initialPin). Tanpa PIN default umum.")
+        return@withContext Result.success("PIN akun ${cred.fullName} berhasil di-reset ke kunci individual 6 digit terakhir NIP.")
     }
 
     /**

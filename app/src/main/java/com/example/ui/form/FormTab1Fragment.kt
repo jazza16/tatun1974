@@ -97,9 +97,14 @@ class FormTab1Fragment : Fragment() {
         dropdownCuaca.isClickable = false
 
         // Inisialisasi Info Sesi Petugas
+        val officerAuthManager = com.example.data.local.OfficerAuthManager(requireContext())
         val sessionManager = SessionManager(requireContext())
-        petugasAktifNama = sessionManager.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
-        petugasAktifNip = sessionManager.getNipPetugas().ifBlank { "-" }
+        petugasAktifNama = officerAuthManager.getOfficerName().ifBlank {
+            sessionManager.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
+        }
+        petugasAktifNip = officerAuthManager.getOfficerBadgeId().ifBlank {
+            sessionManager.getNipPetugas().ifBlank { "-" }
+        }
         val tvNamaPetugas = view.findViewById<android.widget.TextView>(R.id.tvNamaPetugas)
         val tvInfoPetugas = view.findViewById<android.widget.TextView>(R.id.tvInfoPetugas)
         tvNamaPetugas?.text = petugasAktifNama
@@ -107,19 +112,20 @@ class FormTab1Fragment : Fragment() {
 
         // Di dalam onViewCreated FormTab1Fragment:
         lifecycleScope.launch {
-            val context = requireContext()
-            context.dataStore.data.map { preferences ->
-                val nama = preferences[NAMA_PETUGAS]
-                    ?: sessionManager.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
-                val nip = preferences[NIP_PETUGAS]
-                    ?: sessionManager.getNipPetugas().ifBlank { "-" }
+            sessionManager.namaPetugasFlow.collect { decryptedNama ->
+                val nama = officerAuthManager.getOfficerName().ifBlank {
+                    decryptedNama.takeUnless { it.startsWith("enc_v1:") }.orEmpty().ifBlank { "HITATUN ARAZAK" }
+                }
+                val nip = officerAuthManager.getOfficerBadgeId().ifBlank {
+                    sessionManager.getNipPetugas().takeUnless { it.startsWith("enc_v1:") }.orEmpty().ifBlank { "-" }
+                }
 
                 petugasAktifNama = nama
                 petugasAktifNip = nip
 
                 tvNamaPetugas?.text = nama
                 tvInfoPetugas?.text = "Diisi oleh: $nama"
-            }.collect()
+            }
         }
 
         setupDropdowns()
@@ -244,7 +250,6 @@ class FormTab1Fragment : Fragment() {
     }
 
     private fun setupDropdowns() {
-        // List Pilihan Bencana
         val listBencana = arrayOf(
             "Banjir",
             "Tanah Longsor",
@@ -254,13 +259,48 @@ class FormTab1Fragment : Fragment() {
             "Cuaca Ekstrem",
             "Tidak Ada Bencana (Kondusif)"
         )
-        val adapterBencana = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, listBencana)
-        dropdownJenisBencana.setAdapter(adapterBencana)
+        dropdownJenisBencana.keyListener = null
+        dropdownJenisBencana.isFocusable = false
+        dropdownJenisBencana.setOnClickListener {
+            if (!isAdded) return@setOnClickListener
+            val switchKondusif = view?.findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switchKondusif)
+            android.app.AlertDialog.Builder(requireContext())
+                .setTitle("Pilih Jenis Bencana")
+                .setItems(listBencana) { dialog, which ->
+                    val selected = listBencana[which]
+                    dropdownJenisBencana.setText(selected, false)
+                    if (selected.contains("Kondusif", ignoreCase = true) || selected.contains("Tidak Ada", ignoreCase = true)) {
+                        switchKondusif?.isChecked = true
+                        etTanggalKejadian.isEnabled = false
+                        etKedalaman.isEnabled = false
+                        Toast.makeText(requireContext(), "Mode Kondusif diaktifkan", Toast.LENGTH_SHORT).show()
+                    } else {
+                        if (switchKondusif?.isChecked == true) {
+                            switchKondusif.isChecked = false
+                        }
+                        etTanggalKejadian.isEnabled = true
+                        etKedalaman.isEnabled = true
+                    }
+                    dialog.dismiss()
+                }
+                .show()
+        }
 
-        // List 15 Kecamatan Kabupaten Mukomuko
         val listKecamatan = MukomukoDistricts.list.map { it.name }.toTypedArray()
-        val adapterKecamatan = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, listKecamatan)
-        dropdownKecamatan.setAdapter(adapterKecamatan)
+        dropdownKecamatan.keyListener = null
+        dropdownKecamatan.isFocusable = false
+        dropdownKecamatan.setOnClickListener {
+            if (!isAdded) return@setOnClickListener
+            android.app.AlertDialog.Builder(requireContext())
+                .setTitle("Pilih Kecamatan (15 Kecamatan)")
+                .setItems(listKecamatan) { dialog, which ->
+                    val namaKecamatan = listKecamatan[which]
+                    dropdownKecamatan.setText(namaKecamatan, false)
+                    muatCuacaKecamatanOtomatis(namaKecamatan, updateLokasiDanKoordinat = true)
+                    dialog.dismiss()
+                }
+                .show()
+        }
     }
 
     /**

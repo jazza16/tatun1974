@@ -12,6 +12,7 @@ import com.google.firebase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.tasks.await
 
 /**
  * Central Authentication Manager for BPBD Kabupaten Mukomuko (SIPAGAR KITA).
@@ -169,6 +170,45 @@ class AuthManager(private val context: Context) {
             } else {
                 _isAuthenticated.value = false
             }
+        }
+    }
+
+    /**
+     * Sign in to Firebase using Google via Jetpack Credential Manager (GetSignInWithGoogleOption).
+     */
+    suspend fun signInWithGoogle(activityContext: Context): Result<FirebaseUser> {
+        return try {
+            val credentialManager = androidx.credentials.CredentialManager.create(activityContext)
+            val webClientId = activityContext.getString(com.example.R.string.default_web_client_id)
+            val googleIdOption = com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption.Builder(webClientId)
+                .build()
+            val request = androidx.credentials.GetCredentialRequest.Builder()
+                .addCredentialOption(googleIdOption)
+                .build()
+
+            val result = credentialManager.getCredential(
+                request = request,
+                context = activityContext
+            )
+            val googleIdTokenCredential = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.createFrom(
+                result.credential.data
+            )
+            val firebaseCredential = com.google.firebase.auth.GoogleAuthProvider.getCredential(
+                googleIdTokenCredential.idToken,
+                null
+            )
+            val authResult = auth.signInWithCredential(firebaseCredential).await()
+            val user = authResult.user
+                ?: return Result.failure(IllegalStateException("Akun Google tidak mengembalikan sesi pengguna."))
+            _isAuthenticated.value = true
+            _currentUserEmail.value = user.email
+            Result.success(user)
+        } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+            Result.failure(Exception("Masuk dengan Google dibatalkan pengguna.", e))
+        } catch (e: androidx.credentials.exceptions.NoCredentialException) {
+            Result.failure(Exception("Tidak ada akun Google yang tersedia di perangkat ini.", e))
+        } catch (e: Exception) {
+            Result.failure(Exception(e.localizedMessage ?: "Gagal autentikasi Google Firebase.", e))
         }
     }
 

@@ -1,5 +1,6 @@
 package com.example.model
 
+import androidx.annotation.Keep
 import java.util.Calendar
 import java.util.Locale
 
@@ -7,6 +8,7 @@ import java.util.Locale
  * Model data Pasang Surut dan Pasang Naik (Tidal Information)
  * untuk pesisir Samudra Hindia Kabupaten Mukomuko (Pantai Mukomuko, Koto Jaya, Teramang, Ipuh).
  */
+@Keep
 data class TidalData(
     val stationName: String,
     val currentWaterLevelMeters: Float,
@@ -30,6 +32,7 @@ data class TidalData(
     val hourlyLevels: List<TidalHourlyPoint>
 )
 
+@Keep
 data class TidalHourlyPoint(
     val hourLabel: String,
     val heightMeters: Float,

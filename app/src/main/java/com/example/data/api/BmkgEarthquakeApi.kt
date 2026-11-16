@@ -1,5 +1,6 @@
 package com.example.data.api
 
+import com.example.BuildConfig
 import com.example.model.BmkgAutoGempaResponse
 import com.example.model.BmkgRecentGempaResponse
 import com.squareup.moshi.Moshi
@@ -33,7 +34,7 @@ object BmkgNetworkClient {
 
     private val okHttpClient: OkHttpClient by lazy {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
         val headerInterceptor = okhttp3.Interceptor { chain ->
             val original = chain.request()

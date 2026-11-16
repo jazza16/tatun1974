@@ -1,5 +1,8 @@
 package com.example.model
 
+import androidx.annotation.Keep
+
+@Keep
 data class CurrentWeather(
     val temperature: Double,
     val feelsLike: Double,
@@ -33,6 +36,7 @@ data class CurrentWeather(
         }
 }
 
+@Keep
 data class HourlyItem(
     val time: String,
     val hourLabel: String,
@@ -46,6 +50,7 @@ data class HourlyItem(
         get() = WeatherCodeHelper.getWeatherInfo(weatherCode)
 }
 
+@Keep
 data class DailyItem(
     val date: String,
     val dayName: String,
@@ -63,6 +68,7 @@ data class DailyItem(
         get() = WeatherCodeHelper.getWeatherInfo(weatherCode)
 }
 
+@Keep
 data class MarineWeather(
     val waveHeight: Double, // in meters
     val seaCondition: String, // "Tenang", "Sedang", "Tinggi", "Sangat Tinggi"
@@ -73,6 +79,7 @@ data class MarineWeather(
     val waterTemp: Double = 29.0
 )
 
+@Keep
 data class AirQuality(
     val aqi: Int,
     val pm25: Double,
@@ -81,6 +88,7 @@ data class AirQuality(
     val recommendation: String
 )
 
+@Keep
 data class WeatherAlert(
     val id: String,
     val title: String,
@@ -90,6 +98,7 @@ data class WeatherAlert(
     val validUntil: String
 )
 
+@Keep
 data class WeatherFullReport(
     val district: District,
     val current: CurrentWeather,
@@ -102,6 +111,7 @@ data class WeatherFullReport(
     val isFromCache: Boolean = false
 )
 
+@Keep
 data class HistoricalWeatherRecord(
     val date: String, // YYYY-MM-DD
     val districtName: String,
@@ -118,6 +128,7 @@ data class HistoricalWeatherRecord(
         get() = WeatherCodeHelper.getWeatherInfo(weatherCode)
 }
 
+@Keep
 data class CommunityWeatherReport(
     val id: String,
     val districtId: String,
@@ -129,6 +140,7 @@ data class CommunityWeatherReport(
     val upvotes: Int = 0
 )
 
+@Keep
 data class DetailedEarlyWarning(
     val id: String,
     val title: String,

@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.time.Duration
 
 plugins {
   alias(libs.plugins.android.application)
@@ -16,8 +17,8 @@ android {
     applicationId = "com.aistudio.cuacamukomuko.wmzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 15
-    versionName = "3.7.0"
+    versionCode = 2
+    versionName = "1.0.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -69,6 +70,14 @@ android {
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
+  }
+}
+
+tasks.withType<Test> {
+  failFast = true
+  timeout.set(Duration.ofMinutes(2))
+  testLogging {
+    events("passed", "failed", "skipped")
   }
 }
 
@@ -129,10 +138,13 @@ dependencies {
   implementation(libs.play.integrity)
   implementation(libs.play.app.update)
   implementation(libs.play.app.update.ktx)
+  implementation("com.github.javiersantos:AppUpdater:2.7") {
+    exclude(group = "com.android.support")
+  }
   implementation("com.google.firebase:firebase-appcheck-playintegrity")
   implementation(libs.androidx.work.runtime.ktx)
-  // implementation(libs.firebase.appcheck.recaptcha)
-  // implementation(libs.firebase.appcheck.debug)
+  implementation(libs.firebase.appcheck.recaptcha)
+  implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)

@@ -2,76 +2,413 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAuthenticated() {
+    // Pillar 4.1: Global Safety Net default-deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL PRIMITIVES ---
+    function isSignedIn() {
       return request.auth != null;
     }
 
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    // User Preferences & Notification Settings
+    // --- VALIDATION HELPERS ---
+
+    function isValidUserPreferences(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+          && data.notificationsEnabled is bool
+          && (!('favoriteDistricts' in data) || (
+               data.favoriteDistricts is list
+               && data.favoriteDistricts.size() <= 30
+               && (data.favoriteDistricts.size() == 0 || data.favoriteDistricts[0] is string)
+             ))
+          && (!('createdAt' in data) || (data.createdAt is timestamp && data.createdAt <= request.time))
+          && (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidCommunityReport(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+          && data.districtName is string && data.districtName.size() >= 1 && data.districtName.size() <= 100
+          && data.weatherCondition is string && data.weatherCondition.size() >= 1 && data.weatherCondition.size() <= 120
+          && (!('id' in data) || (data.id is string && data.id.size() <= 128))
+          && (!('districtId' in data) || (data.districtId is string && data.districtId.size() <= 80))
+          && (!('reporterName' in data) || (data.reporterName is string && data.reporterName.size() <= 100))
+          && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+          && (!('upvotes' in data) || (data.upvotes is int && data.upvotes >= 0 && data.upvotes <= 1000000))
+          && (!('createdAt' in data) || (data.createdAt is timestamp && data.createdAt <= request.time))
+          && (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidCitizenDisasterReport(data) {
+      return data.id is string && data.id.size() >= 1 && data.id.size() <= 128
+          && data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128
+          && data.disasterType is string && data.disasterType.size() >= 1 && data.disasterType.size() <= 120
+          && data.district is string && data.district.size() >= 1 && data.district.size() <= 100
+          && data.status is string && data.status.size() >= 1 && data.status.size() <= 64
+          && (!('incidentTime' in data) || (data.incidentTime is string && data.incidentTime.size() <= 80))
+          && (!('incidentLocation' in data) || (data.incidentLocation is string && data.incidentLocation.size() <= 300))
+          && (!('village' in data) || (data.village is string && data.village.size() <= 120))
+          && (!('latitude' in data) || (data.latitude is number && data.latitude >= -90 && data.latitude <= 90))
+          && (!('longitude' in data) || (data.longitude is number && data.longitude >= -180 && data.longitude <= 180))
+          && (!('gpsAccuracyMeters' in data) || data.gpsAccuracyMeters == null || (data.gpsAccuracyMeters is number && data.gpsAccuracyMeters >= 0 && data.gpsAccuracyMeters <= 100000))
+          && (!('isGpsVerified' in data) || data.isGpsVerified is bool)
+          && (!('casualtiesDead' in data) || (data.casualtiesDead is int && data.casualtiesDead >= 0 && data.casualtiesDead <= 100000))
+          && (!('casualtiesInjured' in data) || (data.casualtiesInjured is int && data.casualtiesInjured >= 0 && data.casualtiesInjured <= 100000))
+          && (!('casualtiesMissing' in data) || (data.casualtiesMissing is int && data.casualtiesMissing >= 0 && data.casualtiesMissing <= 100000))
+          && (!('photoUri' in data) || data.photoUri == null || (data.photoUri is string && data.photoUri.size() <= 1024))
+          && (!('reporterName' in data) || (data.reporterName is string && data.reporterName.size() <= 120))
+          && (!('reporterPhone' in data) || (data.reporterPhone is string && data.reporterPhone.size() <= 40))
+          && (!('additionalNotes' in data) || (data.additionalNotes is string && data.additionalNotes.size() <= 2000))
+          && (!('timestamp' in data) || data.timestamp is int)
+          && (!('updatedAt' in data) || data.updatedAt is int);
+    }
+
+    function isValidOfficerProfile(data) {
+      return data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128
+          && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 150
+          && data.nip is string && data.nip.size() >= 1 && data.nip.size() <= 64
+          && data.role is string && data.role.size() >= 1 && data.role.size() <= 80
+          && (!('id' in data) || (data.id is string && data.id.size() <= 128))
+          && (!('unit' in data) || (data.unit is string && data.unit.size() <= 150))
+          && (!('shift' in data) || (data.shift is string && data.shift.size() <= 80))
+          && (!('phone' in data) || (data.phone is string && data.phone.size() <= 40))
+          && (!('updatedAt' in data) || data.updatedAt is int);
+    }
+
+    function isValidOfficerCredential(data) {
+      return data.nip is string && data.nip.size() >= 1 && data.nip.size() <= 64
+          && data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128
+          && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 150
+          && data.pinHash is string && data.pinHash.size() >= 32 && data.pinHash.size() <= 256
+          && data.salt is string && data.salt.size() >= 16 && data.salt.size() <= 128
+          && (!('role' in data) || (data.role is string && data.role.size() <= 80))
+          && (!('unit' in data) || (data.unit is string && data.unit.size() <= 150))
+          && (!('shift' in data) || (data.shift is string && data.shift.size() <= 80))
+          && (!('phone' in data) || (data.phone is string && data.phone.size() <= 40))
+          && (!('isCustomPinSet' in data) || data.isCustomPinSet is bool)
+          && (!('isPinChanged' in data) || data.isPinChanged is bool)
+          // Never store plaintext initial PIN in Firestore
+          && (!('initialSecurePin' in data) || (data.initialSecurePin is string && data.initialSecurePin.size() == 0))
+          && (!('lastLoginAt' in data) || data.lastLoginAt is int)
+          && (!('lastLoginDevice' in data) || (data.lastLoginDevice is string && data.lastLoginDevice.size() <= 150))
+          && (!('updatedAt' in data) || data.updatedAt is int);
+    }
+
+    function isValidDatabaseBackup(data) {
+      return data.backupId is string && data.backupId.size() >= 1 && data.backupId.size() <= 128
+          && data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128
+          && data.backupDate is int
+          && data.officerName is string && data.officerName.size() >= 1 && data.officerName.size() <= 150
+          && (!('totalReports' in data) || (data.totalReports is int && data.totalReports >= 0 && data.totalReports <= 5000))
+          && (!('reports' in data) || (data.reports is list && data.reports.size() <= 500));
+    }
+
+    function isValidDeviceHeartbeat(data) {
+      return data.deviceId is string && data.deviceId.size() >= 1 && data.deviceId.size() <= 128
+          && data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128
+          && data.status is string && data.status.size() >= 1 && data.status.size() <= 32
+          && (!('deviceModel' in data) || (data.deviceModel is string && data.deviceModel.size() <= 120))
+          && (!('officerName' in data) || (data.officerName is string && data.officerName.size() <= 150))
+          && (!('lastSeen' in data) || data.lastSeen is int)
+          && (!('latencyMs' in data) || (data.latencyMs is int && data.latencyMs >= 0 && data.latencyMs <= 300000));
+    }
+
+    function isValidNetworkPing(data) {
+      return data.deviceId is string && data.deviceId.size() >= 1 && data.deviceId.size() <= 128
+          && data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128
+          && data.pingTimestamp is int;
+    }
+
+    function isValidDeviceSecuritySession(data) {
+      return data.sessionId is string && data.sessionId.size() >= 1 && data.sessionId.size() <= 128
+          && data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128
+          && data.officerNip is string && data.officerNip.size() >= 1 && data.officerNip.size() <= 64
+          && data.accessGranted is bool
+          && data.timestamp is int
+          && (!('nip' in data) || (data.nip is string && data.nip.size() <= 64))
+          && (!('officerName' in data) || (data.officerName is string && data.officerName.size() <= 150))
+          && (!('officerRole' in data) || (data.officerRole is string && data.officerRole.size() <= 80))
+          && (!('integrityToken' in data) || (data.integrityToken is string && data.integrityToken.size() <= 4096))
+          && (!('tokenHash' in data) || (data.tokenHash is string && data.tokenHash.size() <= 128))
+          && (!('classicNonce' in data) || (data.classicNonce is string && data.classicNonce.size() <= 256))
+          && (!('verdict' in data) || (data.verdict is string && data.verdict.size() <= 80))
+          && (!('deviceVerdict' in data) || (data.deviceVerdict is string && data.deviceVerdict.size() <= 120))
+          && (!('deviceId' in data) || (data.deviceId is string && data.deviceId.size() <= 128))
+          && (!('deviceModel' in data) || (data.deviceModel is string && data.deviceModel.size() <= 120))
+          && (!('osVersion' in data) || (data.osVersion is string && data.osVersion.size() <= 80))
+          && (!('sdkInt' in data) || (data.sdkInt is int && data.sdkInt >= 0 && data.sdkInt <= 100))
+          && (!('isVerified' in data) || data.isVerified is bool)
+          && (!('targetModule' in data) || (data.targetModule is string && data.targetModule.size() <= 64));
+    }
+
+    function isValidDeviceSecurityFailure(data) {
+      return data.failureId is string && data.failureId.size() >= 1 && data.failureId.size() <= 128
+          && data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128
+          && data.officerNip is string && data.officerNip.size() <= 64
+          && data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 500
+          && data.timestamp is int
+          && (!('deviceId' in data) || (data.deviceId is string && data.deviceId.size() <= 128))
+          && (!('deviceModel' in data) || (data.deviceModel is string && data.deviceModel.size() <= 120))
+          && (!('osVersion' in data) || (data.osVersion is string && data.osVersion.size() <= 80))
+          && (!('sdkInt' in data) || (data.sdkInt is int && data.sdkInt >= 0 && data.sdkInt <= 100))
+          && (!('recordedSessionId' in data) || (data.recordedSessionId is string && data.recordedSessionId.size() <= 128))
+          && (!('recordedVerdict' in data) || (data.recordedVerdict is string && data.recordedVerdict.size() <= 80))
+          && (!('recordedTokenHash' in data) || (data.recordedTokenHash is string && data.recordedTokenHash.size() <= 128))
+          && (!('targetModule' in data) || (data.targetModule is string && data.targetModule.size() <= 64))
+          && (!('additionalDetails' in data) || (data.additionalDetails is string && data.additionalDetails.size() <= 1000));
+    }
+
+    // --- COLLECTION RULES ---
+
+    // 1. User Preferences & Notification Settings (User-scoped subcollection)
     match /users/{userId}/preferences/{prefId} {
-      allow read: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(prefId);
+      allow list: if isOwner(userId);
       allow create: if isOwner(userId)
-                    && request.resource.data.userId == userId;
+                    && isValidId(prefId)
+                    && incoming().userId == request.auth.uid
+                    && incoming().keys().hasAll(['userId', 'notificationsEnabled'])
+                    && incoming().keys().hasOnly(['userId', 'favoriteDistricts', 'notificationsEnabled', 'createdAt', 'updatedAt'])
+                    && isValidUserPreferences(incoming());
       allow update: if isOwner(userId)
-                    && request.resource.data.userId == userId;
-      allow delete: if isOwner(userId);
+                    && isValidId(prefId)
+                    && isValidUserPreferences(incoming())
+                    && incoming().userId == existing().userId
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['favoriteDistricts', 'notificationsEnabled', 'updatedAt']);
+      allow delete: if isOwner(userId) && isValidId(prefId);
     }
 
-    // Citizen Community Weather Reports
+    // 2. Citizen Community Weather Reports
     match /community_reports/{reportId} {
-      allow read: if true;
-      allow create: if request.resource.data.districtName is string
-                    && request.resource.data.weatherCondition is string;
-      allow update: if true;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && isValidId(reportId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isSignedIn()
+                    && isValidId(reportId)
+                    && incoming().userId == request.auth.uid
+                    && incoming().keys().hasAll(['userId', 'districtName', 'weatherCondition'])
+                    && incoming().keys().hasOnly(['id', 'userId', 'districtId', 'districtName', 'reporterName', 'weatherCondition', 'notes', 'upvotes', 'createdAt', 'updatedAt'])
+                    && isValidCommunityReport(incoming());
+      allow update: if isSignedIn()
+                    && isValidId(reportId)
+                    && isValidCommunityReport(incoming())
+                    && incoming().userId == existing().userId
+                    && (
+                      (existing().userId == request.auth.uid
+                        && incoming().diff(existing()).affectedKeys().hasOnly(['districtId', 'districtName', 'reporterName', 'weatherCondition', 'notes', 'upvotes', 'updatedAt']))
+                      || incoming().diff(existing()).affectedKeys().hasOnly(['upvotes', 'updatedAt'])
+                    );
+      allow delete: if isSignedIn() && isValidId(reportId) && existing().userId == request.auth.uid;
     }
 
-    // Citizen Disaster Reports (SIPAGAR KITA BPBD Mukomuko)
+    // 3. Citizen Disaster Reports (SIPAGAR KITA BPBD Mukomuko)
     match /citizen_disaster_reports/{reportId} {
       allow read: if true;
-      allow create: if request.resource.data.disasterType is string;
-      allow update: if true;
-      allow delete: if true;
+      allow create: if isValidId(reportId)
+                    && incoming().keys().hasAll(['id', 'authorUid', 'disasterType', 'district', 'status'])
+                    && incoming().keys().hasOnly([
+                         'id', 'authorUid', 'disasterType', 'incidentTime', 'incidentLocation',
+                         'district', 'village', 'latitude', 'longitude', 'gpsAccuracyMeters',
+                         'isGpsVerified', 'casualtiesDead', 'casualtiesInjured', 'casualtiesMissing',
+                         'photoUri', 'reporterName', 'reporterPhone', 'additionalNotes',
+                         'timestamp', 'updatedAt', 'status'
+                       ])
+                    && isValidCitizenDisasterReport(incoming());
+      allow update: if isValidId(reportId)
+                    && incoming().id == existing().id
+                    && (
+                      // Action: Officer status / follow-up update
+                      incoming().diff(existing()).affectedKeys().hasOnly(['status', 'additionalNotes', 'updatedAt'])
+                      // Action: Owner full edit
+                      || (
+                        isValidCitizenDisasterReport(incoming())
+                        && incoming().diff(existing()).affectedKeys().hasOnly([
+                             'disasterType', 'incidentTime', 'incidentLocation', 'district', 'village',
+                             'latitude', 'longitude', 'gpsAccuracyMeters', 'isGpsVerified',
+                             'casualtiesDead', 'casualtiesInjured', 'casualtiesMissing',
+                             'photoUri', 'reporterName', 'reporterPhone', 'additionalNotes',
+                             'timestamp', 'updatedAt', 'status'
+                           ])
+                      )
+                    );
+      allow delete: if isSignedIn() && isValidId(reportId) && existing().authorUid == request.auth.uid;
     }
 
-    // Pusdalops & TRC Official Officers Directory
+    // 4. Pusdalops & TRC Official Officers Directory
     match /officers/{officerId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isSignedIn() && isValidId(officerId) && existing().ownerUid == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+      allow create: if isSignedIn()
+                    && isValidId(officerId)
+                    && incoming().ownerUid == request.auth.uid
+                    && incoming().keys().hasAll(['ownerUid', 'fullName', 'nip', 'role'])
+                    && incoming().keys().hasOnly(['id', 'ownerUid', 'fullName', 'nip', 'role', 'unit', 'shift', 'phone', 'updatedAt'])
+                    && isValidOfficerProfile(incoming());
+      allow update: if isSignedIn()
+                    && isValidId(officerId)
+                    && isValidOfficerProfile(incoming())
+                    && existing().ownerUid == request.auth.uid
+                    && incoming().ownerUid == existing().ownerUid
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['id', 'fullName', 'nip', 'role', 'unit', 'shift', 'phone', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(officerId) && existing().ownerUid == request.auth.uid;
     }
 
-    // Pusdalops & TRC Individual Officer Credentials & Custom PIN Sync
+    // 5. Pusdalops & TRC Individual Officer Credentials & Custom PIN Sync (No plaintext initial PIN)
     match /officer_credentials/{nip} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isSignedIn() && isValidId(nip) && existing().ownerUid == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+      allow create: if isSignedIn()
+                    && isValidId(nip)
+                    && incoming().ownerUid == request.auth.uid
+                    && incoming().keys().hasAll(['nip', 'ownerUid', 'fullName', 'pinHash', 'salt'])
+                    && incoming().keys().hasOnly([
+                         'nip', 'ownerUid', 'fullName', 'role', 'unit', 'shift', 'phone',
+                         'pinHash', 'salt', 'isCustomPinSet', 'isPinChanged',
+                         'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
+                       ])
+                    && isValidOfficerCredential(incoming());
+      allow update: if isSignedIn()
+                    && isValidId(nip)
+                    && isValidOfficerCredential(incoming())
+                    && existing().ownerUid == request.auth.uid
+                    && incoming().ownerUid == existing().ownerUid
+                    && incoming().nip == existing().nip
+                    && incoming().diff(existing()).affectedKeys().hasOnly([
+                         'fullName', 'role', 'unit', 'shift', 'phone',
+                         'pinHash', 'salt', 'isCustomPinSet', 'isPinChanged',
+                         'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
+                       ]);
+      allow delete: if false;
     }
 
-    // Cloud Disaster Reports Database Backups
+    // 6. Cloud Disaster Reports Database Backups (User-scoped)
     match /database_backups/{backupId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isSignedIn() && isValidId(backupId) && existing().ownerUid == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+      allow create: if isSignedIn()
+                    && isValidId(backupId)
+                    && incoming().ownerUid == request.auth.uid
+                    && incoming().keys().hasAll(['backupId', 'ownerUid', 'backupDate', 'officerName'])
+                    && incoming().keys().hasOnly(['backupId', 'ownerUid', 'backupDate', 'officerName', 'totalReports', 'reports'])
+                    && isValidDatabaseBackup(incoming());
+      allow update: if isSignedIn()
+                    && isValidId(backupId)
+                    && isValidDatabaseBackup(incoming())
+                    && existing().ownerUid == request.auth.uid
+                    && incoming().ownerUid == existing().ownerUid
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['backupId', 'backupDate', 'officerName', 'totalReports', 'reports']);
+      allow delete: if false;
     }
 
-    // Multi-Device Heartbeats & Pings for Real-Time Sync
+    // 7. Multi-Device Heartbeats for Real-Time Sync
     match /device_heartbeats/{deviceId} {
-      allow read, write: if true;
+      allow get: if isSignedIn() && isValidId(deviceId) && existing().ownerUid == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+      allow create: if isSignedIn()
+                    && isValidId(deviceId)
+                    && incoming().ownerUid == request.auth.uid
+                    && incoming().keys().hasAll(['deviceId', 'ownerUid', 'status'])
+                    && incoming().keys().hasOnly(['deviceId', 'ownerUid', 'deviceModel', 'officerName', 'lastSeen', 'latencyMs', 'status'])
+                    && isValidDeviceHeartbeat(incoming());
+      allow update: if isSignedIn()
+                    && isValidId(deviceId)
+                    && isValidDeviceHeartbeat(incoming())
+                    && existing().ownerUid == request.auth.uid
+                    && incoming().ownerUid == existing().ownerUid
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['deviceModel', 'officerName', 'lastSeen', 'latencyMs', 'status']);
+      allow delete: if isSignedIn() && isValidId(deviceId) && existing().ownerUid == request.auth.uid;
     }
 
+    // 8. Network Latency Pings
     match /network_pings/{deviceId} {
-      allow read, write: if true;
+      allow get: if isSignedIn() && isValidId(deviceId) && existing().ownerUid == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+      allow create: if isSignedIn()
+                    && isValidId(deviceId)
+                    && incoming().ownerUid == request.auth.uid
+                    && incoming().keys().hasAll(['deviceId', 'ownerUid', 'pingTimestamp'])
+                    && incoming().keys().hasOnly(['deviceId', 'ownerUid', 'pingTimestamp'])
+                    && isValidNetworkPing(incoming());
+      allow update: if isSignedIn()
+                    && isValidId(deviceId)
+                    && isValidNetworkPing(incoming())
+                    && existing().ownerUid == request.auth.uid
+                    && incoming().ownerUid == existing().ownerUid
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['pingTimestamp']);
+      allow delete: if isSignedIn() && isValidId(deviceId) && existing().ownerUid == request.auth.uid;
     }
 
-    // Play Integrity Classic Device Security Sessions (Ruang Kerja Access Gating)
+    // 9. Play Integrity Classic Device Security Sessions (Ruang Kerja Access Gating)
     match /device_security_sessions/{officerNip} {
-      allow read, write: if true;
+      allow get: if isSignedIn() && isValidId(officerNip) && existing().ownerUid == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+      allow create: if isSignedIn()
+                    && isValidId(officerNip)
+                    && incoming().ownerUid == request.auth.uid
+                    && incoming().keys().hasAll(['sessionId', 'ownerUid', 'officerNip', 'accessGranted', 'timestamp'])
+                    && incoming().keys().hasOnly([
+                         'sessionId', 'ownerUid', 'nip', 'officerNip', 'officerName', 'officerRole',
+                         'integrityToken', 'tokenHash', 'classicNonce', 'verdict', 'deviceVerdict',
+                         'deviceId', 'deviceModel', 'osVersion', 'sdkInt',
+                         'isVerified', 'accessGranted', 'targetModule', 'timestamp'
+                       ])
+                    && isValidDeviceSecuritySession(incoming());
+      allow update: if isSignedIn()
+                    && isValidId(officerNip)
+                    && isValidDeviceSecuritySession(incoming())
+                    && existing().ownerUid == request.auth.uid
+                    && incoming().ownerUid == existing().ownerUid
+                    && (
+                      // Action: Toggle remote access permission
+                      incoming().diff(existing()).affectedKeys().hasOnly(['accessGranted'])
+                      // Action: Refresh verified device session
+                      || incoming().diff(existing()).affectedKeys().hasOnly([
+                           'sessionId', 'nip', 'officerNip', 'officerName', 'officerRole',
+                           'integrityToken', 'tokenHash', 'classicNonce', 'verdict', 'deviceVerdict',
+                           'deviceId', 'deviceModel', 'osVersion', 'sdkInt',
+                           'isVerified', 'accessGranted', 'targetModule', 'timestamp'
+                         ])
+                    );
+      allow delete: if isSignedIn() && isValidId(officerNip) && existing().ownerUid == request.auth.uid;
     }
 
-    // Play Integrity Security Audit & Validation Failures Logging
+    // 10. Play Integrity Security Audit & Validation Failures Logging (Append-Only)
     match /device_security_failures/{failureId} {
-      allow read, write: if true;
+      allow get: if isSignedIn() && isValidId(failureId) && existing().ownerUid == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+      allow create: if isSignedIn()
+                    && isValidId(failureId)
+                    && incoming().ownerUid == request.auth.uid
+                    && incoming().keys().hasAll(['failureId', 'ownerUid', 'officerNip', 'reason', 'timestamp'])
+                    && incoming().keys().hasOnly([
+                         'failureId', 'ownerUid', 'officerNip', 'reason',
+                         'deviceId', 'deviceModel', 'osVersion', 'sdkInt',
+                         'recordedSessionId', 'recordedVerdict', 'recordedTokenHash',
+                         'targetModule', 'additionalDetails', 'timestamp'
+                       ])
+                    && isValidDeviceSecurityFailure(incoming());
+      allow update, delete: if false;
+    }
+
+    // 11. Cloud Master Admin Configuration (Managed exclusively via Firebase Console)
+    match /app_settings/{docId} {
+      allow get: if isValidId(docId);
+      allow list, write: if false;
     }
   }
 }

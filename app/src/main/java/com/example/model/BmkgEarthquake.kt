@@ -1,5 +1,6 @@
 package com.example.model
 
+import androidx.annotation.Keep
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import java.text.SimpleDateFormat
@@ -9,30 +10,35 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+@Keep
 @JsonClass(generateAdapter = true)
 data class BmkgAutoGempaResponse(
     @param:Json(name = "Infogempa")
     val infoGempa: BmkgInfoGempaContainer?
 )
 
+@Keep
 @JsonClass(generateAdapter = true)
 data class BmkgRecentGempaResponse(
     @param:Json(name = "Infogempa")
     val infoGempa: BmkgRecentGempaContainer?
 )
 
+@Keep
 @JsonClass(generateAdapter = true)
 data class BmkgInfoGempaContainer(
     @param:Json(name = "gempa")
     val gempa: BmkgGempaRaw?
 )
 
+@Keep
 @JsonClass(generateAdapter = true)
 data class BmkgRecentGempaContainer(
     @param:Json(name = "gempa")
     val gempaList: List<BmkgGempaRaw>?
 )
 
+@Keep
 @JsonClass(generateAdapter = true)
 data class BmkgGempaRaw(
     @param:Json(name = "Tanggal")
@@ -61,6 +67,7 @@ data class BmkgGempaRaw(
     val shakemap: String? = null
 )
 
+@Keep
 data class BmkgEarthquake(
     val id: String,
     val date: String,

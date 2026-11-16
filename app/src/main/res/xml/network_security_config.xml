@@ -12,6 +12,5 @@
         <domain includeSubdomains="true">api.bmkg.go.id</domain>
         <domain includeSubdomains="true">bmkg.go.id</domain>
         <domain includeSubdomains="true">open-meteo.com</domain>
-        <domain includeSubdomains="true">api.restful-api.dev</domain>
     </domain-config>
 </network-security-config>

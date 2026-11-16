@@ -1,9 +1,12 @@
 package com.example.model
 
+import androidx.annotation.Keep
+
 /**
  * Model data laporan kejadian bencana dari warga Mukomuko.
  * Dilengkapi koordinat GPS ponsel dan foto kejadian untuk verifikasi anti-laporan palsu.
  */
+@Keep
 data class CitizenDisasterReport(
     val id: String, // e.g. "LAP-MMK-20261025-001"
     val disasterType: String, // Jenis Bencana

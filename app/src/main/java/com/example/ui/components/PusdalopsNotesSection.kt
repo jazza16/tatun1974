@@ -94,7 +94,7 @@ import java.util.UUID
  * Responsif & Adaptif untuk semua ukuran layar (Phone, Tablet, Foldable):
  * - Layar Tablet/Foldable (lebar >= 600dp): Tampilan List-Detail Berdampingan (Side-by-Side).
  * - Layar Ponsel (lebar < 600dp): Tampilan Terpisah dengan Navigasi BackHandler.
- * - Dilengkapi Asisten Cerdas Gemini untuk ringkasan catatan operasional dan draf SOP.
+ * - Dilengkapi Asisten AI Pusdalops untuk ringkasan catatan operasional dan draf SOP.
  */
 @Composable
 fun PusdalopsNotesSection(
@@ -949,7 +949,7 @@ private fun NoteEditorView(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // 3. GEMINI AI SMART ASSISTANT TOOLBAR FOR NOTES
+            // 3. AI SMART ASSISTANT TOOLBAR FOR NOTES
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = Color(0xFF0284C7).copy(alpha = 0.08f),
@@ -971,7 +971,7 @@ private fun NoteEditorView(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Asisten Gemini AI Pusdalops",
+                                text = "Asisten AI Pusdalops",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF0369A1)
@@ -1006,7 +1006,7 @@ private fun NoteEditorView(
                                 // Rule-based Pusdalops executive extraction
                                 val lines = content.lines().filter { it.isNotBlank() }
                                 val summary = buildString {
-                                    appendLine("\n\n📋 [RINGKASAN EKSEKUTIF PUSDALOPS - GEMINI]")
+                                    appendLine("\n\n📋 [RINGKASAN EKSEKUTIF PUSDALOPS - AI]")
                                     appendLine("• Topik: $title (${category.uppercase()})")
                                     appendLine("• Prioritas Penanganan: $priority")
                                     appendLine("• Poin Kunci Lapangan: ${lines.take(3).joinToString(" / ") { it.take(60) }}")
@@ -1022,7 +1022,7 @@ private fun NoteEditorView(
                         ) {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(12.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Ringkas Catatan (Gemini)", fontSize = 11.sp, fontWeight = FontWeight.Normal)
+                            Text("Ringkas Catatan AI", fontSize = 11.sp, fontWeight = FontWeight.Normal)
                         }
 
                         // AI Action 2: Draf SOP Rekomendasi
@@ -1030,7 +1030,7 @@ private fun NoteEditorView(
                             onClick = {
                                 isAiProcessing = true
                                 val sopDraft = buildString {
-                                    appendLine("\n\n🛡️ [DRAF REKOMENDASI SOP PUSDALOPS - GEMINI]")
+                                    appendLine("\n\n🛡️ [DRAF REKOMENDASI SOP PUSDALOPS - AI]")
                                     appendLine("1. Pastikan komunikasi radio HT frekuensi 143.550 MHz aktif.")
                                     appendLine("2. Konfirmasi update data korban / kerusakan dengan pihak Desa dan Camat.")
                                     appendLine("3. Siapkan laporan situasi (Lapsit) harian untuk dikirim ke BNPB dan Bupati Mukomuko.")

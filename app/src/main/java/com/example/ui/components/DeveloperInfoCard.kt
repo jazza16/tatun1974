@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -182,13 +183,15 @@ fun DeveloperInfoCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Avatar with Programmer Monogram
                     Box(
                         modifier = Modifier
-                            .size(54.dp)
+                            .size(50.dp)
                             .clip(CircleShape)
                             .background(
                                 Brush.radialGradient(
@@ -200,29 +203,33 @@ fun DeveloperInfoCard(
                     ) {
                         Text(
                             text = if (developerName.contains("_")) "TA" else developerName.take(2).uppercase(),
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Black,
                             color = Color.White
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             Text(
                                 text = developerName,
-                                fontSize = 18.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Black,
                                 color = if (isDark) Color(0xFFFFF7ED) else Color(0xFF7C2D12),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
+                                modifier = Modifier.weight(1f)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
                             Surface(
                                 color = OrangePrimary,
-                                shape = RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(4.dp),
+                                modifier = Modifier.wrapContentWidth(unbounded = false)
                             ) {
                                 Text(
                                     text = "Lead Dev",
@@ -236,19 +243,25 @@ fun DeveloperInfoCard(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
                             text = developerRole,
                             fontSize = 11.sp,
+                            lineHeight = 15.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isDark) Color(0xFFFDBA74) else Color(0xFF9A3412)
+                            color = if (isDark) Color(0xFFFDBA74) else Color(0xFF9A3412),
+                            modifier = Modifier.fillMaxWidth()
                         )
+
+                        Spacer(modifier = Modifier.height(2.dp))
 
                         Text(
                             text = organization,
                             fontSize = 11.sp,
-                            color = if (isDark) Color(0xFFE2D6CF) else Color(0xFF573E32)
+                            lineHeight = 15.sp,
+                            color = if (isDark) Color(0xFFE2D6CF) else Color(0xFF573E32),
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }

@@ -87,7 +87,18 @@ class FormTab4Fragment : Fragment() {
 @Composable
 fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val officerAuthManager = remember { com.example.data.local.OfficerAuthManager(context) }
     val session = remember { com.example.util.SessionManager(context) }
+    val resolvedOfficerName = remember {
+        officerAuthManager.getOfficerName().ifBlank {
+            session.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
+        }
+    }
+    val resolvedOfficerNip = remember {
+        officerAuthManager.getOfficerBadgeId().ifBlank {
+            session.getNipPetugas().ifBlank { "-" }
+        }
+    }
     val defaultDate = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()) }
     var tanggalSurat by remember {
         mutableStateOf(
@@ -101,9 +112,9 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
     }
     var operatorName by remember {
         mutableStateOf(
-            sharedViewModel?.laporanSementara?.petugasJaga?.ifBlank {
-                session.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
-            } ?: session.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
+            sharedViewModel?.laporanSementara?.petugasJaga?.takeUnless { it.startsWith("enc_v1:") }?.ifBlank {
+                resolvedOfficerName
+            } ?: resolvedOfficerName
         )
     }
     var stationId by remember {
@@ -125,8 +136,8 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
                         stationIdFrom = "PUSDALOPS-MM-01",
                         stationIdTo = "Kalaksa BPBD Mukomuko",
                         subjek = "Laporan awal kejadian disampaikan. Tidak terdeteksi potensi tsunami.",
-                        operatorNama = session.getNamaPetugas(),
-                        operatorNip = session.getNipPetugas()
+                        operatorNama = resolvedOfficerName,
+                        operatorNip = resolvedOfficerNip
                     )
                 )
             }

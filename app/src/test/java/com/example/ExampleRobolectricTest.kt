@@ -204,28 +204,30 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `verify bpbd officer authentication and valid pins`() {
+  fun `verify bpbd officer authentication rejects default pins and accepts custom pbkdf2 pin`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val officerAuth = com.example.data.local.OfficerAuthManager(context)
 
-    // Test invalid pin
+    // Test invalid pin and forbidden default pins
     val failed = officerAuth.loginOfficer("Bripka Hendra", "TRC-01", "Shift 1", "0000")
     org.junit.Assert.assertFalse(failed)
 
-    // Test valid BPBD PIN 117
-    val success117 = officerAuth.loginOfficer("Bripka Hendra", "TRC-01", "Shift Siaga 24 Jam", "117")
-    assertTrue(success117)
+    val rejected117 = officerAuth.loginOfficer("Bripka Hendra", "TRC-01", "Shift Siaga 24 Jam", "117")
+    org.junit.Assert.assertFalse("Default PIN 117 must be rejected", rejected117)
+
+    val rejectedTrc = officerAuth.loginOfficer("Tim Reaksi Cepat", "TRC-MMK-117", "Regu Siaga", "TRC2026")
+    org.junit.Assert.assertFalse("Default PIN TRC2026 must be rejected", rejectedTrc)
+
+    // Configure custom PBKDF2 PIN and authenticate
+    officerAuth.setCustomOfficerPin("849201")
+    val successCustom = officerAuth.loginOfficer("Bripka Hendra", "TRC-01", "Shift Siaga 24 Jam", "849201")
+    assertTrue(successCustom)
     assertTrue(officerAuth.isOfficerLoggedIn())
     assertEquals("Bripka Hendra", officerAuth.getOfficerName())
 
     // Test logout
     officerAuth.logoutOfficer()
     org.junit.Assert.assertFalse(officerAuth.isOfficerLoggedIn())
-
-    // Test valid TRC2026 PIN
-    val successTrc = officerAuth.loginOfficer("Tim Reaksi Cepat", "TRC-MMK-117", "Regu Siaga", "TRC2026")
-    assertTrue(successTrc)
-    assertTrue(officerAuth.isOfficerLoggedIn())
   }
 
   @Test
@@ -325,12 +327,22 @@ class ExampleRobolectricTest {
     assertEquals("YUDHA SOFRIANTO,S.A.P", yudha?.fullName)
     assertEquals("Operator Pusdalops", yudha?.role)
 
-    // Verify login with selected ASN credential
-    val loginSuccess = officerAuth.loginOfficer(
+    // Verify default PIN 117 is rejected and configured custom PIN succeeds
+    val defaultRejected = officerAuth.loginOfficer(
       name = yudha!!.fullName,
       badgeId = yudha.nip,
       shift = yudha.shift,
       pin = "117",
+      role = yudha.role
+    )
+    org.junit.Assert.assertFalse(defaultRejected)
+
+    officerAuth.setCustomOfficerPin("739150")
+    val loginSuccess = officerAuth.loginOfficer(
+      name = yudha.fullName,
+      badgeId = yudha.nip,
+      shift = yudha.shift,
+      pin = "739150",
       role = yudha.role
     )
     assertTrue(loginSuccess)
@@ -462,6 +474,165 @@ class ExampleRobolectricTest {
     val credAfterReset = db.credentialDao().getCredentialByNip(yudhaNip)
     org.junit.Assert.assertFalse(credAfterReset?.isCustomPinSet ?: true)
   }
+
+  @Test
+  fun `verify pbkdf2 hashing and legacy sha256 verification compatibility`() {
+    val salt = com.example.data.local.OfficerCredentialEntity.generateCryptographicSalt()
+    val hash = com.example.data.local.OfficerCredentialEntity.hashWithSalt("918273", salt)
+    assertTrue("New hashes must use PBKDF2 format", hash.startsWith("pbkdf2\$10000\$"))
+    assertTrue(com.example.data.local.OfficerCredentialEntity.verifyHash("918273", salt, hash))
+    org.junit.Assert.assertFalse(com.example.data.local.OfficerCredentialEntity.verifyHash("000000", salt, hash))
+
+    // Legacy SHA-256 hash format remains verifiable during migration
+    val legacyMd = java.security.MessageDigest.getInstance("SHA-256")
+      .digest("$salt:654321:mukomuko_bpbd_2026".toByteArray(Charsets.UTF_8))
+      .joinToString("") { "%02x".format(it) }
+    assertTrue(com.example.data.local.OfficerCredentialEntity.verifyHash("654321", salt, legacyMd))
+  }
+
+  @Test
+  fun `verify admin password hardening blocks defaults enforces lockout and restricts resetPinWithAdmin`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    context.getSharedPreferences("bpbd_officer_auth_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+    val officerAuth = com.example.data.local.OfficerAuthManager(context)
+
+    org.junit.Assert.assertFalse(officerAuth.isAdminPasswordConfigured())
+    org.junit.Assert.assertFalse("Hardcoded default password must be rejected", officerAuth.verifyAdminPassword("sipagarkita2026"))
+    assertTrue(officerAuth.configureInitialAdminPassword("sipagarkita2026").isFailure)
+
+    val setupResult = officerAuth.configureInitialAdminPassword("BpbdMmk#2026!")
+    assertTrue(setupResult.isSuccess)
+    assertTrue(officerAuth.isAdminPasswordConfigured())
+    assertTrue(officerAuth.verifyAdminPassword("BpbdMmk#2026!"))
+
+    // Ensure officer PIN cannot be used to authorize resetPinWithAdmin
+    officerAuth.setCustomOfficerPin("849201")
+    assertTrue(officerAuth.resetPinWithAdmin("849201").isFailure)
+    assertTrue(officerAuth.resetPinWithAdmin("BpbdMmk#2026!").isSuccess)
+
+    // Brute-force 5 wrong admin password attempts trigger temporary lockout
+    repeat(5) {
+      org.junit.Assert.assertFalse(officerAuth.verifyAdminPassword("WrongPassword$it"))
+    }
+    assertTrue(officerAuth.getAdminLockoutRemainingSeconds() > 0L)
+    org.junit.Assert.assertFalse("Correct password must stay locked out during cooldown", officerAuth.verifyAdminPassword("BpbdMmk#2026!"))
+  }
+
+  @Test
+  fun `verify sensitive shared preferences values are aes256gcm encrypted at rest`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val authPrefs = context.getSharedPreferences("bpbd_officer_auth_prefs", Context.MODE_PRIVATE)
+    authPrefs.edit().clear().commit()
+
+    val officerAuth = com.example.data.local.OfficerAuthManager(context)
+    officerAuth.setCustomOfficerPin("918273")
+    officerAuth.loginOfficerDirectly("Yudha Test", "199807202025061002", "Shift 1", "Operator Pusdalops")
+
+    val rawName = authPrefs.getString("officer_name", null)
+    val rawBadge = authPrefs.getString("officer_badge_id", null)
+    val rawPinHash = authPrefs.getString("officer_pin_hash", null)
+    assertTrue(com.example.security.SecureStorageHelper.isEncryptedValue(rawName))
+    assertTrue(com.example.security.SecureStorageHelper.isEncryptedValue(rawBadge))
+    assertTrue(com.example.security.SecureStorageHelper.isEncryptedValue(rawPinHash))
+    assertEquals("Yudha Test", officerAuth.getOfficerName())
+    assertEquals("199807202025061002", officerAuth.getOfficerBadgeId())
+
+    val sessionMgr = com.example.util.SessionManager(context)
+    sessionMgr.setPetugasLogin("Hitatun Test", "197401282006041006", "Manajer")
+    val sessionPrefs = context.getSharedPreferences("PusdalopsSession", Context.MODE_PRIVATE)
+    assertTrue(com.example.security.SecureStorageHelper.isEncryptedValue(sessionPrefs.getString("NAMA_PETUGAS", null)))
+    assertEquals("Hitatun Test", sessionMgr.getNamaPetugas())
+  }
+
+  @Test
+  fun `verify ota download url validation blocks http and untrusted domains`() {
+    val httpRejected = com.example.data.api.AppUpdateRemoteService.validateDownloadUrl("http://github.com/evil/app.apk")
+    assertEquals("https://t.me/takajuikgue", httpRejected)
+
+    val untrustedRejected = com.example.data.api.AppUpdateRemoteService.validateDownloadUrl("https://evil-domain.example/update.apk")
+    assertEquals("https://t.me/takajuikgue", untrustedRejected)
+
+    val githubAccepted = com.example.data.api.AppUpdateRemoteService.validateDownloadUrl("https://github.com/tathoenz/sipagar-kita/releases/download/v3.7/app.apk")
+    assertEquals("https://github.com/tathoenz/sipagar-kita/releases/download/v3.7/app.apk", githubAccepted)
+  }
+
+  @Test
+  fun `verify device security session defaults fail closed`() {
+    val session = com.example.security.DeviceSecuritySession()
+    org.junit.Assert.assertFalse(session.isVerified)
+    org.junit.Assert.assertFalse(session.accessGranted)
+    assertEquals("UNVERIFIED", session.verdict)
+
+    val fromEmptyMap = com.example.security.DeviceSecuritySession.fromMap(emptyMap())
+    org.junit.Assert.assertFalse(fromEmptyMap.isVerified)
+    org.junit.Assert.assertFalse(fromEmptyMap.accessGranted)
+    assertEquals("UNVERIFIED", fromEmptyMap.verdict)
+  }
+
+  @Test
+  fun `verify v1_0_0 production release defaults and apk upgrade sync`() {
+    val state = com.example.model.AppUpdateState()
+    assertEquals("1.0.0", state.currentVersion)
+    assertEquals("1.0.0", state.latestVersion)
+    assertEquals(1, state.changelogs.size)
+    assertEquals("1.0.0", state.changelogs.first().version)
+    assertTrue(state.changelogs.first().isCurrent)
+    assertTrue(state.changelogs.first().isLatest)
+
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val rawPrefs = context.getSharedPreferences("mukomuko_update_persistence", Context.MODE_PRIVATE)
+    rawPrefs.edit()
+      .putString("recorded_build_version", "0.9.0")
+      .putString("installed_version", "0.9.0")
+      .putString("latest_server_version", "1.0.0")
+      .putBoolean("is_permanently_installed", false)
+      .putString("dismissed_dialog_version", "1.0.0")
+      .commit()
+
+    val prefs = com.example.data.local.AppUpdatePreferences(context)
+    assertEquals("1.0.0", com.example.data.local.AppUpdatePreferences.DEFAULT_LATEST_VERSION)
+    assertEquals(BuildConfig.VERSION_NAME, prefs.getInstalledVersion())
+    assertTrue(prefs.isUpdatePermanentlyInstalled())
+    org.junit.Assert.assertFalse(prefs.isDialogDismissedForVersion("1.0.0"))
+  }
+
+  @Test
+  fun `verify device authenticity login falls back gracefully when play integrity unavailable`() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val securityManager = com.example.security.SecurityManager.getInstance(context)
+    val playIntegrity = com.example.security.PlayIntegritySecurityManager.getInstance(context)
+
+    val loginRes = securityManager.verifyDeviceAuthenticityDuringLogin(
+      officerNip = "199807202025061002",
+      officerName = "YUDHA SOFRIANTO,S.A.P",
+      officerRole = "Operator Pusdalops"
+    )
+    assertTrue("Login authenticity check must succeed with fallback warning", loginRes.isSuccess)
+    val session = loginRes.getOrNull()
+    assertNotNull(session)
+    assertEquals("APP_CHECK_FALLBACK_AUTHORIZED", session!!.verdict)
+    assertTrue(session.accessGranted)
+    assertTrue(session.isVerified)
+    assertTrue(session.integrityToken.isNotBlank())
+
+    val cachedSessions = securityManager.fetchSecuritySessions()
+    assertTrue("Logged-in device session must be returned by fetchSecuritySessions", cachedSessions.any { it.officerNip == "199807202025061002" })
+
+    val accessResult = securityManager.verifySessionBeforeGrantingRuangKerja("199807202025061002")
+    assertTrue("Ruang Kerja local session check must authorize after fallback login", accessResult.isAuthorized)
+
+    val deleted = securityManager.deleteSecuritySession("199807202025061002")
+    assertTrue("deleteSecuritySession must succeed", deleted)
+    assertTrue(
+      "Revoked session must immediately disappear from fetchSecuritySessions",
+      securityManager.fetchSecuritySessions().none { it.officerNip == "199807202025061002" }
+    )
+
+    val criticalRes = playIntegrity.verifyCriticalAction("199807202025061002", "CHANGE_PIN")
+    assertTrue("PlayIntegritySecurityManager critical action must fallback gracefully", criticalRes.isSecure)
+    assertTrue(!criticalRes.token.isNullOrBlank())
+  }
 }
+
 
 

@@ -83,13 +83,19 @@ class SyncController(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val firestore: FirebaseFirestore? by lazy {
         try {
-            val dbId = "ai-studio-android-cuacamuk-a1e6cb6f-11e7-41ba-90f4-82c9adb67961"
-            try {
-                FirebaseFirestore.getInstance(dbId)
+            val dbId = try {
+                context.getString(com.example.R.string.firestore_database_id)
             } catch (_: Exception) {
-                FirebaseFirestore.getInstance()
+                "ai-studio-android-cuacamuk-a1e6cb6f-11e7-41ba-90f4-82c9adb67961"
             }
+            FirebaseFirestore.getInstance(dbId)
         } catch (_: Exception) { null }
+    }
+
+    private fun currentUid(): String? = try {
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    } catch (_: Exception) {
+        null
     }
 
     private val conflictHandler = SyncConflictHandler(context, database)
@@ -97,12 +103,13 @@ class SyncController(
 
     // Unique ID for this device
     val deviceId: String by lazy {
-        try {
+        val rawId = try {
             Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
                 ?: UUID.randomUUID().toString().take(12)
         } catch (_: Exception) {
             UUID.randomUUID().toString().take(12)
         }
+        rawId.trim().replace(Regex("[^a-zA-Z0-9_\\-]"), "_").take(128).ifBlank { "device_local" }
     }
 
     val deviceModel: String = "${Build.MANUFACTURER} ${Build.MODEL}"
@@ -133,17 +140,38 @@ class SyncController(
     private var heartbeatsListener: ListenerRegistration? = null
     private var heartbeatJob: Job? = null
     private var latencyJob: Job? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
-    // Track known report IDs to only trigger notifications on new/updated external reports
-    private val knownReportIds = mutableSetOf<String>()
+    // Track known report IDs thread-safely to only trigger notifications on new/updated external reports
+    private val knownReportIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    @Volatile
     private var isFirstSnapshot = true
+
+    private var authStateListener: com.google.firebase.auth.FirebaseAuth.AuthStateListener? = null
 
     init {
         createNotificationChannel()
         setupNetworkCallback()
-        startHeartbeatAndLatencyMonitoring()
         attachRealtimeReportsListener()
-        attachRealtimeHeartbeatsListener()
+        try {
+            val firebaseAuth = com.google.firebase.auth.FirebaseAuth.getInstance()
+            val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { auth ->
+                if (auth.currentUser != null) {
+                    startHeartbeatAndLatencyMonitoring()
+                    attachRealtimeReportsListener()
+                    attachRealtimeHeartbeatsListener()
+                } else {
+                    heartbeatsListener?.remove()
+                    heartbeatsListener = null
+                    heartbeatJob?.cancel()
+                    heartbeatJob = null
+                }
+            }
+            authStateListener = listener
+            firebaseAuth.addAuthStateListener(listener)
+        } catch (e: Exception) {
+            Log.w(TAG, "FirebaseAuth listener skipped: ${e.message}")
+        }
     }
 
     private fun createNotificationChannel() {
@@ -176,7 +204,7 @@ class SyncController(
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
         val builder = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-        cm.registerNetworkCallback(builder.build(), object : ConnectivityManager.NetworkCallback() {
+        val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 _isOnline.value = true
                 scope.launch {
@@ -189,19 +217,23 @@ class SyncController(
                 _isOnline.value = false
                 _syncState.value = SyncState.OFFLINE
             }
-        })
+        }
+        networkCallback = callback
+        cm.registerNetworkCallback(builder.build(), callback)
     }
 
     /**
      * Measures network latency towards Cloud Firestore and triggers Slow Network warning if > 3000ms.
      */
     suspend fun measureLatency(): Long = withContext(Dispatchers.IO) {
+        val uid = currentUid() ?: return@withContext -1L
         val db = firestore ?: return@withContext -1L
         val startTime = System.currentTimeMillis()
         try {
             val pingDoc = mapOf(
                 "deviceId" to deviceId,
-                "timestamp" to startTime
+                "ownerUid" to uid,
+                "pingTimestamp" to startTime
             )
             // Perform write roundtrip test on ping document
             val task = db.collection("network_pings").document(deviceId).set(pingDoc)
@@ -230,39 +262,76 @@ class SyncController(
         heartbeatJob = scope.launch {
             while (true) {
                 if (_isOnline.value) {
-                    measureLatency()
                     sendHeartbeat()
+                    measureLatency()
                 }
                 delay(30_000L) // every 30 seconds
             }
         }
     }
 
+    /**
+     * Immediately dispatches a device heartbeat (used on officer login & Sync tab open).
+     */
+    fun sendHeartbeatNow() {
+        scope.launch {
+            if (currentUid() != null && heartbeatsListener == null) {
+                attachRealtimeHeartbeatsListener()
+            }
+            sendHeartbeat()
+        }
+    }
+
     private suspend fun sendHeartbeat() = withContext(Dispatchers.IO) {
-        val db = firestore ?: return@withContext
-        try {
-            val officerAuth = OfficerAuthManager(context)
-            val officerName = if (officerAuth.isOfficerLoggedIn()) officerAuth.getOfficerName() else "Piket Siaga"
-            val heartbeat = DeviceHeartbeat(
+        val officerAuth = OfficerAuthManager(context)
+        val isOfficerActive = officerAuth.isOfficerLoggedIn()
+        val officerName = if (isOfficerActive) officerAuth.getOfficerName().ifBlank { "Petugas Pusdalops" } else "Piket Siaga"
+        val now = System.currentTimeMillis()
+        val currentStatus = if (_isSlowNetwork.value) "SLOW_NET" else "ONLINE"
+
+        if (isOfficerActive || currentUid() != null) {
+            val localHeartbeat = DeviceHeartbeat(
                 deviceId = deviceId,
                 deviceModel = deviceModel,
                 officerName = officerName,
-                lastSeen = System.currentTimeMillis(),
-                latencyMs = _latencyMs.value,
-                status = if (_isSlowNetwork.value) "SLOW_NET" else "ONLINE"
+                lastSeen = now,
+                latencyMs = _latencyMs.value.coerceAtLeast(0L),
+                status = currentStatus
             )
-            db.collection("device_heartbeats")
+            val merged = _activeDevices.value
+                .filterNot { it.deviceId == deviceId }
+                .toMutableList()
+            merged.add(0, localHeartbeat)
+            _activeDevices.value = merged.sortedByDescending { it.lastSeen }
+        }
+
+        val uid = currentUid() ?: return@withContext
+        val db = firestore ?: return@withContext
+        try {
+            val heartbeat = mapOf(
+                "deviceId" to deviceId,
+                "ownerUid" to uid,
+                "deviceModel" to deviceModel,
+                "officerName" to officerName,
+                "lastSeen" to now,
+                "latencyMs" to _latencyMs.value.coerceAtLeast(0L),
+                "status" to currentStatus
+            )
+            val task = db.collection("device_heartbeats")
                 .document(deviceId)
                 .set(heartbeat, SetOptions.merge())
+            com.google.android.gms.tasks.Tasks.await(task)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to send heartbeat: ${e.message}")
         }
     }
 
     private fun attachRealtimeHeartbeatsListener() {
+        val uid = currentUid() ?: return
         val db = firestore ?: return
         heartbeatsListener?.remove()
         heartbeatsListener = db.collection("device_heartbeats")
+            .whereEqualTo("ownerUid", uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
                 val list = mutableListOf<DeviceHeartbeat>()
@@ -296,10 +365,15 @@ class SyncController(
         reportsListener?.remove()
         reportsListener = db.collection("citizen_disaster_reports")
             .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) {
-                    Log.w(TAG, "Error in realtime reports listener: ${error?.message}")
+                if (error != null) {
+                    Log.e(
+                        TAG,
+                        "[FIRESTORE_SYNC_ERROR] Gagal membaca citizen_disaster_reports (Code=${error.code}): ${error.message}",
+                        error
+                    )
                     return@addSnapshotListener
                 }
+                if (snapshot == null) return@addSnapshotListener
 
                 scope.launch {
                     val incomingReports = mutableListOf<CitizenDisasterReport>()
@@ -437,7 +511,7 @@ class SyncController(
      * Executes retry loop with exponential backoff and updates retryProgress for the UI status bar.
      */
     suspend fun processPendingSyncWithRetry() = withContext(Dispatchers.IO) {
-        if (!_isOnline.value) return@withContext
+        if (!_isOnline.value || currentUid() == null) return@withContext
         _isRetrying.value = true
         _syncState.value = SyncState.SYNCING
 
@@ -493,9 +567,22 @@ class SyncController(
     }
 
     fun cleanup() {
+        authStateListener?.let { listener ->
+            try {
+                com.google.firebase.auth.FirebaseAuth.getInstance().removeAuthStateListener(listener)
+            } catch (_: Exception) {}
+            authStateListener = null
+        }
         reportsListener?.remove()
         heartbeatsListener?.remove()
         heartbeatJob?.cancel()
         latencyJob?.cancel()
+        networkCallback?.let { cb ->
+            try {
+                val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                cm?.unregisterNetworkCallback(cb)
+            } catch (_: Exception) {}
+            networkCallback = null
+        }
     }
 }

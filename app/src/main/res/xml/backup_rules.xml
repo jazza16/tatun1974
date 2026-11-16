@@ -6,8 +6,12 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="bpbd_officer_auth_prefs.xml" />
+    <exclude domain="sharedpref" path="bpbd_security_manager_prefs.xml" />
+    <exclude domain="sharedpref" path="bpbd_integrity_device_binding.xml" />
+    <exclude domain="sharedpref" path="PusdalopsSession.xml" />
+    <exclude domain="file" path="datastore/user_session.preferences_pb" />
+    <exclude domain="database" path="sipagar_database" />
+    <exclude domain="database" path="sipagar_database-wal" />
+    <exclude domain="database" path="sipagar_database-shm" />
 </full-backup-content>

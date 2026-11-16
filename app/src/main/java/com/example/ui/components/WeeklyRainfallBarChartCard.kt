@@ -46,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
@@ -141,9 +142,9 @@ object RainfallChartDataProvider {
     fun get15DistrictsWeeklyRainfall(): List<RainfallBarItem> {
         val districts = MukomukoDistricts.list
         val shortLabels = listOf(
-            "Kota", "Ipuh", "Penarik", "L.Pinang", "P.Suguh",
-            "Teramang", "Teras.T", "Selagan", "V Koto", "XIV Koto",
-            "A.Rami", "M.Deman", "S.Rumbai", "Air Mjt", "A.Dikit"
+            "Kota", "Ipuh", "Pnrk", "L.Png", "P.Sgh",
+            "Trmg", "Trs.T", "Slgn", "V Kto", "XIV K",
+            "A.Rmi", "M.Dmn", "S.Rmb", "A.Mjt", "A.Dkt"
         )
 
         // Realistic weekly total rainfall calibrated to Mukomuko tropical precipitation
@@ -170,7 +171,7 @@ object RainfallChartDataProvider {
             val (condition, risk, advice) = classifyRainfall(mm / 7f)
 
             RainfallBarItem(
-                label = shortLabels.getOrElse(idx) { dist.name.take(4) },
+                label = shortLabels.getOrElse(idx) { dist.name.take(5) },
                 fullTitle = "Kecamatan ${dist.name}",
                 precipitationMm = mm,
                 rainProbability = 75,
@@ -711,7 +712,7 @@ private fun DrawScope.drawRechartsBarChart(
 ) {
     val leftPadding = 36.dp.toPx()
     val rightPadding = 8.dp.toPx()
-    val bottomPadding = 24.dp.toPx()
+    val bottomPadding = if (dataPoints.size > 7) 36.dp.toPx() else 24.dp.toPx()
     val topPadding = 14.dp.toPx()
 
     val chartWidth = size.width - leftPadding - rightPadding
@@ -824,7 +825,8 @@ private fun DrawScope.drawRechartsBarChart(
             )
         }
 
-        // Bottom X-axis label
+        // Bottom X-axis label (dirotasi -45 derajat pada mode 15 kecamatan agar tidak bertumpuk)
+        val shortLabelText = if (count > 7) item.label.take(5) else item.label
         drawContext.canvas.nativeCanvas.apply {
             val paint = android.graphics.Paint().apply {
                 color = if (isSelected) OrangePrimary.toArgb() else textColor.toArgb()
@@ -833,7 +835,15 @@ private fun DrawScope.drawRechartsBarChart(
                 isFakeBoldText = isSelected
                 isAntiAlias = true
             }
-            drawText(item.label, xCenter, size.height - 4.dp.toPx(), paint)
+            if (count > 7) {
+                save()
+                val labelY = size.height - 12.dp.toPx()
+                rotate(-45f, xCenter, labelY)
+                drawText(shortLabelText, xCenter, labelY, paint)
+                restore()
+            } else {
+                drawText(shortLabelText, xCenter, size.height - 4.dp.toPx(), paint)
+            }
         }
     }
 

@@ -11,7 +11,7 @@
         },
         "favoriteDistricts": {
           "type": "array",
-          "description": "List of favorite Mukomuko district IDs",
+          "description": "List of favorite Mukomuko district IDs (max 30)",
           "items": { "type": "string" }
         },
         "notificationsEnabled": {
@@ -20,265 +20,152 @@
         },
         "createdAt": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "description": "Server timestamp"
         },
         "updatedAt": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "description": "Server timestamp"
         }
       },
       "required": ["userId", "notificationsEnabled"]
     },
     "CommunityReport": {
       "title": "CommunityReport",
-      "description": "Real-time crowd-sourced citizen weather report in Mukomuko",
+      "description": "Crowd-sourced citizen weather report in Mukomuko",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Report ID"
-        },
-        "userId": {
-          "type": "string",
-          "description": "Author user ID"
-        },
-        "districtId": {
-          "type": "string",
-          "description": "Target district ID"
-        },
-        "districtName": {
-          "type": "string",
-          "description": "District name"
-        },
-        "reporterName": {
-          "type": "string",
-          "description": "Citizen reporter display name"
-        },
-        "weatherCondition": {
-          "type": "string",
-          "description": "Observed weather condition"
-        },
-        "notes": {
-          "type": "string",
-          "description": "Report notes and local observation"
-        },
-        "upvotes": {
-          "type": "integer",
-          "description": "Number of citizen upvotes"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "districtId": { "type": "string" },
+        "districtName": { "type": "string" },
+        "reporterName": { "type": "string" },
+        "weatherCondition": { "type": "string" },
+        "notes": { "type": "string" },
+        "upvotes": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["districtName", "reporterName", "weatherCondition"]
+      "required": ["userId", "districtName", "reporterName", "weatherCondition"]
     },
     "CitizenDisasterReport": {
       "title": "CitizenDisasterReport",
       "description": "Verified citizen disaster report for BPBD Mukomuko",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique report ID"
-        },
-        "disasterType": {
-          "type": "string",
-          "description": "Type of disaster (Banjir, Longsor, Cuaca Ekstrem, etc.)"
-        },
-        "incidentTime": {
-          "type": "string",
-          "description": "Time of incident"
-        },
-        "incidentLocation": {
-          "type": "string",
-          "description": "Incident location address/landmark"
-        },
-        "district": {
-          "type": "string",
-          "description": "District in Mukomuko"
-        },
-        "village": {
-          "type": "string",
-          "description": "Village name"
-        },
-        "latitude": {
-          "type": "number",
-          "description": "GPS Latitude"
-        },
-        "longitude": {
-          "type": "number",
-          "description": "GPS Longitude"
-        },
-        "gpsAccuracyMeters": {
-          "type": "number",
-          "description": "GPS accuracy in meters"
-        },
-        "isGpsVerified": {
-          "type": "boolean",
-          "description": "Whether coordinates are GPS-verified"
-        },
-        "casualtiesDead": {
-          "type": "integer",
-          "description": "Count of dead casualties"
-        },
-        "casualtiesInjured": {
-          "type": "integer",
-          "description": "Count of injured casualties"
-        },
-        "casualtiesMissing": {
-          "type": "integer",
-          "description": "Count of missing persons"
-        },
-        "photoUri": {
-          "type": "string",
-          "description": "Evidence photo URL or URI"
-        },
-        "reporterName": {
-          "type": "string",
-          "description": "Name of citizen reporter"
-        },
-        "reporterPhone": {
-          "type": "string",
-          "description": "Contact phone number"
-        },
-        "additionalNotes": {
-          "type": "string",
-          "description": "Additional notes and officer log"
-        },
-        "timestamp": {
-          "type": "integer",
-          "description": "Unix timestamp in milliseconds"
-        },
-        "status": {
-          "type": "string",
-          "description": "Verification status (Diterima PUSDALOPS, Tim TRC Meluncur, etc.)"
-        }
+        "id": { "type": "string" },
+        "authorUid": { "type": "string", "description": "Authenticated Firebase UID owner" },
+        "disasterType": { "type": "string" },
+        "incidentTime": { "type": "string" },
+        "incidentLocation": { "type": "string" },
+        "district": { "type": "string" },
+        "village": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "gpsAccuracyMeters": { "type": "number" },
+        "isGpsVerified": { "type": "boolean" },
+        "casualtiesDead": { "type": "integer" },
+        "casualtiesInjured": { "type": "integer" },
+        "casualtiesMissing": { "type": "integer" },
+        "photoUri": { "type": "string" },
+        "reporterName": { "type": "string" },
+        "reporterPhone": { "type": "string" },
+        "additionalNotes": { "type": "string" },
+        "timestamp": { "type": "integer" },
+        "updatedAt": { "type": "integer" },
+        "status": { "type": "string" }
       },
-      "required": ["id", "disasterType", "district", "status"]
+      "required": ["id", "authorUid", "disasterType", "district", "status"]
     },
     "OfficerProfile": {
       "title": "OfficerProfile",
       "description": "Pusdalops & TRC officer profile in duty roster",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Officer ID or NIP"
-        },
-        "fullName": {
-          "type": "string",
-          "description": "Full name with official academic / ASN title"
-        },
-        "nip": {
-          "type": "string",
-          "description": "NIP or TRC registration number"
-        },
-        "role": {
-          "type": "string",
-          "description": "Assigned role (Pengawas, Manajer, Operator, etc.)"
-        },
-        "unit": {
-          "type": "string",
-          "description": "Operating unit"
-        },
-        "shift": {
-          "type": "string",
-          "description": "Assigned duty shift"
-        },
-        "phone": {
-          "type": "string",
-          "description": "Contact phone or radio channel"
-        },
-        "updatedAt": {
-          "type": "integer",
-          "description": "Last updated timestamp"
-        }
+        "id": { "type": "string" },
+        "ownerUid": { "type": "string", "description": "Authenticated Firebase UID owner" },
+        "fullName": { "type": "string" },
+        "nip": { "type": "string" },
+        "role": { "type": "string" },
+        "unit": { "type": "string" },
+        "shift": { "type": "string" },
+        "phone": { "type": "string" },
+        "updatedAt": { "type": "integer" }
       },
-      "required": ["fullName", "nip", "role"]
+      "required": ["ownerUid", "fullName", "nip", "role"]
+    },
+    "OfficerCredential": {
+      "title": "OfficerCredential",
+      "description": "Individual BPBD officer login credential with salted PBKDF2 PIN hash",
+      "type": "object",
+      "properties": {
+        "nip": { "type": "string" },
+        "ownerUid": { "type": "string", "description": "Authenticated Firebase UID owner" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string" },
+        "unit": { "type": "string" },
+        "shift": { "type": "string" },
+        "phone": { "type": "string" },
+        "pinHash": { "type": "string" },
+        "salt": { "type": "string" },
+        "isCustomPinSet": { "type": "boolean" },
+        "isPinChanged": { "type": "boolean" },
+        "initialSecurePin": { "type": "string", "description": "Must always be empty string in cloud sync" },
+        "lastLoginAt": { "type": "integer" },
+        "lastLoginDevice": { "type": "string" },
+        "updatedAt": { "type": "integer" }
+      },
+      "required": ["nip", "ownerUid", "fullName", "pinHash", "salt"]
     },
     "DatabaseBackup": {
       "title": "DatabaseBackup",
-      "description": "Full snapshot backup of disaster reports database",
+      "description": "User-scoped snapshot backup of disaster reports database",
       "type": "object",
       "properties": {
-        "backupId": {
-          "type": "string",
-          "description": "Backup identifier"
-        },
-        "backupDate": {
-          "type": "integer",
-          "description": "Timestamp of backup creation"
-        },
-        "officerName": {
-          "type": "string",
-          "description": "Name of officer triggering backup"
-        },
-        "totalReports": {
-          "type": "integer",
-          "description": "Total report records count"
-        }
+        "backupId": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "backupDate": { "type": "integer" },
+        "officerName": { "type": "string" },
+        "totalReports": { "type": "integer" },
+        "reports": { "type": "array", "items": { "type": "object" } }
       },
-      "required": ["backupId", "backupDate", "officerName"]
+      "required": ["backupId", "ownerUid", "backupDate", "officerName"]
     },
     "DeviceHeartbeat": {
       "title": "DeviceHeartbeat",
       "description": "Real-time heartbeat of active Pusdalops duty device",
       "type": "object",
       "properties": {
-        "deviceId": {
-          "type": "string",
-          "description": "Hardware device identifier"
-        },
-        "deviceModel": {
-          "type": "string",
-          "description": "Device manufacturer and model"
-        },
-        "officerName": {
-          "type": "string",
-          "description": "Current logged-in officer"
-        },
-        "lastSeen": {
-          "type": "integer",
-          "description": "Last heartbeat timestamp"
-        },
-        "latencyMs": {
-          "type": "integer",
-          "description": "Firestore round-trip ping latency"
-        },
-        "status": {
-          "type": "string",
-          "description": "Online status"
-        }
+        "deviceId": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "deviceModel": { "type": "string" },
+        "officerName": { "type": "string" },
+        "lastSeen": { "type": "integer" },
+        "latencyMs": { "type": "integer" },
+        "status": { "type": "string" }
       },
-      "required": ["deviceId", "status"]
+      "required": ["deviceId", "ownerUid", "status"]
     },
     "NetworkPing": {
       "title": "NetworkPing",
       "description": "Network latency measurement document",
       "type": "object",
       "properties": {
-        "deviceId": {
-          "type": "string",
-          "description": "Pinging device ID"
-        },
-        "pingTimestamp": {
-          "type": "integer",
-          "description": "Client timestamp of ping"
-        }
+        "deviceId": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "pingTimestamp": { "type": "integer" }
       },
-      "required": ["deviceId", "pingTimestamp"]
+      "required": ["deviceId", "ownerUid", "pingTimestamp"]
     },
     "DeviceSecuritySession": {
       "title": "DeviceSecuritySession",
-      "description": "Cryptographically verified Play Integrity session and device trust record for officer login and Ruang Kerja access gating",
+      "description": "Play Integrity session and device trust record for Ruang Kerja access gating",
       "type": "object",
       "properties": {
         "sessionId": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "nip": { "type": "string" },
         "officerNip": { "type": "string" },
         "officerName": { "type": "string" },
         "officerRole": { "type": "string" },
@@ -296,29 +183,29 @@
         "targetModule": { "type": "string" },
         "timestamp": { "type": "integer" }
       },
-      "required": ["sessionId", "officerNip", "accessGranted", "timestamp"]
+      "required": ["sessionId", "ownerUid", "officerNip", "accessGranted", "timestamp"]
     },
-    "OfficerCredential": {
-      "title": "OfficerCredential",
-      "description": "Individual BPBD officer login credential with salted SHA-256 PIN hash and custom PIN status",
+    "DeviceSecurityFailure": {
+      "title": "DeviceSecurityFailure",
+      "description": "Append-only security validation failure audit log entry",
       "type": "object",
       "properties": {
-        "nip": { "type": "string" },
-        "fullName": { "type": "string" },
-        "role": { "type": "string" },
-        "unit": { "type": "string" },
-        "shift": { "type": "string" },
-        "phone": { "type": "string" },
-        "pinHash": { "type": "string" },
-        "salt": { "type": "string" },
-        "isCustomPinSet": { "type": "boolean" },
-        "isPinChanged": { "type": "boolean" },
-        "initialSecurePin": { "type": "string" },
-        "lastLoginAt": { "type": "integer" },
-        "lastLoginDevice": { "type": "string" },
-        "updatedAt": { "type": "integer" }
+        "failureId": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "officerNip": { "type": "string" },
+        "reason": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "deviceModel": { "type": "string" },
+        "osVersion": { "type": "string" },
+        "sdkInt": { "type": "integer" },
+        "recordedSessionId": { "type": "string" },
+        "recordedVerdict": { "type": "string" },
+        "recordedTokenHash": { "type": "string" },
+        "targetModule": { "type": "string" },
+        "additionalDetails": { "type": "string" },
+        "timestamp": { "type": "integer" }
       },
-      "required": ["nip", "fullName", "pinHash", "salt"]
+      "required": ["failureId", "ownerUid", "officerNip", "reason", "timestamp"]
     }
   },
   "firestore": {
@@ -328,7 +215,7 @@
     },
     "/community_reports/{reportId}": {
       "schema": "CommunityReport",
-      "description": "Public crowd-sourced citizen weather reports"
+      "description": "Authenticated citizen crowd-sourced weather reports"
     },
     "/citizen_disaster_reports/{reportId}": {
       "schema": "CitizenDisasterReport",
@@ -340,11 +227,11 @@
     },
     "/officer_credentials/{nip}": {
       "schema": "OfficerCredential",
-      "description": "Individual BPBD officer login credentials and custom PIN hashes"
+      "description": "Individual BPBD officer login credentials and salted PIN hashes"
     },
     "/database_backups/{backupId}": {
       "schema": "DatabaseBackup",
-      "description": "Disaster reports database cloud archives"
+      "description": "User-scoped disaster reports database cloud archives"
     },
     "/device_heartbeats/{deviceId}": {
       "schema": "DeviceHeartbeat",
@@ -357,6 +244,10 @@
     "/device_security_sessions/{officerNip}": {
       "schema": "DeviceSecuritySession",
       "description": "Play Integrity verified device sessions authorizing access to Ruang Kerja"
+    },
+    "/device_security_failures/{failureId}": {
+      "schema": "DeviceSecurityFailure",
+      "description": "Append-only Play Integrity failure audit trail"
     }
   }
 }

@@ -3,23 +3,18 @@ package com.example.ui.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.BuildConfig
 import com.example.model.District
 import com.example.model.WeatherFullReport
+import com.google.firebase.Firebase
+import com.google.firebase.ai.ai
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
-import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.withTimeout
 
 private const val TAG = "AiWeatherViewModel"
 
@@ -39,11 +34,8 @@ data class AiChatMessage(
 
 class AiWeatherViewModel : ViewModel() {
 
-    private val httpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
+    private val generativeModel by lazy {
+        Firebase.ai.generativeModel("gemini-3.8-flash")
     }
 
     private val _uiState = MutableStateFlow<AiUiState>(AiUiState.Idle)
@@ -93,28 +85,47 @@ class AiWeatherViewModel : ViewModel() {
                     Pertanyaan Pengguna: $prompt
                 """.trimIndent()
 
-                // Attempt direct Gemini REST API call first
-                var generatedAnswer = tryDirectGeminiApi(fullPrompt)
-
-                // If direct API is unavailable, blocked by key constraints, or offline,
-                // generate an intelligent localized reasoning response based on the actual Mukomuko weather data
-                if (generatedAnswer == null) {
-                    generatedAnswer = generateLocalGeminiResponse(prompt, currentDistrict, weatherReport)
-                }
-
-                // Stream the response smoothly chunk by chunk for natural AI typing experience
-                val accumulated = StringBuilder()
-                val words = generatedAnswer.split(" ")
-                for (i in words.indices) {
-                    accumulated.append(words[i]).append(" ")
-                    _uiState.value = AiUiState.Streaming(accumulated.toString())
-                    // Subtle dynamic delay for natural reading pace
-                    if (i % 3 == 0) {
-                        delay(25L)
+                // Stream via Firebase AI Logic (App Check attested) with offline fallback
+                val streamed = StringBuilder()
+                val aiSucceeded = try {
+                    withTimeout(60_000L) {
+                        generativeModel.generateContentStream(fullPrompt).collect { chunk ->
+                            val chunkText = chunk.text.orEmpty()
+                            if (chunkText.isNotEmpty()) {
+                                streamed.append(chunkText)
+                                _uiState.value = AiUiState.Streaming(streamed.toString())
+                            }
+                        }
                     }
+                    streamed.isNotBlank()
+                } catch (e: CancellationException) {
+                    if (e is TimeoutCancellationException) {
+                        Log.e(TAG, "Firebase AI Logic timed out; falling back to local engine", e)
+                        false
+                    } else {
+                        throw e
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Firebase AI Logic unavailable; using local emergency assistant", e)
+                    false
                 }
 
-                val finalText = accumulated.toString().trim()
+                val finalText = if (aiSucceeded) {
+                    streamed.toString().trim()
+                } else {
+                    val localAnswer = generateLocalGeminiResponse(prompt, currentDistrict, weatherReport)
+                    val accumulated = StringBuilder()
+                    val words = localAnswer.split(" ")
+                    for (i in words.indices) {
+                        accumulated.append(words[i]).append(" ")
+                        _uiState.value = AiUiState.Streaming(accumulated.toString())
+                        if (i % 3 == 0) {
+                            delay(25L)
+                        }
+                    }
+                    accumulated.toString().trim()
+                }
+
                 _uiState.value = AiUiState.Success(finalText)
                 _chatMessages.value = _chatMessages.value + AiChatMessage(
                     sender = "gemini",
@@ -132,60 +143,6 @@ class AiWeatherViewModel : ViewModel() {
                     content = fallbackText
                 )
             }
-        }
-    }
-
-    private suspend fun tryDirectGeminiApi(prompt: String): String? = withContext(Dispatchers.IO) {
-        try {
-            val apiKey = BuildConfig.GEMINI_API_KEY.ifBlank { "" }
-            if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-                return@withContext null
-            }
-
-            val requestJson = JSONObject().apply {
-                val contentsArray = org.json.JSONArray().apply {
-                    val contentObj = JSONObject().apply {
-                        val partsArray = org.json.JSONArray().apply {
-                            val partObj = JSONObject().apply {
-                                put("text", prompt)
-                            }
-                            put(partObj)
-                        }
-                        put("parts", partsArray)
-                    }
-                    put(contentObj)
-                }
-                put("contents", contentsArray)
-            }
-
-            val mediaType = "application/json; charset=utf-8".toMediaType()
-            val requestBody = requestJson.toString().toRequestBody(mediaType)
-
-            // Direct call to Gemini 2.5 Flash / 1.5 Flash without Firebase App Check
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
-            val request = Request.Builder()
-                .url(url)
-                .post(requestBody)
-                .build()
-
-            val response = httpClient.newCall(request).execute()
-            if (response.isSuccessful) {
-                val bodyStr = response.body?.string() ?: return@withContext null
-                val rootJson = JSONObject(bodyStr)
-                val candidates = rootJson.optJSONArray("candidates")
-                if (candidates != null && candidates.length() > 0) {
-                    val firstCandidate = candidates.getJSONObject(0)
-                    val content = firstCandidate.optJSONObject("content")
-                    val parts = content?.optJSONArray("parts")
-                    if (parts != null && parts.length() > 0) {
-                        return@withContext parts.getJSONObject(0).optString("text")
-                    }
-                }
-            }
-            null
-        } catch (e: Exception) {
-            Log.d(TAG, "Direct Gemini API unavailable: ${e.message}")
-            null
         }
     }
 

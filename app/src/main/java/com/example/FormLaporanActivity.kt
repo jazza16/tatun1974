@@ -49,8 +49,11 @@ class FormLaporanActivity : AppCompatActivity() {
         btnSelanjutnya = findViewById(R.id.btnSelanjutnya)
 
         // Sesi Petugas Pengisi Form
+        val officerAuthManager = com.example.data.local.OfficerAuthManager(this)
         val sessionManager = com.example.util.SessionManager(this)
-        val namaPetugas = sessionManager.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
+        val namaPetugas = officerAuthManager.getOfficerName().ifBlank {
+            sessionManager.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
+        }
         toolbar.subtitle = "Diisi oleh: $namaPetugas"
 
         val today = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())

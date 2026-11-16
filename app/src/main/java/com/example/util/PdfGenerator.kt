@@ -20,10 +20,15 @@ import android.print.PrintManager
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.text.TextUtils
 import android.widget.Toast
 import com.example.data.local.DistribusiLogistikEntity
 import com.example.data.local.LaporanHarianEntity
 import com.example.data.local.LogKomunikasiEntity
+import com.example.model.WeatherFullReport
+import com.example.ui.components.MonthlyDisasterSummary
+import com.example.ui.components.PieSliceData
+import java.util.Calendar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,7 +48,7 @@ object PdfGenerator {
 
     private const val PAGE_WIDTH = 595
     private const val PAGE_HEIGHT = 842
-    private const val PAGE_MARGIN = 32f
+    private const val PAGE_MARGIN = 36f // Standar margin A4 (~1.27 cm)
 
     private val pdfScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -126,12 +131,22 @@ object PdfGenerator {
         } else {
             null
         }
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        val (monthlyData, pieSlices) = ReportExporter.buildDefaultMonthlyAnalyticsForAttachment(
+            context = context,
+            selectedYear = currentYear
+        )
+        val allDistrictsSummary = ReportExporter.buildDefaultDistrictsForecastForAttachment(context)
         buildTwoPagePdfBytes(
             context = context,
             laporan = laporan,
             listLog = listLog,
             listLogistik = listLogistik,
-            mapBitmap = mapBitmap
+            mapBitmap = mapBitmap,
+            monthlyData = monthlyData,
+            pieSlices = pieSlices,
+            selectedYear = currentYear,
+            allDistrictsSummary = allDistrictsSummary
         )
     }
 
@@ -187,7 +202,7 @@ object PdfGenerator {
 
                     printManager.print(
                         jobName,
-                        PdfBytesPrintAdapter(jobName, pdfBytes, pageCount = 2),
+                        PdfBytesPrintAdapter(jobName, pdfBytes, pageCount = 4),
                         printAttributes
                     )
                 } else {
@@ -212,7 +227,11 @@ object PdfGenerator {
         laporan: LaporanHarianEntity,
         listLog: List<LogKomunikasiEntity>,
         listLogistik: List<DistribusiLogistikEntity>,
-        mapBitmap: Bitmap?
+        mapBitmap: Bitmap?,
+        monthlyData: List<MonthlyDisasterSummary> = emptyList(),
+        pieSlices: List<PieSliceData> = emptyList(),
+        selectedYear: Int = Calendar.getInstance().get(Calendar.YEAR),
+        allDistrictsSummary: List<WeatherFullReport> = emptyList()
     ): ByteArray {
         val pdfDocument = PdfDocument()
         try {
@@ -227,6 +246,33 @@ object PdfGenerator {
             val page2 = pdfDocument.startPage(page2Info)
             drawPage2(context, page2.canvas, listLogistik)
             pdfDocument.finishPage(page2)
+
+            // ==================== HALAMAN 3 (LAMPIRAN STATISTIK BENCANA BULANAN) ====================
+            if (monthlyData.isNotEmpty()) {
+                val page3Info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 3).create()
+                val page3 = pdfDocument.startPage(page3Info)
+                ReportExporter.drawMonthlyDisasterAnalyticsPage(
+                    context = context,
+                    canvas = page3.canvas,
+                    monthlyData = monthlyData,
+                    pieSlices = pieSlices,
+                    selectedYear = selectedYear,
+                    scopeLabel = "15 Kecamatan Kab. Mukomuko"
+                )
+                pdfDocument.finishPage(page3)
+            }
+
+            // ==================== HALAMAN 4 (LAMPIRAN PRAKIRAAN CUACA BMKG 15 KECAMATAN) ====================
+            val page4Info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 4).create()
+            val page4 = pdfDocument.startPage(page4Info)
+            ReportExporter.drawBmkgForecastPageToCanvas(
+                context = context,
+                canvas = page4.canvas,
+                pageWidth = PAGE_WIDTH,
+                pageHeight = PAGE_HEIGHT,
+                allDistrictsSummary = allDistrictsSummary
+            )
+            pdfDocument.finishPage(page4)
 
             val outputStream = ByteArrayOutputStream()
             pdfDocument.writeTo(outputStream)
@@ -491,20 +537,32 @@ object PdfGenerator {
         } else {
             val maxLogRows = listLog.take(7)
             for (log in maxLogRows) {
-                if (y + 16f > PAGE_HEIGHT - 36f) break
-                val rowH = 15.5f
                 val cells = arrayOf(
                     log.waktu.ifBlank { "-" },
                     log.stationIdFrom.ifBlank { "-" },
                     log.stationIdTo.ifBlank { "-" },
                     log.subjek.ifBlank { "-" }
                 )
+                val cellLayouts = Array(cells.size) { i ->
+                    val colW = contentWidth * logColWeights[i]
+                    StaticLayout.Builder
+                        .obtain(cells[i], 0, cells[i].length, valuePaint, (colW - 8f).toInt().coerceAtLeast(24))
+                        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                        .setIncludePad(false)
+                        .setMaxLines(2)
+                        .setEllipsize(TextUtils.TruncateAt.END)
+                        .build()
+                }
+                val rowH = max(15.5f, (cellLayouts.maxOfOrNull { it.height } ?: 10) + 5f)
+                if (y + rowH > PAGE_HEIGHT - 36f) break
                 var cellX = margin
                 for (i in cells.indices) {
                     val colW = contentWidth * logColWeights[i]
                     canvas.drawRect(cellX, y, cellX + colW, y + rowH, borderPaint)
-                    val text = cells[i].let { if (it.length > 36) it.take(33) + "..." else it }
-                    canvas.drawText(text, cellX + 4f, y + 10.5f, valuePaint)
+                    canvas.save()
+                    canvas.translate(cellX + 4f, y + (rowH - cellLayouts[i].height) / 2f)
+                    cellLayouts[i].draw(canvas)
+                    canvas.restore()
                     cellX += colW
                 }
                 y += rowH
@@ -608,40 +666,61 @@ object PdfGenerator {
             y += emptyRowH
         } else {
             listLogistik.forEachIndexed { index, item ->
-                if (y + 20f > PAGE_HEIGHT - 240f) return@forEachIndexed
-                val rowH = 19f
+                val w0 = contentWidth * logistikWeights[0]
+                val w1 = contentWidth * logistikWeights[1]
+                val w2 = contentWidth * logistikWeights[2]
+                val w3 = contentWidth * logistikWeights[3]
+                val w4 = contentWidth * logistikWeights[4]
+                val nama = item.namaBarang.ifBlank { "-" }
+                val ket = item.keterangan.ifBlank { "-" }
+                val namaLayout = StaticLayout.Builder
+                    .obtain(nama, 0, nama.length, cellTextPaint, (w1 - 10f).toInt().coerceAtLeast(30))
+                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .setIncludePad(false)
+                    .setMaxLines(2)
+                    .setEllipsize(TextUtils.TruncateAt.END)
+                    .build()
+                val ketLayout = StaticLayout.Builder
+                    .obtain(ket, 0, ket.length, cellTextPaint, (w4 - 10f).toInt().coerceAtLeast(30))
+                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .setIncludePad(false)
+                    .setMaxLines(2)
+                    .setEllipsize(TextUtils.TruncateAt.END)
+                    .build()
+                val rowH = max(19f, max(namaLayout.height, ketLayout.height) + 6f)
+                if (y + rowH > PAGE_HEIGHT - 240f) return@forEachIndexed
                 var cellX = margin
+                val textCenterBaseline = y + (rowH / 2f) + 3f
 
                 // Kolom 1: NO
-                val w0 = contentWidth * logistikWeights[0]
                 canvas.drawRect(cellX, y, cellX + w0, y + rowH, borderPaint)
-                canvas.drawText("${index + 1}", cellX + w0 / 2f, y + 13f, cellCenterPaint)
+                canvas.drawText("${index + 1}", cellX + w0 / 2f, textCenterBaseline, cellCenterPaint)
                 cellX += w0
 
                 // Kolom 2: NAMA BARANG
-                val w1 = contentWidth * logistikWeights[1]
                 canvas.drawRect(cellX, y, cellX + w1, y + rowH, borderPaint)
-                val nama = item.namaBarang.ifBlank { "-" }.let { if (it.length > 32) it.take(29) + "..." else it }
-                canvas.drawText(nama, cellX + 5f, y + 13f, cellTextPaint)
+                canvas.save()
+                canvas.translate(cellX + 5f, y + (rowH - namaLayout.height) / 2f)
+                namaLayout.draw(canvas)
+                canvas.restore()
                 cellX += w1
 
                 // Kolom 3: JUMLAH
-                val w2 = contentWidth * logistikWeights[2]
                 canvas.drawRect(cellX, y, cellX + w2, y + rowH, borderPaint)
-                canvas.drawText(item.jumlah.ifBlank { "0" }, cellX + w2 / 2f, y + 13f, cellCenterPaint)
+                canvas.drawText(item.jumlah.ifBlank { "0" }, cellX + w2 / 2f, textCenterBaseline, cellCenterPaint)
                 cellX += w2
 
                 // Kolom 4: SATUAN
-                val w3 = contentWidth * logistikWeights[3]
                 canvas.drawRect(cellX, y, cellX + w3, y + rowH, borderPaint)
-                canvas.drawText(item.satuan.ifBlank { "-" }, cellX + w3 / 2f, y + 13f, cellCenterPaint)
+                canvas.drawText(item.satuan.ifBlank { "-" }, cellX + w3 / 2f, textCenterBaseline, cellCenterPaint)
                 cellX += w3
 
                 // Kolom 5: KETERANGAN
-                val w4 = contentWidth * logistikWeights[4]
                 canvas.drawRect(cellX, y, cellX + w4, y + rowH, borderPaint)
-                val ket = item.keterangan.ifBlank { "-" }.let { if (it.length > 30) it.take(27) + "..." else it }
-                canvas.drawText(ket, cellX + 5f, y + 13f, cellTextPaint)
+                canvas.save()
+                canvas.translate(cellX + 5f, y + (rowH - ketLayout.height) / 2f)
+                ketLayout.draw(canvas)
+                canvas.restore()
 
                 y += rowH
             }

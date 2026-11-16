@@ -217,17 +217,10 @@ fun OfficerDashboardConsoleView(
     var showChangePinDialog by remember { mutableStateOf(false) }
     var hasCustomPin by remember { mutableStateOf(officerAuthManager.hasCustomPin()) }
 
-    // Administrator Password Protection for Personnel Directory
-    var showAdminAuthForRoster by remember { mutableStateOf(false) }
-    var adminAuthPasswordInput by remember { mutableStateOf("") }
-    var adminAuthPasswordError by remember { mutableStateOf<String?>(null) }
-    var isAdminAuthPasswordVisible by remember { mutableStateOf(false) }
-
-    // Administrator Password Protection for Sync(xHP) Multi-Device Feature
-    var showAdminAuthForSync by remember { mutableStateOf(false) }
-    var adminAuthSyncPasswordInput by remember { mutableStateOf("") }
-    var adminAuthSyncPasswordError by remember { mutableStateOf<String?>(null) }
-    var isAdminAuthSyncPasswordVisible by remember { mutableStateOf(false) }
+    // Cloud Master Admin Auth Dialog State (protects Kelola Personil, Database Explorer, Cabut Akses, & Sync)
+    var isAdminAuthDialogVisible by remember { mutableStateOf(false) }
+    var adminAuthActionTitle by remember { mutableStateOf("") }
+    var pendingAdminAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     // Room Database & Personnel Repository
     val coroutineScope = rememberCoroutineScope()
@@ -253,13 +246,50 @@ fun OfficerDashboardConsoleView(
     val securityManager = remember { SecurityManager.getInstance(context) }
     var securitySessionsList by remember { mutableStateOf<List<DeviceSecuritySession>>(emptyList()) }
     var showSecuritySessionsDialog by remember { mutableStateOf(false) }
+    var revokedNipsInSession by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var currentFirebaseUid by remember {
+        mutableStateOf(
+            try { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid } catch (_: Exception) { null }
+        )
+    }
 
     DisposableEffect(Unit) {
+        val auth = try { com.google.firebase.auth.FirebaseAuth.getInstance() } catch (_: Exception) { null }
+        val authListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+            currentFirebaseUid = firebaseAuth.currentUser?.uid
+        }
+        auth?.addAuthStateListener(authListener)
+        onDispose {
+            auth?.removeAuthStateListener(authListener)
+        }
+    }
+
+    DisposableEffect(currentFirebaseUid, isOfficerLoggedIn, officerBadgeId) {
         val listener = securityManager.listenSecuritySessionsRealtime { list ->
-            securitySessionsList = list
+            securitySessionsList = list.filterNot {
+                revokedNipsInSession.contains(it.officerNip.trim().lowercase())
+            }
         }
         onDispose {
             listener?.remove()
+        }
+    }
+
+    LaunchedEffect(currentFirebaseUid, isOfficerLoggedIn, officerBadgeId, dashboardSubTab) {
+        onSyncReports?.invoke { _ -> }
+        if (isOfficerLoggedIn && officerBadgeId.isNotBlank()) {
+            syncController.sendHeartbeatNow()
+            val normalizedNip = officerBadgeId.trim().lowercase()
+            if (!revokedNipsInSession.contains(normalizedNip)) {
+                securityManager.syncPendingSessionToFirestore(
+                    officerNip = officerBadgeId,
+                    officerName = officerName,
+                    officerRole = officerRole
+                )
+            }
+        }
+        securitySessionsList = securityManager.fetchSecuritySessions().filterNot {
+            revokedNipsInSession.contains(it.officerNip.trim().lowercase())
         }
     }
 
@@ -515,9 +545,12 @@ fun OfficerDashboardConsoleView(
                             // Badge Personil
                             OutlinedButton(
                                 onClick = {
-                                    adminAuthPasswordInput = ""
-                                    adminAuthPasswordError = null
-                                    showAdminAuthForRoster = true
+                                    adminAuthActionTitle = "Kelola Direktori Personil BPBD"
+                                    pendingAdminAction = {
+                                        rosterList = officerAuthManager.getOfficerRoster()
+                                        showRosterDialog = true
+                                    }
+                                    isAdminAuthDialogVisible = true
                                 },
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
@@ -907,9 +940,11 @@ fun OfficerDashboardConsoleView(
                             .clickable {
                                 if (idx == 3) {
                                     if (dashboardSubTab != 3) {
-                                        adminAuthSyncPasswordInput = ""
-                                        adminAuthSyncPasswordError = null
-                                        showAdminAuthForSync = true
+                                        adminAuthActionTitle = "Sinkronisasi Multi-Perangkat (Sync xHP)"
+                                        pendingAdminAction = {
+                                            dashboardSubTab = 3
+                                        }
+                                        isAdminAuthDialogVisible = true
                                     }
                                 } else {
                                     dashboardSubTab = idx
@@ -969,17 +1004,32 @@ fun OfficerDashboardConsoleView(
                     integrityResult = integrityCheckResult,
                     isCheckingIntegrity = isCheckingIntegrity,
                     securitySessions = securitySessionsList,
-                    onToggleSecurityAccess = { nip, granted ->
-                        coroutineScope.launch {
-                            val ok = securityManager.updateAccessPermission(nip, granted)
-                            if (ok) {
-                                Toast.makeText(
-                                    context,
-                                    "Otorisasi Ruang Kerja NIP $nip ${if (granted) "diaktifkan" else "dinonaktifkan"}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                    onRevokeSecuritySession = { session ->
+                        adminAuthActionTitle = "Cabut Akses Perangkat (${session.officerName})"
+                        pendingAdminAction = {
+                            val normalizedNip = session.officerNip.trim().lowercase()
+                            revokedNipsInSession = revokedNipsInSession + normalizedNip
+                            securitySessionsList = securitySessionsList.filterNot {
+                                it.officerNip.trim().equals(session.officerNip.trim(), ignoreCase = true)
+                            }
+                            coroutineScope.launch {
+                                val ok = securityManager.deleteSecuritySession(session.officerNip)
+                                if (ok) {
+                                    Toast.makeText(
+                                        context,
+                                        "Akses perangkat ${session.officerName} (NIP ${session.officerNip}) berhasil dicabut & dihapus.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Gagal menghapus sesi dari Firestore. Periksa koneksi internet Anda.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                         }
+                        isAdminAuthDialogVisible = true
                     },
                     onRunIntegrityCheck = {
                         isCheckingIntegrity = true
@@ -1008,7 +1058,11 @@ fun OfficerDashboardConsoleView(
                         }
                     },
                     onOpenDatabaseExplorer = {
-                        showDatabaseExplorer = true
+                        adminAuthActionTitle = "Database Explorer (Room SQLite)"
+                        pendingAdminAction = {
+                            showDatabaseExplorer = true
+                        }
+                        isAdminAuthDialogVisible = true
                     },
                     onOpenFormLaporanHarian = {
                         showFormLaporanHarian = true
@@ -1309,7 +1363,7 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color.White,
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                                modifier = Modifier.clickable { isDistrictDropdownExpanded = true }
+                                modifier = Modifier.clickable { isDistrictDropdownExpanded = !isDistrictDropdownExpanded }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
@@ -1327,24 +1381,6 @@ fun OfficerDashboardConsoleView(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = Color(0xFF1E293B)
-                                    )
-                                }
-                            }
-
-                            androidx.compose.runtime.DisposableEffect(Unit) {
-                                onDispose { isDistrictDropdownExpanded = false }
-                            }
-                            DropdownMenu(
-                                expanded = isDistrictDropdownExpanded,
-                                onDismissRequest = { isDistrictDropdownExpanded = false }
-                            ) {
-                                districtOptions.forEach { dist ->
-                                    DropdownMenuItem(
-                                        text = { Text(dist, fontSize = 11.sp) },
-                                        onClick = {
-                                            selectedDistrictFilter = dist
-                                            isDistrictDropdownExpanded = false
-                                        }
                                     )
                                 }
                             }
@@ -1376,6 +1412,35 @@ fun OfficerDashboardConsoleView(
                                     fontWeight = if (onlyWithCasualties) FontWeight.Bold else FontWeight.Normal,
                                     color = if (onlyWithCasualties) Color(0xFF991B1B) else Color(0xFF475569)
                                 )
+                            }
+                        }
+                    }
+
+                    AnimatedVisibility(visible = isDistrictDropdownExpanded) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 3.dp,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 200.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                districtOptions.forEach { dist ->
+                                    DropdownMenuItem(
+                                        text = { Text(dist, fontSize = 11.sp) },
+                                        onClick = {
+                                            selectedDistrictFilter = dist
+                                            isDistrictDropdownExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -1777,9 +1842,9 @@ fun OfficerDashboardConsoleView(
                                     .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "CHANGE_PIN")
                                 val smartRepo = SmartOfficerAuthRepository.getInstance(context)
                                 val result = smartRepo.changePersonalPin(officerBadgeId, oldPinInput, newPinInput)
-                                officerAuthManager.changeOfficerPin(oldPinInput, newPinInput)
                                 isProcessingSecurity = false
                                 result.onSuccess { msg ->
+                                    officerAuthManager.setCustomOfficerPin(newPinInput)
                                     hasCustomPin = true
                                     showChangePinDialog = false
                                     Toast.makeText(context, "$msg (Play Integrity: ${integrityResult.verdict})", Toast.LENGTH_LONG).show()
@@ -1788,7 +1853,8 @@ fun OfficerDashboardConsoleView(
                                 }
                             }
                         } else {
-                            if (resetAdminInput.isBlank()) {
+                            val trimmedResetInput = resetAdminInput.trim()
+                            if (trimmedResetInput.isBlank()) {
                                 errorMessage = "Ketikkan Sandi Administrator atau PIN lama untuk reset."
                                 return@Button
                             }
@@ -1797,10 +1863,28 @@ fun OfficerDashboardConsoleView(
                                 val integrityResult = PlayIntegritySecurityManager.getInstance(context)
                                     .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "RESET_PIN")
                                 val smartRepo = SmartOfficerAuthRepository.getInstance(context)
+                                val currentCred = smartRepo.getCredential(officerBadgeId)
+                                val isAdminAuthorized = securityManager.verifyMasterAdminPin(trimmedResetInput).getOrDefault(false) ||
+                                    officerAuthManager.verifyAdminPassword(trimmedResetInput)
+                                val isSelfPinAuthorized = currentCred != null && currentCred.verifyPin(trimmedResetInput)
+                                if (!isAdminAuthorized && !isSelfPinAuthorized) {
+                                    isProcessingSecurity = false
+                                    val lockSec = officerAuthManager.getAdminLockoutRemainingSeconds()
+                                    errorMessage = if (lockSec > 0) {
+                                        "Terlalu banyak percobaan sandi admin. Coba lagi dalam ${lockSec} detik."
+                                    } else {
+                                        "Sandi Administrator atau PIN pribadi lama salah. Otorisasi reset ditolak."
+                                    }
+                                    return@launch
+                                }
                                 val result = smartRepo.resetToInitialNipSecret(officerBadgeId)
-                                officerAuthManager.resetPinToDefault(resetAdminInput)
                                 isProcessingSecurity = false
                                 result.onSuccess { msg ->
+                                    if (isAdminAuthorized) {
+                                        officerAuthManager.resetPinWithAdmin(trimmedResetInput)
+                                    } else {
+                                        officerAuthManager.resetPinToDefault(trimmedResetInput)
+                                    }
                                     hasCustomPin = false
                                     showChangePinDialog = false
                                     Toast.makeText(context, "$msg (Play Integrity: ${integrityResult.verdict})", Toast.LENGTH_LONG).show()
@@ -1833,205 +1917,20 @@ fun OfficerDashboardConsoleView(
         )
     }
 
-    // 7A. DIALOG AUTENTIKASI ADMINISTRATOR SEBELUM MEMBUKA DIREKTORI PERSONIL BPBD
-    if (showAdminAuthForRoster) {
-        AlertDialog(
-            onDismissRequest = { showAdminAuthForRoster = false },
-            icon = {
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFFFEF2F2),
-                    modifier = Modifier.size(50.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.AdminPanelSettings,
-                            contentDescription = null,
-                            tint = Color(0xFFDC2626),
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                }
+    // 7A. DIALOG AUTENTIKASI MASTER ADMIN CLOUD (FIRESTORE app_settings/admin_config)
+    if (isAdminAuthDialogVisible) {
+        AdminAuthDialog(
+            actionTitle = adminAuthActionTitle,
+            securityManager = securityManager,
+            onDismiss = {
+                isAdminAuthDialogVisible = false
+                pendingAdminAction = null
             },
-            title = {
-                Text(
-                    text = "Autentikasi Administrator BPBD",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    textAlign = TextAlign.Center
-                )
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "Data Personil BPBD dilindungi sandi Administrator untuk mencegah penyalahgunaan data dan struktur personil dinas.",
-                        fontSize = 11.5.sp,
-                        color = Color(0xFF475569),
-                        lineHeight = 16.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = adminAuthPasswordInput,
-                        onValueChange = {
-                            adminAuthPasswordInput = it
-                            adminAuthPasswordError = null
-                        },
-                        label = { Text("Sandi Administrator / Master PIN", fontSize = 11.sp) },
-                        placeholder = { Text("Masukkan sandi administrator", fontSize = 11.sp) },
-                        visualTransformation = if (isAdminAuthPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        trailingIcon = {
-                            IconButton(onClick = { isAdminAuthPasswordVisible = !isAdminAuthPasswordVisible }) {
-                                Icon(
-                                    imageVector = if (isAdminAuthPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null,
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (adminAuthPasswordError != null) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = adminAuthPasswordError.orEmpty(),
-                            color = Color(0xFFDC2626),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val input = adminAuthPasswordInput.trim()
-                        val isValid = input.isNotBlank() && (
-                            officerAuthManager.loginAdmin("admin", input) ||
-                            input == OfficerAuthManager.DEFAULT_ADMIN_PASSWORD ||
-                            officerAuthManager.verifyPin(input)
-                        )
-                        if (isValid) {
-                            showAdminAuthForRoster = false
-                            rosterList = officerAuthManager.getOfficerRoster()
-                            showRosterDialog = true
-                            Toast.makeText(context, "Akses Data Personil BPBD Diberikan", Toast.LENGTH_SHORT).show()
-                        } else {
-                            adminAuthPasswordError = "Sandi Administrator tidak valid. Otorisasi ditolak."
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
-                ) {
-                    Text("Buka Data Personil")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showAdminAuthForRoster = false }) {
-                    Text("Batal")
-                }
-            }
-        )
-    }
-
-    // 7A-SYNC. DIALOG AUTENTIKASI ADMINISTRATOR SEBELUM MEMBUKA FITUR SYNC (xHP)
-    if (showAdminAuthForSync) {
-        AlertDialog(
-            onDismissRequest = { showAdminAuthForSync = false },
-            icon = {
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFFFEF2F2),
-                    modifier = Modifier.size(50.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.AdminPanelSettings,
-                            contentDescription = null,
-                            tint = Color(0xFFDC2626),
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                }
-            },
-            title = {
-                Text(
-                    text = "Autentikasi Administrator Sync (xHP)",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    textAlign = TextAlign.Center
-                )
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "Fitur Sinkronisasi Multi-Perangkat (Sync xHP) dilindungi sandi Administrator agar tidak disalahgunakan atau memicu konflik sinkronisasi yang tidak bertanggung jawab.",
-                        fontSize = 11.5.sp,
-                        color = Color(0xFF475569),
-                        lineHeight = 16.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = adminAuthSyncPasswordInput,
-                        onValueChange = {
-                            adminAuthSyncPasswordInput = it
-                            adminAuthSyncPasswordError = null
-                        },
-                        label = { Text("Sandi Administrator / Master PIN", fontSize = 11.sp) },
-                        placeholder = { Text("Masukkan sandi administrator", fontSize = 11.sp) },
-                        visualTransformation = if (isAdminAuthSyncPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        trailingIcon = {
-                            IconButton(onClick = { isAdminAuthSyncPasswordVisible = !isAdminAuthSyncPasswordVisible }) {
-                                Icon(
-                                    imageVector = if (isAdminAuthSyncPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null,
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (adminAuthSyncPasswordError != null) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = adminAuthSyncPasswordError.orEmpty(),
-                            color = Color(0xFFDC2626),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val input = adminAuthSyncPasswordInput.trim()
-                        val isValid = input.isNotBlank() && (
-                            officerAuthManager.loginAdmin("admin", input) ||
-                            input == OfficerAuthManager.DEFAULT_ADMIN_PASSWORD ||
-                            officerAuthManager.verifyPin(input)
-                        )
-                        if (isValid) {
-                            showAdminAuthForSync = false
-                            dashboardSubTab = 3
-                            Toast.makeText(context, "Akses Sinkronisasi Administrator Diberikan", Toast.LENGTH_SHORT).show()
-                        } else {
-                            adminAuthSyncPasswordError = "Sandi Administrator salah! Akses ditolak."
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
-                ) {
-                    Text("Buka Fitur Sync")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showAdminAuthForSync = false }) {
-                    Text("Batal")
-                }
+            onAuthorized = {
+                isAdminAuthDialogVisible = false
+                val action = pendingAdminAction
+                pendingAdminAction = null
+                action?.invoke()
             }
         )
     }
@@ -3578,6 +3477,7 @@ private fun OfficerIncidentReportCard(
  * Memantau latensi API Firestore, status detak jantung (heartbeat) 5 unit HP pengujian,
  * pemeriksaan integritas checksum (SHA-256), log resolusi konflik, dan akses Database Explorer.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SyncDiagnosticsSection(
     latencyMs: Long,
@@ -3587,7 +3487,7 @@ private fun SyncDiagnosticsSection(
     integrityResult: com.example.data.sync.IntegrityCheckResult?,
     isCheckingIntegrity: Boolean,
     securitySessions: List<DeviceSecuritySession> = emptyList(),
-    onToggleSecurityAccess: (String, Boolean) -> Unit = { _, _ -> },
+    onRevokeSecuritySession: (DeviceSecuritySession) -> Unit = {},
     onRunIntegrityCheck: () -> Unit,
     onTestPing: () -> Unit,
     onExportConflictLogsCsv: () -> Unit,
@@ -3595,6 +3495,7 @@ private fun SyncDiagnosticsSection(
     onOpenFormLaporanHarian: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    var sessionPendingRevoke by remember { mutableStateOf<DeviceSecuritySession?>(null) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -3763,22 +3664,31 @@ private fun SyncDiagnosticsSection(
                                         color = Color(0xFFEFF6FF),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        FlowRow(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Text(
                                                 text = "Verdict: ${session.verdict}",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.SemiBold,
-                                                color = Color(0xFF1D4ED8)
+                                                color = Color(0xFF1D4ED8),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                softWrap = false,
+                                                modifier = Modifier.padding(end = 8.dp)
                                             )
                                             Text(
                                                 text = "Nonce: ${session.classicNonce.take(12)}...",
                                                 fontSize = 11.sp,
                                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                                color = Color(0xFF475569)
+                                                color = Color(0xFF475569),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                softWrap = false
                                             )
                                         }
                                     }
@@ -3800,24 +3710,26 @@ private fun SyncDiagnosticsSection(
 
                                         Button(
                                             onClick = {
-                                                onToggleSecurityAccess(session.officerNip, !session.accessGranted)
+                                                sessionPendingRevoke = session
                                             },
                                             colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (session.accessGranted) Color(0xFFDC2626) else Color(0xFF15803D)
+                                                containerColor = Color(0xFFDC2626)
                                             ),
                                             shape = RoundedCornerShape(6.dp),
                                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                            modifier = Modifier.heightIn(min = 28.dp)
+                                            modifier = Modifier
+                                                .heightIn(min = 28.dp)
+                                                .testTag("btn_revoke_security_session_${session.officerNip}")
                                         ) {
                                             Icon(
-                                                imageVector = if (session.accessGranted) Icons.Default.Lock else Icons.Default.LockOpen,
-                                                contentDescription = null,
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Cabut Akses Perangkat",
                                                 tint = Color.White,
                                                 modifier = Modifier.size(12.dp)
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(
-                                                text = if (session.accessGranted) "Cabut Akses" else "Beri Akses",
+                                                text = "Cabut Akses",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White
@@ -3830,6 +3742,56 @@ private fun SyncDiagnosticsSection(
                     }
                 }
             }
+        }
+
+        sessionPendingRevoke?.let { targetSession ->
+            AlertDialog(
+                onDismissRequest = { sessionPendingRevoke = null },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFDC2626)
+                    )
+                },
+                title = {
+                    Text(
+                        text = "Cabut Akses Perangkat?",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Yakin ingin mencabut akses perangkat ini?\n\n" +
+                            "Petugas: ${targetSession.officerName} (NIP: ${targetSession.officerNip})\n" +
+                            "Perangkat: ${targetSession.deviceModel}\n\n" +
+                            "Sesi perangkat akan dihapus dari Firestore dan akses petugas ke Ruang Kerja dicabut.",
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            sessionPendingRevoke = null
+                            onRevokeSecuritySession(targetSession)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        modifier = Modifier.testTag("btn_confirm_revoke_security_session")
+                    ) {
+                        Text("Cabut Akses", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = { sessionPendingRevoke = null },
+                        modifier = Modifier.testTag("btn_cancel_revoke_security_session")
+                    ) {
+                        Text("Batal")
+                    }
+                }
+            )
         }
 
         // 1. LATENCY METRIC CARD
@@ -3949,26 +3911,35 @@ private fun SyncDiagnosticsSection(
             modifier = Modifier.fillMaxWidth().testTag("card_active_devices_heartbeat")
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
                         Icon(Icons.Default.Devices, contentDescription = null, tint = OrangePrimary, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Detak Jantung Perangkat (${activeDevices.size} HP Aktif)",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     Text(
                         text = "5 HP Pengujian",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF64748B)
+                        color = Color(0xFF64748B),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false,
+                        modifier = Modifier.align(Alignment.CenterVertically)
                     )
                 }
 
@@ -4262,3 +4233,142 @@ private fun SyncDiagnosticsSection(
     }
 }
 
+@Composable
+fun AdminAuthDialog(
+    actionTitle: String,
+    securityManager: SecurityManager,
+    onDismiss: () -> Unit,
+    onAuthorized: () -> Unit
+) {
+    val coroutineScope = rememberCoroutineScope()
+    var inputPin by remember { mutableStateOf("") }
+    var isPinVisible by remember { mutableStateOf(false) }
+    var isVerifying by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isVerifying) onDismiss() },
+        icon = {
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFFEF2F2),
+                modifier = Modifier.size(50.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.AdminPanelSettings,
+                        contentDescription = null,
+                        tint = Color(0xFFDC2626),
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+        },
+        title = {
+            Text(
+                text = "Otorisasi Master Admin",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Akses ke fitur \"$actionTitle\" dibatasi khusus Administrator. Masukkan PIN / Sandi Master Admin untuk diverifikasi ke server Cloud.",
+                    fontSize = 11.5.sp,
+                    color = Color(0xFF475569),
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = inputPin,
+                    onValueChange = {
+                        inputPin = it
+                        errorMessage = null
+                    },
+                    label = { Text("PIN / Sandi Master Admin", fontSize = 11.sp) },
+                    placeholder = { Text("Masukkan PIN Master Admin", fontSize = 11.sp) },
+                    visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        IconButton(onClick = { isPinVisible = !isPinVisible }) {
+                            Icon(
+                                imageVector = if (isPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = null,
+                                tint = Color.Gray,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    enabled = !isVerifying,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_master_admin_pin")
+                )
+                if (!errorMessage.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = errorMessage.orEmpty(),
+                        color = Color(0xFFDC2626),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val trimmed = inputPin.trim()
+                    if (trimmed.isEmpty()) {
+                        errorMessage = "Masukkan PIN / Sandi Master Admin terlebih dahulu."
+                        return@Button
+                    }
+                    isVerifying = true
+                    errorMessage = null
+                    coroutineScope.launch {
+                        val res = securityManager.verifyMasterAdminPin(trimmed)
+                        isVerifying = false
+                        res.fold(
+                            onSuccess = { matched ->
+                                if (matched) {
+                                    onAuthorized()
+                                } else {
+                                    errorMessage = "PIN Master Admin salah. Akses ditolak."
+                                }
+                            },
+                            onFailure = { err ->
+                                errorMessage = err.message ?: "Gagal memverifikasi PIN Master Admin ke server."
+                            }
+                        )
+                    }
+                },
+                enabled = !isVerifying,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                modifier = Modifier.testTag("btn_verify_master_admin_pin")
+            ) {
+                if (isVerifying) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Memverifikasi...")
+                } else {
+                    Text("Verifikasi")
+                }
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                enabled = !isVerifying
+            ) {
+                Text("Batal")
+            }
+        }
+    )
+}

@@ -49,8 +49,8 @@ class AppUpdatePreferences(private val context: Context) {
         private const val PREF_DISMISSED_DIALOG_VERSION = "dismissed_dialog_version"
         private const val PREF_IS_ONBOARDING_COMPLETED = "is_onboarding_completed"
 
-        const val DEFAULT_LATEST_VERSION = "3.7.0"
-        const val PREVIOUS_VERSION_MOCK = "3.6.0"
+        const val DEFAULT_LATEST_VERSION = "1.0.0"
+        const val PREVIOUS_VERSION_MOCK = "0.9.0"
     }
 
     init {
@@ -89,8 +89,9 @@ class AppUpdatePreferences(private val context: Context) {
             editor.putBoolean(PREF_IS_PERMANENTLY_INSTALLED, isCurrent)
             editor.putString(PREF_LAST_CHECKED_VERSION, targetLatest)
             editor.apply()
+            syncStateToDataStore(currentBuildVersion, targetLatest, targetLatest, isCurrent, clearDismissed = false)
         } else if (recordedBuild != currentBuildVersion) {
-            // An APK update was installed onto the phone! (e.g. 1.4.0 -> 1.5.0)
+            // An APK update was installed onto the phone!
             editor.putString(PREF_RECORDED_BUILD_VERSION, currentBuildVersion)
             editor.putString(PREF_INSTALLED_VERSION, currentBuildVersion)
             val targetLatest = maxVersion(currentBuildVersion, DEFAULT_LATEST_VERSION)
@@ -99,18 +100,49 @@ class AppUpdatePreferences(private val context: Context) {
             editor.remove(PREF_DISMISSED_DIALOG_VERSION)
             editor.putString(PREF_LAST_CHECKED_VERSION, currentBuildVersion)
             editor.apply()
+            syncStateToDataStore(currentBuildVersion, currentBuildVersion, targetLatest, true, clearDismissed = true)
         } else {
             // Same binary build is running. Ensure server version is at least DEFAULT_LATEST_VERSION.
             val currentServer = savedServer ?: DEFAULT_LATEST_VERSION
             if (AppVersionHelper.isVersionNewer(currentServer, DEFAULT_LATEST_VERSION)) {
                 editor.putString(PREF_LATEST_SERVER_VERSION, DEFAULT_LATEST_VERSION)
                 val installed = savedInstalled ?: currentBuildVersion
-                if (AppVersionHelper.isVersionNewer(installed, DEFAULT_LATEST_VERSION)) {
+                val hasNewer = AppVersionHelper.isVersionNewer(installed, DEFAULT_LATEST_VERSION)
+                if (hasNewer) {
                     editor.remove(PREF_DISMISSED_DIALOG_VERSION)
                     editor.putBoolean(PREF_IS_PERMANENTLY_INSTALLED, false)
                 }
                 editor.apply()
+                syncStateToDataStore(
+                    installedVersion = installed,
+                    lastCheckedVersion = sharedPrefs.getString(PREF_LAST_CHECKED_VERSION, DEFAULT_LATEST_VERSION) ?: DEFAULT_LATEST_VERSION,
+                    latestServerVersion = DEFAULT_LATEST_VERSION,
+                    isPermanent = !hasNewer,
+                    clearDismissed = hasNewer
+                )
             }
+        }
+    }
+
+    private fun syncStateToDataStore(
+        installedVersion: String,
+        lastCheckedVersion: String,
+        latestServerVersion: String,
+        isPermanent: Boolean,
+        clearDismissed: Boolean
+    ) {
+        scope.launch {
+            try {
+                context.dataStore.edit { prefs ->
+                    prefs[KEY_INSTALLED_VERSION] = installedVersion
+                    prefs[KEY_LAST_CHECKED_VERSION] = lastCheckedVersion
+                    prefs[KEY_LATEST_SERVER_VERSION] = latestServerVersion
+                    prefs[KEY_IS_PERMANENTLY_INSTALLED] = isPermanent
+                    if (clearDismissed) {
+                        prefs.remove(KEY_DISMISSED_DIALOG_VERSION)
+                    }
+                }
+            } catch (_: Exception) {}
         }
     }
 

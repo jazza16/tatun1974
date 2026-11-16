@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.security.MessageDigest
+import java.security.SecureRandom
 
 /**
  * Room Database Entity for Officer Login Credentials in Pusdalops BPBD Kabupaten Mukomuko.
@@ -74,8 +75,7 @@ data class OfficerCredentialEntity(
             if (isMatchingInitialNip) {
                 return false
             }
-            val calculatedHash = hashWithSalt(trimmed, salt)
-            return calculatedHash.equals(pinHash, ignoreCase = true)
+            return verifyHash(trimmed, salt, pinHash)
         }
 
         // 3. Before officer changes PIN (isCustomPinSet == false), accept 6-digit NIP as valid initial PIN
@@ -83,19 +83,71 @@ data class OfficerCredentialEntity(
             return true
         }
 
-        val calculatedHash = hashWithSalt(trimmed, salt)
-        return calculatedHash.equals(pinHash, ignoreCase = true)
+        return verifyHash(trimmed, salt, pinHash)
     }
 
     companion object {
+        private val secureRandom = SecureRandom()
+        private const val PBKDF2_PREFIX = "pbkdf2"
+        private const val PBKDF2_ITERATIONS = 10_000
+        private const val PBKDF2_KEY_BITS = 256
+
+        fun generateCryptographicSalt(): String {
+            val bytes = ByteArray(16)
+            secureRandom.nextBytes(bytes)
+            return bytes.joinToString("") { "%02x".format(it) }
+        }
+
+        fun constantTimeEqualsHex(a: String, b: String): Boolean {
+            if (a.isBlank() || b.isBlank()) return false
+            return MessageDigest.isEqual(
+                a.lowercase().toByteArray(Charsets.UTF_8),
+                b.lowercase().toByteArray(Charsets.UTF_8)
+            )
+        }
+
         /**
-         * Computes salted SHA-256 hash.
+         * Computes salted PBKDF2WithHmacSHA256 hash (10,000 iterations).
+         * Format: pbkdf2$10000$<hexDigest>
          */
         fun hashWithSalt(pin: String, salt: String): String {
+            return hashPbkdf2(pin, salt, PBKDF2_ITERATIONS)
+        }
+
+        private fun hashPbkdf2(pin: String, salt: String, iterations: Int): String {
+            val factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            val saltBytes = "$salt:mukomuko_bpbd_2026".toByteArray(Charsets.UTF_8)
+            val spec = javax.crypto.spec.PBEKeySpec(pin.toCharArray(), saltBytes, iterations, PBKDF2_KEY_BITS)
+            val encoded = factory.generateSecret(spec).encoded
+            spec.clearPassword()
+            val hex = encoded.joinToString("") { "%02x".format(it) }
+            return "$PBKDF2_PREFIX\$$iterations\$$hex"
+        }
+
+        private fun hashLegacySha256(pin: String, salt: String): String {
             val combined = "$salt:$pin:mukomuko_bpbd_2026"
             val md = MessageDigest.getInstance("SHA-256")
             val digest = md.digest(combined.toByteArray(Charsets.UTF_8))
             return digest.fold("") { str, it -> str + "%02x".format(it) }
+        }
+
+        /**
+         * Verifies a candidate PIN against a stored PBKDF2 hash or legacy 64-char SHA-256 hex hash.
+         */
+        fun verifyHash(pin: String, salt: String, storedHash: String): Boolean {
+            if (pin.isBlank() || salt.isBlank() || storedHash.isBlank()) return false
+            return if (storedHash.startsWith("$PBKDF2_PREFIX\$")) {
+                val parts = storedHash.split("$")
+                if (parts.size != 3) return false
+                val iterations = parts[1].toIntOrNull()?.coerceIn(1_000, 100_000) ?: PBKDF2_ITERATIONS
+                val expectedHex = parts[2]
+                val candidateFull = hashPbkdf2(pin, salt, iterations)
+                val candidateHex = candidateFull.substringAfterLast("$")
+                constantTimeEqualsHex(candidateHex, expectedHex)
+            } else {
+                val legacyCandidate = hashLegacySha256(pin, salt)
+                constantTimeEqualsHex(legacyCandidate, storedHash)
+            }
         }
 
         /**
@@ -128,7 +180,7 @@ data class OfficerCredentialEntity(
             phone: String = "",
             customPin: String? = null
         ): OfficerCredentialEntity {
-            val salt = java.util.UUID.randomUUID().toString().take(12)
+            val salt = generateCryptographicSalt()
             val initialPin = generateInitialPinForNip(nip)
             val effectivePin = customPin?.trim()?.ifBlank { null } ?: initialPin
             val isCustom = customPin != null && customPin.isNotBlank()

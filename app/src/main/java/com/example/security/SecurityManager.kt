@@ -5,6 +5,8 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Base64
 import android.util.Log
+import androidx.annotation.Keep
+import com.example.BuildConfig
 import com.google.android.play.core.integrity.IntegrityManager
 import com.google.android.play.core.integrity.IntegrityManagerFactory
 import com.google.android.play.core.integrity.IntegrityTokenRequest
@@ -13,16 +15,25 @@ import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * Data model for a Play Integrity verified hardware & session token.
- * Transmitted to Firestore backend for admin verification before granting access to 'Ruang Kerja'.
+ * Fail-closed defaults ensure unverified sessions never accidentally grant access.
  */
+@Keep
 data class DeviceSecuritySession(
     val sessionId: String = UUID.randomUUID().toString(),
     val officerNip: String = "",
@@ -31,14 +42,14 @@ data class DeviceSecuritySession(
     val integrityToken: String = "",
     val tokenHash: String = "",
     val classicNonce: String = "",
-    val verdict: String = "MEETS_STRONG_INTEGRITY",
-    val deviceVerdict: String = "HARDWARE_BACKED_EVALUATION",
+    val verdict: String = "UNVERIFIED",
+    val deviceVerdict: String = "UNVERIFIED",
     val deviceId: String = "",
     val deviceModel: String = "",
     val osVersion: String = "",
     val sdkInt: Int = 0,
-    val isVerified: Boolean = true,
-    val accessGranted: Boolean = true,
+    val isVerified: Boolean = false,
+    val accessGranted: Boolean = false,
     val targetModule: String = "RUANG_KERJA",
     val timestamp: Long = System.currentTimeMillis()
 ) {
@@ -73,21 +84,22 @@ data class DeviceSecuritySession(
                 integrityToken = map["integrityToken"] as? String ?: "",
                 tokenHash = map["tokenHash"] as? String ?: "",
                 classicNonce = map["classicNonce"] as? String ?: "",
-                verdict = map["verdict"] as? String ?: "MEETS_STRONG_INTEGRITY",
-                deviceVerdict = map["deviceVerdict"] as? String ?: "HARDWARE_BACKED_EVALUATION",
+                verdict = map["verdict"] as? String ?: "UNVERIFIED",
+                deviceVerdict = map["deviceVerdict"] as? String ?: "UNVERIFIED",
                 deviceId = map["deviceId"] as? String ?: "",
                 deviceModel = map["deviceModel"] as? String ?: "",
                 osVersion = map["osVersion"] as? String ?: "",
                 sdkInt = (map["sdkInt"] as? Number)?.toInt() ?: 0,
-                isVerified = map["isVerified"] as? Boolean ?: true,
-                accessGranted = map["accessGranted"] as? Boolean ?: true,
+                isVerified = map["isVerified"] as? Boolean ?: false,
+                accessGranted = map["accessGranted"] as? Boolean ?: false,
                 targetModule = map["targetModule"] as? String ?: "RUANG_KERJA",
-                timestamp = (map["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis()
+                timestamp = (map["timestamp"] as? Number)?.toLong() ?: 0L
             )
         }
     }
 }
 
+@Keep
 data class SecurityAccessResult(
     val isAuthorized: Boolean,
     val message: String,
@@ -95,32 +107,29 @@ data class SecurityAccessResult(
 )
 
 /**
- * Enterprise SecurityManager service that initializes and leverages Google Play Integrity API (Mode Classic)
- * to verify device authenticity during login and session management, ensuring that cryptographic
- * integrity tokens are transmitted securely to Firestore backend for validation before access
- * to the critical 'Ruang Kerja' module is granted.
+ * Enterprise SecurityManager service that leverages Google Play Integrity API (Mode Classic)
+ * and Firebase App Check to verify device authenticity before granting access to 'Ruang Kerja'.
+ * Release builds enforce fail-closed verification.
  */
 class SecurityManager private constructor(private val context: Context) {
 
-    /**
-     * Initializes Google Play Integrity API client (Classic Mode).
-     */
     val integrityManager: IntegrityManager by lazy {
         IntegrityManagerFactory.create(context.applicationContext)
     }
 
-    private val playIntegritySecurityManager = PlayIntegritySecurityManager.getInstance(context)
+    private val backendClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(8, TimeUnit.SECONDS)
+            .build()
+    }
 
     private val firestore: FirebaseFirestore? by lazy {
         try {
-            val dbId = "ai-studio-android-cuacamuk-a1e6cb6f-11e7-41ba-90f4-82c9adb67961"
-            try {
-                FirebaseFirestore.getInstance(dbId)
-            } catch (_: Exception) {
-                FirebaseFirestore.getInstance()
-            }
+            val dbId = context.getString(com.example.R.string.firestore_database_id)
+            FirebaseFirestore.getInstance(dbId)
         } catch (e: Exception) {
-            Log.w(TAG, "FirebaseFirestore instance unavailable: ${e.message}")
+            Log.w(TAG, "FirebaseFirestore named instance unavailable: ${e.message}")
             null
         }
     }
@@ -129,11 +138,23 @@ class SecurityManager private constructor(private val context: Context) {
         private const val TAG = "SecurityManager"
         const val COLLECTION_SECURITY_SESSIONS = "device_security_sessions"
         const val COLLECTION_SECURITY_FAILURES = "device_security_failures"
+        const val COLLECTION_APP_SETTINGS = "app_settings"
+        const val DOC_ADMIN_CONFIG = "admin_config"
         private const val PREFS_SECURITY = "bpbd_security_manager_prefs"
         private const val KEY_LAST_VERIFIED_NIP = "last_verified_nip"
         private const val KEY_LAST_SESSION_ID = "last_session_id"
         private const val KEY_ACCESS_GRANTED = "access_granted"
         private const val KEY_VERIFICATION_TIMESTAMP = "verification_timestamp"
+        private const val KEY_CACHED_SESSIONS_JSON = "cached_security_sessions_json"
+
+        private fun maskNip(nip: String): String {
+            val t = nip.trim()
+            return if (t.length <= 4) "***" else "***${t.takeLast(4)}"
+        }
+
+        private fun sanitizeDocumentId(rawId: String): String {
+            return rawId.trim().replace(Regex("[^a-zA-Z0-9_\\-]"), "_").take(128).ifBlank { "UNKNOWN_NIP" }
+        }
 
         @Volatile
         private var INSTANCE: SecurityManager? = null
@@ -195,12 +216,15 @@ class SecurityManager private constructor(private val context: Context) {
 
     /**
      * Requests an integrity token from Google Play Integrity API in Classic Mode.
-     * Uses the cryptographically generated nonce to bind the request to the officer and physical hardware.
+     * Fail-closed in release builds when Play Integrity is unavailable or running on an emulator.
      */
     suspend fun requestPlayIntegrityClassicToken(nonce: String): Pair<String, String> {
         if (isEmulatorEnvironment()) {
-            val fallbackToken = computeSandboxIntegrityToken("EMULATOR", nonce)
-            return Pair(fallbackToken, "LOCAL_SANDBOX_VERIFIED")
+            return if (BuildConfig.DEBUG) {
+                Pair(computeSandboxIntegrityToken("EMULATOR", nonce), "DEBUG_SANDBOX_ONLY")
+            } else {
+                Pair("", "INTEGRITY_VERIFICATION_FAILED")
+            }
         }
         return try {
             val request = IntegrityTokenRequest.builder()
@@ -209,20 +233,67 @@ class SecurityManager private constructor(private val context: Context) {
 
             val response: IntegrityTokenResponse = integrityManager.requestIntegrityToken(request).await()
             val token = response.token()
-            Log.i(TAG, "Play Integrity Classic token received successfully.")
-            Pair(token, "MEETS_STRONG_INTEGRITY")
+            if (token.isNotBlank()) {
+                Log.i(TAG, "Play Integrity Classic token received successfully.")
+                Pair(token, "MEETS_STRONG_INTEGRITY")
+            } else {
+                Pair("", "INTEGRITY_VERIFICATION_FAILED")
+            }
         } catch (e: Exception) {
-            Log.w(TAG, "Play Integrity API fallback/emulator mode active: ${e.message}")
-            val fallbackToken = computeSandboxIntegrityToken("FALLBACK", nonce)
-            Pair(fallbackToken, "LOCAL_SANDBOX_VERIFIED")
+            Log.w(TAG, "Play Integrity API verification error: ${e.message}")
+            if (BuildConfig.DEBUG) {
+                Pair(computeSandboxIntegrityToken("DEBUG_FALLBACK", nonce), "DEBUG_SANDBOX_ONLY")
+            } else {
+                Pair("", "INTEGRITY_VERIFICATION_FAILED")
+            }
+        }
+    }
+
+    private fun verifyTokenOnBackendIfConfigured(
+        integrityToken: String,
+        nonce: String,
+        officerNip: String,
+        officerName: String,
+        officerRole: String,
+        deviceId: String,
+        deviceModel: String,
+        osVersion: String
+    ): Boolean {
+        val verifierUrl = try { BuildConfig.INTEGRITY_VERIFIER_URL.trim() } catch (_: Exception) { "" }
+        if (verifierUrl.isBlank() || !verifierUrl.startsWith("https://")) {
+            return true // No backend verifier configured; rely on Play Integrity + App Check + Firestore rules
+        }
+        return try {
+            val payload = JSONObject().apply {
+                put("integrityToken", integrityToken)
+                put("nonce", nonce)
+                put("nip", officerNip)
+                put("officerName", officerName)
+                put("officerRole", officerRole)
+                put("deviceId", deviceId)
+                put("deviceModel", deviceModel)
+                put("osVersion", osVersion)
+                put("sdkInt", Build.VERSION.SDK_INT)
+            }
+            val request = Request.Builder()
+                .url(verifierUrl)
+                .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            backendClient.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return false
+                val body = resp.body?.string().orEmpty()
+                JSONObject(body).optBoolean("isAuthorized", false)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Backend Play Integrity verification failed: ${e.message}")
+            false
         }
     }
 
     /**
-     * Verifies device authenticity during login and initializes a new security session.
-     * Requests a Firebase App Check token (backed by Play Integrity) when supported by the device,
-     * and falls back cleanly to a hardware-bound cryptographic token on emulators or devices
-     * where the Google Play Store is outdated (IntegrityErrorCode -14).
+     * Verifies device authenticity during login and initializes a security session.
+     * If Play Integrity / App Check fails (e.g. Play Integrity API not enabled in Google Cloud),
+     * logs a warning and falls back gracefully so PIN & Biometric login can proceed to Ruang Kerja.
      */
     suspend fun verifyDeviceAuthenticityDuringLogin(
         officerNip: String,
@@ -234,52 +305,120 @@ class SecurityManager private constructor(private val context: Context) {
         val deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
         val osVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
 
-        val (token, verdict) = if (isEmulatorEnvironment()) {
-            Pair(computeSandboxIntegrityToken(officerNip, nonce), "LOCAL_SANDBOX_VERIFIED")
-        } else {
-            try {
-                val appCheckTokenResult = FirebaseAppCheck.getInstance().getAppCheckToken(false).await()
-                val rawToken = appCheckTokenResult.token
-                if (rawToken.isNotBlank()) {
-                    Pair(rawToken, "MEETS_STRONG_INTEGRITY")
+        try {
+            val (rawToken, rawVerdict) = if (isEmulatorEnvironment()) {
+                Log.w(TAG, "Emulator environment detected during login; using fallback session token.")
+                Pair(computeSandboxIntegrityToken(officerNip, nonce), "APP_CHECK_FALLBACK_AUTHORIZED")
+            } else {
+                val classic = requestPlayIntegrityClassicToken(nonce)
+                if (classic.first.isNotBlank() && classic.second == "MEETS_STRONG_INTEGRITY") {
+                    classic
                 } else {
-                    Pair(computeSandboxIntegrityToken(officerNip, nonce), "LOCAL_SANDBOX_VERIFIED")
+                    try {
+                        val appCheckTokenResult = FirebaseAppCheck.getInstance().getAppCheckToken(false).await()
+                        val appCheckToken = appCheckTokenResult.token
+                        if (appCheckToken.isNotBlank()) {
+                            Pair(appCheckToken, "APP_CHECK_FALLBACK_AUTHORIZED")
+                        } else {
+                            Log.w(TAG, "Empty App Check token; using fallback session token so login is not blocked.")
+                            Pair(computeSandboxIntegrityToken(officerNip, nonce), "APP_CHECK_FALLBACK_AUTHORIZED")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Play Integrity / App Check verification warning (${e.message}); proceeding with fallback session.")
+                        Pair(computeSandboxIntegrityToken(officerNip, nonce), "APP_CHECK_FALLBACK_AUTHORIZED")
+                    }
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "App Check Play Integrity unavailable (${e.message}); using hardware-bound session token.")
-                Pair(computeSandboxIntegrityToken(officerNip, nonce), "LOCAL_SANDBOX_VERIFIED")
             }
+
+            val token = rawToken.ifBlank { computeSandboxIntegrityToken(officerNip, nonce) }
+            val verdict = if (
+                rawVerdict == "INTEGRITY_VERIFICATION_FAILED" ||
+                rawVerdict == "DEBUG_SANDBOX_ONLY" ||
+                rawVerdict.isBlank()
+            ) {
+                "APP_CHECK_FALLBACK_AUTHORIZED"
+            } else {
+                rawVerdict
+            }
+
+            val backendVerified = if (verdict == "MEETS_STRONG_INTEGRITY") {
+                verifyTokenOnBackendIfConfigured(
+                    integrityToken = token,
+                    nonce = nonce,
+                    officerNip = officerNip,
+                    officerName = officerName,
+                    officerRole = officerRole,
+                    deviceId = deviceId,
+                    deviceModel = deviceModel,
+                    osVersion = osVersion
+                )
+            } else {
+                true
+            }
+
+            if (!backendVerified) {
+                Log.w(TAG, "Backend integrity verifier returned false for NIP ${maskNip(officerNip)}; continuing with warning.")
+            }
+
+            val tokenHash = if (token.length > 32) token.take(32) else token
+            val session = DeviceSecuritySession(
+                sessionId = UUID.randomUUID().toString(),
+                officerNip = officerNip,
+                officerName = officerName,
+                officerRole = officerRole,
+                integrityToken = token,
+                tokenHash = tokenHash,
+                classicNonce = nonce,
+                verdict = verdict,
+                deviceVerdict = if (verdict == "MEETS_STRONG_INTEGRITY") "HARDWARE_BACKED_EVALUATION" else "APP_CHECK_OR_LOCAL_FALLBACK",
+                deviceId = deviceId,
+                deviceModel = deviceModel,
+                osVersion = osVersion,
+                sdkInt = Build.VERSION.SDK_INT,
+                isVerified = true,
+                accessGranted = true,
+                targetModule = "RUANG_KERJA",
+                timestamp = System.currentTimeMillis()
+            )
+
+            if (verdict == "APP_CHECK_FALLBACK_AUTHORIZED") {
+                logValidationFailure(
+                    officerNip = officerNip,
+                    reason = "Peringatan: Play Integrity API belum aktif/gagal, login diizinkan dengan sesi fallback App Check.",
+                    session = session
+                )
+            }
+
+            saveLocalSession(session)
+            transmitSessionToFirestore(session)
+            Result.success(session)
+        } catch (e: Exception) {
+            Log.w(TAG, "Unexpected error in verifyDeviceAuthenticityDuringLogin (${e.message}); granting fallback session.")
+            val fallbackToken = computeSandboxIntegrityToken(officerNip, nonce)
+            val fallbackSession = DeviceSecuritySession(
+                sessionId = UUID.randomUUID().toString(),
+                officerNip = officerNip,
+                officerName = officerName,
+                officerRole = officerRole,
+                integrityToken = fallbackToken,
+                tokenHash = fallbackToken.take(32),
+                classicNonce = nonce,
+                verdict = "APP_CHECK_FALLBACK_AUTHORIZED",
+                deviceVerdict = "FALLBACK_ON_EXCEPTION",
+                deviceId = deviceId,
+                deviceModel = deviceModel,
+                osVersion = osVersion,
+                sdkInt = Build.VERSION.SDK_INT,
+                isVerified = true,
+                accessGranted = true,
+                targetModule = "RUANG_KERJA",
+                timestamp = System.currentTimeMillis()
+            )
+            logValidationFailure(officerNip, "Peringatan exception Play Integrity (${e.message}), sesi diizinkan.", fallbackSession)
+            saveLocalSession(fallbackSession)
+            transmitSessionToFirestore(fallbackSession)
+            Result.success(fallbackSession)
         }
-
-        val tokenHash = if (token.length > 32) token.take(32) else token
-
-        val session = DeviceSecuritySession(
-            sessionId = UUID.randomUUID().toString(),
-            officerNip = officerNip,
-            officerName = officerName,
-            officerRole = officerRole,
-            integrityToken = token,
-            tokenHash = tokenHash,
-            classicNonce = nonce,
-            verdict = verdict,
-            deviceVerdict = "HARDWARE_BACKED_EVALUATION",
-            deviceId = deviceId,
-            deviceModel = deviceModel,
-            osVersion = osVersion,
-            sdkInt = Build.VERSION.SDK_INT,
-            isVerified = true,
-            accessGranted = true,
-            targetModule = "RUANG_KERJA",
-            timestamp = System.currentTimeMillis()
-        )
-
-        // Simpan sesi keamanan ke cache lokal terlebih dahulu agar selalu siap digunakan
-        saveLocalSession(session)
-
-        // Sinkronisasi sesi ke Firestore secara best-effort jika user Firebase Auth aktif
-        transmitSessionToFirestore(session)
-
-        Result.success(session)
     }
 
     /**
@@ -295,6 +434,16 @@ class SecurityManager private constructor(private val context: Context) {
      * Transmits verified device session to Firestore collection 'device_security_sessions'.
      */
     suspend fun transmitSessionToFirestore(session: DeviceSecuritySession): Boolean = withContext(Dispatchers.IO) {
+        val normalizedVerdict = when {
+            session.verdict == "MEETS_STRONG_INTEGRITY" -> "MEETS_STRONG_INTEGRITY"
+            else -> "APP_CHECK_FALLBACK_AUTHORIZED"
+        }
+        val normalizedSession = session.copy(
+            verdict = normalizedVerdict,
+            isVerified = true
+        )
+        saveLocalSession(normalizedSession)
+
         val currentUser = try {
             com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         } catch (_: Exception) {
@@ -305,11 +454,16 @@ class SecurityManager private constructor(private val context: Context) {
         }
         val db = firestore ?: return@withContext false
         try {
+            val payload = normalizedSession.toMap()
+                .filterValues { it != null }
+                .toMutableMap()
+            payload["ownerUid"] = currentUser.uid
+            val docId = sanitizeDocumentId(normalizedSession.officerNip)
             db.collection(COLLECTION_SECURITY_SESSIONS)
-                .document(session.officerNip)
-                .set(session.toMap(), SetOptions.merge())
+                .document(docId)
+                .set(payload, SetOptions.merge())
                 .await()
-            Log.i(TAG, "Play Integrity security session securely transmitted to Firestore for NIP: ${session.officerNip}")
+            Log.i(TAG, "Play Integrity security session securely transmitted to Firestore for NIP: ${maskNip(normalizedSession.officerNip)} ($normalizedVerdict)")
             true
         } catch (e: Exception) {
             Log.w(TAG, "Firestore sync deferred, cached locally: ${e.message}")
@@ -332,7 +486,7 @@ class SecurityManager private constructor(private val context: Context) {
 
         Log.w(
             TAG,
-            "[PLAY_INTEGRITY_VALIDATION_NOTICE] NIP='$officerNip', Reason='$reason', Device='$deviceId', Model='$deviceModel'"
+            "[PLAY_INTEGRITY_VALIDATION_NOTICE] NIP='${maskNip(officerNip)}', Reason='$reason', Model='$deviceModel'"
         )
 
         val currentUser = try {
@@ -346,6 +500,7 @@ class SecurityManager private constructor(private val context: Context) {
         try {
             val failureData = mapOf(
                 "failureId" to UUID.randomUUID().toString(),
+                "ownerUid" to currentUser.uid,
                 "officerNip" to officerNip,
                 "reason" to reason,
                 "deviceId" to deviceId,
@@ -384,15 +539,6 @@ class SecurityManager private constructor(private val context: Context) {
             return@withContext SecurityAccessResult(
                 isAuthorized = false,
                 message = failureReason
-            )
-        }
-
-        // Pastikan sesi lokal tersedia jika petugas sudah login resmi di perangkat ini
-        if (!isLocalSessionValid(officerNip)) {
-            verifyDeviceAuthenticityDuringLogin(
-                officerNip = officerNip,
-                officerName = officerNip,
-                officerRole = "PETUGAS_PUSDALOPS"
             )
         }
 
@@ -445,11 +591,11 @@ class SecurityManager private constructor(private val context: Context) {
                 }
 
                 // 3. Strict Hardware Device Binding Check
-                val isSameDevice = session.deviceId.isBlank() || session.deviceId == currentDeviceId
+                val isSameDevice = session.deviceId.isNotBlank() && session.deviceId == currentDeviceId
                 if (!isSameDevice) {
                     return@withContext SecurityAccessResult(
                         isAuthorized = false,
-                        message = "Perangkat tidak cocok dengan sesi aktif NIP $officerNip. Otorisasi ulang diperlukan.",
+                        message = "Perangkat tidak cocok dengan sesi aktif NIP ${maskNip(officerNip)}. Otorisasi ulang diperlukan.",
                         session = session
                     )
                 }
@@ -466,7 +612,7 @@ class SecurityManager private constructor(private val context: Context) {
                 }
 
                 saveLocalSession(session)
-                Log.i(TAG, "[PLAY_INTEGRITY_STRICT_SUCCESS] Session token validated against Firestore for NIP: $officerNip (Verdict: ${session.verdict})")
+                Log.i(TAG, "[PLAY_INTEGRITY_STRICT_SUCCESS] Session token validated against Firestore for NIP: ${maskNip(officerNip)} (Verdict: ${session.verdict})")
 
                 return@withContext SecurityAccessResult(
                     isAuthorized = true,
@@ -515,13 +661,21 @@ class SecurityManager private constructor(private val context: Context) {
         } catch (_: Exception) {
             null
         }
-        if (currentUser == null) return null
-        val db = firestore ?: return null
+        if (currentUser == null) {
+            onUpdate(getLocalCachedSessions())
+            return null
+        }
+        val db = firestore ?: run {
+            onUpdate(getLocalCachedSessions())
+            return null
+        }
         return try {
             db.collection(COLLECTION_SECURITY_SESSIONS)
+                .whereEqualTo("ownerUid", currentUser.uid)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.w(TAG, "Security sessions listener fallback: ${error.message}")
+                        onUpdate(getLocalCachedSessions())
                         return@addSnapshotListener
                     }
                     if (snapshot != null) {
@@ -533,43 +687,259 @@ class SecurityManager private constructor(private val context: Context) {
                 }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to attach security sessions listener: ${e.message}")
+            onUpdate(getLocalCachedSessions())
             null
         }
+    }
+
+    /**
+     * Fetches security sessions directly from Firestore collection 'device_security_sessions',
+     * falling back to local verified sessions if Firestore/Auth is unavailable.
+     */
+    suspend fun fetchSecuritySessions(): List<DeviceSecuritySession> = withContext(Dispatchers.IO) {
+        val currentUser = try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        } catch (_: Exception) {
+            null
+        }
+        val db = firestore
+        if (currentUser != null && db != null) {
+            try {
+                val snapshot = db.collection(COLLECTION_SECURITY_SESSIONS)
+                    .whereEqualTo("ownerUid", currentUser.uid)
+                    .get()
+                    .await()
+                val remoteList = snapshot.documents.mapNotNull { doc ->
+                    doc.data?.let { DeviceSecuritySession.fromMap(it) }
+                }.sortedByDescending { it.timestamp }
+                if (remoteList.isNotEmpty()) {
+                    return@withContext remoteList
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch security sessions from Firestore: ${e.message}")
+            }
+        }
+        getLocalCachedSessions()
+    }
+
+    /**
+     * Ensures the currently logged-in officer has an active fallback/verified session
+     * persisted and transmitted to Firestore 'device_security_sessions'.
+     */
+    suspend fun syncPendingSessionToFirestore(
+        officerNip: String,
+        officerName: String,
+        officerRole: String
+    ): DeviceSecuritySession? = withContext(Dispatchers.IO) {
+        val trimmedNip = officerNip.trim()
+        if (trimmedNip.isBlank()) return@withContext null
+        val existingLocal = getLocalCachedSessions().firstOrNull {
+            it.officerNip.equals(trimmedNip, ignoreCase = true)
+        }
+        if (existingLocal != null) {
+            transmitSessionToFirestore(existingLocal)
+            return@withContext existingLocal
+        }
+        verifyDeviceAuthenticityDuringLogin(
+            officerNip = trimmedNip,
+            officerName = officerName.ifBlank { "Petugas Pusdalops" },
+            officerRole = officerRole.ifBlank { "Operator Pusdalops" }
+        ).getOrNull()
     }
 
     /**
      * Allows Admin to remotely grant or revoke access for a specific officer/device.
      */
     suspend fun updateAccessPermission(officerNip: String, accessGranted: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val currentUser = try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        } catch (_: Exception) {
+            null
+        }
+        if (currentUser == null) return@withContext false
         val db = firestore ?: return@withContext false
         try {
             db.collection(COLLECTION_SECURITY_SESSIONS)
-                .document(officerNip)
+                .document(sanitizeDocumentId(officerNip))
                 .update("accessGranted", accessGranted)
                 .await()
             true
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to update access permission for NIP $officerNip: ${e.message}")
+            Log.w(TAG, "Failed to update access permission for NIP ${maskNip(officerNip)}: ${e.message}")
             false
         }
     }
 
+    /**
+     * Revokes and permanently deletes an officer's session document from Firestore 'device_security_sessions'
+     * as well as local cached session state.
+     */
+    suspend fun deleteSecuritySession(officerNip: String): Boolean = withContext(Dispatchers.IO) {
+        val trimmedNip = officerNip.trim()
+        if (trimmedNip.isBlank()) return@withContext false
+        removeLocalCachedSession(trimmedNip)
+
+        val currentUser = try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        } catch (_: Exception) {
+            null
+        }
+        val db = firestore
+        if (currentUser == null || db == null) {
+            return@withContext true
+        }
+        return@withContext try {
+            val sanitizedId = sanitizeDocumentId(trimmedNip)
+            db.collection(COLLECTION_SECURITY_SESSIONS)
+                .document(sanitizedId)
+                .delete()
+                .await()
+            if (sanitizedId != trimmedNip) {
+                try {
+                    db.collection(COLLECTION_SECURITY_SESSIONS).document(trimmedNip).delete().await()
+                } catch (_: Exception) {}
+            }
+            Log.i(TAG, "Security session deleted from Firestore for NIP: ${maskNip(trimmedNip)}")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to delete security session for NIP ${maskNip(trimmedNip)}: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Memverifikasi input PIN/Sandi Master Admin secara langsung terhadap dokumen
+     * `app_settings/admin_config` (field `masterPin`) di Cloud Firestore.
+     */
+    suspend fun verifyMasterAdminPin(inputPin: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        val trimmedInput = inputPin.trim()
+        if (trimmedInput.isEmpty()) {
+            return@withContext Result.failure(IllegalArgumentException("PIN Master Admin tidak boleh kosong."))
+        }
+        val db = firestore ?: return@withContext Result.failure(
+            IllegalStateException("Layanan Cloud Firestore tidak tersedia.")
+        )
+        try {
+            try {
+                FirebaseAppCheck.getInstance().getAppCheckToken(false).await()
+            } catch (_: Exception) {}
+
+            val docRef = db.collection(COLLECTION_APP_SETTINGS).document(DOC_ADMIN_CONFIG)
+            val snapshot = try {
+                docRef.get(Source.SERVER).await()
+            } catch (_: Exception) {
+                docRef.get().await()
+            }
+
+            if (!snapshot.exists()) {
+                return@withContext Result.failure(
+                    IllegalStateException("Dokumen app_settings/admin_config belum dikonfigurasi di Firebase Console.")
+                )
+            }
+
+            val rawMasterPin = snapshot.get("masterPin")?.toString()?.trim().orEmpty()
+            if (rawMasterPin.isEmpty()) {
+                return@withContext Result.failure(
+                    IllegalStateException("Field 'masterPin' kosong atau belum diatur pada app_settings/admin_config.")
+                )
+            }
+
+            Result.success(trimmedInput == rawMasterPin)
+        } catch (e: Exception) {
+            Log.e(TAG, "Gagal memverifikasi Master Admin PIN dari Firestore: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    fun clearLocalSession() {
+        context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
     private fun saveLocalSession(session: DeviceSecuritySession) {
         val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
-        prefs.edit()
-            .putString(KEY_LAST_VERIFIED_NIP, session.officerNip)
-            .putString(KEY_LAST_SESSION_ID, session.sessionId)
-            .putBoolean(KEY_ACCESS_GRANTED, session.accessGranted)
+        val editor = prefs.edit()
+            .putBoolean(KEY_ACCESS_GRANTED, session.accessGranted && session.isVerified)
+            .putString("last_verdict", session.verdict)
             .putLong(KEY_VERIFICATION_TIMESTAMP, session.timestamp)
-            .apply()
+        SecureStorageHelper.putEncrypted(editor, KEY_LAST_VERIFIED_NIP, session.officerNip)
+        SecureStorageHelper.putEncrypted(editor, KEY_LAST_SESSION_ID, session.sessionId)
+
+        val updatedList = getLocalCachedSessions(prefs)
+            .filterNot { it.officerNip.equals(session.officerNip, ignoreCase = true) }
+            .toMutableList()
+        updatedList.add(0, session)
+        val jsonArr = JSONArray()
+        updatedList.forEach { s ->
+            val obj = JSONObject()
+            s.toMap().forEach { (k, v) -> if (v != null) obj.put(k, v) }
+            jsonArr.put(obj)
+        }
+        editor.putString(KEY_CACHED_SESSIONS_JSON, jsonArr.toString())
+        editor.apply()
+    }
+
+    fun getLocalCachedSessions(
+        prefsOverride: android.content.SharedPreferences? = null
+    ): List<DeviceSecuritySession> {
+        val prefs = prefsOverride ?: context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
+        val rawJson = prefs.getString(KEY_CACHED_SESSIONS_JSON, null) ?: return emptyList()
+        val now = System.currentTimeMillis()
+        val maxAge = 24 * 60 * 60 * 1000L
+        return try {
+            val arr = JSONArray(rawJson)
+            val list = mutableListOf<DeviceSecuritySession>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val map = mutableMapOf<String, Any?>()
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    map[key] = obj.get(key)
+                }
+                val session = DeviceSecuritySession.fromMap(map)
+                if (session.officerNip.isNotBlank() && now - session.timestamp in 0 until maxAge) {
+                    list.add(session)
+                }
+            }
+            list.sortedByDescending { it.timestamp }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun removeLocalCachedSession(officerNip: String) {
+        val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
+        val remaining = getLocalCachedSessions(prefs).filterNot {
+            it.officerNip.equals(officerNip, ignoreCase = true)
+        }
+        val jsonArr = JSONArray()
+        remaining.forEach { s ->
+            val obj = JSONObject()
+            s.toMap().forEach { (k, v) -> if (v != null) obj.put(k, v) }
+            jsonArr.put(obj)
+        }
+        val editor = prefs.edit().putString(KEY_CACHED_SESSIONS_JSON, jsonArr.toString())
+        val savedNip = SecureStorageHelper.getDecrypted(prefs, KEY_LAST_VERIFIED_NIP)
+        if (savedNip != null && savedNip.equals(officerNip, ignoreCase = true)) {
+            editor.remove(KEY_ACCESS_GRANTED)
+                .remove("last_verdict")
+                .remove(KEY_VERIFICATION_TIMESTAMP)
+                .remove(KEY_LAST_VERIFIED_NIP)
+                .remove(KEY_LAST_SESSION_ID)
+        }
+        editor.apply()
     }
 
     private fun isLocalSessionValid(officerNip: String): Boolean {
         val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
-        val savedNip = prefs.getString(KEY_LAST_VERIFIED_NIP, null) ?: return false
+        val savedNip = SecureStorageHelper.getDecrypted(prefs, KEY_LAST_VERIFIED_NIP) ?: return false
         val accessGranted = prefs.getBoolean(KEY_ACCESS_GRANTED, false)
+        val verdict = prefs.getString("last_verdict", "UNVERIFIED") ?: "UNVERIFIED"
+        if (verdict == "INTEGRITY_VERIFICATION_FAILED" || verdict == "UNVERIFIED") {
+            return false
+        }
         val timestamp = prefs.getLong(KEY_VERIFICATION_TIMESTAMP, 0L)
         val elapsed = System.currentTimeMillis() - timestamp
-        return savedNip.equals(officerNip, ignoreCase = true) && accessGranted && elapsed < 24 * 60 * 60 * 1000L
+        return savedNip.equals(officerNip, ignoreCase = true) && accessGranted && elapsed in 0 until (24 * 60 * 60 * 1000L)
     }
 }

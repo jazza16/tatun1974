@@ -1568,7 +1568,7 @@ private fun InteractiveDonutPieChartCanvas(
  * laporan warga real-time (`CitizenDisasterReport`), database lokal (`LaporanHarianEntity`),
  * dan profil kejadian historis BPBD Kabupaten Mukomuko.
  */
-private fun buildMonthlyDisasterSummaries(
+internal fun buildMonthlyDisasterSummaries(
     reports: List<CitizenDisasterReport>,
     selectedYear: Int,
     districtFilter: String?
@@ -1658,7 +1658,7 @@ private fun buildMonthlyDisasterSummaries(
 /**
  * Membangun potongan data Pie / Donut Chart berdasarkan mode terpilih.
  */
-private fun buildPieSlices(
+internal fun buildPieSlices(
     monthlyList: List<MonthlyDisasterSummary>,
     reports: List<CitizenDisasterReport>,
     pieMode: Int

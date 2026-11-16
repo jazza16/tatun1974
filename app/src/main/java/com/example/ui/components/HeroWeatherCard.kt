@@ -183,40 +183,53 @@ fun HeroWeatherCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
                         Row(verticalAlignment = Alignment.Top) {
                             Text(
                                 text = "${current.temperature.toInt()}",
-                                fontSize = 68.sp,
+                                fontSize = 60.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
-                                lineHeight = 68.sp,
-                                modifier = Modifier.weight(1f, fill = false),
+                                lineHeight = 62.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            Spacer(modifier = Modifier.width(2.dp))
                             Text(
                                 text = "°C",
-                                fontSize = 28.sp,
+                                fontSize = 26.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White.copy(alpha = 0.9f),
-                                modifier = Modifier.padding(top = 8.dp).weight(0.5f, fill = false),
+                                modifier = Modifier.padding(top = 6.dp),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
 
-                        Text(
-                            text = "Terasa seperti ${current.feelsLike.toInt()}°C",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White.copy(alpha = 0.95f)
-                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Terasa seperti ${current.feelsLike.toInt()}°C",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White.copy(alpha = 0.95f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
+
+                    Spacer(modifier = Modifier.width(12.dp))
 
                     // Condition Badge & Dynamic Animated Weather Icon
                     Column(
-                        horizontalAlignment = Alignment.End
+                        horizontalAlignment = Alignment.End,
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
                         Surface(
                             color = Color.White.copy(alpha = 0.22f),
@@ -229,12 +242,12 @@ fun HeroWeatherCard(
                                 DynamicWeatherIcon(
                                     weatherCode = current.weatherCode,
                                     isDay = current.isDay,
-                                    size = 38.dp
+                                    size = 34.dp
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = weatherInfo.conditionText,
-                                    fontSize = 16.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
                                     maxLines = 1,

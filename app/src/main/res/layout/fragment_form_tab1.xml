@@ -118,17 +118,23 @@
 
                 <!-- 1. Dropdown Jenis Bencana -->
                 <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="Pilih Jenis Bencana"
                     app:boxStrokeColor="#1976D2"
+                    app:endIconMode="custom"
+                    app:endIconDrawable="@android:drawable/arrow_down_float"
                     android:layout_marginBottom="12dp">
 
                     <AutoCompleteTextView
                         android:id="@+id/dropdownJenisBencana"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:padding="14dp"
+                        android:focusable="false"
+                        android:clickable="true"
+                        android:cursorVisible="false"
                         android:inputType="none"
                         android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
@@ -145,7 +151,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginEnd="8dp"
+                        android:layout_marginEnd="6dp"
                         android:hint="Tanggal"
                         app:endIconMode="custom"
                         app:endIconDrawable="@android:drawable/ic_menu_my_calendar">
@@ -154,6 +160,10 @@
                             android:id="@+id/etTanggalKejadian"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="6dp"
+                            android:textSize="13sp"
+                            android:singleLine="true"
                             android:focusable="false"
                             android:clickable="true"
                             android:textColor="#333333"/>
@@ -164,7 +174,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginStart="8dp"
+                        android:layout_marginStart="6dp"
                         android:hint="Waktu"
                         app:endIconMode="custom"
                         app:endIconDrawable="@android:drawable/ic_menu_recent_history">
@@ -173,6 +183,10 @@
                             android:id="@+id/etWaktuKejadian"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="6dp"
+                            android:textSize="13sp"
+                            android:singleLine="true"
                             android:focusable="false"
                             android:clickable="true"
                             android:textColor="#333333"/>
@@ -181,17 +195,23 @@
 
                 <!-- 3. Pilih Kecamatan (15 Kecamatan Mukomuko - Integrasi Cuaca Otomatis) -->
                 <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="Pilih Kecamatan (15 Kecamatan)"
                     app:boxStrokeColor="#1976D2"
+                    app:endIconMode="custom"
+                    app:endIconDrawable="@android:drawable/arrow_down_float"
                     android:layout_marginBottom="12dp">
 
                     <AutoCompleteTextView
                         android:id="@+id/dropdownKecamatan"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:padding="14dp"
+                        android:focusable="false"
+                        android:clickable="true"
+                        android:cursorVisible="false"
                         android:inputType="none"
                         android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>

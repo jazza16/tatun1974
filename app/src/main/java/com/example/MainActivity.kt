@@ -12,10 +12,22 @@ import com.example.model.MukomukoDistricts
 import com.example.util.WeatherAlertSettings
 
 import android.Manifest
+import android.app.AlertDialog
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
+import com.github.javiersantos.appupdater.AppUpdater
+import com.github.javiersantos.appupdater.AppUpdaterUtils
+import com.github.javiersantos.appupdater.enums.AppUpdaterError
+import com.github.javiersantos.appupdater.enums.Display
+import com.github.javiersantos.appupdater.enums.UpdateFrom
+import com.github.javiersantos.appupdater.objects.Update
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -90,6 +102,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -150,34 +163,86 @@ import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import com.example.ui.theme.OrangeSecondary
 import com.example.ui.theme.WeatherGoodGreen
+import com.example.ui.theme.geminiGradientBorder
 import com.example.ui.viewmodel.AiWeatherViewModel
 import com.example.ui.viewmodel.WeatherViewModel
 import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.FirebaseAppCheck
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
+import com.google.firebase.appcheck.recaptcha.RecaptchaAppCheckProviderFactory
+
+private const val APP_CHECK_TAG = "AppCheckInit"
+private const val DEBUG_TOKEN_EXTRA = "FIREBASE_APPCHECK_DEBUG_TOKEN"
+private const val DEBUG_STORE_PREFIX = "com.google.firebase.appcheck.debug.store."
+private const val DEBUG_SECRET_KEY = "com.google.firebase.appcheck.debug.DEBUG_SECRET"
+private const val RECAPTCHA_SITE_KEY_RES = "recaptcha_site_key"
+
+fun configureAppCheck(context: Context, intent: Intent?) {
+    try {
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+
+        if (BuildConfig.DEBUG) {
+            val debugToken = intent?.getStringExtra(DEBUG_TOKEN_EXTRA)
+            if (!debugToken.isNullOrEmpty()) {
+                val persistenceKey = FirebaseApp.getInstance().persistenceKey
+                val prefs = context.getSharedPreferences(
+                    "$DEBUG_STORE_PREFIX$persistenceKey",
+                    Context.MODE_PRIVATE
+                )
+                // Synchronous commit() is required before DebugAppCheckProviderFactory reads the secret.
+                prefs.edit()
+                    .putString(DEBUG_SECRET_KEY, debugToken)
+                    .commit()
+                Log.d(APP_CHECK_TAG, "App Check debug secret configured successfully.")
+            } else {
+                Log.w(APP_CHECK_TAG, "No debug token found in Intent extra.")
+            }
+
+            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                DebugAppCheckProviderFactory.getInstance()
+            )
+            Log.d(APP_CHECK_TAG, "DebugAppCheckProviderFactory installed.")
+        } else {
+            val resId = context.resources.getIdentifier(RECAPTCHA_SITE_KEY_RES, "string", context.packageName)
+            if (resId != 0) {
+                val siteKey = context.getString(resId)
+                if (siteKey.isNotBlank()) {
+                    FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                        RecaptchaAppCheckProviderFactory.getInstance(siteKey)
+                    )
+                    Log.d(APP_CHECK_TAG, "RecaptchaAppCheckProviderFactory installed.")
+                } else {
+                    Log.e(APP_CHECK_TAG, "recaptcha_site_key resource string is blank.")
+                }
+            } else {
+                Log.e(APP_CHECK_TAG, "recaptcha_site_key string resource not found in package.")
+            }
+        }
+    } catch (e: Exception) {
+        Log.e(APP_CHECK_TAG, "Failed to initialize Firebase App Check", e)
+    }
+}
 
 class MainActivity : ComponentActivity() {
+    private val notificationIntentFlow = kotlinx.coroutines.flow.MutableStateFlow<Intent?>(null)
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize Firebase & App Check with Play Integrity provider on physical devices
-        FirebaseApp.initializeApp(this)
-        val isEmulator = android.os.Build.FINGERPRINT.startsWith("generic") ||
-            android.os.Build.MODEL.contains("sdk_gphone") ||
-            android.os.Build.MODEL.contains("Emulator") ||
-            android.os.Build.HARDWARE.contains("ranchu") ||
-            android.os.Build.HARDWARE.contains("goldfish")
-        if (!isEmulator) {
-            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
-                PlayIntegrityAppCheckProviderFactory.getInstance()
-            )
-        }
+        // STEP 1: Configure App Check with launch intent before any UI, ViewModels, or Firebase operations
+        configureAppCheck(this, intent)
+        notificationIntentFlow.value = intent
 
         // Initialize BMKG Earthquake and Severe Weather Notification Channels
         com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
         com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
         com.example.util.WeatherNotificationHelper.initAppUpdateNotificationChannel(this)
+
+        // Pemicu pemeriksaan Auto-Update GitHub saat aplikasi dibuka
+        checkForAppUpdates(this)
 
         enableEdgeToEdge()
         setContent {
@@ -203,11 +268,117 @@ class MainActivity : ComponentActivity() {
                     WeatherAppScreen(
                         viewModel = weatherViewModel,
                         aiViewModel = aiViewModel,
-                        windowSizeClass = windowSizeClass
+                        windowSizeClass = windowSizeClass,
+                        notificationIntentFlow = notificationIntentFlow
                     )
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Pemicu pemeriksaan Auto-Update saat aplikasi kembali dari background
+        checkForAppUpdates(this)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        notificationIntentFlow.value = intent
+    }
+}
+
+/**
+ * Memeriksa pembaruan aplikasi dari GitHub Releases (jazza16/tatun1974) menggunakan AppUpdater.
+ * Memastikan izin REQUEST_INSTALL_PACKAGES telah diberikan sebelum proses unduh APK dimulai.
+ */
+fun checkForAppUpdates(context: Context) {
+    try {
+        val appUpdaterUtils = AppUpdaterUtils(context)
+            .setUpdateFrom(UpdateFrom.GITHUB)
+            .setGitHubUserAndRepo("jazza16", "tatun1974")
+            .withListener(object : AppUpdaterUtils.UpdateListener {
+                override fun onSuccess(update: Update, isUpdateAvailable: Boolean) {
+                    val remoteVersionCode = update.latestVersionCode ?: 0
+                    val isNewerVersionCode = remoteVersionCode > BuildConfig.VERSION_CODE
+                    if (isUpdateAvailable || isNewerVersionCode) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                            !context.packageManager.canRequestPackageInstalls()
+                        ) {
+                            showRequestInstallPackagesDialog(context, update)
+                        } else {
+                            showUpdateDialog(context, update)
+                        }
+                    }
+                }
+
+                override fun onFailed(error: AppUpdaterError) {
+                    Log.w("AppUpdater", "Gagal memeriksa update GitHub (jazza16/tatun1974): $error")
+                }
+            })
+        appUpdaterUtils.start()
+    } catch (t: Throwable) {
+        Log.w("AppUpdater", "Eksepsi saat menginisialisasi AppUpdater: ${t.message}")
+    }
+}
+
+fun showUpdateDialog(context: Context, update: Update? = null) {
+    try {
+        AppUpdater(context)
+            .setUpdateFrom(UpdateFrom.GITHUB)
+            .setGitHubUserAndRepo("jazza16", "tatun1974")
+            .setDisplay(Display.DIALOG)
+            .showAppUpdated(false)
+            .start()
+    } catch (t: Throwable) {
+        Log.w("AppUpdater", "Fallback ke dialog sistem untuk update GitHub: ${t.message}")
+        if (context is android.app.Activity && !context.isFinishing) {
+            val latestVer = update?.latestVersion ?: "terbaru"
+            val releaseNotes = update?.releaseNotes?.takeIf { it.isNotBlank() }
+                ?: "Pembaruan rilis resmi SIPAGAR KITA tersedia di GitHub Releases."
+            val targetUrl = update?.urlToDownload?.toString()
+                ?: "https://github.com/jazza16/tatun1974/releases/latest"
+            AlertDialog.Builder(context)
+                .setTitle("Pembaruan Tersedia (v$latestVer)")
+                .setMessage(releaseNotes)
+                .setPositiveButton("Unduh & Pasang") { _, _ ->
+                    runCatching {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
+                }
+                .setNegativeButton("Nanti", null)
+                .show()
+        }
+    }
+}
+
+private fun showRequestInstallPackagesDialog(context: Context, update: Update) {
+    if (context is android.app.Activity && context.isFinishing) return
+    runCatching {
+        AlertDialog.Builder(context)
+            .setTitle("Izin Instalasi Pembaruan Diperlukan")
+            .setMessage(
+                "Tersedia pembaruan SIPAGAR KITA versi ${update.latestVersion}. " +
+                    "Izinkan instalasi paket dari sumber ini agar pembaruan dapat diunduh dan dipasang secara otomatis."
+            )
+            .setCancelable(false)
+            .setPositiveButton("Berikan Izin") { _, _ ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${context.packageName}")
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+            }
+            .setNegativeButton("Nanti", null)
+            .show()
     }
 }
 
@@ -215,16 +386,57 @@ class MainActivity : ComponentActivity() {
 fun WeatherAppScreen(
     viewModel: WeatherViewModel,
     aiViewModel: AiWeatherViewModel,
-    windowSizeClass: WindowSizeClass
+    windowSizeClass: WindowSizeClass,
+    notificationIntentFlow: kotlinx.coroutines.flow.StateFlow<Intent?>? = null
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var savedMainTab by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(uiState.selectedTab) }
+    var savedWallpaperDismissed by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(!uiState.isStartupWallpaperVisible) }
+
+    LaunchedEffect(Unit) {
+        if (savedWallpaperDismissed && uiState.isStartupWallpaperVisible) {
+            viewModel.dismissStartupWallpaper()
+        }
+        if (savedMainTab != uiState.selectedTab) {
+            viewModel.selectTab(savedMainTab)
+        }
+    }
+    LaunchedEffect(uiState.selectedTab) {
+        savedMainTab = uiState.selectedTab
+    }
+    LaunchedEffect(uiState.isStartupWallpaperVisible) {
+        savedWallpaperDismissed = !uiState.isStartupWallpaperVisible
+    }
     val favorites by viewModel.favoriteDistricts.collectAsStateWithLifecycle()
     val communityReports by viewModel.communityReports.collectAsStateWithLifecycle()
     val citizenDisasterReports by viewModel.citizenDisasterReports.collectAsStateWithLifecycle()
 
     val aiUiState by aiViewModel.uiState.collectAsStateWithLifecycle()
     val aiChatMessages by aiViewModel.chatMessages.collectAsStateWithLifecycle()
+    val pendingNotificationIntent = notificationIntentFlow?.collectAsStateWithLifecycle()?.value
+
+    LaunchedEffect(pendingNotificationIntent) {
+        val notifIntent = pendingNotificationIntent ?: return@LaunchedEffect
+        val navTab = notifIntent.getIntExtra("EXTRA_NAVIGATE_TAB", -1)
+        val openUpdate = notifIntent.getBooleanExtra("EXTRA_OPEN_UPDATE_SHEET", false)
+        val autoStartUpdate = notifIntent.getBooleanExtra("EXTRA_AUTO_START_UPDATE", false)
+        if (navTab >= 0 || openUpdate || autoStartUpdate) {
+            viewModel.dismissStartupWallpaper()
+        }
+        if (navTab >= 0) {
+            viewModel.selectTab(navTab)
+            notifIntent.removeExtra("EXTRA_NAVIGATE_TAB")
+        }
+        if (openUpdate) {
+            viewModel.setAppUpdateSheetOpen(true)
+            notifIntent.removeExtra("EXTRA_OPEN_UPDATE_SHEET")
+        }
+        if (autoStartUpdate) {
+            viewModel.downloadAndApplyUpdate(context)
+            notifIntent.removeExtra("EXTRA_AUTO_START_UPDATE")
+        }
+    }
 
     var isCallCenter117SheetOpen by remember { mutableStateOf(false) }
     var isQuickActionsFabExpanded by remember { mutableStateOf(false) }
@@ -261,8 +473,6 @@ fun WeatherAppScreen(
     val syncState by syncController.syncState.collectAsStateWithLifecycle()
     val isRetrying by syncController.isRetrying.collectAsStateWithLifecycle()
     val retryProgress by syncController.retryProgress.collectAsStateWithLifecycle()
-    val isSlowNetwork by syncController.isSlowNetwork.collectAsStateWithLifecycle()
-    val latencyMs by syncController.latencyMs.collectAsStateWithLifecycle()
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -355,7 +565,8 @@ fun WeatherAppScreen(
                     onOpenAppMenu = { viewModel.setAppUpdateSheetOpen(true) },
                     onEvacuationGuideClick = { isPanduanEvakuasiOpen = true },
                     onCallCenter117Click = { isCallCenter117SheetOpen = true },
-                    onDetectLocationClick = triggerLocationDetection
+                    onDetectLocationClick = triggerLocationDetection,
+                    onWallpaperClick = { viewModel.showStartupWallpaper() }
                 )
                 if (!isExpandedWindow) {
                     WeatherTabs(
@@ -435,71 +646,10 @@ fun WeatherAppScreen(
                         )
                     }
                 }
-            } else if (isSlowNetwork) {
-                Surface(
-                    color = Color(0xFFFEF3C7),
-                    modifier = Modifier.fillMaxWidth().testTag("sync_slow_network_strip")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFB45309), modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Jaringan Lambat (${latencyMs}ms) - Antrean retry otomatis diaktifkan",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF92400E)
-                            )
-                        }
-                    }
-                }
             }
 
-            // Location detection notification banner if any
-            if (uiState.locationDetectionMessage != null) {
-                Surface(
-                    color = if (uiState.isLocationDetected) WeatherGoodGreen.copy(alpha = 0.12f) else OrangePrimary.copy(alpha = 0.12f),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MyLocation,
-                            contentDescription = null,
-                            tint = if (uiState.isLocationDetected) WeatherGoodGreen else OrangePrimary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = uiState.locationDetectionMessage ?: "",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(
-                            onClick = { viewModel.clearLocationMessage() },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Tutup",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-            }
+            // Banner status jaringan lambat dan notifikasi deteksi lokasi disembunyikan dari layar utama;
+            // detectCurrentLocation & syncAllDataOnline tetap berjalan otomatis di background.
 
             // Error notice banner if any
             if (uiState.errorMessage != null && uiState.report == null) {
@@ -785,6 +935,15 @@ fun WeatherAppScreen(
                                     contentPadding = PaddingValues(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
+                                    // Tabel Prakiraan Cuaca 15 Kecamatan Bergaya BMKG + Unduh PDF
+                                    item {
+                                        com.example.ui.components.BmkgStyleForecastTable(
+                                            allDistrictsSummary = uiState.allDistrictsSummary,
+                                            currentDistrict = currentDistrict,
+                                            isDark = isActuallyDark
+                                        )
+                                    }
+
                                     // Feature: Prakiraan Cuaca 3 Hari Mukomuko
                                     item {
                                         ThreeDayForecastCard(
@@ -1091,8 +1250,13 @@ fun WeatherAppScreen(
             onSetThemeMode = { viewModel.setDarkMode(it) },
             onCheckUpdateOnline = { viewModel.checkForUpdatesOnline(context = context) },
             onDownloadUpdate = { viewModel.downloadAndApplyUpdate(context = context) },
-            onSimulateOlderVersion = { viewModel.simulateOlderVersionForTesting("3.6.0", context) },
-            onSimulatePublishNextVersion = { viewModel.simulatePublishNextVersion("3.8.0", context) },
+            onSimulateOlderVersion = {
+                viewModel.simulateOlderVersionForTesting(
+                    com.example.data.local.AppUpdatePreferences.PREVIOUS_VERSION_MOCK,
+                    context
+                )
+            },
+            onSimulatePublishNextVersion = { viewModel.simulatePublishNextVersion("1.1.0", context) },
             onResetLatestRelease = { viewModel.resetToLatestReleaseState() },
             onOpenOnboarding = { viewModel.setOnboardingOpen(true) },
             onOpenCompass = { viewModel.setCompassSheetOpen(true) },
@@ -1152,15 +1316,7 @@ fun WeatherAppScreen(
                             val activeHighlights = uiState.updateState.changelogs
                                 .find { it.version == uiState.updateState.latestVersion }
                                 ?.highlights
-                                ?: listOf(
-                                    "Tab Laporan Warga Bersebelahan dengan Prakiraan Cuaca",
-                                    "Peluncur Kamera Langsung (Live Camera Launcher) & Geotag",
-                                    "Peta Spasial GIS Laporan Warga & Filter Kategori Kejadian",
-                                    "Layer Overlay Titik Rawan Bencana BPBD Mukomuko",
-                                    "Pelacakan Status Laporan & Notifikasi Toast Konfirmasi",
-                                    "Direktori Kontak Darurat Mukomuko & Dial Cepat 117 BPBD",
-                                    "Optimalisasi Tombol Aksi Cepat Speed Dial FAB Material 3"
-                                )
+                                ?: com.example.model.INITIAL_RELEASE_CHANGELOG.highlights
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 activeHighlights.take(4).forEach { hl ->
                                     Text(
@@ -1560,16 +1716,24 @@ private fun ActiveAlertCard(
     alert: com.example.model.WeatherAlert,
     onViewDetail: () -> Unit
 ) {
+    val cardShape = RoundedCornerShape(16.dp)
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val accentRed = if (isDarkTheme) Color(0xFFF87171) else Color(0xFFDC2626)
+    val titleRed = if (isDarkTheme) Color(0xFFFEE2E2) else Color(0xFF991B1B)
+    val bodyRed = if (isDarkTheme) Color(0xFFFECACA) else Color(0xFF7F1D1D)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(cardShape)
+            .geminiGradientBorder(borderWidth = 2.dp, shape = cardShape)
             .clickable(onClick = onViewDetail)
             .testTag("card_active_alert"),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shape = RoundedCornerShape(16.dp)
+        shape = cardShape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -1578,7 +1742,7 @@ private fun ActiveAlertCard(
             Icon(
                 imageVector = Icons.Default.Campaign,
                 contentDescription = "Peringatan",
-                tint = Color(0xFFDC2626),
+                tint = accentRed,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
@@ -1587,12 +1751,12 @@ private fun ActiveAlertCard(
                     text = alert.title,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF991B1B)
+                    color = titleRed
                 )
                 Text(
                     text = alert.message,
                     fontSize = 11.sp,
-                    color = Color(0xFF7F1D1D),
+                    color = bodyRed,
                     lineHeight = 16.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1602,7 +1766,7 @@ private fun ActiveAlertCard(
                 text = "Lihat >",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFDC2626),
+                color = accentRed,
                 maxLines = 1,
                 softWrap = false
             )
@@ -1906,21 +2070,21 @@ private fun WrsLiveEarthquakeQuickCard(
 ) {
     val isTsunami = earthquake.potentialTsunami.contains("berpotensi tsunami", ignoreCase = true) &&
             !earthquake.potentialTsunami.contains("tidak", ignoreCase = true)
+    val cardShape = RoundedCornerShape(18.dp)
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(cardShape)
+            .geminiGradientBorder(borderWidth = 2.dp, shape = cardShape)
             .clickable(onClick = onClick)
             .testTag("live_earthquake_quick_banner"),
-        shape = RoundedCornerShape(18.dp),
+        shape = cardShape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.5.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -1954,7 +2118,11 @@ private fun WrsLiveEarthquakeQuickCard(
                                 text = "WRS-NTWC BMKG",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
-                                color = if (isTsunami) Color(0xFF991B1B) else Color(0xFF9A3412)
+                                color = if (isDarkTheme) {
+                                    if (isTsunami) Color(0xFFFCA5A5) else Color(0xFFFDBA74)
+                                } else {
+                                    if (isTsunami) Color(0xFF991B1B) else Color(0xFF9A3412)
+                                }
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
@@ -1993,7 +2161,11 @@ private fun WrsLiveEarthquakeQuickCard(
                         text = if (isTsunami) "⚠️ POTENSI TSUNAMI" else "✓ AMAN TSUNAMI",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isTsunami) Color(0xFFDC2626) else Color(0xFF16A34A),
+                        color = if (isDarkTheme) {
+                            if (isTsunami) Color(0xFFF87171) else Color(0xFF4ADE80)
+                        } else {
+                            if (isTsunami) Color(0xFFDC2626) else Color(0xFF16A34A)
+                        },
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

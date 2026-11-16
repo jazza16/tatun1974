@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -111,8 +112,9 @@ fun CallCenter117HeroBanner(
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
-                            painter = painterResource(id = R.drawable.ic_bpbd_logo),
+                            painter = painterResource(id = R.drawable.ic_bpbd_mukomuko_official),
                             contentDescription = "BPBD 117",
+                            contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)

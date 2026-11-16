@@ -22,9 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -80,8 +78,6 @@ fun GeminiWeatherSection(
     modifier: Modifier = Modifier
 ) {
     var inputText by remember { mutableStateOf("") }
-    var isApiKeyDialogOpen by remember { mutableStateOf(false) }
-    var tempKeyInput by remember(customApiKey) { mutableStateOf(customApiKey) }
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
@@ -160,7 +156,7 @@ fun GeminiWeatherSection(
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
-                                        text = if (customApiKey.isNotBlank()) "Gemini Direct" else "PUSDALOPS AI",
+                                        text = "PUSDALOPS AI",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
@@ -191,93 +187,9 @@ fun GeminiWeatherSection(
                                 modifier = Modifier.size(18.dp)
                             )
                         }
-
-                        IconButton(
-                            onClick = { isApiKeyDialogOpen = true },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(Color.White.copy(alpha = 0.2f), CircleShape)
-                                .testTag("btn_gemini_api_key_settings")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.VpnKey,
-                                contentDescription = "Pengaturan Kunci API Gemini",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
                     }
                 }
             }
-        }
-
-        // Dialog Konfigurasi Kunci API Gemini (Opsional)
-        if (isApiKeyDialogOpen) {
-            AlertDialog(
-                onDismissRequest = { isApiKeyDialogOpen = false },
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.VpnKey,
-                            contentDescription = null,
-                            tint = OrangePrimary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Kunci API Gemini",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "Asisten Cerdas PUSDALOPS-PB BPBD Mukomuko siap merespons otomatis secara mandiri tanpa perlu Firebase.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                            lineHeight = 16.sp
-                        )
-                        Text(
-                            text = "Jika Anda memiliki API Key Gemini dari Google AI Studio dan ingin menggunakannya langsung:",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                            lineHeight = 15.sp
-                        )
-                        OutlinedTextField(
-                            value = tempKeyInput,
-                            onValueChange = { tempKeyInput = it },
-                            placeholder = { Text("AIzaSy...", fontSize = 12.sp) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onSaveApiKey(tempKeyInput.trim())
-                            isApiKeyDialogOpen = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary)
-                    ) {
-                        Text("Simpan")
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = {
-                            tempKeyInput = ""
-                            onSaveApiKey("")
-                            isApiKeyDialogOpen = false
-                        }
-                    ) {
-                        Text("Reset Default")
-                    }
-                }
-            )
         }
 
         // Quick Suggestion Chips (Horizontal Scroll)

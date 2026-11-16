@@ -637,6 +637,7 @@ private fun OnlineUpdateCard(
     onSimulatePublishNextVersion: () -> Unit = {},
     onResetLatestRelease: () -> Unit = {}
 ) {
+    val isUpToDate = updateState.currentVersion == updateState.latestVersion
     @OptIn(ExperimentalLayoutApi::class)
     Card(
         modifier = Modifier
@@ -661,16 +662,16 @@ private fun OnlineUpdateCard(
                         modifier = Modifier
                             .size(36.dp)
                             .background(
-                                if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A).copy(alpha = 0.15f)
-                                else Color(0xFF0284C7).copy(alpha = 0.15f),
+                                if (isUpToDate) Color(0xFF16A34A).copy(alpha = 0.15f)
+                                else OrangePrimary.copy(alpha = 0.15f),
                                 RoundedCornerShape(10.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Icons.Default.VerifiedUser else Icons.Default.NewReleases,
+                            imageVector = if (isUpToDate) Icons.Default.VerifiedUser else Icons.Default.NewReleases,
                             contentDescription = "Pembaruan",
-                            tint = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A) else Color(0xFF0284C7),
+                            tint = if (isUpToDate) Color(0xFF16A34A) else OrangePrimary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -691,16 +692,16 @@ private fun OnlineUpdateCard(
                 }
 
                 Surface(
-                    color = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A).copy(alpha = 0.15f)
+                    color = if (isUpToDate) Color(0xFF16A34A).copy(alpha = 0.15f)
                     else OrangePrimary.copy(alpha = 0.15f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = if (updateState.isPermanentlyInstalled && updateState.isUpdated) "Rilis Resmi v${updateState.currentVersion}"
-                        else "Update v${updateState.latestVersion}",
+                        text = if (isUpToDate) "Tersedia Versi Terbaru"
+                        else "Update Tersedia",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A) else OrangePrimary,
+                        color = if (isUpToDate) Color(0xFF16A34A) else OrangePrimary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -755,64 +756,6 @@ private fun OnlineUpdateCard(
                 }
             }
 
-            // OTA Architecture Assurance Strip
-            Spacer(modifier = Modifier.height(12.dp))
-            Surface(
-                color = if (updateState.isPermanentlyInstalled && updateState.isUpdated) {
-                    Color(0xFF16A34A).copy(alpha = 0.10f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Icons.Default.CheckCircle else Icons.Default.SystemUpdate,
-                        contentDescription = null,
-                        tint = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A) else OrangePrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (updateState.isPermanentlyInstalled && updateState.isUpdated) {
-                                "Perangkat Berada Pada Rilis Terbaru (Tetap & Permanen)"
-                            } else {
-                                "Sistem OTA Aktif (Tanpa Offline Update)"
-                            },
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (updateState.isPermanentlyInstalled && updateState.isUpdated) Color(0xFF16A34A) else OrangePrimary
-                        )
-                        Text(
-                            text = if (updateState.isPermanentlyInstalled && updateState.isUpdated) {
-                                "Perangkat yang sudah memperbarui tidak berulang meminta update. Cukup sekali saja dan posisi rilis tersimpan permanen di DataStore."
-                            } else {
-                                "Perangkat yang sebelumnya menginstal versi lama langsung mengenali & memasang v${updateState.latestVersion} secara daring tanpa perantara offline."
-                            },
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                            lineHeight = 15.sp
-                        )
-                    }
-                }
-            }
-
-            // Status message
-            if (updateState.updateStatusMessage.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = updateState.updateStatusMessage,
-                    fontSize = 11.sp,
-                    color = if (updateState.isUpdated) Color(0xFF16A34A) else OrangePrimary,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
             // Downloading Progress
             if (updateState.isDownloading) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -847,37 +790,7 @@ private fun OnlineUpdateCard(
                 }
             }
 
-            // Success message
-            if (updateState.isUpdated) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Surface(
-                    color = Color(0xFF16A34A).copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = Color(0xFF16A34A),
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Aplikasi berhasil diperbarui ke versi ${updateState.currentVersion} secara daring dan tersimpan permanen!",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF16A34A),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Action Buttons
             FlowRow(
@@ -912,7 +825,7 @@ private fun OnlineUpdateCard(
                     }
                 }
 
-                if (!updateState.isUpdated && updateState.isUpdateAvailable) {
+                if (!isUpToDate && updateState.isUpdateAvailable) {
                     Button(
                         onClick = onApplyUpdate,
                         modifier = Modifier
@@ -933,93 +846,13 @@ private fun OnlineUpdateCard(
                     }
                 }
             }
-
-            // Developer / QA Simulation Section
-            Spacer(modifier = Modifier.height(16.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Pengujian Alur Pembaruan Daring (OTA)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Sistem menggunakan Semantic Versioning (AppVersionHelper) untuk mendeteksi perangkat versi sebelumnya (v3.6.0) guna memicu notifikasi update ke Rilis Resmi v3.7.0, serta otomatis berlaku untuk versi berikutnya (v3.8.0, dst) saat dirilis pengembang.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                        lineHeight = 14.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = onSimulateOlderVersion,
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 40.dp)
-                                .testTag("btn_simulate_v140"),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "Uji v3.6.0 (Notif v3.7.0)",
-                                fontSize = 11.sp,
-                                maxLines = 1
-                            )
-                        }
-
-                        OutlinedButton(
-                            onClick = onSimulatePublishNextVersion,
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 40.dp)
-                                .testTag("btn_simulate_v160"),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "Uji Rilis v3.8.0",
-                                fontSize = 11.sp,
-                                maxLines = 1
-                            )
-                        }
-
-                        Button(
-                            onClick = onResetLatestRelease,
-                            modifier = Modifier
-                                .weight(0.9f)
-                                .heightIn(min = 40.dp)
-                                .testTag("btn_reset_latest_release"),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (updateState.isUpdated && updateState.isPermanentlyInstalled) Color(0xFF16A34A) else OrangePrimary
-                            ),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "Rilis v3.7.0",
-                                fontSize = 11.sp,
-                                color = Color.White,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
 
 @Composable
 private fun NewFeaturesExplanationSection(
-    currentVersion: String = "3.7.0",
+    currentVersion: String = com.example.data.local.AppUpdatePreferences.DEFAULT_LATEST_VERSION,
     isDark: Boolean
 ) {
     var isExpanded by remember { mutableStateOf(false) }

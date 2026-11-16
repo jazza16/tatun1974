@@ -167,6 +167,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.security.PlayIntegritySecurityManager
 import com.example.security.SecurityManager
 import com.example.security.SecurityAccessResult
@@ -263,16 +264,16 @@ fun CitizenReportScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Formulir, 1 = Peta Sebaran, 2 = Tabel Riwayat, 3 = Kontak Penting, 4 = Konsol Petugas
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Formulir, 1 = Peta Sebaran, 2 = Tabel Riwayat, 3 = Kontak Penting, 4 = Konsol Petugas
 
     // Officer & Firebase Authentication Manager (SIPAGAR KITA)
     val authManager = remember { com.example.data.auth.AuthManager.getInstance(context) }
     val officerAuthManager = remember { OfficerAuthManager(context) }
-    var isOfficerLoggedIn by remember { mutableStateOf(authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn()) }
-    var officerName by remember { mutableStateOf(officerAuthManager.getOfficerName().ifBlank { authManager.getDisplayName() }) }
-    var officerBadgeId by remember { mutableStateOf(officerAuthManager.getOfficerBadgeId().ifBlank { authManager.getBadgeOrUid() }) }
-    var officerShift by remember { mutableStateOf(officerAuthManager.getOfficerShift()) }
-    var officerRole by remember { mutableStateOf(officerAuthManager.getOfficerRole()) }
+    var isOfficerLoggedIn by rememberSaveable { mutableStateOf(authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn()) }
+    var officerName by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerName().ifBlank { authManager.getDisplayName() }) }
+    var officerBadgeId by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerBadgeId().ifBlank { authManager.getBadgeOrUid() }) }
+    var officerShift by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerShift()) }
+    var officerRole by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerRole()) }
 
     val coroutineScope = rememberCoroutineScope()
     val database = remember { AppDatabase.getInstance(context) }
@@ -318,8 +319,8 @@ fun CitizenReportScreen(
     var isSyncingOnline by remember { mutableStateOf(false) }
     var lastSyncStatusMessage by remember { mutableStateOf<String?>(null) }
 
-    // Trigger auto-sync once on screen open
-    LaunchedEffect(Unit) {
+    // Trigger auto-sync on screen open and sub-tab / officer login state changes
+    LaunchedEffect(selectedTab, isOfficerLoggedIn) {
         onSyncReports?.invoke { count ->
             if (count > 0) {
                 lastSyncStatusMessage = "$count laporan baru disinkronkan"
@@ -328,51 +329,62 @@ fun CitizenReportScreen(
     }
 
     // Form inputs state
-    var selectedDisasterType by remember { mutableStateOf(DISASTER_TYPES[0]) }
+    var selectedDisasterType by rememberSaveable { mutableStateOf(DISASTER_TYPES[0]) }
     var isDisasterDropdownExpanded by remember { mutableStateOf(false) }
 
     val initialTime = remember {
         val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
         sdf.format(Date())
     }
-    var incidentTime by remember { mutableStateOf(initialTime) }
-    var incidentLocation by remember { mutableStateOf("") }
+    var incidentTime by rememberSaveable { mutableStateOf(initialTime) }
+    var incidentLocation by rememberSaveable { mutableStateOf("") }
 
-    var selectedDistrict by remember { mutableStateOf(currentDistrict.name) }
+    var selectedDistrict by rememberSaveable { mutableStateOf(currentDistrict.name) }
     var isDistrictDropdownExpanded by remember { mutableStateOf(false) }
 
-    var selectedVillage by remember {
+    var selectedVillage by rememberSaveable {
         mutableStateOf(VILLAGES_MAP[currentDistrict.name]?.firstOrNull() ?: "Desa Pasar")
     }
     var isVillageDropdownExpanded by remember { mutableStateOf(false) }
 
     // Coordinates & GPS Verification
-    var latitude by remember { mutableDoubleStateOf(currentDistrict.latitude) }
-    var longitude by remember { mutableDoubleStateOf(currentDistrict.longitude) }
-    var gpsAccuracy by remember { mutableStateOf<Float?>(null) }
-    var isGpsLocked by remember { mutableStateOf(false) }
+    var latitude by rememberSaveable { mutableDoubleStateOf(currentDistrict.latitude) }
+    var longitude by rememberSaveable { mutableDoubleStateOf(currentDistrict.longitude) }
+    var gpsAccuracy by rememberSaveable { mutableStateOf<Float?>(null) }
+    var isGpsLocked by rememberSaveable { mutableStateOf(false) }
     var isFetchingGps by remember { mutableStateOf(false) }
-    var gpsStatusMessage by remember { mutableStateOf("Sentuh pin GPS untuk mengunci koordinat ponsel") }
+    var gpsStatusMessage by rememberSaveable { mutableStateOf("Sentuh pin GPS untuk mengunci koordinat ponsel") }
 
     // Casualties data
-    var deadCount by remember { mutableIntStateOf(0) }
-    var injuredCount by remember { mutableIntStateOf(0) }
-    var missingCount by remember { mutableIntStateOf(0) }
+    var deadCount by rememberSaveable { mutableIntStateOf(0) }
+    var injuredCount by rememberSaveable { mutableIntStateOf(0) }
+    var missingCount by rememberSaveable { mutableIntStateOf(0) }
 
     // Photo & Geotag Verification (Anti-Hoax: Live camera only, gallery upload disabled)
-    var photoUriString by remember { mutableStateOf<String?>(null) }
+    var photoUriString by rememberSaveable { mutableStateOf<String?>(null) }
     var cameraCapturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    var reporterName by remember { mutableStateOf("") }
-    var reporterPhone by remember { mutableStateOf("") }
-    var additionalNotes by remember { mutableStateOf("") }
+    LaunchedEffect(photoUriString) {
+        if (cameraCapturedBitmap == null && !photoUriString.isNullOrBlank()) {
+            runCatching {
+                val parsedUri = Uri.parse(photoUriString)
+                context.contentResolver.openInputStream(parsedUri)?.use { input ->
+                    cameraCapturedBitmap = BitmapFactory.decodeStream(input)
+                }
+            }
+        }
+    }
+
+    var reporterName by rememberSaveable { mutableStateOf("") }
+    var reporterPhone by rememberSaveable { mutableStateOf("") }
+    var additionalNotes by rememberSaveable { mutableStateOf("") }
 
     // Dialog state
-    var showSuccessDialog by remember { mutableStateOf(false) }
-    var submittedReportId by remember { mutableStateOf("") }
+    var showSuccessDialog by rememberSaveable { mutableStateOf(false) }
+    var submittedReportId by rememberSaveable { mutableStateOf("") }
 
     // Table Filter by Status: "Semua", "Diproses", "Divalidasi", "Selesai"
-    var tableStatusFilter by remember { mutableStateOf("Semua") }
+    var tableStatusFilter by rememberSaveable { mutableStateOf("Semua") }
 
     // Permission Rationale / Guidance Dialog state
     var permissionDeniedDialogMessage by remember { mutableStateOf<String?>(null) }
@@ -2209,10 +2221,27 @@ fun CitizenReportScreen(
                                     officerName = cred.fullName,
                                     officerRole = cred.role
                                 )
+                                val verifiedSession = sessionRes.getOrNull()
+                                val isDeviceAuthorized = sessionRes.isSuccess && (verifiedSession?.accessGranted == true)
+                                if (!isDeviceAuthorized) {
+                                    val denyReason = sessionRes.exceptionOrNull()?.message
+                                        ?: "Integritas perangkat tidak memenuhi syarat keamanan (${verifiedSession?.verdict ?: "UNVERIFIED"}) untuk mengakses Ruang Kerja."
+                                    securityAccessResult = SecurityAccessResult(
+                                        isAuthorized = false,
+                                        message = denyReason,
+                                        session = verifiedSession
+                                    )
+                                    officerAuthManager.logoutOfficer()
+                                    isOfficerLoggedIn = false
+                                    isError = true
+                                    errorMessage = denyReason
+                                    Toast.makeText(context, denyReason, Toast.LENGTH_LONG).show()
+                                    return@launch
+                                }
                                 securityAccessResult = SecurityAccessResult(
                                     isAuthorized = true,
                                     message = "Perangkat terverifikasi valid.",
-                                    session = sessionRes.getOrNull()
+                                    session = verifiedSession
                                 )
                                 isOfficerLoggedIn = true
                                 officerName = cred.fullName
@@ -2443,14 +2472,14 @@ fun CitizenReportScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        Box(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color(0xFFEFF6FF),
                                 border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF2563EB)),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { isNameDropdownOpen = true }
+                                    .clickable { isNameDropdownOpen = !isNameDropdownOpen }
                                     .testTag("officer_name_dropdown_selector")
                             ) {
                                 Row(
@@ -2488,59 +2517,67 @@ fun CitizenReportScreen(
                                 }
                             }
 
-                            androidx.compose.runtime.DisposableEffect(Unit) {
-                                onDispose { isNameDropdownOpen = false }
-                            }
-                            DropdownMenu(
-                                expanded = isNameDropdownOpen,
-                                onDismissRequest = { isNameDropdownOpen = false },
-                                modifier = Modifier
-                                    .fillMaxWidth(0.9f)
-                                    .heightIn(max = 280.dp)
-                            ) {
-                                val availableInRole = filteredRoster.ifEmpty { roster }
-                                availableInRole.forEach { off ->
-                                    val isCurrent = selectedOfficer?.nip == off.nip
-                                    DropdownMenuItem(
-                                        text = {
-                                            Column {
-                                                Text(
-                                                    text = off.fullName,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
-                                                    color = if (isCurrent) Color(0xFF1D4ED8) else Color(0xFF0F172A)
-                                                )
-                                                Text(
-                                                    text = "NIP: ${off.nip} • ${off.role}",
-                                                    fontSize = 11.sp,
-                                                    color = Color(0xFF64748B)
-                                                )
-                                            }
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                imageVector = Icons.Default.Badge,
-                                                contentDescription = null,
-                                                tint = if (isCurrent) Color(0xFF2563EB) else Color.Gray,
-                                                modifier = Modifier.size(16.dp)
+                            AnimatedVisibility(visible = isNameDropdownOpen) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shadowElevation = 4.dp,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 220.dp)
+                                            .verticalScroll(rememberScrollState())
+                                    ) {
+                                        val availableInRole = filteredRoster.ifEmpty { roster }
+                                        availableInRole.forEach { off ->
+                                            val isCurrent = selectedOfficer?.nip == off.nip
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text(
+                                                            text = off.fullName,
+                                                            fontSize = 11.sp,
+                                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
+                                                            color = if (isCurrent) Color(0xFF1D4ED8) else Color(0xFF0F172A)
+                                                        )
+                                                        Text(
+                                                            text = "NIP: ${off.nip} • ${off.role}",
+                                                            fontSize = 11.sp,
+                                                            color = Color(0xFF64748B)
+                                                        )
+                                                    }
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Badge,
+                                                        contentDescription = null,
+                                                        tint = if (isCurrent) Color(0xFF2563EB) else Color.Gray,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                },
+                                                trailingIcon = {
+                                                    if (isCurrent) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Check,
+                                                            contentDescription = null,
+                                                            tint = Color(0xFF16A34A),
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                },
+                                                onClick = {
+                                                    selectedOfficer = off
+                                                    isNameDropdownOpen = false
+                                                    isError = false
+                                                }
                                             )
-                                        },
-                                        trailingIcon = {
-                                            if (isCurrent) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFF16A34A),
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
-                                        },
-                                        onClick = {
-                                            selectedOfficer = off
-                                            isNameDropdownOpen = false
-                                            isError = false
                                         }
-                                    )
+                                    }
                                 }
                             }
                         }
@@ -2714,10 +2751,7 @@ fun CitizenReportScreen(
                                     text = if (selectedCredential?.isCustomPinSet == true) {
                                         "Kredensial tersimpan di SQLite & Cloud Firestore. Wajib login dengan PIN pribadi Anda pada perangkat ini maupun perangkat baru. PIN default '117' dinonaktifkan."
                                     } else {
-                                        val initialHint = selectedCredential?.initialSecurePin?.ifBlank {
-                                            selectedOfficer?.nip?.filter { it.isDigit() }?.takeLast(6)
-                                        } ?: "6 digit NIP"
-                                        "Akun personil belum mengganti PIN. Login awal wajib menggunakan 6 digit akhir NIP ($initialHint). Akses melalui PIN default '117' dilarang."
+                                        "Akun personil belum mengganti PIN pribadi. Untuk aktivasi perdana, gunakan 6 digit terakhir NIP Anda secara pribadi. Akses melalui PIN default '117' dilarang."
                                     },
                                     fontSize = 11.sp,
                                     color = if (selectedCredential?.isCustomPinSet == true) Color(0xFF166534) else Color(0xFF78350F),
@@ -2735,6 +2769,81 @@ fun CitizenReportScreen(
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
+
+                        // Google Account Sign-In Status (Zero-Trust Cloud Firestore Gate)
+                        val authMgr = remember { com.example.data.auth.AuthManager.getInstance(context) }
+                        val googleUserEmail by authMgr.currentUserEmail.collectAsStateWithLifecycle()
+                        val isFirebaseSignedIn = googleUserEmail != null || authMgr.getCurrentUser() != null
+                        var isGoogleSigningIn by remember { mutableStateOf(false) }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isFirebaseSignedIn) Color(0xFFEFF6FF) else Color(0xFFF8FAFC),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isFirebaseSignedIn) Color(0xFF93C5FD) else Color(0xFFE2E8F0)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isFirebaseSignedIn) "Akun Cloud Google Aktif" else "Sinkronisasi Cloud Membutuhkan Google",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isFirebaseSignedIn) Color(0xFF1D4ED8) else Color(0xFF334155)
+                                    )
+                                    Text(
+                                        text = googleUserEmail ?: "Masuk Google untuk sinkronisasi Firestore & backup lintas perangkat.",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF475569),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        if (isGoogleSigningIn) return@OutlinedButton
+                                        if (isFirebaseSignedIn) {
+                                            authMgr.signOut()
+                                            Toast.makeText(context, "Sesi Google Cloud ditutup", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            coroutineScope.launch {
+                                                isGoogleSigningIn = true
+                                                val signInRes = authMgr.signInWithGoogle(context)
+                                                isGoogleSigningIn = false
+                                                signInRes.onSuccess {
+                                                    Toast.makeText(context, "Akun Google terhubung untuk Cloud Firestore", Toast.LENGTH_SHORT).show()
+                                                }.onFailure { err ->
+                                                    Toast.makeText(context, err.message ?: "Gagal masuk Google", Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.heightIn(min = 32.dp)
+                                ) {
+                                    Text(
+                                        text = when {
+                                            isGoogleSigningIn -> "Memuat..."
+                                            isFirebaseSignedIn -> "Keluar"
+                                            else -> "Masuk Google"
+                                        },
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF1D4ED8)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
 
                         // Multi-device Cloud Sync & Admin Management Row
                         Row(
@@ -2789,14 +2898,9 @@ fun CitizenReportScreen(
 
                             OutlinedButton(
                                 onClick = {
-                                    if (officerAuthManager.isAdminLoggedIn()) {
-                                        dialogMode = 1
-                                        formValidationError = ""
-                                    } else {
-                                        showAdminPromptForAdd = true
-                                        adminPinAttempt = ""
-                                        adminPinErrorMsg = ""
-                                    }
+                                    showAdminPromptForAdd = true
+                                    adminPinAttempt = ""
+                                    adminPinErrorMsg = ""
                                 },
                                 shape = RoundedCornerShape(6.dp),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
@@ -2814,71 +2918,16 @@ fun CitizenReportScreen(
                         }
 
                         if (showAdminPromptForAdd) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFF1F5F9),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Text(
-                                        text = "Verifikasi Hak Akses Administrator:",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Normal,
-                                        color = Color(0xFF1E293B)
-                                    )
-                                    Text(
-                                        text = "Pendaftaran atau modifikasi personil baru hanya dapat dilakukan oleh Admin Pusdalops PB.",
-                                        fontSize = 11.sp,
-                                        color = Color(0xFF475569)
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    OutlinedTextField(
-                                        value = adminPinAttempt,
-                                        onValueChange = { adminPinAttempt = it },
-                                        placeholder = { Text("Masukkan Sandi/PIN Admin...", fontSize = 11.sp) },
-                                        singleLine = true,
-                                        visualTransformation = PasswordVisualTransformation(),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    if (adminPinErrorMsg.isNotBlank()) {
-                                        Text(
-                                            text = adminPinErrorMsg,
-                                            fontSize = 11.sp,
-                                            color = Color.Red,
-                                            modifier = Modifier.padding(top = 2.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(
-                                            onClick = { showAdminPromptForAdd = false },
-                                            modifier = Modifier.weight(1f).heightIn(min = 36.dp),
-                                            contentPadding = PaddingValues(4.dp)
-                                        ) {
-                                            Text("Batal", fontSize = 11.sp)
-                                        }
-                                        Button(
-                                            onClick = {
-                                                if (officerAuthManager.verifyPin(adminPinAttempt) || officerAuthManager.loginAdmin("admin", adminPinAttempt)) {
-                                                    showAdminPromptForAdd = false
-                                                    dialogMode = 1
-                                                    formValidationError = ""
-                                                } else {
-                                                    adminPinErrorMsg = "PIN/Sandi Admin salah. Akses ditolak demi keamanan."
-                                                }
-                                            },
-                                            modifier = Modifier.weight(1f).heightIn(min = 36.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                                            contentPadding = PaddingValues(4.dp)
-                                        ) {
-                                            Text("Verifikasi", fontSize = 11.sp)
-                                        }
-                                    }
+                            AdminAuthDialog(
+                                actionTitle = "Kelola Personil Pusdalops BPBD",
+                                securityManager = remember { com.example.security.SecurityManager.getInstance(context) },
+                                onDismiss = { showAdminPromptForAdd = false },
+                                onAuthorized = {
+                                    showAdminPromptForAdd = false
+                                    dialogMode = 1
+                                    formValidationError = ""
                                 }
-                            }
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
@@ -3285,10 +3334,27 @@ fun CitizenReportScreen(
                                         officerName = profile.fullName,
                                         officerRole = profile.role
                                     )
+                                    val verifiedSession = sessionRes.getOrNull()
+                                    val isDeviceAuthorized = sessionRes.isSuccess && (verifiedSession?.accessGranted == true)
+                                    if (!isDeviceAuthorized) {
+                                        val denyReason = sessionRes.exceptionOrNull()?.message
+                                            ?: "Integritas perangkat tidak memenuhi syarat keamanan (${verifiedSession?.verdict ?: "UNVERIFIED"}) untuk mengakses Ruang Kerja."
+                                        securityAccessResult = SecurityAccessResult(
+                                            isAuthorized = false,
+                                            message = denyReason,
+                                            session = verifiedSession
+                                        )
+                                        officerAuthManager.logoutOfficer()
+                                        isOfficerLoggedIn = false
+                                        isError = true
+                                        errorMessage = denyReason
+                                        Toast.makeText(context, denyReason, Toast.LENGTH_LONG).show()
+                                        return@launch
+                                    }
                                     securityAccessResult = SecurityAccessResult(
                                         isAuthorized = true,
                                         message = "Perangkat terverifikasi valid.",
-                                        session = sessionRes.getOrNull()
+                                        session = verifiedSession
                                     )
                                     isOfficerLoggedIn = true
                                     officerName = profile.fullName
@@ -3595,17 +3661,26 @@ private fun ReportDropdownField(
                     modifier = Modifier.size(24.dp)
                 )
             }
+        }
 
-            androidx.compose.runtime.DisposableEffect(Unit) {
-                onDispose {
-                    if (isExpanded) onDismiss()
-                }
-            }
-            DropdownMenu(
-                expanded = isExpanded,
-                onDismissRequest = onDismiss
+        AnimatedVisibility(visible = isExpanded) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 3.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
             ) {
-                content()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    content()
+                }
             }
         }
     }
@@ -4255,6 +4330,9 @@ internal fun decodeCitizenPhotoModel(photoSource: String?): Any? {
             if (path.isNullOrBlank()) return null
             val file = File(path)
             return if (file.exists() && file.length() > 0L) file else null
+        }
+        if (trimmed.startsWith("http://", ignoreCase = true)) {
+            return "https://" + trimmed.substring(7)
         }
         return trimmed
     }

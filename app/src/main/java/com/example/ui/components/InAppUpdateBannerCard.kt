@@ -399,15 +399,7 @@ fun AppUpdatePromptDialog(
                         val activeHighlights = updateState.changelogs
                             .find { it.version == updateState.latestVersion }
                             ?.highlights
-                            ?: listOf(
-                                "Tab Laporan Warga Bersebelahan dengan Prakiraan Cuaca",
-                                "Peluncur Kamera Langsung (Live Camera Launcher) & Geotag",
-                                "Peta Spasial GIS Laporan Warga & Filter Kategori Kejadian",
-                                "Layer Overlay Titik Rawan Bencana BPBD Mukomuko",
-                                "Pelacakan Status Laporan & Notifikasi Toast Konfirmasi",
-                                "Direktori Kontak Darurat Mukomuko & Dial Cepat 117 BPBD",
-                                "Optimalisasi Tombol Aksi Cepat Speed Dial FAB Material 3"
-                            )
+                            ?: com.example.model.INITIAL_RELEASE_CHANGELOG.highlights
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             activeHighlights.take(5).forEach { highlight ->
                                 Text(

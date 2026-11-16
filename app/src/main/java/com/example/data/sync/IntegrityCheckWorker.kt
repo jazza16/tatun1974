@@ -36,32 +36,40 @@ object IntegrityCheckWorker {
     ): IntegrityCheckResult = withContext(Dispatchers.IO) {
         val weatherDao = database.weatherDao()
         val conflictHandler = SyncConflictHandler(context, database)
+        val currentUid = try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        } catch (_: Exception) { null }
         val firestore = try {
-            val dbId = "ai-studio-android-cuacamuk-a1e6cb6f-11e7-41ba-90f4-82c9adb67961"
-            try {
-                FirebaseFirestore.getInstance(dbId)
+            val dbId = try {
+                context.getString(com.example.R.string.firestore_database_id)
             } catch (_: Exception) {
-                FirebaseFirestore.getInstance()
+                "ai-studio-android-cuacamuk-a1e6cb6f-11e7-41ba-90f4-82c9adb67961"
             }
+            FirebaseFirestore.getInstance(dbId)
         } catch (_: Exception) { null }
 
         val localEntities = weatherDao.getAllCitizenDisasterReportsSync()
         val localChecksum = computeChecksum(localEntities.map { "${it.id}:${it.status}:${it.timestamp}" })
 
-        if (firestore == null) {
+        if (currentUid == null || firestore == null) {
             return@withContext IntegrityCheckResult(
                 localCount = localEntities.size,
                 remoteCount = 0,
                 localChecksum = localChecksum,
-                remoteChecksum = "OFFLINE_NO_FIRESTORE",
+                remoteChecksum = if (currentUid == null) "AUTH_REQUIRED_OFFLINE" else "OFFLINE_NO_FIRESTORE",
                 isConsistent = true,
-                discrepancies = listOf("Firestore offline / tidak dapat diakses untuk pembanding."),
+                discrepancies = listOf(
+                    if (currentUid == null) "Login Google diperlukan untuk memverifikasi integritas Cloud Firestore."
+                    else "Firestore offline / tidak dapat diakses untuk pembanding."
+                ),
                 resolvedDiscrepancyCount = 0
             )
         }
 
         try {
-            val snapshot = firestore.collection("citizen_disaster_reports").get().await()
+            val snapshot = firestore.collection("citizen_disaster_reports")
+                .get()
+                .await()
             val remoteReports = mutableListOf<CitizenDisasterReport>()
             for (doc in snapshot.documents) {
                 val id = doc.getString("id") ?: doc.id

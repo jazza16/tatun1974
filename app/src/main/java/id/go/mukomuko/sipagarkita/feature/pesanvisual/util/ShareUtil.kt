@@ -45,15 +45,11 @@ object ShareUtil {
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_TEXT, caption)
             putExtra(Intent.EXTRA_SUBJECT, subject)
+            clipData = android.content.ClipData.newRawUri("Poster Kesiapsiagaan", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
         val resInfoList = context.packageManager.queryIntentActivities(shareIntent, 0)
-        if (resInfoList.isEmpty()) {
-            return false
-        }
-
-        // Grant read URI permission to target apps
         for (resolveInfo in resInfoList) {
             val pkg = resolveInfo.activityInfo.packageName
             context.grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)

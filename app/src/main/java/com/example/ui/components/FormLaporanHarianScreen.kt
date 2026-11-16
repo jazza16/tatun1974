@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -80,8 +82,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -195,10 +199,17 @@ fun FormLaporanHarianScreen(
 
     // --- State Step 4: Administrasi & Log Komunikasi ---
     val context = LocalContext.current
+    val officerAuthManager = remember { com.example.data.local.OfficerAuthManager(context) }
     val session = remember { SessionManager(context) }
     var tanggalSurat by remember { mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())) }
     var tanggalTerima by remember { mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())) }
-    var operatorName by remember { mutableStateOf(session.getNamaPetugas().ifBlank { "Rahmat Hidayat (Operator Utama)" }) }
+    var operatorName by remember {
+        mutableStateOf(
+            officerAuthManager.getOfficerName().ifBlank {
+                session.getNamaPetugas().ifBlank { "Rahmat Hidayat (Operator Utama)" }
+            }
+        )
+    }
     var stationId by remember { mutableStateOf("PUSDALOPS-MM-01") }
 
     // Temporary list for Log Komunikasi (Relasi One-to-Many)
@@ -211,8 +222,8 @@ fun FormLaporanHarianScreen(
                 stationIdFrom = "Radio VHF Ch.1",
                 stationIdTo = "Kalaksa BPBD Mukomuko",
                 subjek = "Laporan awal kejadian disampaikan. Tidak terdeteksi potensi tsunami.",
-                operatorNama = session.getNamaPetugas(),
-                operatorNip = session.getNipPetugas()
+                operatorNama = officerAuthManager.getOfficerName().ifBlank { session.getNamaPetugas() },
+                operatorNip = officerAuthManager.getOfficerBadgeId().ifBlank { session.getNipPetugas() }
             )
         )
     }
@@ -754,19 +765,17 @@ private fun Step1DataKejadian(
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    CompactOutlinedTextField(
                         value = tanggalKejadian,
                         onValueChange = onTanggalKejadianChange,
-                        label = { Text("Tanggal", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
+                        label = "Tanggal",
+                        modifier = Modifier.weight(1f)
                     )
-                    OutlinedTextField(
+                    CompactOutlinedTextField(
                         value = waktuKejadian,
                         onValueChange = onWaktuKejadianChange,
-                        label = { Text("Waktu", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
+                        label = "Waktu",
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
@@ -839,6 +848,59 @@ private fun Step1DataKejadian(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CompactOutlinedTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val colors = OutlinedTextFieldDefaults.colors()
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.fillMaxWidth(),
+        singleLine = true,
+        textStyle = TextStyle(
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF1E293B)
+        ),
+        interactionSource = interactionSource,
+        decorationBox = { innerTextField ->
+            OutlinedTextFieldDefaults.DecorationBox(
+                value = value,
+                innerTextField = innerTextField,
+                enabled = true,
+                singleLine = true,
+                visualTransformation = VisualTransformation.None,
+                interactionSource = interactionSource,
+                label = {
+                    Text(
+                        text = label,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
+                    )
+                },
+                colors = colors,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp),
+                container = {
+                    OutlinedTextFieldDefaults.Container(
+                        enabled = true,
+                        isError = false,
+                        interactionSource = interactionSource,
+                        colors = colors
+                    )
+                }
+            )
+        }
+    )
 }
 
 @Composable
@@ -1384,6 +1446,7 @@ private fun DialogTambahLogKomunikasi(
     onAddLog: (LogKomunikasi) -> Unit
 ) {
     val context = LocalContext.current
+    val officerAuthManager = remember { com.example.data.local.OfficerAuthManager(context) }
     val session = remember { SessionManager(context) }
     var waktu by remember {
         mutableStateOf(SimpleDateFormat("HH:mm 'WIB'", Locale.getDefault()).format(Date()))
@@ -1392,7 +1455,9 @@ private fun DialogTambahLogKomunikasi(
     var pihakDihubungi by remember { mutableStateOf("Kalaksa BPBD Mukomuko") }
     var pesan by remember { mutableStateOf("") }
     var arahanTindakan by remember { mutableStateOf("") }
-    var operatorLog by remember { mutableStateOf(session.getNamaPetugas()) }
+    var operatorLog by remember {
+        mutableStateOf(officerAuthManager.getOfficerName().ifBlank { session.getNamaPetugas() })
+    }
 
     val saluranList = listOf("Radio VHF Ch.1", "Radio SSB", "Call Center 117", "WhatsApp Siaga", "Telepon Satelit")
 

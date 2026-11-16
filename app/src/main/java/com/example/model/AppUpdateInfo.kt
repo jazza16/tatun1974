@@ -1,5 +1,8 @@
 package com.example.model
 
+import androidx.annotation.Keep
+
+@Keep
 data class VersionChangelog(
     val version: String,
     val releaseDate: String,
@@ -8,9 +11,26 @@ data class VersionChangelog(
     val highlights: List<String>
 )
 
+val INITIAL_RELEASE_CHANGELOG = VersionChangelog(
+    version = "1.0.0",
+    releaseDate = "15 November 2026",
+    isCurrent = true,
+    isLatest = true,
+    highlights = listOf(
+        "Rilis Perdana SIPAGAR KITA v1.0.0: Aplikasi resmi pemantauan cuaca, maritim, dan kesiapsiagaan bencana Kabupaten Mukomuko.",
+        "Prakiraan Cuaca & Peringatan Dini BMKG: Pemantauan cuaca 15 kecamatan, kualitas udara (ISPU), indeks UV, gelombang laut, dan gempa bumi InaTEWS real-time.",
+        "Integrasi Peta Interaktif & SOP Evakuasi: Peta geospasial GIS titik rawan bencana, jalur evakuasi mandiri, serta panggilan cepat darurat Call Center 117 BPBD.",
+        "Sinkronisasi Data Laporan Warga Real-time: Pelaporan kejadian bencana warga terverifikasi GPS beserta foto langsung yang terhubung ke Ruang Kerja Pusdalops BPBD.",
+        "Login Biometrik & Keamanan Tingkat Tinggi: Perlindungan sesi petugas dengan autentikasi biometrik, enkripsi lokal AES-256-GCM, serta isolasi data cloud terproteksi."
+    )
+)
+
+val DEFAULT_RELEASE_CHANGELOGS: List<VersionChangelog> = listOf(INITIAL_RELEASE_CHANGELOG)
+
+@Keep
 data class AppUpdateState(
-    val currentVersion: String = "3.7.0",
-    val latestVersion: String = "3.7.0",
+    val currentVersion: String = "1.0.0",
+    val latestVersion: String = "1.0.0",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -22,256 +42,12 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "3.7.0",
+    val lastCheckedVersion: String = "1.0.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Release Version) v3.7.0 Enterprise Edition terbaru secara permanen.",
-    val packageSizeMb: Float = 19.8f,
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Production Release) v1.0.0 terbaru secara permanen.",
+    val packageSizeMb: Float = 20.4f,
+    val downloadUrl: String = "https://t.me/takajuikgue",
     val isBannerDismissed: Boolean = false,
     val isSimulationActive: Boolean = false,
-    val changelogs: List<VersionChangelog> = listOf(
-        VersionChangelog(
-            version = "3.7.0",
-            releaseDate = "12 November 2026",
-            isCurrent = true,
-            isLatest = true,
-            highlights = listOf(
-                "Autentikasi Cepat Login Biometrik (Fingerprint / Biometric Strong): Opsi login cepat menggunakan sensor biometrik pada layar pembuka bagi petugas Pusdalops yang memiliki sesi NIP tersimpan.",
-                "Validasi Backend Play Integrity API Classic (Cloud Functions): Dekripsi dan verifikasi token Play Integrity serta one-time cryptographic nonce langsung di server Google Cloud Functions sebelum menyimpan sesi ke koleksi device_security_sessions.",
-                "Proteksi Ketat Tanpa Bypass Lokal: Penanganan kegagalan jaringan pada verifikasi keamanan perangkat secara tegas menolak sesi tanpa fallback lokal demi mencegah pembajakan kredensial.",
-                "Otorisasi Berbasis Jabatan pada Form Laporan Harian (Resmi): Kartu formulir laporan harian kini hanya ditampilkan bagi petugas aktif dengan jabatan Manajer, Koord. Administrasi, Operator, atau pemegang Penugasan Khusus.",
-                "Integrasi Penuh Form Laporan Harian 4-Tab & Cetak PDF: Penyimpanan laporan harian dan log komunikasi ke Room Database (sipagar_database) serta fitur cetak langsung dokumen PDF resmi Pusdalops BPBD.",
-                "Optimalisasi Responsivitas Input & Keyboard (IME Padding): Penyesuaian tata letak formulir laporan warga dengan dukungan penuh WindowInsets dan adjustResize."
-            )
-        ),
-        VersionChangelog(
-            version = "3.6.0",
-            releaseDate = "4 November 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Pembaruan Wallpaper & Infografis Bencana Mukomuko: Mengintegrasikan Lambang Resmi Kabupaten Mukomuko ('Kapuang Sakti Ratau Batuah') dan Cap Resmi BPBD Kabupaten Mukomuko kualitas tinggi, menampilkan kearifan lokal Rumah Adat panggung dan budaya Sirih Carano yang adaptif terhadap gempa bumi pesisir.",
-                "Penyelarasan Zona Kegempaan Megathrust: Memperbarui penamaan seismik menjadi Zona Subduksi & Megathrust Mentawai - Bengkulu dan edukasi rumus evakuasi mandiri tsunami 20-20-20.",
-                "Pembersihan Banner & Elemen Visual: Menghapus spanduk oranye kontak darurat di bawah foto, nomor telepon, teks 'high resolution (9:16)', serta referensi teks 'air rami/air manjuto/sungai manjuto' dari infografis wallpaper.",
-                "Standardisasi Spacing Seragam 8dp Ruang Kerja: Menerapkan tata letak LazyColumn dengan Arrangement.spacedBy(8.dp) di seluruh konsol Ruang Kerja untuk konsistensi kartu UI lintas ukuran layar.",
-                "Validasi Token Play Integrity API (Mode Classic): Integrasi verifikasi token Play Integrity API Classic pada AuthManager sebelum finalisasi sesi pengguna di Ruang Kerja, dengan pencatatan otomatis kegagalan pada log audit keamanan lokal (Room database).",
-                "Otomatisasi Simpan & Sinkronisasi Petugas Antar-Perangkat: Penambahan data Nama dan NIP petugas baru oleh Administrator otomatis tersimpan di Room database dan langsung tersinkronisasi via Cloud Firestore ke semua perangkat baru yang terpasang aplikasi.",
-                "Catatan Operasional Lapangan & Asisten Gemini AI: Modul catatan List-Detail adaptif (SlidingPaneLayout & Dual-Pane) terintegrasi Room Database v9 dengan asisten AI Gemini untuk peringkasan insiden dan pembuatan draf SOP rekomendasi penanganan."
-            )
-        ),
-        VersionChangelog(
-            version = "3.5.0",
-            releaseDate = "3 November 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Proteksi Password Administrator pada Tombol Sync (xHP): Mengamankan sinkronisasi lintas perangkat dengan dialog verifikasi sandi administrator resmi agar tidak disalahgunakan personil yang tidak berwenang.",
-                "Otorisasi Khusus Ekspor PDF & CSV: Tombol Ekspor PDF dan CSV pada Ruang Kerja kini hanya dapat dilihat dan dioperasikan oleh pejabat berwenang (Manajer, Koord. Administrasi, dan Operator).",
-                "Tata Letak Presisi Ruang Kerja: Judul 'RUANG KERJA' dan 'KONSOL PUSDALOPS' dipindahkan persis di atas tengah seluruh badge identitas personil dan status.",
-                "Navigasi Cepat Tab Laporan Warga: Tab 'Laporan Warga' dipindahkan persis di sebelah tab utama 'Hari Ini' untuk kecepatan respon penanganan bencana di lapangan.",
-                "Modul Peta Interaktif 15 Kecamatan (MapActivity): Peta GIS interaktif seluruh 15 kecamatan Kabupaten Mukomuko dengan navigasi zoom, pan, stasiun BMKG, posko siaga TRC, dan integrasi Google Maps.",
-                "Automated Database Index Manager & Maintenance Worker: Pengoptimalan performa Room SQLite melalui penambahan indeks otomatis dan WorkManager berkala untuk operasi SQLite VACUUM & ANALYZE.",
-                "Perapihan Kartu Keamanan Perangkat & Sesi: Pemangkasan ruang kosong berlebih pada kartu Play Integrity Classic untuk tampilan yang jauh lebih ringkas dan estetik.",
-                "Optimalisasi Badge Peringatan Dini Aktif: Dimensi dan ukuran font badge peringatan dini diatur proporsional di sisi kartu judul tanpa bertumpuk atau melebar.",
-                "Integrasi Nama Aplikasi SIPAGAR KITA & Info Lanskap: Penempatan nama aplikasi resmi SIPAGAR KITA di atas judul Pusdalops halaman login utama, serta pemindahan Wallpaper HD & Info Lanskap ke info aplikasi pasca-login."
-            )
-        ),
-        VersionChangelog(
-            version = "3.4.0",
-            releaseDate = "1 November 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Proteksi Password Administrator Data Personil: Pengamanan ganda tombol dan badge 'Data Personil' dengan verifikasi Sandi Administrator resmi sebelum akses struktur personil dinas diberikan.",
-                "Google Play In-App Update Engine: Pustaka resmi Google Play App Update untuk mendeteksi dan menginstal rilis mutakhir secara daring langsung di dalam aplikasi.",
-                "Play Integrity API Mode Classic: Menerapkan verifikasi keamanan hardware dan validasi cryptographic nonce anti-replay pada alur login petugas dinas dan penggantian PIN.",
-                "Transmisi Sesi Keamanan ke Cloud Firestore: Entitas sesi keamanan perangkat dikirimkan ke backend Firestore untuk validasi berlapis sebelum hak akses Ruang Kerja diberikan.",
-                "Pemantauan Real-time Sesi & Hardware Token: Dasbor administrator yang memantau keaslian perangkat petugas yang sedang bertugas secara langsung dengan tombol kontrol akses.",
-                "Tampilan Adaptif Mode Warga & Sesi Petugas: Pemisahan tampilan kartu status menjadi 'Mode Warga / Tamu' saat mode publik aktif dan 'Petugas Jaga Aktif' saat sesi dinas resmi aktif.",
-                "Tata Letak Ergonomis Tombol & Status: Penataan ulang posisi badge 'Sesi Resmi' di bawah judul Ruang Kerja dan pemindahan keterangan akses respon ke bawah tombol konsol.",
-                "Fitur Terdedikasi Ganti PIN & Reset PIN: Antarmuka tab ganti sandi dinas mandiri dan reset PIN ke konfigurasi bawaan resmi terenkripsi Pusdalops BPBD Mukomuko.",
-                "Semboyan Nasional 'BENCANA URUSAN BERSAMA': Penempatan semboyan penanggulangan bencana nasional dengan tipografi kapital serasi di antara kartu lanskap dan menu login warga/petugas.",
-                "Standardisasi & Penguncian Dimensi Badge: Seluruh badge kartu insiden dan status dikunci dengan tinggi seragam 24dp, lebar dinamis proporsional, dan susunan teks satu baris tanpa terpotong.",
-                "Lampiran NIP Petugas pada Dokumen PDF: Dokumen resmi berita acara ekspor PDF Pusdalops secara otomatis mencantumkan NIP resmi ASN/TRC petugas verifikator menggantikan ID lama.",
-                "Penjajaran Satu Baris Log Konflik Database Explorer: Informasi detail waktu, tanggal, dan bulan pada log konflik sinkronisasi diselaraskan presisi satu baris sejajar dengan judul laporan.",
-                "Optimalisasi Cerdas Resolusi Foto Laporan: Kompresi bitmap presisi 1280px dan JPEG 82% untuk mempercepat sinkronisasi dokumen kelengkapan laporan warga ke petugas.",
-                "Pembaruan Jajaran Kontributor: Penambahan Erhy, Ande_@inun, dan maz_Mei pada daftar kontributor resmi aplikasi SIPAGAR KITA.",
-                "Proteksi Tab Ruang Kerja Khusus Mode Warga: Pengamanan ketat tab Ruang Kerja 'Khusus' pada mode warga guna menghindari penyalahgunaan kredensial dinas."
-            )
-        ),
-        VersionChangelog(
-            version = "2.0.0",
-            releaseDate = "31 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Enterprise Multi-Device Synchronization: Integrasi SyncController terpusat yang menghubungkan hingga 5 perangkat ponsel piket Pusdalops serentak menerima notifikasi audio-alarm dan getaran seketika saat laporan bencana masuk.",
-                "Presisi Desain Badge & Status: Standardisasi geometri pill mikro-presisi, kontras optimal, border stroke halus, dan indikator status sinkronisasi (Synced vs Pending) pada seluruh kartu laporan bencana.",
-                "Lencana Peran Resmi ASN & Personil: Kode warna peran resmi (Pengawas, Supervisor, Koord. Administrasi, Manajer Pusdalops PB, Operator, Staff Logistik TRC, Piket Posko) lengkap dengan manajemen personil (Tambah, Ubah, Hapus) dan ganti PIN terenkripsi.",
-                "Pemantauan Latensi Firestore Real-time: Pengukuran roundtrip latensi dengan ambang batas peringatan jaringan lambat (>3000ms) di dashboard konsol dan status strip.",
-                "Antrean Otomatis & Progress Bar Retry: Pemulihan koneksi otomatis dengan exponential backoff dan progress bar visual saat sinkronisasi tertunda.",
-                "Pemeriksaan Integritas SHA-256 Harian: Worker verifikasi checksum otomatis antara Room SQLite lokal dan Cloud Firestore untuk mendeteksi serta menyelesaikan inkonsistensi data secara instan.",
-                "Database Explorer Room SQLite: Modul inspeksi data tabel Room (personnel, citizen_disaster_reports, personnel_audit_logs, sync_conflict_logs) untuk troubleshooting mandiri administrator BPBD.",
-                "Kompatibilitas Lintas Versi Android: Dukungan penuh Android 7.0 hingga Android 16 (API 24 - API 36) dengan pengelolaan saluran notifikasi darurat, izin dinamis POST_NOTIFICATIONS, dan WakeLock siaga."
-            )
-        ),
-        VersionChangelog(
-            version = "1.8.0",
-            releaseDate = "29 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Penguncian Skala Font Universal: Penerapan fontScale = 1.0f pada seluruh komponen antarmuka aplikasi, mencegah distorsi dan tumpang tindih teks akibat pengaturan skala font sistem ponsel.",
-                "Sinkronisasi Basis Data Real-Time Antar-Ponsel: Pembaruan status dan tindak lanjut petugas BPBD langsung tampil secara instan di layar warga tanpa perlu refresh manual.",
-                "Kartu Wajib Formulir Laporan: Penambahan kartu terdedikasi 'Deskripsi Kejadian / Jenis Bencana Lainnya' dengan validasi wajib diisi sebelum mengirim laporan.",
-                "Proteksi Mode Tamu & Toast Notifikasi: Kartu dan modul khusus petugas membatasi akses pada mode tamu dengan pemberitahuan 'Login dengan ID petugas untuk akses ini'.",
-                "Semboyan Polres Mukomuko: Penambahan semboyan resmi 'POLISI BERSAMA MASYARAKAT' pada daftar kontak darurat kepolisian.",
-                "Penyederhanaan Layar Login: Tampilan login warga dan petugas dibuat bersih, ringkas, dan fokus tanpa wallpaper berat atau kartu analisis berlebih.",
-                "Daftar Kontributor Resmi: Penambahan daftar kontributor aplikasi (M@mi, Afid, Ran_NAM, Erhy, Erick P, Bg-Fir) pada kartu info pengembang.",
-                "Peran Resmi Staff Logistik TRC: Pembaruan label peran personil menjadi 'Staff Logistik TRC' dan optimasi presisi badge pada seluruh kartu."
-            )
-        ),
-        VersionChangelog(
-            version = "1.7.0",
-            releaseDate = "28 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Akses Langsung Tab Konsol Admin BPBD: Penambahan tab terdedikasi 'Konsol Admin' di bilah navigasi utama dan tombol pintasan di bilah atas aplikasi untuk akses tanpa hambatan.",
-                "Penyimpanan Permanen Room Database: Perbaikan menyeluruh persistensi personil sehingga seluruh data pendaftaran nama petugas tersimpan secara permanen di Room Database SQLite lokal.",
-                "Sinkronisasi Roster Dua Arah Real-time: Integrasi pendaftaran personil baik dari dialog login maupun dashboard konsol dengan pembaruan otomatis tanpa perlu refresh aplikasi.",
-                "Login Administrator Master PIN: Akses cepat otorisasi administrator menggunakan verifikasi PIN Master resmi terenkripsi untuk manajemen personil dan penanganan kedaruratan daerah.",
-                "Badge Warna Peran Resmi: Tampilan lencana berkode warna untuk Operator (Biru), Piket Posko (Kuning Amber), Staff Logistik TRC (Hijau), dan Manajer Pusdalops PB (Ungu).",
-                "Timer Keamanan Auto-Logout 30 Menit: Pemutusan sesi dinas petugas otomatis saat tidak aktif selama 30 menit untuk perlindungan data kedaruratan daerah."
-            )
-        ),
-        VersionChangelog(
-            version = "1.6.1",
-            releaseDate = "27 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Ekspor Digital Laporan Bencana (PDF & CSV): Ekspor arsip resmi dalam format dokumen PDF bertanda tangan Pusdalops BPBD serta berkas CSV untuk analisis data spreadsheet Excel.",
-                "Peta Mini Lokasi Kejadian (Auto-Pin): Peninjauan lokasi presisi laporan warga dengan penanda otomatis dan navigasi rute armada di Petugas Dashboard.",
-                "Penyaringan Multi-Kategori Bencana: Filter laporan berdasarkan kategori bencana spesifik (Banjir, Cuaca Ekstrem, Keamanan Pesisir, Longsor, Gempa, dll.).",
-                "Visualisasi Grafik Batang Tren Bulanan: Grafik statistik tren bulanan kejadian bencana di Kabupaten Mukomuko.",
-                "Modul Arsip Penanganan Tuntas: Pemisahan data laporan berstatus 'Selesai' untuk manajemen arsip tanggap darurat yang efisien.",
-                "Info Pasang Surut & Pasang Naik Dinamis: Integrasi data pasang surut maritim pesisir Mukomuko dengan animasi gelombang dinamis dan panduan interaktif nelayan.",
-                "Indikator Visual Cuaca Komprehensif: Indikator visual kelembapan udara, kecepatan angin, dan panah putar kompas arah angin di kartu cuaca utama.",
-                "Optimalisasi R8/ProGuard & Keamanan Jaringan: Pengurangan ukuran APK dan penguatan konfigurasi keamanan jaringan endpoint BMKG."
-            )
-        ),
-        VersionChangelog(
-            version = "1.6.0",
-            releaseDate = "26 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Konsol Khusus Petugas Pusdalops BPBD & TRC: Antarmuka terdedikasi bagi petugas jaga Pusdalops dan Tim Reaksi Cepat (TRC) untuk validasi, verifikasi, dan pengelolaan laporan bencana warga secara terpusat.",
-                "Dasbor KPI & Metrik Siaga Bencana Real-Time: Pemantauan statistik operasional interaktif (Total Masuk, Menunggu Validasi, Tim Lapangan Diterjunkan, Tuntas Ditangani, dan Akumulasi Korban Jiwa).",
-                "Log Tindak Lanjut & Catatan Lapangan TRC: Fitur pencatatan resmi aksi penanganan, pengerahan armada/logistik (perahu karet, tenda darurat, genset), yang tersimpan permanen dan tersinkronisasi daring.",
-                "Pemanduan Langsung Google Maps & Kontak Pelapor Cepat: Satu ketukan untuk rute navigasi armada darurat ke koordinat satelit GPS pelapor, disertai panggilan telepon dan WhatsApp instan.",
-                "Disposisi Laporan Format Resmi Pusdalops BPBD: Ekspor dan bagikan laporan situasi (Sitrep) lengkap dengan koordinat dan tautan Google Maps langsung ke posko siaga atau grup WhatsApp komando.",
-                "Sinkronisasi Multi-Device Cloud Real-Time: Sinkronisasi instan status laporan (Diproses -> Divalidasi -> Selesai) antar perangkat ponsel warga, relawan, dan posko induk BPBD Kabupaten Mukomuko.",
-                "Autentikasi Keamanan PIN Petugas Jaga: Perlindungan akses perubahan status dan log TRC menggunakan PIN resmi terverifikasi dan terenkripsi dinas."
-            )
-        ),
-        VersionChangelog(
-            version = "1.5.0",
-            releaseDate = "25 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Tab Laporan Warga Bersebelahan dengan Prakiraan Cuaca: Navigasi cepat tepat di samping tab Prakiraan Cuaca untuk pelaporan insiden darurat dan bencana secara instan.",
-                "Formulir Pelaporan Bencana Terpadu & Geotag Anti-Hoax: Pencatatan data bencana lengkap (jenis bencana, waktu WIB, lokasi detail, 15 kecamatan & desa/kelurahan Mukomuko, data korban jiwa meninggal/luka/hilang) dengan kunci koordinat GPS satelit ponsel.",
-                "Peluncur Kamera Langsung (Live Camera Launcher): Ambil foto kondisi kejadian langsung di lokasi dengan stempel digital watermark GPS resmi BPBD Mukomuko.",
-                "Peta Spasial GIS Interaktif Laporan Warga: Pemetaan pin kejadian real-time dengan filter kategori (Banjir, Angin Kencang, Gelombang/Abrasi, Longsor, Infrastruktur) dan tombol navigasi langsung ke Google Maps.",
-                "Layer Overlay Titik Rawan Bencana BPBD Mukomuko: Pemantauan korelasi sebaran aduan warga dengan zona risiko tinggi (Zona Pesisir Abrasi Koto Jaya - Teramang Jaya, DAS Manjunto & Selagan, Perbukitan V Koto & Malin Deman, Pesisir Ipuh & Air Rami).",
-                "Sistem Pelacakan Status Laporan & Notifikasi Toast: Indikator status berwarna (Diproses, Divalidasi, Selesai) pada tabel riwayat laporan dengan aksi pembaruan status interaktif dan notifikasi toast konfirmasi.",
-                "Direktori 'Kontak Penting' Darurat Mukomuko: Akses panggilan cepat satu ketukan ke Call Center Bebas Pulsa 117 BPBD, Pusdalops BPBD (0737-71112), Polres 110, RSUD Mukomuko IGD 24 Jam, Damkar 113, Basarnas 115, PMI, dan Polsek se-Mukomuko.",
-                "Optimalisasi Tombol Aksi Cepat (Speed Dial FAB): Tombol aksi cepat Material 3 yang 100% responsif terhadap ketukan tanpa konflik gestur, dilengkapi tombol alih posisi jempol (kiri/kanan) dan pintasan ke Laporan Warga.",
-                "Caching Offline Room Database: Dukungan penyimpanan offline prakiraan cuaca dan riwayat aduan warga untuk kelancaran akses di daerah pesisir Mukomuko dengan sinyal terbatas."
-            )
-        ),
-        VersionChangelog(
-            version = "1.4.0",
-            releaseDate = "24 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Identitas Baru SIPAGAR KITA: Resmi berganti nama dari Cuaca Mukomuko menjadi SIPAGAR KITA (SIMAK, PAGAR, KITA) sebagai benteng pertahanan & kesiapsiagaan masyarakat Mukomuko.",
-                "Edukasi Akronim SIPAGAR KITA: Penjelasan rinci makna SIMAK (Sistem Informasi Maritim, Atmosfer & Kebencanaan Mukomuko), PAGAR (Peringatan Awal, Gelombang, Air & Resiko Mukomuko), dan KITA (Kesiapsiagaan, Iklim, dan Tanggap Bencana Mukomuko) di layar utama dengan tipografi oranye khas.",
-                "Sistem Notifikasi Popup Peringatan Dini: Popup otomatis aktif saat ada peringatan cuaca buruk BMKG, gelombang tinggi (>= 2m), atau gempa bumi BMKG InaTEWS WRS-NTWC dengan aksi panggilan cepat Call Center 117 BPBD dan SOP Evakuasi.",
-                "Penyegaran Tampilan Wallpaper Startup: Tampilan wallpaper pembuka lebih bersih, fokus, dan modern tanpa elemen header berlebih.",
-                "Aksi Cepat Portabel & Kompak: Tombol Aksi Cepat kini berukuran minimalis (48dp), dapat digeser (drag & drop) secara bebas ke posisi mana pun di layar, dilengkapi preset docking (Kanan/Kiri Bawah/Tengah), serta urutan aksi yang dapat disesuaikan.",
-                "Pembaruan Informasi Pengembang: Nama pengembang resmi diperbarui menjadi tathoenz_arazak dengan kontak Telegram @takajuikgue pada menu informasi aplikasi.",
-                "Optimalisasi Desain & Shadow Modern: Tata letak kartu cuaca dipercantik dengan sudut rounded 20-24dp, bayangan lembut elegan, serta standardisasi hierarki status badge."
-            )
-        ),
-        VersionChangelog(
-            version = "1.3.0",
-            releaseDate = "22 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Konsol Gempa WRS-NTWC InaTEWS BMKG: Tampilan peta geospasial GIS interaktif (Streets, Satelit, Grayscale) dengan animasi gelombang seismik P/S, patahan Megathrust Sunda, status ancaman tsunami nasional, dan tautan resmi inatews.bmkg.go.id/wrs.",
-                "Integrasi Tab Kualitas Udara (ISPU): Pemantauan PM2.5, PM10, SO2, CO, O3, NO2 dan himbauan kesehatan masyarakat resmi BMKG.",
-                "Peta Shake Map Gempa Terkini Interaktif: Fitur zoom in, zoom out, pan, dan penampil gambar peta guncangan gempa BMKG layar penuh.",
-                "Dynamic Weather Icon: Ikon cuaca beranimasi dinamis yang menyesuaikan kondisi cuaca real-time (cerah, berawan, hujan, badai, kabut).",
-                "Grafik Kurva Indeks UV Harian: Visualisasi kurva paparan UV dengan penanda waktu paparan sinar UV puncak (10.00 - 14.00 WIB) dan rekomendasi perlindungan diri.",
-                "Deteksi Otomatis Lokasi GPS Kecamatan: Deteksi akurat 15 kecamatan di Kabupaten Mukomuko melalui GPS perangkat dengan izin lokasi runtime.",
-                "Optimalisasi Mode Pengguna Ponsel Portrait: Kunci orientasi portrait penuh dan tata letak satu kolom vertikal yang responsif & ergonomis.",
-                "Animasi Transisi Tab Halus: Transisi navigasi antar tab cuaca, maritim, dan kualitas udara yang lebih lembut dan nyaman."
-            )
-        ),
-        VersionChangelog(
-            version = "1.2.0",
-            releaseDate = "20 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Sistem Penerimaan & Instalasi Pembaruan Daring Otomatis (OTA In-App Engine) tanpa perlu update offline.",
-                "Prakiraan Cuaca 3 Hari terperinci untuk 15 kecamatan di Kabupaten Mukomuko.",
-                "Modul peta interaktif titik rawan bencana dan rute evakuasi tsunami/banjir.",
-                "Sistem peringatan cuaca buruk waktu nyata berbasis push notification lokal.",
-                "Tema terang sebagai tema default dengan palet oranye hangat dan rasio kontras tinggi.",
-                "Tata letak LazyVerticalGrid adaptif yang seimbang pada perangkat tablet dan ponsel.",
-                "Migrasi otomatis database Room lokal tanpa risiko force close atau kehilangan data."
-            )
-        ),
-        VersionChangelog(
-            version = "1.1.0",
-            releaseDate = "17 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "UI Toggle Mode Gelap & Mode Terang dengan kalibrasi kontras tinggi (WCAG AAA).",
-                "Penyempurnaan kontras kartu peringatan cuaca oranye & gempa BMKG di semua kondisi pencahayaan.",
-                "Menu pembaruan aplikasi daring (online update) dari versi sebelumnya.",
-                "Pembaruan antarmuka dan peningkatan keandalan sistem mitigasi bencana.",
-                "Optimalisasi rendering grafik interaktif gelombang pesisir Samudra Hindia."
-            )
-        ),
-        VersionChangelog(
-            version = "1.0.0",
-            releaseDate = "16 Oktober 2026",
-            isCurrent = false,
-            isLatest = false,
-            highlights = listOf(
-                "Prakiraan cuaca lengkap untuk 15 kecamatan se-Kabupaten Mukomuko.",
-                "Sistem peringatan cuaca buruk berstatus AWAS, SIAGA, dan WASPADA.",
-                "Notifikasi gempa bumi real-time berdasarkan rilis resmi BMKG Indonesia.",
-                "Akses panggilan darurat cepat Call Center 117 Pusdalops BPBD Mukomuko.",
-                "Visualisasi tinggi gelombang laut & kecepatan angin untuk keselamatan nelayan.",
-                "Laporan cuaca langsung dari warga (Community Citizen Weather)."
-            )
-        ),
-        VersionChangelog(
-            version = "0.9.0",
-            releaseDate = "Awal Oktober 2026",
-            highlights = listOf(
-                "Versi prarilis: integrasi data cuaca Open-Meteo dan pemetaan koordinat kecamatan Mukomuko.",
-                "Pengujian awal notifikasi lokal cuaca ekstrem."
-            )
-        )
-    )
+    val changelogs: List<VersionChangelog> = DEFAULT_RELEASE_CHANGELOGS
 )

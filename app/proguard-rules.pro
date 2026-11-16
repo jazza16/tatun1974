@@ -55,3 +55,13 @@
 
 # 7. Preserve Line Numbers for Crash Reporting
 -keepattributes SourceFile, LineNumberTable
+
+# Aturan Anti-Rusak untuk Model Data Firestore
+-keep class com.aistudio.cuacamukomuko.wmzq.model.** { *; }
+-keepclassmembers class com.aistudio.cuacamukomuko.wmzq.model.** { *; }
+-keep class com.example.security.DeviceSecuritySession { *; }
+-keepclassmembers class com.example.security.DeviceSecuritySession { *; }
+-keep @androidx.annotation.Keep class * { *; }
+-keepclassmembers class * {
+    @androidx.annotation.Keep *;
+}

@@ -2,6 +2,8 @@ package com.example.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.security.SecureStorageHelper
+import com.example.security.SecurityManager
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -77,14 +79,25 @@ class OfficerAuthManager(private val context: Context) {
         private const val PREF_OFFICER_ROLE = "officer_role"
         private const val PREF_OFFICER_SHIFT = "officer_shift"
         private const val PREF_OFFICER_PIN = "officer_pin"
+        private const val PREF_OFFICER_PIN_HASH = "officer_pin_hash"
+        private const val PREF_OFFICER_PIN_SALT = "officer_pin_salt"
         private const val PREF_OFFICER_ROSTER_JSON = "officer_roster_json"
 
         private const val PREF_IS_ADMIN_LOGGED_IN = "is_admin_logged_in"
         private const val PREF_ADMIN_PASSWORD = "admin_password"
+        private const val PREF_ADMIN_PASSWORD_HASH = "admin_password_hash"
+        private const val PREF_ADMIN_PASSWORD_SALT = "admin_password_salt"
+        private const val PREF_ADMIN_FAILED_ATTEMPTS = "admin_failed_attempts"
+        private const val PREF_ADMIN_LOCKOUT_UNTIL = "admin_lockout_until"
         const val DEFAULT_ADMIN_USERNAME = "admin"
-        const val DEFAULT_ADMIN_PASSWORD = "sipagarkita2026"
+        private const val MAX_ADMIN_ATTEMPTS = 5
+        private const val ADMIN_LOCKOUT_MS = 5 * 60 * 1000L
 
-        // Default valid PINs for BPBD Mukomuko Duty Officers and Admin Master
+        private val FORBIDDEN_ADMIN_PASSWORDS = setOf(
+            "sipagarkita2026", "admin", "admin123", "123456", "12345678", "password", "bpbd117"
+        )
+
+        // Legacy forbidden PINs that must never be accepted for authentication
         val VALID_PINS = listOf("117", "BPBD117", "ADMIN117", "TRC2026", "PUSDALOPS117")
 
         // Roster is pre-populated with official ASN BPBD Mukomuko Pusdalops operators
@@ -96,19 +109,19 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     fun getOfficerName(): String {
-        return sharedPrefs.getString(PREF_OFFICER_NAME, "") ?: ""
+        return SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_NAME) ?: ""
     }
 
     fun getOfficerBadgeId(): String {
-        return sharedPrefs.getString(PREF_OFFICER_BADGE_ID, "") ?: ""
+        return SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID) ?: ""
     }
 
     fun getOfficerRole(): String {
-        return sharedPrefs.getString(PREF_OFFICER_ROLE, OfficerRoles.OPERATOR) ?: OfficerRoles.OPERATOR
+        return SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_ROLE) ?: OfficerRoles.OPERATOR
     }
 
     fun getOfficerShift(): String {
-        return sharedPrefs.getString(PREF_OFFICER_SHIFT, "Shift Siaga 24 Jam") ?: "Shift Siaga 24 Jam"
+        return SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_SHIFT) ?: "Shift Siaga 24 Jam"
     }
 
     fun getOfficerFormattedTitle(): String {
@@ -312,20 +325,19 @@ class OfficerAuthManager(private val context: Context) {
         if (VALID_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) {
             return false
         }
-        val customPin = sharedPrefs.getString(PREF_OFFICER_PIN, null)
-        val isPinValid = customPin != null && customPin == trimmedPin
+        val isPinValid = verifyStoredOfficerPinHash(trimmedPin)
 
         if (isPinValid) {
             val resolvedName = name.ifBlank { "Petugas Pusdalops PB" }
             val resolvedBadge = badgeId.ifBlank { "PUSDALOPS-117" }
             val resolvedRole = role.ifBlank { OfficerRoles.PETUGAS_JAGA }
-            sharedPrefs.edit()
-                .putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
-                .putString(PREF_OFFICER_NAME, resolvedName)
-                .putString(PREF_OFFICER_BADGE_ID, resolvedBadge)
-                .putString(PREF_OFFICER_ROLE, resolvedRole)
-                .putString(PREF_OFFICER_SHIFT, shift.ifBlank { "Shift Siaga 24 Jam" })
-                .apply()
+            val resolvedShift = shift.ifBlank { "Shift Siaga 24 Jam" }
+            val editor = sharedPrefs.edit().putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_NAME, resolvedName)
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_BADGE_ID, resolvedBadge)
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_ROLE, resolvedRole)
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_SHIFT, resolvedShift)
+            editor.apply()
             com.example.util.SessionManager(context).setPetugasLogin(resolvedName, resolvedBadge, resolvedRole)
             return true
         }
@@ -344,13 +356,13 @@ class OfficerAuthManager(private val context: Context) {
         val resolvedName = name.ifBlank { "Petugas Pusdalops PB" }
         val resolvedBadge = badgeId.ifBlank { "PUSDALOPS-117" }
         val resolvedRole = role.ifBlank { OfficerRoles.PETUGAS_JAGA }
-        sharedPrefs.edit()
-            .putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
-            .putString(PREF_OFFICER_NAME, resolvedName)
-            .putString(PREF_OFFICER_BADGE_ID, resolvedBadge)
-            .putString(PREF_OFFICER_ROLE, resolvedRole)
-            .putString(PREF_OFFICER_SHIFT, shift.ifBlank { "Shift Siaga 24 Jam" })
-            .apply()
+        val resolvedShift = shift.ifBlank { "Shift Siaga 24 Jam" }
+        val editor = sharedPrefs.edit().putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
+        SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_NAME, resolvedName)
+        SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_BADGE_ID, resolvedBadge)
+        SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_ROLE, resolvedRole)
+        SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_SHIFT, resolvedShift)
+        editor.apply()
         com.example.util.SessionManager(context).setPetugasLogin(resolvedName, resolvedBadge, resolvedRole)
     }
 
@@ -360,18 +372,15 @@ class OfficerAuthManager(private val context: Context) {
      */
     fun verifyPin(pin: String): Boolean {
         val trimmedPin = pin.trim()
-        if (trimmedPin.equals("117", ignoreCase = true)) {
+        if (VALID_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) {
             return false
         }
-        val customPin = sharedPrefs.getString(PREF_OFFICER_PIN, null)
-        if (!customPin.isNullOrBlank()) {
-            return customPin == trimmedPin
-        }
-        return false
+        return verifyStoredOfficerPinHash(trimmedPin)
     }
 
     fun hasCustomPin(): Boolean {
-        return sharedPrefs.contains(PREF_OFFICER_PIN)
+        migrateLegacySecretsIfNeeded()
+        return !SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_PIN_HASH).isNullOrBlank()
     }
 
     /**
@@ -380,9 +389,12 @@ class OfficerAuthManager(private val context: Context) {
     fun setCustomOfficerPin(newPin: String) {
         val trimmedNew = newPin.trim()
         if (trimmedNew.length >= 4) {
-            sharedPrefs.edit()
-                .putString(PREF_OFFICER_PIN, trimmedNew)
-                .apply()
+            val salt = OfficerCredentialEntity.generateCryptographicSalt()
+            val hash = OfficerCredentialEntity.hashWithSalt(trimmedNew, salt)
+            val editor = sharedPrefs.edit().remove(PREF_OFFICER_PIN)
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_PIN_SALT, salt)
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_PIN_HASH, hash)
+            editor.apply()
         }
     }
 
@@ -405,9 +417,7 @@ class OfficerAuthManager(private val context: Context) {
             return Result.failure(IllegalArgumentException("PIN baru tidak boleh sama dengan PIN saat ini."))
         }
 
-        sharedPrefs.edit()
-            .putString(PREF_OFFICER_PIN, trimmedNew)
-            .apply()
+        setCustomOfficerPin(trimmedNew)
 
         return Result.success("PIN keamanan petugas berhasil diperbarui secara permanen!")
     }
@@ -419,6 +429,8 @@ class OfficerAuthManager(private val context: Context) {
         if (verifyPin(currentPin)) {
             sharedPrefs.edit()
                 .remove(PREF_OFFICER_PIN)
+                .remove(PREF_OFFICER_PIN_HASH)
+                .remove(PREF_OFFICER_PIN_SALT)
                 .apply()
             return true
         }
@@ -426,19 +438,19 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Resets the PIN back to standard Pusdalops default PINs using Administrator password/PIN.
+     * Resets the PIN using ONLY verified Administrator password (never officer PIN).
      */
-    fun resetPinWithAdmin(adminPasswordOrPin: String): Result<String> {
-        val trimmed = adminPasswordOrPin.trim()
-        val storedAdminPass = sharedPrefs.getString(PREF_ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD) ?: DEFAULT_ADMIN_PASSWORD
-        val isAdminValid = (trimmed == storedAdminPass || trimmed == DEFAULT_ADMIN_PASSWORD || verifyPin(trimmed))
-        if (!isAdminValid) {
-            return Result.failure(IllegalArgumentException("Sandi / PIN Administrator tidak valid. Otorisasi reset PIN ditolak."))
+    fun resetPinWithAdmin(adminPassword: String): Result<String> {
+        val trimmed = adminPassword.trim()
+        if (!verifyAdminPassword(trimmed)) {
+            return Result.failure(IllegalArgumentException("Sandi Administrator tidak valid atau belum dikonfigurasi. Otorisasi reset PIN ditolak."))
         }
         sharedPrefs.edit()
             .remove(PREF_OFFICER_PIN)
+            .remove(PREF_OFFICER_PIN_HASH)
+            .remove(PREF_OFFICER_PIN_SALT)
             .apply()
-        return Result.success("PIN keamanan petugas berhasil di-reset ke PIN resmi bawaan Pusdalops (117 / BPBD117 / TRC2026).")
+        return Result.success("PIN keamanan petugas berhasil di-reset ke kunci individual NIP (6 digit terakhir NIP).")
     }
 
     fun logoutOfficer() {
@@ -446,6 +458,50 @@ class OfficerAuthManager(private val context: Context) {
             .putBoolean(PREF_IS_OFFICER_LOGGED_IN, false)
             .apply()
         com.example.util.SessionManager(context).clearSession()
+        SecurityManager.getInstance(context).clearLocalSession()
+    }
+
+    /**
+     * Checks if Application Administrator has configured a custom master password.
+     */
+    fun isAdminPasswordConfigured(): Boolean {
+        migrateLegacySecretsIfNeeded()
+        val storedHash = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_ADMIN_PASSWORD_HASH)
+        val storedSalt = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_ADMIN_PASSWORD_SALT)
+        return !storedHash.isNullOrBlank() && !storedSalt.isNullOrBlank()
+    }
+
+    /**
+     * First-time setup for the Application Administrator master password.
+     * Rejects trivial defaults and stores only a PBKDF2 hash encrypted via AndroidKeyStore.
+     */
+    fun configureInitialAdminPassword(newPassword: String): Result<String> {
+        if (isAdminPasswordConfigured()) {
+            return Result.failure(IllegalStateException("Sandi Administrator sudah dikonfigurasi. Gunakan menu ubah sandi admin."))
+        }
+        val trimmed = newPassword.trim()
+        if (trimmed.length < 8) {
+            return Result.failure(IllegalArgumentException("Sandi Administrator minimal 8 karakter."))
+        }
+        if (FORBIDDEN_ADMIN_PASSWORDS.contains(trimmed.lowercase())) {
+            return Result.failure(IllegalArgumentException("Sandi Administrator terlalu lemah atau menggunakan kata sandi default yang dilarang."))
+        }
+        val salt = OfficerCredentialEntity.generateCryptographicSalt()
+        val hash = OfficerCredentialEntity.hashWithSalt(trimmed, salt)
+        val editor = sharedPrefs.edit()
+            .remove(PREF_ADMIN_PASSWORD)
+            .putInt(PREF_ADMIN_FAILED_ATTEMPTS, 0)
+            .putLong(PREF_ADMIN_LOCKOUT_UNTIL, 0L)
+        SecureStorageHelper.putEncrypted(editor, PREF_ADMIN_PASSWORD_SALT, salt)
+        SecureStorageHelper.putEncrypted(editor, PREF_ADMIN_PASSWORD_HASH, hash)
+        editor.apply()
+        return Result.success("Sandi Administrator berhasil dikonfigurasi secara aman.")
+    }
+
+    fun getAdminLockoutRemainingSeconds(): Long {
+        val lockoutUntil = sharedPrefs.getLong(PREF_ADMIN_LOCKOUT_UNTIL, 0L)
+        val remaining = lockoutUntil - System.currentTimeMillis()
+        return if (remaining > 0L) (remaining + 999L) / 1000L else 0L
     }
 
     /**
@@ -456,19 +512,50 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Authenticates Application Admin.
-     * Default username: admin, Default password: sipagarkita2026.
+     * Authenticates Application Admin using configured PBKDF2 credentials (no hardcoded default password).
      */
     fun loginAdmin(username: String, password: String): Boolean {
         val trimmedUser = username.trim()
         val trimmedPass = password.trim()
-        val currentPass = sharedPrefs.getString(PREF_ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD) ?: DEFAULT_ADMIN_PASSWORD
-
-        if (trimmedUser.equals(DEFAULT_ADMIN_USERNAME, ignoreCase = true) && trimmedPass == currentPass) {
+        if (trimmedUser.equals(DEFAULT_ADMIN_USERNAME, ignoreCase = true) && verifyAdminPassword(trimmedPass)) {
             sharedPrefs.edit().putBoolean(PREF_IS_ADMIN_LOGGED_IN, true).apply()
             return true
         }
         return false
+    }
+
+    /**
+     * Memverifikasi sandi Administrator secara aman (PBKDF2 salted + constant-time + brute-force lockout)
+     * tanpa fallback kata sandi bawaan hardcode.
+     */
+    fun verifyAdminPassword(password: String): Boolean {
+        if (getAdminLockoutRemainingSeconds() > 0L) {
+            return false
+        }
+        val trimmed = password.trim()
+        if (trimmed.isEmpty()) return false
+        migrateLegacySecretsIfNeeded()
+        val storedHash = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_ADMIN_PASSWORD_HASH)
+        val storedSalt = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_ADMIN_PASSWORD_SALT)
+        if (storedHash.isNullOrBlank() || storedSalt.isNullOrBlank()) {
+            return false
+        }
+        val matches = OfficerCredentialEntity.verifyHash(trimmed, storedSalt, storedHash)
+        if (matches) {
+            sharedPrefs.edit()
+                .putInt(PREF_ADMIN_FAILED_ATTEMPTS, 0)
+                .putLong(PREF_ADMIN_LOCKOUT_UNTIL, 0L)
+                .apply()
+        } else {
+            val attempts = sharedPrefs.getInt(PREF_ADMIN_FAILED_ATTEMPTS, 0) + 1
+            val editor = sharedPrefs.edit().putInt(PREF_ADMIN_FAILED_ATTEMPTS, attempts)
+            if (attempts >= MAX_ADMIN_ATTEMPTS) {
+                editor.putLong(PREF_ADMIN_LOCKOUT_UNTIL, System.currentTimeMillis() + ADMIN_LOCKOUT_MS)
+                editor.putInt(PREF_ADMIN_FAILED_ATTEMPTS, 0)
+            }
+            editor.apply()
+        }
+        return matches
     }
 
     /**
@@ -479,25 +566,67 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Allows Admin to change the master admin password/PIN after successful login.
+     * Allows Admin to change the master admin password after successful verification.
      */
     fun changeAdminPassword(oldPass: String, newPass: String): Result<String> {
+        if (getAdminLockoutRemainingSeconds() > 0L) {
+            return Result.failure(SecurityException("Akses admin dikunci sementara (${getAdminLockoutRemainingSeconds()} detik) karena terlalu banyak percobaan gagal."))
+        }
         val trimmedOld = oldPass.trim()
         val trimmedNew = newPass.trim()
-        val currentPass = sharedPrefs.getString(PREF_ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD) ?: DEFAULT_ADMIN_PASSWORD
-
-        if (trimmedOld != currentPass) {
+        if (!verifyAdminPassword(trimmedOld)) {
             return Result.failure(IllegalArgumentException("Sandi admin lama tidak sesuai."))
         }
-        if (trimmedNew.length < 6) {
-            return Result.failure(IllegalArgumentException("Sandi baru minimal 6 karakter/digit."))
+        if (trimmedNew.length < 8) {
+            return Result.failure(IllegalArgumentException("Sandi admin baru minimal 8 karakter."))
+        }
+        if (FORBIDDEN_ADMIN_PASSWORDS.contains(trimmedNew.lowercase())) {
+            return Result.failure(IllegalArgumentException("Sandi baru terlalu lemah atau menggunakan kata sandi default yang dilarang."))
         }
         if (trimmedNew == trimmedOld) {
             return Result.failure(IllegalArgumentException("Sandi baru tidak boleh sama dengan sandi saat ini."))
         }
 
-        sharedPrefs.edit().putString(PREF_ADMIN_PASSWORD, trimmedNew).apply()
+        val salt = OfficerCredentialEntity.generateCryptographicSalt()
+        val hash = OfficerCredentialEntity.hashWithSalt(trimmedNew, salt)
+        val editor = sharedPrefs.edit().remove(PREF_ADMIN_PASSWORD)
+        SecureStorageHelper.putEncrypted(editor, PREF_ADMIN_PASSWORD_SALT, salt)
+        SecureStorageHelper.putEncrypted(editor, PREF_ADMIN_PASSWORD_HASH, hash)
+        editor.apply()
         return Result.success("Sandi Admin SIPAGAR KITA berhasil diperbarui secara permanen!")
+    }
+
+    private fun verifyStoredOfficerPinHash(trimmedPin: String): Boolean {
+        migrateLegacySecretsIfNeeded()
+        val storedHash = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_PIN_HASH) ?: return false
+        val storedSalt = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_PIN_SALT) ?: return false
+        return OfficerCredentialEntity.verifyHash(trimmedPin, storedSalt, storedHash)
+    }
+
+    private fun migrateLegacySecretsIfNeeded() {
+        val editor = sharedPrefs.edit()
+        var changed = false
+        val legacyPin = sharedPrefs.getString(PREF_OFFICER_PIN, null)
+        if (!legacyPin.isNullOrBlank()) {
+            val salt = OfficerCredentialEntity.generateCryptographicSalt()
+            val hash = OfficerCredentialEntity.hashWithSalt(legacyPin.trim(), salt)
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_PIN_SALT, salt)
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_PIN_HASH, hash)
+            editor.remove(PREF_OFFICER_PIN)
+            changed = true
+        }
+        val legacyAdmin = sharedPrefs.getString(PREF_ADMIN_PASSWORD, null)
+        if (!legacyAdmin.isNullOrBlank()) {
+            val salt = OfficerCredentialEntity.generateCryptographicSalt()
+            val hash = OfficerCredentialEntity.hashWithSalt(legacyAdmin.trim(), salt)
+            SecureStorageHelper.putEncrypted(editor, PREF_ADMIN_PASSWORD_SALT, salt)
+            SecureStorageHelper.putEncrypted(editor, PREF_ADMIN_PASSWORD_HASH, hash)
+            editor.remove(PREF_ADMIN_PASSWORD)
+            changed = true
+        }
+        if (changed) {
+            editor.apply()
+        }
     }
 
     /**

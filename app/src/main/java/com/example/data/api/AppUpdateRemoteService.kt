@@ -41,6 +41,34 @@ object AppUpdateRemoteService {
         "https://raw.githubusercontent.com/tathoenz/sipagar-kita/main/app-version.json"
     )
 
+    private const val FALLBACK_TRUSTED_DOWNLOAD_URL = "https://t.me/takajuikgue"
+    private val TRUSTED_DOWNLOAD_HOSTS = setOf(
+        "github.com",
+        "raw.githubusercontent.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+        "t.me",
+        "play.google.com"
+    )
+
+    fun validateDownloadUrl(rawUrl: String?): String {
+        val candidate = rawUrl?.trim().orEmpty()
+        if (candidate.isBlank()) return FALLBACK_TRUSTED_DOWNLOAD_URL
+        return try {
+            val uri = java.net.URI(candidate)
+            val scheme = uri.scheme?.lowercase()
+            val host = uri.host?.lowercase()
+            if (scheme == "https" && !host.isNullOrBlank() && TRUSTED_DOWNLOAD_HOSTS.any { host == it || host.endsWith(".$it") }) {
+                candidate
+            } else {
+                Log.w(TAG, "Untrusted OTA downloadUrl rejected ($host); falling back to official channel.")
+                FALLBACK_TRUSTED_DOWNLOAD_URL
+            }
+        } catch (_: Exception) {
+            FALLBACK_TRUSTED_DOWNLOAD_URL
+        }
+    }
+
     /**
      * Attempts to fetch the latest release manifest from remote server endpoints.
      * Returns null if all endpoints fail or device is offline (calling code then falls back
@@ -64,7 +92,7 @@ object AppUpdateRemoteService {
                             if (ver.isNotBlank()) {
                                 val code = json.optInt("versionCode", 5)
                                 val date = json.optString("releaseDate", "Oktober 2026")
-                                val dlUrl = json.optString("downloadUrl", "https://t.me/takajuikgue")
+                                val dlUrl = validateDownloadUrl(json.optString("downloadUrl", FALLBACK_TRUSTED_DOWNLOAD_URL))
                                 val size = json.optDouble("packageSizeMb", 16.2).toFloat()
                                 val highlightsList = mutableListOf<String>()
                                 val highlightsArr = json.optJSONArray("highlights")
@@ -78,7 +106,7 @@ object AppUpdateRemoteService {
                                     latestVersion = ver,
                                     versionCode = code,
                                     releaseDate = date,
-                                    highlights = if (highlightsList.isNotEmpty()) highlightsList else listOf("Pembaruan sistem & keandalan SIPAGAR KITA"),
+                                    highlights = highlightsList.ifEmpty { com.example.model.INITIAL_RELEASE_CHANGELOG.highlights },
                                     downloadUrl = dlUrl,
                                     packageSizeMb = size
                                 )

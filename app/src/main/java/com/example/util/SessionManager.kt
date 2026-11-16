@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.security.SecureStorageHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,8 +27,8 @@ val JABATAN_PETUGAS = stringPreferencesKey("jabatan_petugas")
 
 /**
  * Pengelola Sesi Petugas Piket Pusdalops BPBD Kabupaten Mukomuko.
- * Menyimpan dan menyinkronkan data petugas login (Nama, NIP, Jabatan) menggunakan
- * Jetpack DataStore ("user_session") serta SharedPreferences ("PusdalopsSession").
+ * Menyimpan dan menyinkronkan data petugas login (Nama, NIP, Jabatan) terenkripsi AES-256-GCM
+ * menggunakan Jetpack DataStore ("user_session") serta SharedPreferences ("PusdalopsSession").
  */
 class SessionManager(private val context: Context) {
     private val appContext: Context = context.applicationContext ?: context
@@ -44,8 +45,8 @@ class SessionManager(private val context: Context) {
      * Flow DataStore untuk memantau perubahan Nama Petugas secara reaktif.
      */
     val namaPetugasFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
-        preferences[NAMA_PETUGAS]
-            ?: prefs.getString("NAMA_PETUGAS", null)
+        SecureStorageHelper.decryptString(preferences[NAMA_PETUGAS])?.takeIf { it.isNotBlank() }
+            ?: SecureStorageHelper.getDecrypted(prefs, "NAMA_PETUGAS")?.takeIf { it.isNotBlank() }
             ?: DEFAULT_NAMA_PETUGAS
     }
 
@@ -53,8 +54,8 @@ class SessionManager(private val context: Context) {
      * Flow DataStore untuk memantau perubahan NIP Petugas secara reaktif.
      */
     val nipPetugasFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
-        preferences[NIP_PETUGAS]
-            ?: prefs.getString("NIP_PETUGAS", null)
+        SecureStorageHelper.decryptString(preferences[NIP_PETUGAS])?.takeIf { it.isNotBlank() }
+            ?: SecureStorageHelper.getDecrypted(prefs, "NIP_PETUGAS")?.takeIf { it.isNotBlank() }
             ?: DEFAULT_NIP_PETUGAS
     }
 
@@ -62,20 +63,20 @@ class SessionManager(private val context: Context) {
      * Flow DataStore untuk memantau perubahan Jabatan Petugas secara reaktif.
      */
     val jabatanPetugasFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
-        preferences[JABATAN_PETUGAS]
-            ?: prefs.getString("JABATAN_PETUGAS", null)
+        SecureStorageHelper.decryptString(preferences[JABATAN_PETUGAS])?.takeIf { it.isNotBlank() }
+            ?: SecureStorageHelper.getDecrypted(prefs, "JABATAN_PETUGAS")?.takeIf { it.isNotBlank() }
             ?: DEFAULT_JABATAN_PETUGAS
     }
 
     /**
-     * Menyimpan sesi petugas ke DataStore ("user_session") dan SharedPreferences ("PusdalopsSession").
+     * Menyimpan sesi petugas terenkripsi ke DataStore ("user_session") dan SharedPreferences ("PusdalopsSession").
      */
     fun setPetugasLogin(nama: String, nip: String, jabatan: String) {
-        prefs.edit()
-            .putString("NAMA_PETUGAS", nama)
-            .putString("NIP_PETUGAS", nip)
-            .putString("JABATAN_PETUGAS", jabatan)
-            .apply()
+        val editor = prefs.edit()
+        SecureStorageHelper.putEncrypted(editor, "NAMA_PETUGAS", nama)
+        SecureStorageHelper.putEncrypted(editor, "NIP_PETUGAS", nip)
+        SecureStorageHelper.putEncrypted(editor, "JABATAN_PETUGAS", jabatan)
+        editor.apply()
 
         scope.launch {
             savePetugasToDataStore(nama, nip, jabatan)
@@ -83,30 +84,33 @@ class SessionManager(private val context: Context) {
     }
 
     /**
-     * Suspend function untuk menyimpan sesi langsung ke DataStore ("user_session").
+     * Suspend function untuk menyimpan sesi terenkripsi langsung ke DataStore ("user_session").
      */
     suspend fun savePetugasToDataStore(nama: String, nip: String, jabatan: String = DEFAULT_JABATAN_PETUGAS) {
+        val encNama = SecureStorageHelper.encryptString(nama)
+        val encNip = SecureStorageHelper.encryptString(nip)
+        val encJabatan = SecureStorageHelper.encryptString(jabatan)
         appContext.dataStore.edit { preferences ->
-            preferences[NAMA_PETUGAS] = nama
-            preferences[NIP_PETUGAS] = nip
-            preferences[JABATAN_PETUGAS] = jabatan
+            preferences[NAMA_PETUGAS] = encNama
+            preferences[NIP_PETUGAS] = encNip
+            preferences[JABATAN_PETUGAS] = encJabatan
         }
-        prefs.edit()
-            .putString("NAMA_PETUGAS", nama)
-            .putString("NIP_PETUGAS", nip)
-            .putString("JABATAN_PETUGAS", jabatan)
-            .apply()
+        val editor = prefs.edit()
+        SecureStorageHelper.putEncrypted(editor, "NAMA_PETUGAS", nama)
+        SecureStorageHelper.putEncrypted(editor, "NIP_PETUGAS", nip)
+        SecureStorageHelper.putEncrypted(editor, "JABATAN_PETUGAS", jabatan)
+        editor.apply()
     }
 
     /**
      * Mengambil Nama Petugas dari DataStore / SharedPreferences.
      */
     fun getNamaPetugas(): String {
-        val fromPrefs = prefs.getString("NAMA_PETUGAS", null)
+        val fromPrefs = SecureStorageHelper.getDecrypted(prefs, "NAMA_PETUGAS")
         if (!fromPrefs.isNullOrBlank()) return fromPrefs
         return try {
             runBlocking(Dispatchers.IO) {
-                appContext.dataStore.data.first()[NAMA_PETUGAS]
+                SecureStorageHelper.decryptString(appContext.dataStore.data.first()[NAMA_PETUGAS])
             }?.takeIf { it.isNotBlank() } ?: DEFAULT_NAMA_PETUGAS
         } catch (_: Exception) {
             DEFAULT_NAMA_PETUGAS
@@ -117,11 +121,11 @@ class SessionManager(private val context: Context) {
      * Mengambil NIP Petugas dari DataStore / SharedPreferences.
      */
     fun getNipPetugas(): String {
-        val fromPrefs = prefs.getString("NIP_PETUGAS", null)
+        val fromPrefs = SecureStorageHelper.getDecrypted(prefs, "NIP_PETUGAS")
         if (!fromPrefs.isNullOrBlank()) return fromPrefs
         return try {
             runBlocking(Dispatchers.IO) {
-                appContext.dataStore.data.first()[NIP_PETUGAS]
+                SecureStorageHelper.decryptString(appContext.dataStore.data.first()[NIP_PETUGAS])
             }?.takeIf { it.isNotBlank() } ?: DEFAULT_NIP_PETUGAS
         } catch (_: Exception) {
             DEFAULT_NIP_PETUGAS
@@ -132,11 +136,11 @@ class SessionManager(private val context: Context) {
      * Mengambil Jabatan Petugas dari DataStore / SharedPreferences.
      */
     fun getJabatanPetugas(): String {
-        val fromPrefs = prefs.getString("JABATAN_PETUGAS", null)
+        val fromPrefs = SecureStorageHelper.getDecrypted(prefs, "JABATAN_PETUGAS")
         if (!fromPrefs.isNullOrBlank()) return fromPrefs
         return try {
             runBlocking(Dispatchers.IO) {
-                appContext.dataStore.data.first()[JABATAN_PETUGAS]
+                SecureStorageHelper.decryptString(appContext.dataStore.data.first()[JABATAN_PETUGAS])
             }?.takeIf { it.isNotBlank() } ?: DEFAULT_JABATAN_PETUGAS
         } catch (_: Exception) {
             DEFAULT_JABATAN_PETUGAS
@@ -151,7 +155,7 @@ class SessionManager(private val context: Context) {
     }
 
     fun isPetugasLoggedIn(): Boolean {
-        val nama = prefs.getString("NAMA_PETUGAS", null)
+        val nama = SecureStorageHelper.getDecrypted(prefs, "NAMA_PETUGAS")
         return !nama.isNullOrBlank()
     }
 }
