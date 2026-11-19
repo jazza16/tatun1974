@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -55,13 +57,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.ui.theme.OrangePrimary
 import com.example.ui.theme.WeatherGoodGreen
 
@@ -188,24 +193,25 @@ fun DeveloperInfoCard(
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Avatar with Programmer Monogram
+                    // Avatar with Developer Photo (replaces TA Monogram, retains exact 50.dp CircleShape)
                     Box(
                         modifier = Modifier
                             .size(50.dp)
                             .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    listOf(Color(0xFFEA580C), Color(0xFF9A3412))
-                                )
-                            )
-                            .border(2.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                            .background(Color(0xFF8C8575))
+                            .border(2.dp, OrangePrimary.copy(alpha = 0.65f), CircleShape)
+                            .testTag("developer_avatar_circle"),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (developerName.contains("_")) "TA" else developerName.take(2).uppercase(),
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White
+                        Image(
+                            painter = painterResource(id = R.drawable.img_developer_tathoenz),
+                            contentDescription = "Foto Pengembang $developerName",
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .testTag("developer_profile_photo")
                         )
                     }
 

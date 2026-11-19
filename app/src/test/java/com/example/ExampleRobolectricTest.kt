@@ -204,30 +204,48 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `verify bpbd officer authentication rejects default pins and accepts custom pbkdf2 pin`() {
+  fun `verify bpbd officer authentication rejects default pins and never stores raw pins locally`() = kotlinx.coroutines.runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
+    com.example.data.local.FirestoreHelper.resetTestHooks()
+    com.example.data.repository.SmartOfficerAuthRepository.clearFailedAttemptsForTesting()
     val officerAuth = com.example.data.local.OfficerAuthManager(context)
+    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository(context)
 
-    // Test invalid pin and forbidden default pins
-    val failed = officerAuth.loginOfficer("Bripka Hendra", "TRC-01", "Shift 1", "0000")
-    org.junit.Assert.assertFalse(failed)
+    // Test invalid pin and forbidden default pins unconditionally rejected
+    org.junit.Assert.assertFalse(officerAuth.loginOfficer("Bripka Hendra", "TRC-01", "Shift 1", "0000"))
+    org.junit.Assert.assertFalse("Default PIN 117 must be rejected", smartRepo.authenticateOfficer("TRC-01", "117").isSuccess)
+    org.junit.Assert.assertFalse("Default PIN TRC2026 must be rejected", smartRepo.authenticateOfficer("TRC-MMK-117", "TRC2026").isSuccess)
 
-    val rejected117 = officerAuth.loginOfficer("Bripka Hendra", "TRC-01", "Shift Siaga 24 Jam", "117")
-    org.junit.Assert.assertFalse("Default PIN 117 must be rejected", rejected117)
+    // Configure Cloud mock credential and verify Cloud-authenticated login saves only NIP
+    val salt = com.example.data.local.OfficerCredentialEntity.generateCryptographicSalt()
+    val hash = com.example.data.local.OfficerCredentialEntity.hashWithSalt("849201", salt)
+    com.example.data.local.FirestoreHelper.overrideCloudCredentialFetcherForTesting = {
+      com.example.data.local.CloudCredentialLookupResult.Found(
+        com.example.data.local.OfficerCredentialEntity(
+          nip = "TRC-01",
+          fullName = "Bripka Hendra",
+          role = "Petugas Lapangan TRC",
+          shift = "Shift Siaga 24 Jam",
+          pinHash = hash,
+          salt = salt,
+          isCustomPinSet = true,
+          isSyncedWithCloud = true
+        )
+      )
+    }
+    com.example.data.local.FirestoreHelper.overrideCloudCredentialWriterForTesting = { Result.success(Unit) }
 
-    val rejectedTrc = officerAuth.loginOfficer("Tim Reaksi Cepat", "TRC-MMK-117", "Regu Siaga", "TRC2026")
-    org.junit.Assert.assertFalse("Default PIN TRC2026 must be rejected", rejectedTrc)
-
-    // Configure custom PBKDF2 PIN and authenticate
-    officerAuth.setCustomOfficerPin("849201")
-    val successCustom = officerAuth.loginOfficer("Bripka Hendra", "TRC-01", "Shift Siaga 24 Jam", "849201")
-    assertTrue(successCustom)
+    val successCustom = smartRepo.authenticateOfficer("TRC-01", "849201")
+    assertTrue(successCustom.isSuccess)
     assertTrue(officerAuth.isOfficerLoggedIn())
     assertEquals("Bripka Hendra", officerAuth.getOfficerName())
+    assertEquals("TRC-01", officerAuth.getSavedNip())
 
-    // Test logout
+    // Test logout preserves saved_nip while ending active session
     officerAuth.logoutOfficer()
     org.junit.Assert.assertFalse(officerAuth.isOfficerLoggedIn())
+    assertEquals("TRC-01", officerAuth.getSavedNip())
+    com.example.data.local.FirestoreHelper.resetTestHooks()
   }
 
   @Test
@@ -290,18 +308,20 @@ class ExampleRobolectricTest {
   @Test
   fun `verify 8 ASN BPBD Pusdalops operators seeded with separate name and NIP columns`() = kotlinx.coroutines.runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
+    com.example.data.local.FirestoreHelper.resetTestHooks()
+    com.example.data.repository.SmartOfficerAuthRepository.clearFailedAttemptsForTesting()
     val database = com.example.data.local.AppDatabase.getInstance(context)
     val personnelDao = database.personnelDao()
     val repo = com.example.data.repository.PersonnelRepository(personnelDao)
 
-    // Seed official ASN BPBD personnel
+    // Seed official ASN BPBD personnel (non-secret roster ONLY, never default PINs)
     repo.seedDefaultAsnPersonnelIfNeeded()
 
     // Expected 8 ASN Pusdalops Operators
     val expectedAsnList = listOf(
       "YUDHA SOFRIANTO,S.A.P" to "199807202025061002",
       "ERI YANTO" to "198912102025211038",
-      "MUHAMMAD RIGAN JASWARI" to "200201252025211014",
+      "M. RIGAN JASWARI, S.Akun." to "200201252025211014",
       "AINUN MARDIATI.S.Pd.SD" to "198812302025212141",
       "SATRIA AMANDA PUTRA" to "200003112025211067",
       "FIRMANSYAH" to "199305102025211171",
@@ -327,29 +347,35 @@ class ExampleRobolectricTest {
     assertEquals("YUDHA SOFRIANTO,S.A.P", yudha?.fullName)
     assertEquals("Operator Pusdalops", yudha?.role)
 
-    // Verify default PIN 117 is rejected and configured custom PIN succeeds
-    val defaultRejected = officerAuth.loginOfficer(
-      name = yudha!!.fullName,
-      badgeId = yudha.nip,
-      shift = yudha.shift,
-      pin = "117",
-      role = yudha.role
-    )
-    org.junit.Assert.assertFalse(defaultRejected)
+    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository(context)
+    val salt = com.example.data.local.OfficerCredentialEntity.generateCryptographicSalt()
+    com.example.data.local.FirestoreHelper.overrideCloudCredentialFetcherForTesting = {
+      com.example.data.local.CloudCredentialLookupResult.Found(
+        com.example.data.local.OfficerCredentialEntity(
+          nip = yudha!!.nip,
+          fullName = yudha.fullName,
+          role = yudha.role,
+          shift = yudha.shift,
+          pinHash = com.example.data.local.OfficerCredentialEntity.hashWithSalt("739150", salt),
+          salt = salt,
+          isCustomPinSet = true,
+          isSyncedWithCloud = true
+        )
+      )
+    }
+    com.example.data.local.FirestoreHelper.overrideCloudCredentialWriterForTesting = { Result.success(Unit) }
 
-    officerAuth.setCustomOfficerPin("739150")
-    val loginSuccess = officerAuth.loginOfficer(
-      name = yudha.fullName,
-      badgeId = yudha.nip,
-      shift = yudha.shift,
-      pin = "739150",
-      role = yudha.role
-    )
-    assertTrue(loginSuccess)
+    // Verify default PIN 117 is rejected and Cloud-verified custom PIN succeeds
+    val defaultRejected = smartRepo.authenticateOfficer(yudha!!.nip, "117")
+    org.junit.Assert.assertFalse(defaultRejected.isSuccess)
+
+    val loginSuccess = smartRepo.authenticateOfficer(yudha.nip, "739150")
+    assertTrue(loginSuccess.isSuccess)
     assertTrue(officerAuth.isOfficerLoggedIn())
     assertEquals("YUDHA SOFRIANTO,S.A.P", officerAuth.getOfficerName())
     assertEquals("199807202025061002", officerAuth.getOfficerBadgeId())
     assertEquals("Operator Pusdalops", officerAuth.getOfficerRole())
+    com.example.data.local.FirestoreHelper.resetTestHooks()
   }
 
   @Test
@@ -370,32 +396,50 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `verify smart officer auth harvests all personnel and saves unique credentials in database`() = kotlinx.coroutines.runBlocking {
+  fun `verify smart officer auth pulls cloud metadata without seeding local plaintext PINs`() = kotlinx.coroutines.runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
-    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository.getInstance(context)
-
-    // Harvest all officers from ASN personnel, Room, and roster
-    smartRepo.harvestAndSyncAllOfficers()
-
+    com.example.data.local.FirestoreHelper.resetTestHooks()
+    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository(context)
     val db = com.example.data.local.AppDatabase.getInstance(context)
-    val credList = db.credentialDao().getAllCredentialsList()
-    assertTrue("Credentials table must have at least the 8 ASN personnel", credList.size >= 8)
+    db.clearAllTables()
 
-    // Verify Yudha's credential is saved in Room database
+    // Ensure local table is NEVER auto-seeded with default PINs when Cloud has not returned anything
+    val beforeCredList = db.credentialDao().getAllCredentialsList()
+    assertTrue("Credentials table must stay empty when offline/unseeded", beforeCredList.isEmpty())
+
+    // Simulate Cloud-verified login for Yudha
+    val salt = com.example.data.local.OfficerCredentialEntity.generateCryptographicSalt()
+    com.example.data.local.FirestoreHelper.overrideCloudCredentialFetcherForTesting = {
+      com.example.data.local.CloudCredentialLookupResult.Found(
+        com.example.data.local.OfficerCredentialEntity(
+          nip = "199807202025061002",
+          fullName = "YUDHA SOFRIANTO,S.A.P",
+          role = "Operator Pusdalops",
+          pinHash = com.example.data.local.OfficerCredentialEntity.hashWithSalt("739150", salt),
+          salt = salt,
+          isCustomPinSet = true
+        )
+      )
+    }
+    com.example.data.local.FirestoreHelper.overrideCloudCredentialWriterForTesting = { Result.success(Unit) }
+
+    val loginRes = smartRepo.authenticateOfficer("199807202025061002", "739150", "Pixel 8 Pro")
+    assertTrue(loginRes.isSuccess)
+
+    // Verify local Room metadata has NO PIN hash, salt, or plaintext initialSecurePin
     val yudhaCred = db.credentialDao().getCredentialByNip("199807202025061002")
-    assertNotNull("Yudha must have a database credential", yudhaCred)
+    assertNotNull("Yudha metadata must be cached after login", yudhaCred)
     assertEquals("YUDHA SOFRIANTO,S.A.P", yudhaCred?.fullName)
-    assertEquals("Operator Pusdalops", yudhaCred?.role)
-    assertTrue("Salt must not be empty", yudhaCred!!.salt.isNotBlank())
-    assertTrue("PIN hash must not be empty", yudhaCred.pinHash.isNotBlank())
-    assertEquals("061002", yudhaCred.initialSecurePin) // Last 6 digits of 199807202025061002 -> 061002
+    assertEquals("", yudhaCred?.pinHash)
+    assertEquals("", yudhaCred?.salt)
+    assertEquals("", yudhaCred?.initialSecurePin)
+    com.example.data.local.FirestoreHelper.resetTestHooks()
   }
 
   @Test
   fun `verify smart officer auth strictly rejects default PIN 117 and TRC2026`() = kotlinx.coroutines.runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
-    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository.getInstance(context)
-    smartRepo.harvestAndSyncAllOfficers()
+    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository(context)
 
     val yudhaNip = "199807202025061002"
 
@@ -417,62 +461,52 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `verify smart officer auth succeeds with initial NIP secret on new unactivated device`() = kotlinx.coroutines.runBlocking {
+  fun `verify changing personal PIN persists to Cloud Firestore and rejects old PIN or default PIN`() = kotlinx.coroutines.runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
-    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository.getInstance(context)
-    smartRepo.harvestAndSyncAllOfficers()
-
-    val db = com.example.data.local.AppDatabase.getInstance(context)
-    val yudhaCred = db.credentialDao().getCredentialByNip("199807202025061002")!!
-
-    // Login with initial deterministic NIP secret
-    val loginResult = smartRepo.authenticateOfficer(yudhaCred.nip, yudhaCred.initialSecurePin, "Pixel 8 Pro")
-    assertTrue("Login with initial NIP secret must succeed", loginResult.isSuccess)
-    val profile = loginResult.getOrNull()
-    assertNotNull(profile)
-    assertEquals("YUDHA SOFRIANTO,S.A.P", profile?.fullName)
-
-    // Check device was recorded
-    val updated = db.credentialDao().getCredentialByNip(yudhaCred.nip)
-    assertTrue(updated?.lastLoginDevice?.contains("Pixel 8 Pro") == true)
-    assertTrue((updated?.lastLoginAt ?: 0L) > 0L)
-  }
-
-  @Test
-  fun `verify changing personal PIN persists to database and rejects old PIN or default PIN`() = kotlinx.coroutines.runBlocking {
-    val context = ApplicationProvider.getApplicationContext<Context>()
-    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository.getInstance(context)
-    smartRepo.harvestAndSyncAllOfficers()
-
+    com.example.data.local.FirestoreHelper.resetTestHooks()
+    com.example.data.repository.SmartOfficerAuthRepository.clearFailedAttemptsForTesting()
+    val smartRepo = com.example.data.repository.SmartOfficerAuthRepository(context)
     val yudhaNip = "199807202025061002"
-    val db = com.example.data.local.AppDatabase.getInstance(context)
-    val cred = db.credentialDao().getCredentialByNip(yudhaNip)!!
+
+    val initSalt = com.example.data.local.OfficerCredentialEntity.generateCryptographicSalt()
+    var cloudCred = com.example.data.local.OfficerCredentialEntity(
+      nip = yudhaNip,
+      fullName = "YUDHA SOFRIANTO,S.A.P",
+      role = "Operator Pusdalops",
+      pinHash = com.example.data.local.OfficerCredentialEntity.hashWithSalt("654321", initSalt),
+      salt = initSalt,
+      isCustomPinSet = true
+    )
+
+    com.example.data.local.FirestoreHelper.overrideCloudCredentialFetcherForTesting = {
+      com.example.data.local.CloudCredentialLookupResult.Found(cloudCred)
+    }
+    com.example.data.local.FirestoreHelper.overrideCloudCredentialWriterForTesting = { updated ->
+      cloudCred = updated
+      Result.success(Unit)
+    }
 
     // Try setting new PIN to a forbidden default PIN (e.g. "117")
-    val rejectDefaultChange = smartRepo.changePersonalPin(yudhaNip, cred.initialSecurePin, "117")
+    val rejectDefaultChange = smartRepo.changePersonalPin(yudhaNip, "654321", "117")
     assertTrue("Cannot change PIN to default PIN 117", rejectDefaultChange.isFailure)
 
     // Set a custom secure PIN (e.g. "889911")
-    val changeResult = smartRepo.changePersonalPin(yudhaNip, cred.initialSecurePin, "889911")
+    val changeResult = smartRepo.changePersonalPin(yudhaNip, "654321", "889911")
     assertTrue("Changing to custom PIN 889911 must succeed", changeResult.isSuccess)
 
-    // Now old initial NIP key should be rejected
-    val loginOldKey = smartRepo.authenticateOfficer(yudhaNip, cred.initialSecurePin, "Pixel 8")
-    assertTrue("Old initial NIP key must now fail", loginOldKey.isFailure)
+    // Old PIN should now be rejected by Cloud verification
+    val loginOldKey = smartRepo.authenticateOfficer(yudhaNip, "654321", "Pixel 8")
+    assertTrue("Old PIN must now fail", loginOldKey.isFailure)
 
     // Login with new custom PIN must succeed
     val loginNewPin = smartRepo.authenticateOfficer(yudhaNip, "889911", "Pixel 8")
     assertTrue("Login with new custom PIN must succeed", loginNewPin.isSuccess)
 
-    // Credential isCustomPinSet must be true
-    val updatedCred = db.credentialDao().getCredentialByNip(yudhaNip)
-    assertTrue(updatedCred?.isCustomPinSet == true)
-
-    // Reset to individual NIP key
+    // Reset to individual NIP key on Cloud
     val resetResult = smartRepo.resetToInitialNipSecret(yudhaNip)
     assertTrue("Reset to NIP key must succeed", resetResult.isSuccess)
-    val credAfterReset = db.credentialDao().getCredentialByNip(yudhaNip)
-    org.junit.Assert.assertFalse(credAfterReset?.isCustomPinSet ?: true)
+    org.junit.Assert.assertFalse(cloudCred.isCustomPinSet)
+    com.example.data.local.FirestoreHelper.resetTestHooks()
   }
 
   @Test
@@ -491,7 +525,7 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `verify admin password hardening blocks defaults enforces lockout and restricts resetPinWithAdmin`() {
+  fun `verify local admin password verification is permanently disabled in favor of server-side auth`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     context.getSharedPreferences("bpbd_officer_auth_prefs", Context.MODE_PRIVATE).edit().clear().commit()
     val officerAuth = com.example.data.local.OfficerAuthManager(context)
@@ -499,43 +533,30 @@ class ExampleRobolectricTest {
     org.junit.Assert.assertFalse(officerAuth.isAdminPasswordConfigured())
     org.junit.Assert.assertFalse("Hardcoded default password must be rejected", officerAuth.verifyAdminPassword("sipagarkita2026"))
     assertTrue(officerAuth.configureInitialAdminPassword("sipagarkita2026").isFailure)
-
-    val setupResult = officerAuth.configureInitialAdminPassword("BpbdMmk#2026!")
-    assertTrue(setupResult.isSuccess)
-    assertTrue(officerAuth.isAdminPasswordConfigured())
-    assertTrue(officerAuth.verifyAdminPassword("BpbdMmk#2026!"))
-
-    // Ensure officer PIN cannot be used to authorize resetPinWithAdmin
-    officerAuth.setCustomOfficerPin("849201")
     assertTrue(officerAuth.resetPinWithAdmin("849201").isFailure)
-    assertTrue(officerAuth.resetPinWithAdmin("BpbdMmk#2026!").isSuccess)
-
-    // Brute-force 5 wrong admin password attempts trigger temporary lockout
-    repeat(5) {
-      org.junit.Assert.assertFalse(officerAuth.verifyAdminPassword("WrongPassword$it"))
-    }
-    assertTrue(officerAuth.getAdminLockoutRemainingSeconds() > 0L)
-    org.junit.Assert.assertFalse("Correct password must stay locked out during cooldown", officerAuth.verifyAdminPassword("BpbdMmk#2026!"))
   }
 
   @Test
-  fun `verify sensitive shared preferences values are aes256gcm encrypted at rest`() {
+  fun `verify saved_nip and officer session are aes256gcm encrypted at rest with zero local PIN storage`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val authPrefs = context.getSharedPreferences("bpbd_officer_auth_prefs", Context.MODE_PRIVATE)
     authPrefs.edit().clear().commit()
 
     val officerAuth = com.example.data.local.OfficerAuthManager(context)
-    officerAuth.setCustomOfficerPin("918273")
     officerAuth.loginOfficerDirectly("Yudha Test", "199807202025061002", "Shift 1", "Operator Pusdalops")
 
     val rawName = authPrefs.getString("officer_name", null)
     val rawBadge = authPrefs.getString("officer_badge_id", null)
-    val rawPinHash = authPrefs.getString("officer_pin_hash", null)
+    val rawSavedNip = authPrefs.getString("saved_nip", null)
     assertTrue(com.example.security.SecureStorageHelper.isEncryptedValue(rawName))
     assertTrue(com.example.security.SecureStorageHelper.isEncryptedValue(rawBadge))
-    assertTrue(com.example.security.SecureStorageHelper.isEncryptedValue(rawPinHash))
+    assertTrue(com.example.security.SecureStorageHelper.isEncryptedValue(rawSavedNip))
+    org.junit.Assert.assertFalse(authPrefs.contains("officer_pin"))
+    org.junit.Assert.assertFalse(authPrefs.contains("officer_pin_hash"))
+    org.junit.Assert.assertFalse(authPrefs.contains("officer_pin_salt"))
     assertEquals("Yudha Test", officerAuth.getOfficerName())
     assertEquals("199807202025061002", officerAuth.getOfficerBadgeId())
+    assertEquals("199807202025061002", officerAuth.getSavedNip())
 
     val sessionMgr = com.example.util.SessionManager(context)
     sessionMgr.setPetugasLogin("Hitatun Test", "197401282006041006", "Manajer")

@@ -38,6 +38,12 @@ class FormLaporanHarianActivity : AppCompatActivity() {
         // Memaksa aplikasi menggunakan mode terang
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
 
+        val verifiedUser = com.example.util.SessionManager(this).authenticateToken()
+        sharedViewModel.laporanSementara = sharedViewModel.laporanSementara.copy(
+            petugasJaga = verifiedUser.name,
+            stationId = verifiedUser.stationId
+        )
+
         setContentView(R.layout.activity_form_laporan_harian)
 
         toolbar = findViewById(R.id.toolbar)
@@ -46,6 +52,7 @@ class FormLaporanHarianActivity : AppCompatActivity() {
         btnSebelumnya = findViewById(R.id.btnSebelumnya)
         btnSelanjutnya = findViewById(R.id.btnSelanjutnya)
 
+        toolbar.subtitle = "Diisi oleh: ${verifiedUser.name} (NIP. ${verifiedUser.nip})"
         toolbar.setNavigationOnClickListener {
             finish()
         }
@@ -72,6 +79,21 @@ class FormLaporanHarianActivity : AppCompatActivity() {
         }
 
         btnSelanjutnya.setOnClickListener {
+            val currentLaporan = sharedViewModel.laporanSementara
+            val isKondusif = currentLaporan.jenisBencana.contains("Kondusif", ignoreCase = true) ||
+                currentLaporan.jenisBencana.contains("Tidak Ada", ignoreCase = true)
+            val coordCheck = com.example.util.CoordinateValidator.validateKoordinatString(
+                koordinat = currentLaporan.koordinat,
+                allowKondusifDash = isKondusif
+            )
+            if (coordCheck.isFailure) {
+                val errMsg = coordCheck.exceptionOrNull()?.message
+                    ?: com.example.util.CoordinateValidator.ERROR_INVALID_RANGE
+                Toast.makeText(this, errMsg, Toast.LENGTH_SHORT).show()
+                viewPager.currentItem = 0
+                return@setOnClickListener
+            }
+
             if (viewPager.currentItem < adapter.itemCount - 1) {
                 viewPager.currentItem = viewPager.currentItem + 1
             } else {
@@ -82,15 +104,38 @@ class FormLaporanHarianActivity : AppCompatActivity() {
     }
 
     private fun simpanLaporanKeDatabase() {
+        val currentLaporan = sharedViewModel.laporanSementara
+        val isKondusif = currentLaporan.jenisBencana.contains("Kondusif", ignoreCase = true) ||
+            currentLaporan.jenisBencana.contains("Tidak Ada", ignoreCase = true)
+        val coordCheck = com.example.util.CoordinateValidator.validateKoordinatString(
+            koordinat = currentLaporan.koordinat,
+            allowKondusifDash = isKondusif
+        )
+        if (coordCheck.isFailure) {
+            val errMsg = coordCheck.exceptionOrNull()?.message
+                ?: com.example.util.CoordinateValidator.ERROR_INVALID_RANGE
+            Toast.makeText(this, errMsg, Toast.LENGTH_LONG).show()
+            viewPager.currentItem = 0
+            return
+        }
+
         btnSelanjutnya.isEnabled = false
         btnSelanjutnya.text = "MENYIMPAN..."
 
-        val dataLaporan = sharedViewModel.laporanSementara
-        val dataLog = sharedViewModel.listLogSementara.toList()
+        // BENAR: Ambil dari data user yang terverifikasi di token (bukan dari body input form)
+        val verifiedUser = com.example.util.SessionManager(this).authenticateToken()
+        val dataLaporan = sharedViewModel.laporanSementara.copy(
+            petugasJaga = verifiedUser.name,
+            stationId = verifiedUser.stationId
+        )
+        val dataLog = sharedViewModel.listLogSementara.map {
+            it.copy(operatorName = verifiedUser.name)
+        }
         val dataLogistik = sharedViewModel.listLogistikSementara.toList()
 
         sharedViewModel.simpanKeDatabase(
             dao = db.laporanHarianDao(),
+            verifiedUser = verifiedUser,
             onSuccess = {
                 runOnUiThread {
                     Toast.makeText(this, "Laporan Berhasil Disimpan! Membuka menu cetak...", Toast.LENGTH_LONG).show()

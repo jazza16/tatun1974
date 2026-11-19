@@ -22,12 +22,14 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
-import com.github.javiersantos.appupdater.AppUpdater
-import com.github.javiersantos.appupdater.AppUpdaterUtils
-import com.github.javiersantos.appupdater.enums.AppUpdaterError
-import com.github.javiersantos.appupdater.enums.Display
-import com.github.javiersantos.appupdater.enums.UpdateFrom
-import com.github.javiersantos.appupdater.objects.Update
+import com.king.app.updater.AppUpdater
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -147,6 +149,7 @@ import com.example.ui.components.HourlyForecastCard
 import com.example.ui.components.SipagarKitaAcronymCard
 import com.example.ui.components.InAppUpdateBannerCard
 import com.example.ui.components.InaRiskBnpbSection
+import com.example.ui.components.FirmsHotspotOsmMapSection
 import com.example.ui.components.InteractiveDisasterMapSection
 import com.example.ui.components.InteractiveTemperatureMapCard
 import com.example.ui.components.MarinePesisirCard
@@ -239,6 +242,9 @@ class MainActivity : ComponentActivity() {
         // Seed 34 data ASN BPBD Kabupaten Mukomuko (hanya jika NIP belum terdaftar)
         com.example.data.local.seedDataAsnMukomuko2026(this)
 
+        // Jadwalkan WorkManager sinkronisasi periodik titik panas FIRMS (1-3 jam) & BMKG (3-6 jam)
+        com.example.service.KarhutlaSyncScheduler.schedulePeriodicSync(this)
+
         // Initialize BMKG Earthquake and Severe Weather Notification Channels
         com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
         com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
@@ -292,79 +298,132 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+data class GitHubReleaseUpdate(
+    val latestVersion: String,
+    val releaseNotes: String,
+    val apkDownloadUrl: String,
+    val releasePageUrl: String
+)
+
+private val githubUpdateHttpClient: OkHttpClient by lazy {
+    OkHttpClient.Builder()
+        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+}
+
 /**
- * Memeriksa pembaruan aplikasi dari GitHub Releases (jazza16/tatun1974) menggunakan AppUpdater.
+ * Memeriksa pembaruan aplikasi dari GitHub Releases (jazza16/tatun1974) dan mengunduh APK
+ * menggunakan com.king.app.updater.AppUpdater (jenly1314:AppUpdater berbasis AndroidX).
  * Memastikan izin REQUEST_INSTALL_PACKAGES telah diberikan sebelum proses unduh APK dimulai.
  */
 fun checkForAppUpdates(context: Context) {
-    try {
-        val appUpdater = AppUpdater(context)
-            .setUpdateFrom(UpdateFrom.GITHUB)
-            .setGitHubUserAndRepo("jazza16", "tatun1974")
-            .setDisplay(Display.DIALOG) // Opsi tampilan: DIALOG, SNACKBAR, atau NOTIFICATION
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val request = Request.Builder()
+                .url("https://api.github.com/repos/jazza16/tatun1974/releases/latest")
+                .header("Accept", "application/vnd.github+json")
+                .header("User-Agent", "SIPAGAR-KITA-Android/${BuildConfig.VERSION_NAME}")
+                .build()
 
-        appUpdater.start() // Memulai pengecekan di latar belakang
+            val releaseUpdate = githubUpdateHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val bodyStr = response.body?.string().orEmpty()
+                if (bodyStr.isBlank()) return@use null
 
-        val appUpdaterUtils = AppUpdaterUtils(context)
-            .setUpdateFrom(UpdateFrom.GITHUB)
-            .setGitHubUserAndRepo("jazza16", "tatun1974")
-            .withListener(object : AppUpdaterUtils.UpdateListener {
-                override fun onSuccess(update: Update, isUpdateAvailable: Boolean) {
-                    val remoteVersionCode = update.latestVersionCode ?: 0
-                    val isNewerVersionCode = remoteVersionCode > BuildConfig.VERSION_CODE
-                    if (isUpdateAvailable || isNewerVersionCode) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-                            !context.packageManager.canRequestPackageInstalls()
-                        ) {
-                            showRequestInstallPackagesDialog(context, update)
+                val json = JSONObject(bodyStr)
+                val rawTag = json.optString("tag_name", "").trim()
+                val cleanVer = rawTag.removePrefix("v").removePrefix("V").trim()
+                if (cleanVer.isBlank()) return@use null
+
+                val notes = json.optString("body", "").trim()
+                    .ifBlank { "Pembaruan rilis resmi SIPAGAR KITA v$cleanVer tersedia di GitHub Releases." }
+                val htmlUrl = json.optString("html_url", "https://github.com/jazza16/tatun1974/releases/latest")
+
+                var apkUrl = ""
+                val assets = json.optJSONArray("assets")
+                if (assets != null) {
+                    for (i in 0 until assets.length()) {
+                        val asset = assets.optJSONObject(i) ?: continue
+                        val dlUrl = asset.optString("browser_download_url", "")
+                        if (dlUrl.endsWith(".apk", ignoreCase = true)) {
+                            apkUrl = dlUrl
+                            break
                         }
                     }
                 }
 
-                override fun onFailed(error: AppUpdaterError) {
-                    Log.w("AppUpdater", "Gagal memeriksa update GitHub (jazza16/tatun1974): $error")
+                GitHubReleaseUpdate(
+                    latestVersion = cleanVer,
+                    releaseNotes = notes,
+                    apkDownloadUrl = apkUrl,
+                    releasePageUrl = htmlUrl
+                )
+            } ?: return@launch
+
+            val isUpdateAvailable = com.example.util.AppVersionHelper.isVersionNewer(
+                currentVersion = BuildConfig.VERSION_NAME,
+                targetVersion = releaseUpdate.latestVersion
+            )
+
+            if (isUpdateAvailable) {
+                withContext(Dispatchers.Main) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                        !context.packageManager.canRequestPackageInstalls()
+                    ) {
+                        showRequestInstallPackagesDialog(context, releaseUpdate)
+                    } else {
+                        showUpdateDialog(context, releaseUpdate)
+                    }
                 }
-            })
-        appUpdaterUtils.start()
-    } catch (t: Throwable) {
-        Log.w("AppUpdater", "Eksepsi saat menginisialisasi AppUpdater: ${t.message}")
+            }
+        } catch (t: Throwable) {
+            Log.w("AppUpdater", "Gagal memeriksa update GitHub (jazza16/tatun1974): ${t.message}")
+        }
     }
 }
 
-fun showUpdateDialog(context: Context, update: Update? = null) {
-    try {
-        AppUpdater(context)
-            .setUpdateFrom(UpdateFrom.GITHUB)
-            .setGitHubUserAndRepo("jazza16", "tatun1974")
-            .setDisplay(Display.DIALOG)
-            .showAppUpdated(false)
-            .start()
-    } catch (t: Throwable) {
-        Log.w("AppUpdater", "Fallback ke dialog sistem untuk update GitHub: ${t.message}")
-        if (context is android.app.Activity && !context.isFinishing) {
-            val latestVer = update?.latestVersion ?: "terbaru"
-            val releaseNotes = update?.releaseNotes?.takeIf { it.isNotBlank() }
-                ?: "Pembaruan rilis resmi SIPAGAR KITA tersedia di GitHub Releases."
-            val targetUrl = update?.urlToDownload?.toString()
-                ?: "https://github.com/jazza16/tatun1974/releases/latest"
-            AlertDialog.Builder(context)
-                .setTitle("Pembaruan Tersedia (v$latestVer)")
-                .setMessage(releaseNotes)
-                .setPositiveButton("Unduh & Pasang") { _, _ ->
+fun showUpdateDialog(context: Context, update: GitHubReleaseUpdate? = null) {
+    if (context is android.app.Activity && context.isFinishing) return
+    val latestVer = update?.latestVersion ?: "terbaru"
+    val releaseNotes = update?.releaseNotes?.takeIf { it.isNotBlank() }
+        ?: "Pembaruan rilis resmi SIPAGAR KITA tersedia di GitHub Releases."
+    val apkUrl = update?.apkDownloadUrl.orEmpty()
+    val fallbackUrl = update?.releasePageUrl?.takeIf { it.isNotBlank() }
+        ?: "https://github.com/jazza16/tatun1974/releases/latest"
+
+    runCatching {
+        AlertDialog.Builder(context)
+            .setTitle("Pembaruan Tersedia (v$latestVer)")
+            .setMessage(releaseNotes)
+            .setPositiveButton("Unduh & Pasang") { _, _ ->
+                if (apkUrl.isNotBlank()) {
+                    try {
+                        AppUpdater(context, apkUrl).start()
+                    } catch (e: Throwable) {
+                        Log.w("AppUpdater", "Fallback membuka URL rilis: ${e.message}")
+                        runCatching {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        }
+                    }
+                } else {
                     runCatching {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl)).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
                         context.startActivity(intent)
                     }
                 }
-                .setNegativeButton("Nanti", null)
-                .show()
-        }
+            }
+            .setNegativeButton("Nanti", null)
+            .show()
     }
 }
 
-private fun showRequestInstallPackagesDialog(context: Context, update: Update) {
+private fun showRequestInstallPackagesDialog(context: Context, update: GitHubReleaseUpdate) {
     if (context is android.app.Activity && context.isFinishing) return
     runCatching {
         AlertDialog.Builder(context)
@@ -1002,14 +1061,40 @@ fun WeatherAppScreen(
                                         onRefreshEarthquake = { viewModel.refreshEarthquakeData(context) },
                                         onCall117 = { EmergencyDialer.dial(context, "117") },
                                         onOpenCallCenterInfo = { isCallCenter117SheetOpen = true },
-                                        onOpenEvacuationGuide = { viewModel.selectTab(5) }
+                                        onOpenEvacuationGuide = { viewModel.selectTab(6) }
                                     )
                                 }
                             }
                         }
 
                         5 -> {
-                            // Tab 5: Modul Peta Interaktif Bencana & SOP Evakuasi Mandiri
+                            // Tab 5: Monitoring Karhutla (VIIRS FIRMS & BMKG Hotspot Sync + OpenStreetMap + Rilis Resmi BMKG 2025-Kini)
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("tab_monitoring_karhutla_list"),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                item {
+                                    FirmsHotspotOsmMapSection(
+                                        currentDistrict = currentDistrict,
+                                        onCall117 = { EmergencyDialer.dial(context, "117") },
+                                        isDark = isActuallyDark
+                                    )
+                                }
+
+                                item {
+                                    com.example.ui.components.BmkgOfficialHotspotReleaseCard(
+                                        currentDistrict = currentDistrict,
+                                        isDark = isActuallyDark
+                                    )
+                                }
+                            }
+                        }
+
+                        6 -> {
+                            // Tab 6: Modul Peta Interaktif Bencana & SOP Evakuasi Mandiri
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1040,8 +1125,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        6 -> {
-                            // Tab 6: inaRISK BNPB - Kajian Risiko Bencana Indonesia Kabupaten Mukomuko
+                        7 -> {
+                            // Tab 7: inaRISK BNPB - Kajian Risiko Bencana Indonesia Kabupaten Mukomuko
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1052,15 +1137,15 @@ fun WeatherAppScreen(
                                 item {
                                     InaRiskBnpbSection(
                                         currentDistrict = currentDistrict,
-                                        onOpenEvacuationGuide = { viewModel.selectTab(5) },
+                                        onOpenEvacuationGuide = { viewModel.selectTab(6) },
                                         onCall117 = { EmergencyDialer.dial(context, "117") }
                                     )
                                 }
                             }
                         }
 
-                        7 -> {
-                            // Tab 7: Cuaca Historis
+                        8 -> {
+                            // Tab 8: Cuaca Historis
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1082,8 +1167,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        8 -> {
-                            // Tab 8: Maritim & Pesisir Pantai
+                        9 -> {
+                            // Tab 9: Maritim & Pesisir Pantai
                             val report = uiState.report
                             if (report != null) {
                                 LazyColumn(
@@ -1112,8 +1197,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        9 -> {
-                            // Tab 9: Kualitas Udara Lengkap BMKG & Himbauan Kesehatan Masyarakat + Grafik Harian UV
+                        10 -> {
+                            // Tab 10: Kualitas Udara Lengkap BMKG & Himbauan Kesehatan Masyarakat + Grafik Harian UV
                             val report = uiState.report
                             if (report != null) {
                                 val maxUv = report.daily.firstOrNull()?.uvIndexMax ?: 8.0
@@ -1135,8 +1220,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        10 -> {
-                            // Tab 10: 15 Kecamatan
+                        11 -> {
+                            // Tab 11: 15 Kecamatan
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1183,7 +1268,7 @@ fun WeatherAppScreen(
             },
             onSelectMaritimeGuide = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(8)
+                viewModel.selectTab(9)
             },
             onSelectEvacuationProcedures = {
                 isQuickActionsFabExpanded = false
@@ -1191,7 +1276,7 @@ fun WeatherAppScreen(
             },
             onSelectDisasterMap = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(5)
+                viewModel.selectTab(6)
             },
             onCall117 = {
                 isQuickActionsFabExpanded = false
@@ -1387,7 +1472,7 @@ fun WeatherAppScreen(
     if (uiState.isCompassSheetOpen) {
         com.example.ui.components.DigitalCompassBottomSheet(
             onDismiss = { viewModel.setCompassSheetOpen(false) },
-            onOpenEvacuationMap = { viewModel.selectTab(5) },
+            onOpenEvacuationMap = { viewModel.selectTab(6) },
             onCall117 = { EmergencyDialer.dial(context, "117") }
         )
     }
@@ -1409,7 +1494,7 @@ fun WeatherAppScreen(
             onDismiss = { isEmergencyPopupDismissed = true },
             onCall117 = { EmergencyDialer.dial(context, "117") },
             onOpenEvacuationMap = {
-                viewModel.selectTab(5)
+                viewModel.selectTab(6)
             }
         )
     }

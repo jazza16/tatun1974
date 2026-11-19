@@ -603,7 +603,8 @@ private fun StepActionRow(
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = badgeBg,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, badgeColor.copy(alpha = 0.25f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -637,7 +638,7 @@ private fun StepActionRow(
                 Text(
                     text = actionText,
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 15.sp
                 )
             }

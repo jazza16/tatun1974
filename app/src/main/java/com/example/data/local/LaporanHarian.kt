@@ -113,6 +113,23 @@ class LaporanHarianEntity(
             tanggalLaporan = value
         }
 
+    @get:Ignore
+    val operatorCanonicalName: String
+        get() = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(operatorName).name
+
+    @get:Ignore
+    val operatorNip: String
+        get() = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(operatorName).nip
+
+    fun formattedOperatorWithNip(): String {
+        val canonical = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(operatorName)
+        return if (canonical.nip.isNotBlank() && canonical.nip != "-") {
+            "${canonical.name} (NIP. ${canonical.nip})"
+        } else {
+            canonical.name
+        }
+    }
+
     fun copy(
         id: Int = this.id,
         jenisBencana: String = this.jenisBencana,

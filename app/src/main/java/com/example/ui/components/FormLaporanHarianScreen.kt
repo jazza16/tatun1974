@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.ContactPhone
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Save
@@ -99,6 +100,10 @@ import com.example.model.MukomukoDistricts
 import com.example.model.WeatherCodeHelper
 import com.example.util.PdfGenerator
 import com.example.util.SessionManager
+import com.example.ui.form.CitizenIncomingReportsModalBottomSheet
+import com.example.ui.form.CitizenIncomingReportsProvider
+import com.example.ui.form.DariWargaHeaderCard
+import com.example.ui.form.IncomingCitizenReportItem
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import android.app.Activity
@@ -201,16 +206,21 @@ fun FormLaporanHarianScreen(
     val context = LocalContext.current
     val officerAuthManager = remember { com.example.data.local.OfficerAuthManager(context) }
     val session = remember { SessionManager(context) }
+    val initialVerifiedUser = remember { session.authenticateToken() }
     var tanggalSurat by remember { mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())) }
     var tanggalTerima by remember { mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())) }
-    var operatorName by remember {
-        mutableStateOf(
-            officerAuthManager.getOfficerName().ifBlank {
-                session.getNamaPetugas().ifBlank { "Rahmat Hidayat (Operator Utama)" }
-            }
-        )
+    var operatorName by remember { mutableStateOf(initialVerifiedUser.name) }
+    var operatorNip by remember { mutableStateOf(initialVerifiedUser.nip) }
+    var stationId by remember { mutableStateOf(initialVerifiedUser.stationId) }
+
+    LaunchedEffect(Unit) {
+        session.namaPetugasFlow.collect {
+            val verified = session.authenticateToken()
+            operatorName = verified.name
+            operatorNip = verified.nip
+            stationId = verified.stationId
+        }
     }
-    var stationId by remember { mutableStateOf("PUSDALOPS-MM-01") }
 
     // Temporary list for Log Komunikasi (Relasi One-to-Many)
     val logsList = remember {
@@ -222,8 +232,8 @@ fun FormLaporanHarianScreen(
                 stationIdFrom = "Radio VHF Ch.1",
                 stationIdTo = "Kalaksa BPBD Mukomuko",
                 subjek = "Laporan awal kejadian disampaikan. Tidak terdeteksi potensi tsunami.",
-                operatorNama = officerAuthManager.getOfficerName().ifBlank { session.getNamaPetugas() },
-                operatorNip = officerAuthManager.getOfficerBadgeId().ifBlank { session.getNipPetugas() }
+                operatorNama = initialVerifiedUser.name,
+                operatorNip = initialVerifiedUser.nip
             )
         )
     }
@@ -238,6 +248,24 @@ fun FormLaporanHarianScreen(
     var saveSuccessDialog by remember { mutableStateOf(false) }
     var savedId by remember { mutableIntStateOf(0) }
     var pendingPdfBytesToSave by remember { mutableStateOf<ByteArray?>(null) }
+
+    // --- State Daftar Laporan Warga ("DARI WARGA") ---
+    var incomingCitizenReports by remember { mutableStateOf<List<IncomingCitizenReportItem>>(emptyList()) }
+    var isLoadingCitizenReports by remember { mutableStateOf(false) }
+    var showDariWargaModalSheet by remember { mutableStateOf(false) }
+    var attachedCitizenReport by remember { mutableStateOf<IncomingCitizenReportItem?>(null) }
+    val unreadCitizenCount = remember(incomingCitizenReports) {
+        incomingCitizenReports.count { it.isUnreadOrUnprocessed }
+    }
+
+    LaunchedEffect(Unit) {
+        isLoadingCitizenReports = true
+        incomingCitizenReports = CitizenIncomingReportsProvider.loadIncomingCitizenReports(
+            context = context,
+            database = database
+        )
+        isLoadingCitizenReports = false
+    }
 
     val savePdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -261,6 +289,8 @@ fun FormLaporanHarianScreen(
     }
 
     fun buildCurrentLaporan(): LaporanHarian {
+        // Ambil namaOperator dan idStasiun langsung dari user yang terverifikasi di token/sesi (bukan dari state input UI)
+        val verifiedUser = session.authenticateToken()
         val safeCuaca = cuacaSaatKejadian.ifBlank { "Data cuaca tidak tersedia" }
         return LaporanHarian(
             id = savedId,
@@ -283,8 +313,8 @@ fun FormLaporanHarianScreen(
             sumberInformasi = sumberInformasi,
             tanggalSurat = tanggalSurat,
             tanggalTerima = tanggalTerima,
-            operatorName = operatorName,
-            stationId = stationId
+            operatorName = verifiedUser.name,
+            stationId = verifiedUser.stationId
         )
     }
 
@@ -403,12 +433,30 @@ fun FormLaporanHarianScreen(
 
                     Button(
                         onClick = {
+                            val isKondusif = jenisBencana.contains("Kondusif", ignoreCase = true) ||
+                                jenisBencana.contains("Tidak Ada", ignoreCase = true)
+                            val coordValidation = com.example.util.CoordinateValidator.validateKoordinatString(
+                                koordinat = koordinat,
+                                allowKondusifDash = isKondusif
+                            )
+                            if (coordValidation.isFailure) {
+                                val errMsg = coordValidation.exceptionOrNull()?.message
+                                    ?: com.example.util.CoordinateValidator.ERROR_INVALID_RANGE
+                                Toast.makeText(context, errMsg, Toast.LENGTH_SHORT).show()
+                                currentStep = 0
+                                return@Button
+                            }
+
                             if (currentStep < 3) {
                                 currentStep += 1
                             } else {
-                                // Save to Room Database
+                                // Jika lolos validasi koordinat, simpan ke Room Database
+                                // BENAR: Ambil namaOperator & idStasiun dari user yang terverifikasi di token sesi (bukan dari UI state)
                                 isSaving = true
                                 scope.launch(Dispatchers.IO) {
+                                    val verifiedUser = session.authenticateToken()
+                                    val namaOperator = verifiedUser.name
+                                    val idStasiun = verifiedUser.stationId
                                     val safeCuaca = cuacaSaatKejadian.ifBlank { "Data cuaca tidak tersedia" }
                                     val newLaporan = LaporanHarian(
                                         tanggalLaporan = tanggalLaporan,
@@ -430,14 +478,18 @@ fun FormLaporanHarianScreen(
                                         sumberInformasi = sumberInformasi,
                                         tanggalSurat = tanggalSurat,
                                         tanggalTerima = tanggalTerima,
-                                        operatorName = operatorName,
-                                        stationId = stationId
+                                        operatorName = namaOperator,
+                                        stationId = idStasiun
                                     )
                                     val insertedLaporanId = database.laporanHarianDao().insertLaporan(newLaporan).toInt()
 
-                                    // Insert associated communication logs
+                                    // Insert associated communication logs with verified operator identity
                                     val logEntities = logsList.map {
-                                        it.copy(id = 0, laporanId = insertedLaporanId)
+                                        it.copy(
+                                            id = 0,
+                                            laporanId = insertedLaporanId,
+                                            operatorName = namaOperator
+                                        )
                                     }
                                     if (logEntities.isNotEmpty()) {
                                         database.laporanHarianDao().insertLogKomunikasiList(logEntities)
@@ -534,6 +586,59 @@ fun FormLaporanHarianScreen(
             ) {
                 when (currentStep) {
                     0 -> Step1DataKejadian(
+                        officerName = "${operatorName.ifBlank { "HITATUN ARAZAK" }} (NIP. ${operatorNip.ifBlank { "197401282006041006" }})",
+                        unreadCitizenCount = unreadCitizenCount,
+                        attachedCitizenReport = attachedCitizenReport,
+                        onClearAttachedCitizenReport = { attachedCitizenReport = null },
+                        onOpenDariWargaModal = {
+                            showDariWargaModalSheet = true
+                            scope.launch {
+                                isLoadingCitizenReports = true
+                                incomingCitizenReports = CitizenIncomingReportsProvider.loadIncomingCitizenReports(
+                                    context = context,
+                                    database = database
+                                )
+                                isLoadingCitizenReports = false
+                            }
+                        },
+                        onTarikLaporanKemarin = {
+                            scope.launch(Dispatchers.IO) {
+                                val laporanKemarin = database.laporanHarianDao().getLaporanTerakhir()
+                                withContext(Dispatchers.Main) {
+                                    if (laporanKemarin != null) {
+                                        jenisBencana = laporanKemarin.jenisBencana.ifBlank { jenisBencana }
+                                        tanggalKejadian = laporanKemarin.tanggalKejadian.ifBlank { tanggalKejadian }
+                                        waktuKejadian = laporanKemarin.waktuKejadian.ifBlank { waktuKejadian }
+                                        kedalaman = laporanKemarin.kedalaman.ifBlank { kedalaman }
+                                        lokasi = laporanKemarin.lokasiBencana.ifBlank { lokasi }
+                                        koordinat = laporanKemarin.koordinat.ifBlank { koordinat }
+                                        cakupanDampak = laporanKemarin.cakupanDampak.ifBlank { cakupanDampak }
+                                        upayaDilakukan = laporanKemarin.upayaDilakukan.ifBlank { upayaDilakukan }
+                                        kondisiMutakhir = laporanKemarin.kondisiMutakhir.ifBlank { kondisiMutakhir }
+                                        kerusakan = laporanKemarin.kerusakan.ifBlank { kerusakan }
+                                        penyebab = laporanKemarin.penyebab.ifBlank { penyebab }
+                                        sumberInformasi = laporanKemarin.sumberInformasi.ifBlank { sumberInformasi }
+                                        val matchedDist = MukomukoDistricts.list.firstOrNull {
+                                            laporanKemarin.lokasiBencana.contains(it.name, ignoreCase = true)
+                                        }
+                                        if (matchedDist != null) {
+                                            selectedKecamatan = matchedDist.name
+                                        }
+                                        Toast.makeText(
+                                            context,
+                                            "Data kejadian sebelumnya berhasil dimuat.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            "Belum ada data laporan sebelumnya.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            }
+                        },
                         tanggalLaporan = tanggalLaporan,
                         onTanggalLaporanChange = { tanggalLaporan = it },
                         jenisBencana = jenisBencana,
@@ -636,6 +741,75 @@ fun FormLaporanHarianScreen(
         )
     }
 
+    // Modal Bottom Sheet Daftar Laporan Warga Masuk ("DARI WARGA")
+    if (showDariWargaModalSheet) {
+        CitizenIncomingReportsModalBottomSheet(
+            reports = incomingCitizenReports,
+            isLoading = isLoadingCitizenReports,
+            onDismiss = { showDariWargaModalSheet = false },
+            onRefresh = {
+                scope.launch {
+                    isLoadingCitizenReports = true
+                    incomingCitizenReports = CitizenIncomingReportsProvider.loadIncomingCitizenReports(
+                        context = context,
+                        database = database
+                    )
+                    isLoadingCitizenReports = false
+                }
+            },
+            onUseReportData = { selectedItem: IncomingCitizenReportItem ->
+                showDariWargaModalSheet = false
+                attachedCitizenReport = selectedItem.copy(
+                    isUnreadOrUnprocessed = false,
+                    status = "Sudah Dipakai"
+                )
+
+                // Autofill Kolom-kolom di "Informasi Dasar Kejadian" & Dampak
+                jenisBencana = selectedItem.disasterType
+                if (selectedItem.dateText.isNotBlank()) {
+                    tanggalKejadian = selectedItem.dateText
+                }
+                if (selectedItem.timeText.isNotBlank()) {
+                    waktuKejadian = selectedItem.timeText
+                }
+                val matchedKecamatan = MukomukoDistricts.list.firstOrNull {
+                    it.name.equals(selectedItem.district.trim(), ignoreCase = true) ||
+                        selectedItem.locationDetail.contains(it.name, ignoreCase = true)
+                }?.name
+                if (!matchedKecamatan.isNullOrBlank()) {
+                    selectedKecamatan = matchedKecamatan
+                }
+                lokasi = selectedItem.fullFormattedLocation()
+                if (selectedItem.coordinates.isNotBlank()) {
+                    koordinat = selectedItem.coordinates
+                }
+                cakupanDampak = "${selectedItem.fullFormattedLocation()} — ${selectedItem.description}"
+                kondisiMutakhir = selectedItem.description
+                sumberInformasi = "Laporan Warga (${selectedItem.reporterName} - ${selectedItem.reporterPhone})"
+                korbanMeninggal = selectedItem.casualtiesDead
+                korbanLuka = selectedItem.casualtiesInjured
+
+                scope.launch {
+                    CitizenIncomingReportsProvider.markReportAsUsedByOfficer(
+                        context = context,
+                        database = database,
+                        report = selectedItem
+                    )
+                    incomingCitizenReports = CitizenIncomingReportsProvider.loadIncomingCitizenReports(
+                        context = context,
+                        database = database
+                    )
+                }
+
+                Toast.makeText(
+                    context,
+                    "Data laporan warga (${selectedItem.disasterType} - ${selectedItem.reporterName}) berhasil diisi ke formulir!",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        )
+    }
+
     // Success Dialog
     if (saveSuccessDialog) {
         androidx.compose.material3.AlertDialog(
@@ -707,6 +881,12 @@ fun FormLaporanHarianScreen(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Step1DataKejadian(
+    officerName: String,
+    unreadCitizenCount: Int,
+    attachedCitizenReport: IncomingCitizenReportItem?,
+    onClearAttachedCitizenReport: () -> Unit,
+    onOpenDariWargaModal: () -> Unit,
+    onTarikLaporanKemarin: () -> Unit,
     tanggalLaporan: String,
     onTanggalLaporanChange: (String) -> Unit,
     jenisBencana: String,
@@ -745,13 +925,23 @@ private fun Step1DataKejadian(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // KARTU 1: INFO PETUGAS & TOMBOL "DARI WARGA" DENGAN BADGE NOTIFIKASI MERAH
+        DariWargaHeaderCard(
+            officerName = officerName,
+            unreadCitizenCount = unreadCitizenCount,
+            attachedCitizenReport = attachedCitizenReport,
+            onOpenDariWargaSheet = onOpenDariWargaModal,
+            onUpdateKejadianKemarin = onTarikLaporanKemarin,
+            onClearAttachedCitizenReport = onClearAttachedCitizenReport
+        )
+
         Card(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "Informasi Dasar Bencana", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+                Text(text = "Informasi Dasar Kejadian", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
 
                 OutlinedTextField(
                     value = tanggalLaporan,
@@ -838,12 +1028,27 @@ private fun Step1DataKejadian(
                     leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFDC2626)) }
                 )
 
+                val isKondusif = jenisBencana.contains("Kondusif", ignoreCase = true) ||
+                    jenisBencana.contains("Tidak Ada", ignoreCase = true)
+                val koordinatError = remember(koordinat, isKondusif) {
+                    com.example.util.CoordinateValidator.validateKoordinatString(
+                        koordinat = koordinat,
+                        allowKondusifDash = isKondusif
+                    ).exceptionOrNull()?.message
+                }
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = koordinat,
                         onValueChange = onKoordinatChange,
+                        isError = koordinatError != null,
+                        supportingText = if (koordinatError != null) {
+                            { Text(text = koordinatError, fontSize = 10.sp) }
+                        } else null,
                         label = { Text("Koordinat GPS", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("input_koordinat_gps"),
                         singleLine = true
                     )
                     OutlinedTextField(
@@ -1195,19 +1400,67 @@ private fun Step4AdministrasiDanKomunikasi(
                     )
                 }
 
+                val resolvedOperatorProfile = remember(operatorName) {
+                    com.example.data.local.OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(operatorName)
+                }
+                val displayOperatorWithNip = if (resolvedOperatorProfile.nip.isNotBlank() && resolvedOperatorProfile.nip != "-") {
+                    "${resolvedOperatorProfile.name} (NIP. ${resolvedOperatorProfile.nip})"
+                } else {
+                    operatorName
+                }
                 OutlinedTextField(
-                    value = operatorName,
-                    onValueChange = onOperatorNameChange,
-                    label = { Text("Nama Operator Pusdalops") },
-                    modifier = Modifier.fillMaxWidth(),
+                    value = displayOperatorWithNip,
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = false,
+                    label = { Text("Nama & NIP Operator Pusdalops") },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Terkunci otomatis dari sesi login",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFF3F4F6),
+                        unfocusedContainerColor = Color(0xFFF3F4F6),
+                        disabledContainerColor = Color(0xFFF3F4F6),
+                        disabledTextColor = Color(0xFF374151),
+                        disabledLabelColor = Color(0xFF6B7280),
+                        disabledBorderColor = Color(0xFFD1D5DB),
+                        disabledTrailingIconColor = Color(0xFF9CA3AF)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_operator_pusdalops"),
                     singleLine = true
                 )
 
                 OutlinedTextField(
                     value = stationId,
-                    onValueChange = onStationIdChange,
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = false,
                     label = { Text("ID Stasiun / Pos Komando") },
-                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Terkunci otomatis dari sesi stasiun",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFF3F4F6),
+                        unfocusedContainerColor = Color(0xFFF3F4F6),
+                        disabledContainerColor = Color(0xFFF3F4F6),
+                        disabledTextColor = Color(0xFF374151),
+                        disabledLabelColor = Color(0xFF6B7280),
+                        disabledBorderColor = Color(0xFFD1D5DB),
+                        disabledTrailingIconColor = Color(0xFF9CA3AF)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_station_id"),
                     singleLine = true
                 )
             }
@@ -1594,8 +1847,26 @@ private fun DialogTambahLogKomunikasi(
 
                 OutlinedTextField(
                     value = operatorLog,
-                    onValueChange = { operatorLog = it },
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = false,
                     label = { Text("Nama Operator") },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Terkunci otomatis dari sesi login",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFF3F4F6),
+                        unfocusedContainerColor = Color(0xFFF3F4F6),
+                        disabledContainerColor = Color(0xFFF3F4F6),
+                        disabledTextColor = Color(0xFF374151),
+                        disabledLabelColor = Color(0xFF6B7280),
+                        disabledBorderColor = Color(0xFFD1D5DB),
+                        disabledTrailingIconColor = Color(0xFF9CA3AF)
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -1605,6 +1876,7 @@ private fun DialogTambahLogKomunikasi(
             Button(
                 onClick = {
                     if (pesan.isNotBlank()) {
+                        val verifiedUser = session.authenticateToken()
                         onAddLog(
                             LogKomunikasi(
                                 id = 0,
@@ -1613,8 +1885,8 @@ private fun DialogTambahLogKomunikasi(
                                 stationIdFrom = saluran,
                                 stationIdTo = pihakDihubungi,
                                 subjek = pesan,
-                                operatorNama = operatorLog,
-                                operatorNip = session.getNipPetugas()
+                                operatorNama = verifiedUser.name,
+                                operatorNip = verifiedUser.nip
                             )
                         )
                     }

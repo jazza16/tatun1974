@@ -78,6 +78,12 @@ class OfficerAuthManager(private val context: Context) {
         private const val PREF_OFFICER_BADGE_ID = "officer_badge_id"
         private const val PREF_OFFICER_ROLE = "officer_role"
         private const val PREF_OFFICER_SHIFT = "officer_shift"
+        private const val PREF_SAVED_NIP = "saved_nip"
+        private const val PREF_HAS_CLOUD_CUSTOM_PIN = "has_cloud_custom_pin"
+        private const val PREF_STORAGE_SCHEMA_VERSION = "officer_storage_schema_version"
+        private const val CURRENT_STORAGE_SCHEMA_VERSION = 2
+
+        // Legacy local PIN keys: NEVER written anymore; purged non-destructively on upgrade
         private const val PREF_OFFICER_PIN = "officer_pin"
         private const val PREF_OFFICER_PIN_HASH = "officer_pin_hash"
         private const val PREF_OFFICER_PIN_SALT = "officer_pin_salt"
@@ -97,27 +103,154 @@ class OfficerAuthManager(private val context: Context) {
             "sipagarkita2026", "admin", "admin123", "123456", "12345678", "password", "bpbd117"
         )
 
-        // Legacy forbidden PINs that must never be accepted for authentication
-        val VALID_PINS = listOf("117", "BPBD117", "ADMIN117", "TRC2026", "PUSDALOPS117")
+        // Forbidden default PINs that must NEVER be accepted or auto-seeded
+        val FORBIDDEN_DEFAULT_PINS = listOf("117", "BPBD117", "ADMIN117", "TRC2026", "PUSDALOPS117", "0000", "1234")
 
         // Roster is pre-populated with official ASN BPBD Mukomuko Pusdalops operators
         val DEFAULT_ROSTER: List<OfficerProfile> = OfficialAsnBpbdPersonnel.toOfficerProfiles()
+    }
+
+    init {
+        ensureUpdateSafeStorageMigration()
+    }
+
+    /**
+     * Update-safe non-destructive migration for SharedPreferences (`bpbd_officer_auth_prefs`):
+     * - NEVER calls `clear()` and NEVER overwrites/erases `saved_nip`, `is_officer_logged_in`,
+     *   or officer profile metadata during an app update.
+     * - Backfills `saved_nip` from `officer_badge_id` if upgrading from an older version.
+     * - Purges ONLY legacy local PIN storage keys (`officer_pin`, `officer_pin_hash`, `officer_pin_salt`)
+     *   so raw/hashed PINs are NEVER stored on the device.
+     */
+    private fun ensureUpdateSafeStorageMigration() {
+        val currentVersion = sharedPrefs.getInt(PREF_STORAGE_SCHEMA_VERSION, 0)
+        val hasLegacyPinKeys = sharedPrefs.contains(PREF_OFFICER_PIN) ||
+            sharedPrefs.contains(PREF_OFFICER_PIN_HASH) ||
+            sharedPrefs.contains(PREF_OFFICER_PIN_SALT)
+
+        if (currentVersion >= CURRENT_STORAGE_SCHEMA_VERSION && !hasLegacyPinKeys) {
+            return
+        }
+
+        val editor = sharedPrefs.edit()
+        // If older build stored a custom PIN hash locally, preserve only the non-secret boolean status
+        if (sharedPrefs.contains(PREF_OFFICER_PIN_HASH) && !sharedPrefs.contains(PREF_HAS_CLOUD_CUSTOM_PIN)) {
+            editor.putBoolean(PREF_HAS_CLOUD_CUSTOM_PIN, true)
+        }
+        // Purge ONLY legacy PIN secrets — strictly preserve saved_nip and officer session!
+        editor.remove(PREF_OFFICER_PIN)
+            .remove(PREF_OFFICER_PIN_HASH)
+            .remove(PREF_OFFICER_PIN_SALT)
+
+        // Backfill saved_nip non-destructively if upgrading from older version that only saved officer_badge_id
+        val existingSavedNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_SAVED_NIP)?.trim().orEmpty()
+        if (existingSavedNip.isBlank()) {
+            val legacyBadgeNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID)?.trim().orEmpty()
+            if (legacyBadgeNip.isNotBlank() && !legacyBadgeNip.equals("PUSDALOPS-117", ignoreCase = true)) {
+                SecureStorageHelper.putEncrypted(editor, PREF_SAVED_NIP, legacyBadgeNip)
+            }
+        }
+
+        editor.putInt(PREF_STORAGE_SCHEMA_VERSION, CURRENT_STORAGE_SCHEMA_VERSION)
+        editor.apply()
     }
 
     fun isOfficerLoggedIn(): Boolean {
         return sharedPrefs.getBoolean(PREF_IS_OFFICER_LOGGED_IN, false)
     }
 
+    /**
+     * Reads `saved_nip` from encrypted Secure Storage (Android Keystore AES-256-GCM).
+     */
+    fun getSavedNip(): String {
+        val secureNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_SAVED_NIP)?.trim().orEmpty()
+        if (secureNip.isNotBlank()) return secureNip
+        val badgeNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID)?.trim().orEmpty()
+        if (badgeNip.isNotBlank()) return badgeNip
+        val storedName = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_NAME)?.trim().orEmpty()
+        if (storedName.isNotBlank()) {
+            val matched = findOfficerInRoster(rawName = storedName, rawNip = "")
+            if (matched != null) return matched.nip
+        }
+        return ""
+    }
+
+    /**
+     * Formats the saved officer identity for Skenario B ("Masuk sebagai: [Nama Petugas/NIP]").
+     */
+    fun getSavedOfficerDisplay(): String {
+        val nip = getSavedNip()
+        val name = getOfficerName().trim()
+        return when {
+            name.isNotBlank() && nip.isNotBlank() -> "$name / $nip"
+            nip.isNotBlank() -> nip
+            name.isNotBlank() -> name
+            else -> ""
+        }
+    }
+
+    /**
+     * Stores `saved_nip` and officer identity encrypted inside Secure Storage (AES-256-GCM),
+     * automatically synchronizing canonical Name and NIP from the officer roster.
+     */
+    fun saveNipToSecureStorage(
+        nip: String,
+        fullName: String = "",
+        role: String = OfficerRoles.PETUGAS_JAGA,
+        shift: String = "Shift Siaga 24 Jam"
+    ) {
+        val matched = findOfficerInRoster(rawName = fullName, rawNip = nip)
+        val cleanNip = matched?.nip ?: nip.trim()
+        val cleanName = matched?.fullName ?: fullName.trim()
+        val cleanRole = matched?.role?.takeIf { role.isBlank() || role == OfficerRoles.PETUGAS_JAGA } ?: role.trim()
+        val cleanShift = matched?.shift?.takeIf { shift.isBlank() } ?: shift.trim()
+        if (cleanNip.isBlank()) return
+        val editor = sharedPrefs.edit()
+        SecureStorageHelper.putEncrypted(editor, PREF_SAVED_NIP, cleanNip)
+        SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_BADGE_ID, cleanNip)
+        if (cleanName.isNotBlank()) {
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_NAME, cleanName)
+        }
+        if (cleanRole.isNotBlank()) {
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_ROLE, cleanRole)
+        }
+        if (cleanShift.isNotBlank()) {
+            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_SHIFT, cleanShift)
+        }
+        editor.apply()
+    }
+
+    /**
+     * Clears `saved_nip` from Secure Storage when "Bukan Anda? Ganti Akun" is clicked.
+     */
+    fun clearSavedNipFromSecureStorage() {
+        clearSavedOfficerIdentity()
+    }
+
     fun getOfficerName(): String {
-        return SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_NAME) ?: ""
+        val rawName = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_NAME)?.trim().orEmpty()
+        val rawNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_SAVED_NIP)?.trim().orEmpty()
+            .ifBlank { SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID)?.trim().orEmpty() }
+        val matched = findOfficerInRoster(rawName = rawName, rawNip = rawNip)
+        return matched?.fullName ?: rawName
     }
 
     fun getOfficerBadgeId(): String {
-        return SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID) ?: ""
+        val rawNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID)?.trim().orEmpty()
+            .ifBlank { SecureStorageHelper.getDecrypted(sharedPrefs, PREF_SAVED_NIP)?.trim().orEmpty() }
+        val rawName = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_NAME)?.trim().orEmpty()
+        val matched = findOfficerInRoster(rawName = rawName, rawNip = rawNip)
+        return matched?.nip ?: rawNip
     }
 
     fun getOfficerRole(): String {
-        return SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_ROLE) ?: OfficerRoles.OPERATOR
+        val rawRole = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_ROLE)?.trim().orEmpty()
+        if (rawRole.isNotBlank()) return rawRole
+        val matched = findOfficerInRoster(
+            rawName = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_NAME).orEmpty(),
+            rawNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID).orEmpty()
+        )
+        return matched?.role ?: OfficerRoles.OPERATOR
     }
 
     fun getOfficerShift(): String {
@@ -134,8 +267,129 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
+     * Searches the active roster (and official 34 ASN BPBD database) by NIP or Name.
+     */
+    fun findOfficerInRoster(rawName: String, rawNip: String = ""): OfficerProfile? {
+        val (cleanName, embeddedNip) = OfficialAsnBpbdPersonnel.extractCleanNameAndNip(rawName)
+        val candidateNip = rawNip.trim().takeIf { it.isNotBlank() && it != "-" } ?: embeddedNip
+        val candidateName = cleanName.ifBlank { rawName.trim() }
+
+        if (candidateNip.isBlank() && (candidateName.isBlank() || candidateName == "-")) {
+            return null
+        }
+
+        val roster = getOfficerRoster()
+        if (candidateNip.isNotBlank()) {
+            val byNip = roster.firstOrNull { it.nip.equals(candidateNip, ignoreCase = true) }
+            if (byNip != null) return byNip
+        }
+        if (candidateName.isNotBlank()) {
+            val byExactName = roster.firstOrNull { it.fullName.equals(candidateName, ignoreCase = true) }
+            if (byExactName != null) return byExactName
+
+            val baseCandidate = candidateName.substringBefore(",").trim()
+            if (baseCandidate.length >= 4) {
+                val byBaseName = roster.firstOrNull {
+                    it.fullName.substringBefore(",").trim().equals(baseCandidate, ignoreCase = true) ||
+                        it.fullName.startsWith(baseCandidate, ignoreCase = true)
+                }
+                if (byBaseName != null) return byBaseName
+            }
+        }
+
+        val officialMatch = OfficialAsnBpbdPersonnel.findByNipOrName(candidateNip.ifBlank { candidateName })
+            ?: OfficialAsnBpbdPersonnel.findByNipOrName(candidateName)
+        return officialMatch?.let {
+            OfficerProfile(
+                id = "asn-${it.nip}",
+                fullName = it.name,
+                nip = it.nip,
+                role = it.role,
+                unit = it.unit,
+                shift = it.shift,
+                phone = it.phone
+            )
+        }
+    }
+
+    /**
+     * Resolves an officer profile for any report, log, or PDF export:
+     * 1. Attempts to resolve `rawName` / `rawNip` from the roster.
+     * 2. Falls back to the currently logged-in / saved officer in Secure Storage & SessionManager.
+     * 3. Falls back to canonical default Manajer Pusdalops-PB ("HITATUN ARAZAK", NIP "197401282006041006").
+     */
+    fun resolveSyncedOfficer(rawName: String = "", rawNip: String = ""): OfficerProfile {
+        val directMatch = findOfficerInRoster(rawName = rawName, rawNip = rawNip)
+        if (directMatch != null) return directMatch
+
+        val activeName = getOfficerName()
+        val activeNip = getOfficerBadgeId()
+        val activeMatch = findOfficerInRoster(rawName = activeName, rawNip = activeNip)
+        if (activeMatch != null && (rawName.isBlank() || rawName.equals("Petugas Pusdalops", ignoreCase = true))) {
+            return activeMatch
+        }
+
+        val session = com.example.util.SessionManager(context)
+        val sessionName = session.getNamaPetugas()
+        val sessionNip = session.getNipPetugas()
+        val sessionMatch = findOfficerInRoster(rawName = sessionName, rawNip = sessionNip)
+
+        val (cleanPassedName, embeddedNip) = OfficialAsnBpbdPersonnel.extractCleanNameAndNip(rawName)
+        val effectivePassedNip = rawNip.trim().takeIf { it.isNotBlank() && it != "-" } ?: embeddedNip
+
+        if (cleanPassedName.isNotBlank() && !cleanPassedName.equals("Petugas Pusdalops", ignoreCase = true)) {
+            val resolvedOfficial = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(cleanPassedName, effectivePassedNip)
+            return OfficerProfile(
+                id = "asn-${resolvedOfficial.nip}",
+                fullName = resolvedOfficial.name,
+                nip = resolvedOfficial.nip.takeIf { it.isNotBlank() && it != "-" }
+                    ?: activeNip.takeIf { it.isNotBlank() && activeName.equals(cleanPassedName, ignoreCase = true) }
+                    ?: sessionNip.takeIf { it.isNotBlank() && sessionName.equals(cleanPassedName, ignoreCase = true) }
+                    ?: "197401282006041006",
+                role = resolvedOfficial.role
+            )
+        }
+
+        if (activeMatch != null) return activeMatch
+        if (sessionMatch != null) return sessionMatch
+
+        val defaultPersonnel = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel("HITATUN ARAZAK", "197401282006041006")
+        return OfficerProfile(
+            id = "asn-${defaultPersonnel.nip}",
+            fullName = defaultPersonnel.name,
+            nip = defaultPersonnel.nip,
+            role = defaultPersonnel.role,
+            unit = defaultPersonnel.unit,
+            shift = defaultPersonnel.shift
+        )
+    }
+
+    /**
+     * Resolves official leadership personnel for signature blocks (Koord. Administrasi, Manajer Pusdalops-PB, Pengawas / Kalaksa)
+     * from the live roster so any updates to personnel names or NIPs automatically reflect in PDF signatures.
+     */
+    fun resolveLeadershipForSignature(
+        roleKeyword: String,
+        fallbackName: String,
+        fallbackNip: String
+    ): OfficerProfile {
+        val roster = getOfficerRoster()
+        val byRole = roster.firstOrNull { it.role.contains(roleKeyword, ignoreCase = true) }
+        if (byRole != null) return byRole
+        val byNip = roster.firstOrNull { it.nip.equals(fallbackNip, ignoreCase = true) }
+        if (byNip != null) return byNip
+        val canonical = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(fallbackName, fallbackNip)
+        return OfficerProfile(
+            id = "asn-${canonical.nip}",
+            fullName = canonical.name,
+            nip = canonical.nip,
+            role = canonical.role
+        )
+    }
+
+    /**
      * Gets the full roster of officers, operators, and field responders.
-     * Guarantees all 8 ASN BPBD Pusdalops operators are present with separate name and NIP.
+     * Guarantees all official ASN BPBD Pusdalops personnel are present with synchronized name and NIP.
      */
     fun getOfficerRoster(): List<OfficerProfile> {
         val jsonString = sharedPrefs.getString(PREF_OFFICER_ROSTER_JSON, null)
@@ -148,19 +402,22 @@ class OfficerAuthManager(private val context: Context) {
             val list = mutableListOf<OfficerProfile>()
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
+                val rawFullName = obj.getString("fullName")
+                val rawNip = obj.getString("nip")
+                val official = OfficialAsnBpbdPersonnel.findByNipOrName(rawNip)
+                    ?: OfficialAsnBpbdPersonnel.findByNipOrName(rawFullName)
                 list.add(
                     OfficerProfile(
                         id = obj.optString("id", UUID.randomUUID().toString()),
-                        fullName = obj.getString("fullName"),
-                        nip = obj.getString("nip"),
-                        role = obj.getString("role"),
-                        unit = obj.optString("unit", "Pusdalops BPBD Kab. Mukomuko"),
-                        shift = obj.optString("shift", "Shift Siaga 24 Jam"),
+                        fullName = official?.name ?: rawFullName,
+                        nip = official?.nip ?: rawNip,
+                        role = obj.getString("role").ifBlank { official?.role ?: OfficerRoles.OPERATOR },
+                        unit = obj.optString("unit", official?.unit ?: "Pusdalops BPBD Kab. Mukomuko"),
+                        shift = obj.optString("shift", official?.shift ?: "Shift Siaga 24 Jam"),
                         phone = obj.optString("phone", "")
                     )
                 )
             }
-            // Ensure all 8 official ASN BPBD operators exist in the list
             for (asn in defaultList) {
                 if (list.none { it.nip.equals(asn.nip, ignoreCase = true) }) {
                     list.add(asn)
@@ -311,9 +568,11 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Validates PIN and registers/logs in the duty officer.
-     * Rejects default PIN '117' and enforces custom PIN if set.
+     * Local offline PIN login is DISABLED.
+     * All ASN officer PIN verification MUST go through Cloud Firestore via
+     * [com.example.data.repository.SmartOfficerAuthRepository.authenticateOfficer].
      */
+    @Deprecated("Verifikasi PIN petugas wajib melalui Cloud Firestore (SmartOfficerAuthRepository.authenticateOfficer)")
     fun loginOfficer(
         name: String,
         badgeId: String,
@@ -321,31 +580,12 @@ class OfficerAuthManager(private val context: Context) {
         pin: String,
         role: String = OfficerRoles.PETUGAS_JAGA
     ): Boolean {
-        val trimmedPin = pin.trim()
-        if (VALID_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) {
-            return false
-        }
-        val isPinValid = verifyStoredOfficerPinHash(trimmedPin)
-
-        if (isPinValid) {
-            val resolvedName = name.ifBlank { "Petugas Pusdalops PB" }
-            val resolvedBadge = badgeId.ifBlank { "PUSDALOPS-117" }
-            val resolvedRole = role.ifBlank { OfficerRoles.PETUGAS_JAGA }
-            val resolvedShift = shift.ifBlank { "Shift Siaga 24 Jam" }
-            val editor = sharedPrefs.edit().putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
-            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_NAME, resolvedName)
-            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_BADGE_ID, resolvedBadge)
-            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_ROLE, resolvedRole)
-            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_SHIFT, resolvedShift)
-            editor.apply()
-            com.example.util.SessionManager(context).setPetugasLogin(resolvedName, resolvedBadge, resolvedRole)
-            return true
-        }
         return false
     }
 
     /**
-     * Directly establishes an authenticated officer session after smart database verification.
+     * Directly establishes an authenticated officer session AFTER Cloud Firestore PIN verification succeeds.
+     * Stores ONLY `saved_nip` and non-secret display metadata — NEVER stores the officer's PIN on the device.
      */
     fun loginOfficerDirectly(
         name: String,
@@ -353,104 +593,112 @@ class OfficerAuthManager(private val context: Context) {
         shift: String,
         role: String = OfficerRoles.PETUGAS_JAGA
     ) {
+        val cleanNip = badgeId.trim()
+        if (cleanNip.isBlank()) return
         val resolvedName = name.ifBlank { "Petugas Pusdalops PB" }
-        val resolvedBadge = badgeId.ifBlank { "PUSDALOPS-117" }
         val resolvedRole = role.ifBlank { OfficerRoles.PETUGAS_JAGA }
         val resolvedShift = shift.ifBlank { "Shift Siaga 24 Jam" }
-        val editor = sharedPrefs.edit().putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
+        val editor = sharedPrefs.edit()
+            .putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
+            .remove(PREF_OFFICER_PIN)
+            .remove(PREF_OFFICER_PIN_HASH)
+            .remove(PREF_OFFICER_PIN_SALT)
+        SecureStorageHelper.putEncrypted(editor, PREF_SAVED_NIP, cleanNip)
         SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_NAME, resolvedName)
-        SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_BADGE_ID, resolvedBadge)
+        SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_BADGE_ID, cleanNip)
         SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_ROLE, resolvedRole)
         SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_SHIFT, resolvedShift)
         editor.apply()
-        com.example.util.SessionManager(context).setPetugasLogin(resolvedName, resolvedBadge, resolvedRole)
+        com.example.util.SessionManager(context).setPetugasLogin(resolvedName, cleanNip, resolvedRole)
     }
 
     /**
-     * Verifies if a given PIN matches the active custom officer PIN.
-     * Never falls back to default PINs ('117') if a custom PIN is configured.
+     * Local PIN verification is DISABLED; PINs are NEVER stored locally on the device.
+     * Always verify NIP + PIN via Cloud Firestore (`SmartOfficerAuthRepository.authenticateOfficer`).
      */
+    @Deprecated("PIN tidak pernah disimpan di perangkat; verifikasi wajib ke Cloud Firestore")
     fun verifyPin(pin: String): Boolean {
-        val trimmedPin = pin.trim()
-        if (VALID_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) {
-            return false
-        }
-        return verifyStoredOfficerPinHash(trimmedPin)
-    }
-
-    fun hasCustomPin(): Boolean {
-        migrateLegacySecretsIfNeeded()
-        return !SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_PIN_HASH).isNullOrBlank()
-    }
-
-    /**
-     * Synchronizes the local SharedPreferences custom PIN cache with Cloud Firestore / Room.
-     */
-    fun setCustomOfficerPin(newPin: String) {
-        val trimmedNew = newPin.trim()
-        if (trimmedNew.length >= 4) {
-            val salt = OfficerCredentialEntity.generateCryptographicSalt()
-            val hash = OfficerCredentialEntity.hashWithSalt(trimmedNew, salt)
-            val editor = sharedPrefs.edit().remove(PREF_OFFICER_PIN)
-            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_PIN_SALT, salt)
-            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_PIN_HASH, hash)
-            editor.apply()
-        }
-    }
-
-    /**
-     * Changes the officer PIN/password to protect against unauthorized ID/NIP usage.
-     */
-    fun changeOfficerPin(oldPin: String, newPin: String): Result<String> {
-        val trimmedOld = oldPin.trim()
-        val trimmedNew = newPin.trim()
-
-        if (trimmedNew.length < 4) {
-            return Result.failure(IllegalArgumentException("PIN baru minimal terdiri dari 4 karakter atau digit."))
-        }
-
-        if (VALID_PINS.any { it.equals(trimmedNew, ignoreCase = true) }) {
-            return Result.failure(IllegalArgumentException("PIN baru dilarang menggunakan PIN default umum (117 / TRC2026)."))
-        }
-
-        if (trimmedNew == trimmedOld) {
-            return Result.failure(IllegalArgumentException("PIN baru tidak boleh sama dengan PIN saat ini."))
-        }
-
-        setCustomOfficerPin(trimmedNew)
-
-        return Result.success("PIN keamanan petugas berhasil diperbarui secara permanen!")
-    }
-
-    /**
-     * Resets the PIN back to standard Pusdalops default PINs.
-     */
-    fun resetPinToDefault(currentPin: String): Boolean {
-        if (verifyPin(currentPin)) {
-            sharedPrefs.edit()
-                .remove(PREF_OFFICER_PIN)
-                .remove(PREF_OFFICER_PIN_HASH)
-                .remove(PREF_OFFICER_PIN_SALT)
-                .apply()
-            return true
-        }
         return false
     }
 
     /**
-     * Resets the PIN using ONLY verified Administrator password (never officer PIN).
+     * Returns whether the last Cloud Firestore login/PIN update confirmed a personalized Cloud PIN.
+     * Does NOT read or store any local PIN or PIN hash.
      */
-    fun resetPinWithAdmin(adminPassword: String): Result<String> {
-        val trimmed = adminPassword.trim()
-        if (!verifyAdminPassword(trimmed)) {
-            return Result.failure(IllegalArgumentException("Sandi Administrator tidak valid atau belum dikonfigurasi. Otorisasi reset PIN ditolak."))
-        }
+    fun hasCustomPin(): Boolean {
+        return sharedPrefs.getBoolean(PREF_HAS_CLOUD_CUSTOM_PIN, false)
+    }
+
+    /**
+     * Records ONLY a non-secret boolean status from Cloud Firestore (whether the officer's PIN is custom).
+     * NEVER stores the actual PIN or PIN hash on the device.
+     */
+    fun markCloudCustomPinStatus(isCustomPinSet: Boolean) {
         sharedPrefs.edit()
+            .putBoolean(PREF_HAS_CLOUD_CUSTOM_PIN, isCustomPinSet)
             .remove(PREF_OFFICER_PIN)
             .remove(PREF_OFFICER_PIN_HASH)
             .remove(PREF_OFFICER_PIN_SALT)
             .apply()
-        return Result.success("PIN keamanan petugas berhasil di-reset ke kunci individual NIP (6 digit terakhir NIP).")
+    }
+
+    /**
+     * Legacy compatibility shim: NEVER persists the PIN value to local storage.
+     * Only records the non-secret custom PIN status flag and purges any legacy local PIN keys.
+     */
+    @Deprecated("Jangan pernah menyimpan PIN di perangkat; gunakan markCloudCustomPinStatus(true)")
+    fun setCustomOfficerPin(newPin: String) {
+        if (newPin.trim().length >= 4) {
+            markCloudCustomPinStatus(true)
+        }
+    }
+
+    /**
+     * Local-only PIN change is disabled; PIN updates must be verified and persisted to Cloud Firestore
+     * via [com.example.data.repository.SmartOfficerAuthRepository.changePersonalPin].
+     */
+    @Deprecated("Gunakan SmartOfficerAuthRepository.changePersonalPin() untuk memperbarui PIN di Cloud Firestore")
+    fun changeOfficerPin(oldPin: String, newPin: String): Result<String> {
+        return Result.failure(
+            UnsupportedOperationException(
+                "Perubahan PIN wajib dilakukan melalui sinkronisasi Cloud Firestore (SmartOfficerAuthRepository.changePersonalPin)."
+            )
+        )
+    }
+
+    /**
+     * Local default PIN reset is permanently disabled so PINs can never revert to default.
+     */
+    @Deprecated("Reset PIN default lokal dinonaktifkan")
+    fun resetPinToDefault(currentPin: String): Boolean {
+        return false
+    }
+
+    /**
+     * Local default PIN reset is permanently disabled; admin PIN management must update Cloud Firestore.
+     */
+    @Deprecated("Gunakan SmartOfficerAuthRepository untuk pengelolaan kredensial di Cloud Firestore")
+    fun resetPinWithAdmin(adminPassword: String): Result<String> {
+        return Result.failure(
+            UnsupportedOperationException("Pengelolaan PIN petugas wajib dilakukan di Cloud Firestore.")
+        )
+    }
+
+    fun hasSavedOfficerIdentity(): Boolean {
+        return getSavedNip().isNotBlank()
+    }
+
+    fun clearSavedOfficerIdentity() {
+        sharedPrefs.edit()
+            .putBoolean(PREF_IS_OFFICER_LOGGED_IN, false)
+            .remove(PREF_SAVED_NIP)
+            .remove(PREF_OFFICER_NAME)
+            .remove(PREF_OFFICER_BADGE_ID)
+            .remove(PREF_OFFICER_ROLE)
+            .remove(PREF_OFFICER_SHIFT)
+            .apply()
+        com.example.util.SessionManager(context).clearSession()
+        SecurityManager.getInstance(context).clearLocalSession()
     }
 
     fun logoutOfficer() {
@@ -459,6 +707,7 @@ class OfficerAuthManager(private val context: Context) {
             .apply()
         com.example.util.SessionManager(context).clearSession()
         SecurityManager.getInstance(context).clearLocalSession()
+        com.example.security.AdminAccessSecurityManager.revokeToken()
     }
 
     /**
@@ -525,43 +774,20 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Memverifikasi sandi Administrator secara aman (PBKDF2 salted + constant-time + brute-force lockout)
-     * tanpa fallback kata sandi bawaan hardcode.
+     * Verifikasi sandi master admin lokal DINONAKTIFKAN demi keamanan anti reverse-engineering.
+     * Seluruh verifikasi master admin wajib melalui endpoint server-side `POST /api/verify-admin-pass`
+     * pada [com.example.security.AdminAccessSecurityManager].
      */
+    @Deprecated("Gunakan AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken() (server-side)")
     fun verifyAdminPassword(password: String): Boolean {
-        if (getAdminLockoutRemainingSeconds() > 0L) {
-            return false
-        }
-        val trimmed = password.trim()
-        if (trimmed.isEmpty()) return false
-        migrateLegacySecretsIfNeeded()
-        val storedHash = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_ADMIN_PASSWORD_HASH)
-        val storedSalt = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_ADMIN_PASSWORD_SALT)
-        if (storedHash.isNullOrBlank() || storedSalt.isNullOrBlank()) {
-            return false
-        }
-        val matches = OfficerCredentialEntity.verifyHash(trimmed, storedSalt, storedHash)
-        if (matches) {
-            sharedPrefs.edit()
-                .putInt(PREF_ADMIN_FAILED_ATTEMPTS, 0)
-                .putLong(PREF_ADMIN_LOCKOUT_UNTIL, 0L)
-                .apply()
-        } else {
-            val attempts = sharedPrefs.getInt(PREF_ADMIN_FAILED_ATTEMPTS, 0) + 1
-            val editor = sharedPrefs.edit().putInt(PREF_ADMIN_FAILED_ATTEMPTS, attempts)
-            if (attempts >= MAX_ADMIN_ATTEMPTS) {
-                editor.putLong(PREF_ADMIN_LOCKOUT_UNTIL, System.currentTimeMillis() + ADMIN_LOCKOUT_MS)
-                editor.putInt(PREF_ADMIN_FAILED_ATTEMPTS, 0)
-            }
-            editor.apply()
-        }
-        return matches
+        return false
     }
 
     /**
-     * Logs out Application Admin.
+     * Logs out Application Admin and revokes any active Temporary Access Token.
      */
     fun logoutAdmin() {
+        com.example.security.AdminAccessSecurityManager.revokeToken()
         sharedPrefs.edit().putBoolean(PREF_IS_ADMIN_LOGGED_IN, false).apply()
     }
 
@@ -596,23 +822,17 @@ class OfficerAuthManager(private val context: Context) {
         return Result.success("Sandi Admin SIPAGAR KITA berhasil diperbarui secara permanen!")
     }
 
-    private fun verifyStoredOfficerPinHash(trimmedPin: String): Boolean {
-        migrateLegacySecretsIfNeeded()
-        val storedHash = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_PIN_HASH) ?: return false
-        val storedSalt = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_PIN_SALT) ?: return false
-        return OfficerCredentialEntity.verifyHash(trimmedPin, storedSalt, storedHash)
-    }
-
     private fun migrateLegacySecretsIfNeeded() {
         val editor = sharedPrefs.edit()
         var changed = false
-        val legacyPin = sharedPrefs.getString(PREF_OFFICER_PIN, null)
-        if (!legacyPin.isNullOrBlank()) {
-            val salt = OfficerCredentialEntity.generateCryptographicSalt()
-            val hash = OfficerCredentialEntity.hashWithSalt(legacyPin.trim(), salt)
-            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_PIN_SALT, salt)
-            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_PIN_HASH, hash)
+        // Always purge any legacy local officer PIN keys without touching saved_nip or session
+        if (sharedPrefs.contains(PREF_OFFICER_PIN) ||
+            sharedPrefs.contains(PREF_OFFICER_PIN_HASH) ||
+            sharedPrefs.contains(PREF_OFFICER_PIN_SALT)
+        ) {
             editor.remove(PREF_OFFICER_PIN)
+                .remove(PREF_OFFICER_PIN_HASH)
+                .remove(PREF_OFFICER_PIN_SALT)
             changed = true
         }
         val legacyAdmin = sharedPrefs.getString(PREF_ADMIN_PASSWORD, null)

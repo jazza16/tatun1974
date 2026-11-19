@@ -73,14 +73,15 @@ class FormTab3Fragment : Fragment() {
 
     // Fungsi saat tombol "Tambah Log" di klik:
     private fun tambahLogBaru(
-        waktuInput: String = "08.20 WIB",
+        waktuInput: String = java.text.SimpleDateFormat("HH:mm 'WIB'", java.util.Locale.getDefault()).format(java.util.Date()),
         fromInput: String = "Pusdalops-PB BPBD Mukomuko",
         toInput: String = "BPBD Provinsi",
         subjekInput: String = "Penyampaian berita cuaca..."
     ) {
+        val currentTimeFormatted = java.text.SimpleDateFormat("HH:mm 'WIB'", java.util.Locale.getDefault()).format(java.util.Date())
         val logBaru = LogKomunikasiEntity(
             laporanId = 0, // Nanti akan diisi otomatis oleh Database
-            waktu = waktuInput.ifBlank { "08.20 WIB" }, // Ambil dari EditText form log
+            waktu = waktuInput.ifBlank { currentTimeFormatted }, // Ambil dari EditText form log atau waktu perangkat otomatis
             stationIdFrom = fromInput.ifBlank { "Pusdalops-PB BPBD Mukomuko" },
             stationIdTo = toInput.ifBlank { "BPBD Provinsi" },
             subjek = subjekInput.ifBlank { "Penyampaian berita cuaca..." },
@@ -99,7 +100,10 @@ fun FormTab3Content(
     sharedViewModel: LaporanViewModel? = null,
     onTambahLogClick: (waktu: String, from: String, to: String, subjek: String) -> Unit = { _, _, _, _ -> }
 ) {
-    var waktuLog by remember { mutableStateOf("08.20 WIB") }
+    val currentDeviceTime = remember {
+        java.text.SimpleDateFormat("HH:mm 'WIB'", java.util.Locale.getDefault()).format(java.util.Date())
+    }
+    var waktuLog by remember { mutableStateOf(currentDeviceTime) }
     var stationFrom by remember { mutableStateOf("Pusdalops-PB BPBD Mukomuko") }
     var stationTo by remember { mutableStateOf("BPBD Provinsi") }
     var subjekLog by remember { mutableStateOf("Penyampaian berita cuaca dan situasi kondusif Kabupaten Mukomuko") }
@@ -167,8 +171,11 @@ fun FormTab3Content(
                     color = Color(0xFF1976D2)
                 )
 
+                val activeLaporan = sharedViewModel?.laporanSementara
+                val opName = activeLaporan?.operatorCanonicalName ?: "HITATUN ARAZAK"
+                val opNip = activeLaporan?.operatorNip ?: "197401282006041006"
                 Text(
-                    text = "Operator Jaga: ${sharedViewModel?.laporanSementara?.petugasJaga ?: "HITATUN ARAZAK"}",
+                    text = "Operator Jaga: $opName (NIP. $opNip)",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF4CAF50)
@@ -249,7 +256,7 @@ fun FormTab3Content(
                                     color = Color(0xFF1976D2)
                                 )
                                 Text(
-                                    text = "Op: ${item.operatorName}",
+                                    text = "Op: ${item.operatorNama} (NIP. ${item.operatorNip})",
                                     fontSize = 11.sp,
                                     color = Color(0xFF616161)
                                 )

@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -89,6 +90,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.MukomukoDistricts
+import com.example.ui.components.EmergencyDialer
+import com.example.ui.components.FirmsHotspotOsmMapSection
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
@@ -126,6 +130,7 @@ class MapActivity : ComponentActivity() {
 
 enum class MapMarkerType(val label: String, val color: Color, val iconColor: Color) {
     ALL("Semua Titik", Color(0xFF0F172A), Color.White),
+    HOTSPOT_FIRMS("Hotspot FIRMS (OSM)", Color(0xFFEA580C), Color.White),
     POSKO_TRC("Posko Siaga TRC", Color(0xFFDC2626), Color.White),
     STASIUN_CUACA("Stasiun Cuaca AWS", Color(0xFF0284C7), Color.White),
     RAWAN_BENCANA("Titik Cuaca Ekstrem", Color(0xFFD97706), Color.White)
@@ -525,7 +530,22 @@ fun MukomukoInteractiveMapScreen(
             }
         }
 
-        // 3. MAIN INTERACTIVE MAP CANVAS WITH PINCH-ZOOM & PAN GESTURES
+        // 3. MAIN INTERACTIVE MAP CANVAS OR OPENSTREETMAP FIRMS HOTSPOT OVERLAY
+        if (selectedFilter == MapMarkerType.HOTSPOT_FIRMS) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(12.dp)
+            ) {
+                FirmsHotspotOsmMapSection(
+                    currentDistrict = MukomukoDistricts.defaultDistrict,
+                    onCall117 = { EmergencyDialer.dial(context, "117") },
+                    isDark = true
+                )
+            }
+        } else {
         BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
@@ -717,6 +737,7 @@ fun MukomukoInteractiveMapScreen(
                     Text("Zoom: ${(zoomScale * 100).toInt()}% • Titik: ${filteredMarkers.size}", fontSize = 10.sp, color = Color(0xFFCBD5E1))
                 }
             }
+        }
         }
 
         // 4. BOTTOM DETAIL CARD WHEN MARKER IS SELECTED

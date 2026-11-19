@@ -226,19 +226,15 @@ fun MarineWaveHistoryChart(
 
             // Interactive Tooltip Callout Card
             Surface(
-                color = when {
-                    selectedPoint.waveHeight >= 2.5f -> Color(0xFFFEF2F2)
-                    selectedPoint.waveHeight >= 1.25f -> Color(0xFFFFF7ED)
-                    else -> Color(0xFFF0FDF4)
-                },
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                 shape = RoundedCornerShape(14.dp),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     when {
                         selectedPoint.waveHeight >= 2.5f -> Color(0xFFFCA5A5)
                         selectedPoint.waveHeight >= 1.25f -> Color(0xFFFDBA74)
-                        else -> Color(0xFFBBF7D0)
-                    }
+                        else -> Color(0xFF22C55E)
+                    }.copy(alpha = 0.45f)
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -284,7 +280,7 @@ fun MarineWaveHistoryChart(
                             text = " meter",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 3.dp).weight(0.5f, fill = false),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis

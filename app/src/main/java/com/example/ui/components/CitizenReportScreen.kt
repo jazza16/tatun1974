@@ -32,6 +32,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -64,6 +65,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -107,6 +109,7 @@ import androidx.compose.material.icons.filled.HeadsetMic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -125,6 +128,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -159,9 +163,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -1517,6 +1523,14 @@ fun CitizenReportScreen(
                                         return@Button
                                     }
 
+                                    val coordValidation = com.example.util.CoordinateValidator.validate(latitude, longitude)
+                                    if (coordValidation.isFailure) {
+                                        val errMsg = coordValidation.exceptionOrNull()?.message
+                                            ?: com.example.util.CoordinateValidator.ERROR_INVALID_RANGE
+                                        Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
+                                        return@Button
+                                    }
+
                                     val reportId = "LAP-MMK-" + SimpleDateFormat("yyyyMMdd", Locale.US).format(Date()) + "-" + (100..999).random()
                                     val report = CitizenDisasterReport(
                                         id = reportId,
@@ -2015,8 +2029,8 @@ fun CitizenReportScreen(
                                     authManager.signOut()
                                     officerAuthManager.logoutOfficer()
                                     isOfficerLoggedIn = false
-                                    officerName = ""
-                                    officerBadgeId = ""
+                                    officerName = officerAuthManager.getOfficerName()
+                                    officerBadgeId = officerAuthManager.getOfficerBadgeId()
                                     securityAccessResult = null
                                     selectedTab = 0
                                     Toast.makeText(context, "Sesi Petugas Ruang Kerja diakhiri", Toast.LENGTH_SHORT).show()
@@ -2072,7 +2086,7 @@ fun CitizenReportScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = {
-                                    Toast.makeText(context, "Login dengan ID petugas untuk akses ini", Toast.LENGTH_SHORT).show()
+                                    showOfficerLoginDialog = true
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
                             ) {
@@ -2236,1271 +2250,485 @@ fun CitizenReportScreen(
         )
     }
 
-    // Officer Login & PIN Verification Dialog
+    // Officer Login & PIN Verification Dialog ("Sekali Input NIP, Seterusnya Cukup PIN")
     if (showOfficerLoginDialog) {
         val smartAuthRepo = remember { SmartOfficerAuthRepository.getInstance(context) }
-        var roster by remember { mutableStateOf(officerAuthManager.getOfficerRoster()) }
-        var selectedRoleFilter by remember { mutableStateOf(OfficerRoles.OPERATOR) }
-        var selectedOfficer by remember {
-            mutableStateOf(
-                roster.firstOrNull { it.nip == officerBadgeId }
-                    ?: roster.firstOrNull { it.role == OfficerRoles.OPERATOR }
-                    ?: roster.firstOrNull()
-            )
-        }
-        var selectedCredential by remember { mutableStateOf<OfficerCredentialEntity?>(null) }
-        var isHarvestingSync by remember { mutableStateOf(false) }
-        var dialogMode by remember { mutableIntStateOf(0) } // 0 = Pilih dari Roster / Dropdown, 1 = Form Input Petugas Baru (Admin Only)
-        var isNameDropdownOpen by remember { mutableStateOf(false) }
-        var rosterSearchQuery by remember { mutableStateOf("") }
 
-        // PIN & Biometric state
+        // 1. Cek Penyimpanan (Secure Storage via Android Keystore AES-256-GCM)
+        var savedNip by remember { mutableStateOf(officerAuthManager.getSavedNip()) }
+        var savedName by remember { mutableStateOf(officerAuthManager.getOfficerName().trim()) }
+        val hasSavedNip = savedNip.isNotBlank()
+
+        var inputNipOrName by remember { mutableStateOf("") }
         var inputPin by remember { mutableStateOf("") }
         var isPinVisible by remember { mutableStateOf(false) }
+        var isSubmitting by remember { mutableStateOf(false) }
+        var isSyncingCloud by remember { mutableStateOf(false) }
         var isError by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf("") }
-        var authResultText by rememberSaveable { mutableStateOf("") }
-        var isBiometricScanning by rememberSaveable { mutableStateOf(false) }
-        val hapticFeedback = LocalHapticFeedback.current
+        var syncStatusMessage by remember { mutableStateOf("") }
 
-        val authLauncher = rememberAuthenticationLauncher { authResult ->
-            when (authResult) {
-                is AuthenticationResult.Success -> {
-                    // Autentikasi biometrik BERHASIL
-                    triggerBiometricVibration(context, "SUCCESS")
-                    authResultText = "Login Biometrik Berhasil! Memverifikasi sesi..."
-                    val savedNip = officerAuthManager.getOfficerBadgeId()
-                        .ifBlank { selectedOfficer?.nip.orEmpty() }
+        val savedOfficerDisplay = remember(savedNip, savedName) {
+            when {
+                savedName.isNotBlank() && savedNip.isNotBlank() -> "$savedName ($savedNip)"
+                savedNip.isNotBlank() -> savedNip
+                else -> ""
+            }
+        }
 
-                    if (savedNip.isBlank()) {
-                        isBiometricScanning = false
-                        isError = true
-                        errorMessage = "NIP petugas belum tersimpan di sesi perangkat. Silakan pilih petugas atau login dengan PIN terlebih dahulu."
-                        Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
-                    } else {
-                        coroutineScope.launch {
-                            isHarvestingSync = true
-                            val bioResult = smartAuthRepo.authenticateWithBiometric(savedNip)
-                            isHarvestingSync = false
-                            isBiometricScanning = false
-
-                            if (bioResult.isSuccess) {
-                                val cred = bioResult.getOrThrow()
-                                selectedCredential = cred
-                                val nipPrefix = if (cred.nip.startsWith("TRC", ignoreCase = true)) "Reg TRC" else "NIP"
-                                val formattedLabel = "${cred.fullName} ($nipPrefix: ${maskNipLast6(cred.nip)})"
-
-                                val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
-                                    officerNip = cred.nip,
-                                    officerName = cred.fullName,
-                                    officerRole = cred.role
-                                )
-                                val verifiedSession = sessionRes.getOrNull()
-                                val isDeviceAuthorized = sessionRes.isSuccess && (verifiedSession?.accessGranted == true)
-                                if (!isDeviceAuthorized) {
-                                    val denyReason = sessionRes.exceptionOrNull()?.message
-                                        ?: "Integritas perangkat tidak memenuhi syarat keamanan (${verifiedSession?.verdict ?: "UNVERIFIED"}) untuk mengakses Ruang Kerja."
-                                    securityAccessResult = SecurityAccessResult(
-                                        isAuthorized = false,
-                                        message = denyReason,
-                                        session = verifiedSession
-                                    )
-                                    officerAuthManager.logoutOfficer()
-                                    isOfficerLoggedIn = false
-                                    isError = true
-                                    errorMessage = denyReason
-                                    Toast.makeText(context, denyReason, Toast.LENGTH_LONG).show()
-                                    return@launch
-                                }
-                                securityAccessResult = SecurityAccessResult(
-                                    isAuthorized = true,
-                                    message = "Perangkat terverifikasi valid.",
-                                    session = verifiedSession
-                                )
-                                isOfficerLoggedIn = true
-                                officerName = cred.fullName
-                                officerBadgeId = cred.nip
-                                officerShift = cred.shift
-                                officerRole = cred.role
-                                showOfficerLoginDialog = false
-                                onOfficerLoginDismissed?.invoke()
-                                selectedTab = 4 // Direct to Konsol Petugas
-
-                                val targetId = pendingStatusReportId
-                                val targetStatus = pendingStatusTarget
-                                if (targetId != null && targetStatus != null) {
-                                    onUpdateReportStatus(targetId, targetStatus)
-                                    Toast.makeText(
-                                        context,
-                                        "Terverifikasi sebagai $formattedLabel. Status laporan diperbarui menjadi '$targetStatus'",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "Selamat bertugas, $formattedLabel! (Biometrik Terverifikasi)",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                                pendingStatusReportId = null
-                                pendingStatusTarget = null
-                            } else {
-                                triggerBiometricVibration(context, "ERROR")
-                                isError = true
-                                val errMsg = bioResult.exceptionOrNull()?.message
-                                    ?: "Petugas tidak ditemukan"
-                                errorMessage = errMsg
-                                authResultText = "Error: $errMsg"
-                                Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
-                }
-                is AuthenticationResult.Error -> {
-                    // Autentikasi GAGAL (misalnya, pengguna membatalkan, sensor error)
-                    isBiometricScanning = false
-                    triggerBiometricVibration(context, "ERROR")
-                    authResultText = "Error: ${authResult.errString}"
+        val submitOfficerLogin: () -> Unit = submitLogin@{
+            val trimmedPin = inputPin.trim()
+            if (hasSavedNip) {
+                // Skenario B: saved_nip ADA -> Hanya validasi PIN yang diketik + saved_nip dari Secure Storage
+                if (trimmedPin.isEmpty()) {
                     isError = true
-                    errorMessage = "Biometrik gagal: ${authResult.errString}. Silakan gunakan PIN pribadi."
+                    errorMessage = "Silakan masukkan PIN Anda"
+                    return@submitLogin
                 }
-                is AuthenticationResult.CustomFallbackSelected -> {
-                    // Pengguna memilih opsi fallback (misalnya, "Gunakan PIN")
-                    isBiometricScanning = false
-                    triggerBiometricVibration(context, "SCAN_START")
-                    authResultText = "Fallback dipilih: ${authResult.fallback.text}"
-                    isError = false
+            } else {
+                // Skenario A: saved_nip KOSONG -> Validasi Kolom 1 (NIP/Nama) & Kolom 2 (PIN)
+                if (inputNipOrName.trim().isEmpty()) {
+                    isError = true
+                    errorMessage = "Silakan masukkan NIP atau Nama"
+                    return@submitLogin
+                }
+                if (trimmedPin.isEmpty()) {
+                    isError = true
+                    errorMessage = "Silakan masukkan PIN Anda"
+                    return@submitLogin
                 }
             }
-        }
 
-        // Admin Security Prompt for manual input protection
-        var showAdminPromptForAdd by remember { mutableStateOf(false) }
-        var adminPinAttempt by remember { mutableStateOf("") }
-        var adminPinErrorMsg by remember { mutableStateOf("") }
+            isError = false
+            errorMessage = ""
+            syncStatusMessage = ""
 
-        // Form Input Petugas Baru (Format: Nama Petugas & NIP selaku ASN/TRC BPBD)
-        var inputFullName by remember { mutableStateOf("") }
-        var inputNip by remember { mutableStateOf("") }
-        var inputRole by remember { mutableStateOf(OfficerRoles.OPERATOR) }
-        var inputShift by remember { mutableStateOf("Shift Siaga 24 Jam") }
-        var inputUnit by remember { mutableStateOf("Pusdalops BPBD Kab. Mukomuko") }
-        var formValidationError by remember { mutableStateOf("") }
-
-        // Automatically harvest un-synced official officers and pull credentials from cloud
-        LaunchedEffect(Unit) {
-            isHarvestingSync = true
-            try {
-                smartAuthRepo.harvestAndSyncAllOfficers()
-                smartAuthRepo.pullCredentialsFromCloud { _, _ -> }
-                roster = officerAuthManager.getOfficerRoster()
-                val nip = selectedOfficer?.nip ?: officerBadgeId
-                if (!nip.isNullOrBlank()) {
-                    selectedCredential = smartAuthRepo.getCredential(nip)
+            coroutineScope.launch {
+                isSubmitting = true
+                val authResult = if (hasSavedNip) {
+                    // Skenario B: Ambil saved_nip dari Secure Storage, gabungkan dengan PIN, verifikasi ke API/Repo
+                    smartAuthRepo.authenticateOfficer(
+                        nip = savedNip,
+                        inputPin = trimmedPin
+                    )
+                } else {
+                    // Skenario A: Verifikasi NIP atau Nama beserta PIN ke API/Repo
+                    smartAuthRepo.authenticateByNipOrNameAndPin(
+                        nipOrName = inputNipOrName.trim(),
+                        inputPin = trimmedPin
+                    )
                 }
-            } catch (_: Exception) {
-            } finally {
-                isHarvestingSync = false
-            }
-        }
+                isSubmitting = false
 
-        LaunchedEffect(selectedOfficer) {
-            val nip = selectedOfficer?.nip
-            if (!nip.isNullOrBlank()) {
-                selectedCredential = smartAuthRepo.getCredential(nip)
-            }
-        }
-
-        val filteredRoster = roster.filter { off ->
-            val matchesRole = if (selectedRoleFilter == "Semua") true else off.role.contains(selectedRoleFilter, ignoreCase = true)
-            val matchesSearch = if (rosterSearchQuery.isBlank()) true else {
-                val q = rosterSearchQuery.trim().lowercase()
-                off.fullName.lowercase().contains(q) || off.nip.lowercase().contains(q) || off.unit.lowercase().contains(q)
-            }
-            matchesRole && matchesSearch
-        }.sortedWith(
-            compareBy<OfficerProfile> { OfficerRoles.getRoleRank(it.role) }
-                .thenBy { it.fullName }
-        )
-
-        AlertDialog(
-            onDismissRequest = {
-                showOfficerLoginDialog = false
-                onOfficerLoginDismissed?.invoke()
-                pendingStatusReportId = null
-                pendingStatusTarget = null
-            },
-            icon = {
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFFEFF6FF),
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (dialogMode == 1) Icons.Default.PersonAdd else Icons.Default.Badge,
-                            contentDescription = null,
-                            tint = Color(0xFF2563EB),
-                            modifier = Modifier.size(26.dp)
+                if (authResult.isSuccess) {
+                    val profile = authResult.getOrThrow()
+                    val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
+                        officerNip = profile.nip,
+                        officerName = profile.fullName,
+                        officerRole = profile.role
+                    )
+                    val verifiedSession = sessionRes.getOrNull()
+                    val isDeviceAuthorized = sessionRes.isSuccess && (verifiedSession?.accessGranted == true)
+                    if (!isDeviceAuthorized) {
+                        val denyReason = sessionRes.exceptionOrNull()?.message
+                            ?: "Integritas perangkat tidak memenuhi syarat keamanan (${verifiedSession?.verdict ?: "UNVERIFIED"}) untuk mengakses Ruang Kerja."
+                        securityAccessResult = SecurityAccessResult(
+                            isAuthorized = false,
+                            message = denyReason,
+                            session = verifiedSession
                         )
+                        officerAuthManager.logoutOfficer()
+                        isOfficerLoggedIn = false
+                        isError = true
+                        errorMessage = denyReason
+                        Toast.makeText(context, denyReason, Toast.LENGTH_LONG).show()
+                        return@launch
                     }
-                }
-            },
-            title = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = if (dialogMode == 1) "Input Petugas Baru (Admin)" else "Login Kredensial Petugas Pusdalops",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        textAlign = TextAlign.Center
+
+                    securityAccessResult = SecurityAccessResult(
+                        isAuthorized = true,
+                        message = "Perangkat terverifikasi valid.",
+                        session = verifiedSession
                     )
-                    Text(
-                        text = "BPBD Kabupaten Mukomuko",
-                        fontSize = 11.sp,
-                        color = Color(0xFF2563EB),
-                        fontWeight = FontWeight.SemiBold
+
+                    // Simpan NIP & identitas petugas ke Secure Storage (AES-256-GCM)
+                    officerAuthManager.saveNipToSecureStorage(
+                        nip = profile.nip,
+                        fullName = profile.fullName,
+                        role = profile.role,
+                        shift = profile.shift
                     )
+                    officerAuthManager.loginOfficerDirectly(
+                        name = profile.fullName,
+                        badgeId = profile.nip,
+                        shift = profile.shift,
+                        role = profile.role
+                    )
+                    savedNip = profile.nip
+                    savedName = profile.fullName
+                    isOfficerLoggedIn = true
+                    officerName = profile.fullName
+                    officerBadgeId = profile.nip
+                    officerShift = profile.shift
+                    officerRole = profile.role
+                    showOfficerLoginDialog = false
+                    onOfficerLoginDismissed?.invoke()
+                    selectedTab = 4 // Arahkan ke halaman utama Ruang Kerja Petugas
+
+                    val targetId = pendingStatusReportId
+                    val targetStatus = pendingStatusTarget
+                    if (targetId != null && targetStatus != null) {
+                        onUpdateReportStatus(targetId, targetStatus)
+                        Toast.makeText(
+                            context,
+                            "Terverifikasi sebagai ${profile.fullName}. Status laporan diperbarui menjadi '$targetStatus'",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Selamat bertugas, ${profile.fullName}!",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    pendingStatusReportId = null
+                    pendingStatusTarget = null
+                } else {
+                    isError = true
+                    val errMsg = authResult.exceptionOrNull()?.message
+                        ?: if (hasSavedNip) "PIN tidak sesuai." else "NIP/Nama atau PIN tidak sesuai."
+                    errorMessage = errMsg
                 }
-            },
-            text = {
+            }
+        }
+
+        Dialog(
+            onDismissRequest = {
+                if (!isSubmitting && !isSyncingCloud) {
+                    showOfficerLoginDialog = false
+                    onOfficerLoginDismissed?.invoke()
+                    pendingStatusReportId = null
+                    pendingStatusTarget = null
+                }
+            }
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = Color.White,
+                tonalElevation = 8.dp,
+                shadowElevation = 12.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 480.dp)
-                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (dialogMode == 0) {
-                        // MODE 0: PILIH DARI DATABASE RESMI PUSDALOPS (ANTI-SPOOFING)
-                        Text(
-                            text = "Pilih nama personil ASN BPBD dari daftar resmi kredensial. Nama dan NIP ditampilkan terpisah dan terkunci guna mencegah manipulasi identitas oleh pihak tidak berwenang.",
-                            fontSize = 11.sp,
-                            color = Color(0xFF4B5563),
-                            lineHeight = 15.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Category Tabs: Operator Pusdalops (Default), Petugas Jaga, Lapangan TRC, Semua
-                        Text(
-                            text = "PILIHAN TUGAS KEDINASAN:",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF64748B),
-                            letterSpacing = 0.5.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            val roleFilters = listOf(
-                                "Semua" to "Semua (${roster.size})",
-                                "Pengawas" to "🏛️ Pengawas (${roster.count { it.role.contains("Pengawas", ignoreCase = true) }})",
-                                "Manajer" to "⭐ Manajer Pusdalops (${roster.count { it.role.contains("Manajer", ignoreCase = true) }})",
-                                "Supervisor" to "🛡️ Supervisor (${roster.count { it.role.contains("Supervisor", ignoreCase = true) }})",
-                                OfficerRoles.OPERATOR to "🎧 Operator (${roster.count { it.role.contains("Operator", ignoreCase = true) }})",
-                                OfficerRoles.PETUGAS_JAGA to "🛡️ Petugas Jaga (${roster.count { it.role.contains("Piket", ignoreCase = true) || it.role.contains("Jaga", ignoreCase = true) }})",
-                                OfficerRoles.PETUGAS_LAPANGAN to "🚜 TRC (${roster.count { it.role.contains("Lapangan", ignoreCase = true) || it.role.contains("Logistik", ignoreCase = true) || it.role.contains("TRC", ignoreCase = true) }})"
+                    // 1. Logo
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFDCFCE7),
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Badge,
+                                contentDescription = "Logo Pusdalops",
+                                tint = Color(0xFF15803D),
+                                modifier = Modifier.size(32.dp)
                             )
-                            items(roleFilters) { (roleKey, label) ->
-                                val isSelected = selectedRoleFilter == roleKey
-                                Surface(
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = if (isSelected) Color(0xFF2563EB) else Color(0xFFF1F5F9),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        if (isSelected) Color(0xFF1D4ED8) else Color(0xFFCBD5E1)
-                                    ),
-                                    modifier = Modifier.clickable {
-                                        selectedRoleFilter = roleKey
-                                        // Auto pick first officer in selected role
-                                        val firstInRole = roster.firstOrNull { if (roleKey == "Semua") true else it.role == roleKey }
-                                        if (firstInRole != null) {
-                                            selectedOfficer = firstInRole
-                                        }
-                                    }
-                                ) {
-                                    Text(
-                                        text = label,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) Color.White else Color(0xFF475569),
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
                         }
+                    }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                        // DROPDOWN MENU PEMILIHAN NAMA PETUGAS ASN (OPERATOR PUSDALOPS)
-                        Text(
-                            text = "PILIH NAMA PETUGAS ASN (OPERATOR PUSDALOPS):",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E40AF),
-                            letterSpacing = 0.5.sp
-                        )
+                    // 2. Judul
+                    Text(
+                        text = "Login Kredensial Petugas Pusdalops",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        textAlign = TextAlign.Center,
+                        color = Color(0xFF0F172A)
+                    )
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFEFF6FF),
-                                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF2563EB)),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { isNameDropdownOpen = !isNameDropdownOpen }
-                                    .testTag("officer_name_dropdown_selector")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null,
-                                        tint = Color(0xFF1D4ED8),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = selectedOfficer?.fullName ?: "Klik untuk memilih nama petugas...",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF0F172A),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "NIP: ${selectedOfficer?.nip?.let { maskNipLast6(it) } ?: "-"} • ${selectedOfficer?.role ?: "-"}",
-                                            fontSize = 11.sp,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = Color(0xFF1E40AF)
-                                        )
-                                    }
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = "Buka Pilihan Nama",
-                                        tint = Color(0xFF1D4ED8),
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-
-                            AnimatedVisibility(visible = isNameDropdownOpen) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shadowElevation = 4.dp,
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 4.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(max = 220.dp)
-                                            .verticalScroll(rememberScrollState())
-                                    ) {
-                                        val availableInRole = filteredRoster.ifEmpty { roster }
-                                        availableInRole.forEach { off ->
-                                            val isCurrent = selectedOfficer?.nip == off.nip
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Column {
-                                                        Text(
-                                                            text = off.fullName,
-                                                            fontSize = 11.sp,
-                                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
-                                                            color = if (isCurrent) Color(0xFF1D4ED8) else Color(0xFF0F172A)
-                                                        )
-                                                        Text(
-                                                            text = "NIP: ${maskNipLast6(off.nip)} • ${off.role}",
-                                                            fontSize = 11.sp,
-                                                            fontFamily = FontFamily.Monospace,
-                                                            color = Color(0xFF64748B)
-                                                        )
-                                                    }
-                                                },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Badge,
-                                                        contentDescription = null,
-                                                        tint = if (isCurrent) Color(0xFF2563EB) else Color.Gray,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                },
-                                                trailingIcon = {
-                                                    if (isCurrent) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Check,
-                                                            contentDescription = null,
-                                                            tint = Color(0xFF16A34A),
-                                                            modifier = Modifier.size(16.dp)
-                                                        )
-                                                    }
-                                                },
-                                                onClick = {
-                                                    selectedOfficer = off
-                                                    isNameDropdownOpen = false
-                                                    isError = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // KREDENSIAL TERPISAH: KOLOM NAMA & KOLOM NIP (TERKUNCI / ANTI MANUAL INPUT)
-                        Text(
-                            text = "KREDENSIAL RESMI DARI DATABASE BPBD (TERPISAH & TERPROTEKSI):",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF475569),
-                            letterSpacing = 0.5.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // Kolom Terpisah 1: Nama Lengkap ASN BPBD (Read-Only)
-                        OutlinedTextField(
-                            value = selectedOfficer?.fullName ?: "",
-                            onValueChange = {}, // Read-only: mencegah input manual pihak tak berwenang
-                            readOnly = true,
-                            enabled = false,
-                            label = { Text("Kolom Nama Pegawai ASN BPBD", fontSize = 11.sp) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    tint = Color(0xFF1D4ED8),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            },
-                            trailingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = "Terkunci Aman",
-                                    tint = Color(0xFF059669),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            colors = TextFieldDefaults.colors(
-                                disabledContainerColor = Color(0xFFF8FAFC),
-                                disabledTextColor = Color(0xFF0F172A),
-                                disabledLabelColor = Color(0xFF475569),
-                                disabledIndicatorColor = Color(0xFFCBD5E1)
-                            ),
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("officer_credential_name_field")
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // Kolom Terpisah 2: NIP Pegawai ASN (Read-Only)
-                        OutlinedTextField(
-                            value = selectedOfficer?.nip?.let { maskNipLast6(it) } ?: "",
-                            onValueChange = {}, // Read-only: mencegah input manual pihak tak berwenang
-                            readOnly = true,
-                            enabled = false,
-                            textStyle = androidx.compose.ui.text.TextStyle(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp
-                            ),
-                            label = { Text("Kolom NIP Pegawai ASN (18 Digit)", fontSize = 11.sp) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Badge,
-                                    contentDescription = null,
-                                    tint = Color(0xFF1D4ED8),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            },
-                            trailingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = "Terkunci Aman",
-                                    tint = Color(0xFF059669),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            colors = TextFieldDefaults.colors(
-                                disabledContainerColor = Color(0xFFF8FAFC),
-                                disabledTextColor = Color(0xFF0F172A),
-                                disabledLabelColor = Color(0xFF475569),
-                                disabledIndicatorColor = Color(0xFFCBD5E1)
-                            ),
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("officer_credential_nip_field")
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // Penugasan & Satuan Kerja Card
+                    // Skenario B: Tampilkan info "Masuk sebagai: [Nama Petugas/NIP]" di atas kolom PIN
+                    AnimatedVisibility(visible = hasSavedNip) {
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(10.dp),
                             color = Color(0xFFF0FDF4),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
-                            modifier = Modifier.fillMaxWidth()
+                            border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 14.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.HeadsetMic,
+                                    imageVector = Icons.Default.VerifiedUser,
                                     contentDescription = null,
                                     tint = Color(0xFF15803D),
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Tugas: ${selectedOfficer?.role ?: OfficerRoles.OPERATOR}",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF166534)
-                                    )
-                                    Text(
-                                        text = "${selectedOfficer?.unit ?: "Pusdalops BPBD Kab. Mukomuko"} • ${selectedOfficer?.shift ?: "Shift Siaga 24 Jam"}",
-                                        fontSize = 11.sp,
-                                        color = Color(0xFF15803D)
-                                    )
-                                }
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFFDCFCE7)
-                                ) {
-                                    Text(
-                                        text = "TERVERIFIKASI",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF166534),
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        softWrap = false
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // Smart Database Credentials & Multi-Device Sync Card
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (selectedCredential?.isCustomPinSet == true) Color(0xFFF0FDF4) else Color(0xFFFFFBEB),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (selectedCredential?.isCustomPinSet == true) Color(0xFF86EFAC) else Color(0xFFFDE68A)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(8.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = if (selectedCredential?.isCustomPinSet == true) Icons.Default.CheckCircle else Icons.Default.Shield,
-                                        contentDescription = null,
-                                        tint = if (selectedCredential?.isCustomPinSet == true) Color(0xFF15803D) else Color(0xFFB45309),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = if (selectedCredential?.isCustomPinSet == true) "Kredensial Aktif: PIN Pribadi Terdaftar" else "Aktivasi Akun Baru: Kunci Individual NIP",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (selectedCredential?.isCustomPinSet == true) Color(0xFF166534) else Color(0xFF92400E)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = if (selectedCredential?.isCustomPinSet == true) {
-                                        "Kredensial tersimpan di SQLite & Cloud Firestore. Wajib login dengan PIN pribadi Anda pada perangkat ini maupun perangkat baru. PIN default '117' dinonaktifkan."
-                                    } else {
-                                        "Akun personil belum mengganti PIN pribadi. Untuk aktivasi perdana, gunakan 6 digit terakhir NIP Anda secara pribadi. Akses melalui PIN default '117' dilarang."
-                                    },
-                                    fontSize = 11.sp,
-                                    color = if (selectedCredential?.isCustomPinSet == true) Color(0xFF166534) else Color(0xFF78350F),
-                                    lineHeight = 13.sp
-                                )
-                                if (selectedCredential?.lastLoginDevice?.isNotBlank() == true) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "📱 Perangkat Terakhir: ${selectedCredential?.lastLoginDevice}",
-                                        fontSize = 10.sp,
-                                        color = Color(0xFF475569)
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Google Account Sign-In Status (Zero-Trust Cloud Firestore Gate)
-                        val authMgr = remember { com.example.data.auth.AuthManager.getInstance(context) }
-                        val googleUserEmail by authMgr.currentUserEmail.collectAsStateWithLifecycle()
-                        val isFirebaseSignedIn = googleUserEmail != null || authMgr.getCurrentUser() != null
-                        var isGoogleSigningIn by remember { mutableStateOf(false) }
-
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isFirebaseSignedIn) Color(0xFFEFF6FF) else Color(0xFFF8FAFC),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isFirebaseSignedIn) Color(0xFF93C5FD) else Color(0xFFE2E8F0)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (isFirebaseSignedIn) "Akun Cloud Google Aktif" else "Sinkronisasi Cloud Membutuhkan Google",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isFirebaseSignedIn) Color(0xFF1D4ED8) else Color(0xFF334155)
-                                    )
-                                    Text(
-                                        text = googleUserEmail ?: "Masuk Google untuk sinkronisasi Firestore & backup lintas perangkat.",
-                                        fontSize = 10.sp,
-                                        color = Color(0xFF475569),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
                                 Spacer(modifier = Modifier.width(6.dp))
-                                OutlinedButton(
-                                    onClick = {
-                                        if (isGoogleSigningIn) return@OutlinedButton
-                                        if (isFirebaseSignedIn) {
-                                            authMgr.signOut()
-                                            Toast.makeText(context, "Sesi Google Cloud ditutup", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            coroutineScope.launch {
-                                                isGoogleSigningIn = true
-                                                val signInRes = authMgr.signInWithGoogle(context)
-                                                isGoogleSigningIn = false
-                                                signInRes.onSuccess {
-                                                    Toast.makeText(context, "Akun Google terhubung untuk Cloud Firestore", Toast.LENGTH_SHORT).show()
-                                                }.onFailure { err ->
-                                                    Toast.makeText(context, err.message ?: "Gagal masuk Google", Toast.LENGTH_LONG).show()
-                                                }
-                                            }
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(6.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                    modifier = Modifier.heightIn(min = 32.dp)
-                                ) {
+                                Text(
+                                    text = "Masuk sebagai: $savedOfficerDisplay",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF166534),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+
+                    // Skenario A: Jika saved_nip KOSONG -> Tampilkan Kolom 1 (Masukkan NIP atau Nama)
+                    AnimatedVisibility(visible = !hasSavedNip) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = inputNipOrName,
+                                onValueChange = {
+                                    inputNipOrName = it
+                                    isError = false
+                                    errorMessage = ""
+                                },
+                                placeholder = {
                                     Text(
-                                        text = when {
-                                            isGoogleSigningIn -> "Memuat..."
-                                            isFirebaseSignedIn -> "Keluar"
-                                            else -> "Masuk Google"
-                                        },
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF1D4ED8)
+                                        text = "Masukkan NIP atau Nama",
+                                        fontSize = 14.sp,
+                                        color = Color(0xFF94A3B8)
                                     )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // Multi-device Cloud Sync & Admin Management Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        isHarvestingSync = true
-                                        try {
-                                            smartAuthRepo.harvestAndSyncAllOfficers()
-                                            smartAuthRepo.pullCredentialsFromCloud { success, count ->
-                                                roster = officerAuthManager.getOfficerRoster()
-                                                val nip = selectedOfficer?.nip
-                                                if (!nip.isNullOrBlank()) {
-                                                    coroutineScope.launch {
-                                                        selectedCredential = smartAuthRepo.getCredential(nip)
-                                                    }
-                                                }
-                                                isHarvestingSync = false
-                                                Toast.makeText(
-                                                    context,
-                                                    if (success) "Sinkronisasi Cloud Berhasil: $count kredensial multi-perangkat diperbarui." else "Kredensial database lokal sudah mutakhir.",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                        } catch (e: Exception) {
-                                            isHarvestingSync = false
-                                            Toast.makeText(context, "Sinkronisasi cloud: ${e.message}", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
                                 },
-                                shape = RoundedCornerShape(6.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.heightIn(min = 36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CloudSync,
-                                    contentDescription = null,
-                                    tint = Color(0xFF2563EB),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (isHarvestingSync) "Menyinkronkan..." else "Sinkronkan Cloud",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF2563EB)
-                                )
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    showAdminPromptForAdd = true
-                                    adminPinAttempt = ""
-                                    adminPinErrorMsg = ""
-                                },
-                                shape = RoundedCornerShape(6.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.heightIn(min = 36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = Color(0xFF0F766E),
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Kelola Personil", fontSize = 11.sp, color = Color(0xFF0F766E))
-                            }
-                        }
-
-                        if (showAdminPromptForAdd) {
-                            AdminAuthDialog(
-                                actionTitle = "Kelola Personil Pusdalops BPBD",
-                                securityManager = remember { com.example.security.SecurityManager.getInstance(context) },
-                                onDismiss = { showAdminPromptForAdd = false },
-                                onAuthorized = {
-                                    showAdminPromptForAdd = false
-                                    dialogMode = 1
-                                    formValidationError = ""
-                                }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Smart PIN Input Field (Dedicated Personal PIN, No Default PIN Allowed)
-                        OutlinedTextField(
-                            value = inputPin,
-                            onValueChange = {
-                                inputPin = it
-                                isError = false
-                            },
-                            label = { Text("PIN Pribadi Petugas Pusdalops", fontSize = 11.sp) },
-                            placeholder = {
-                                Text(
-                                    if (selectedCredential?.isCustomPinSet == true) "Masukkan PIN pribadi tersimpan"
-                                    else "Masukkan 6 digit akhir NIP",
-                                    fontSize = 11.sp
-                                )
-                            },
-                            visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            trailingIcon = {
-                                IconButton(onClick = { isPinVisible = !isPinVisible }) {
+                                singleLine = true,
+                                isError = isError && inputNipOrName.isBlank(),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Text,
+                                    imeAction = ImeAction.Next
+                                ),
+                                leadingIcon = {
                                     Icon(
-                                        imageVector = if (isPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = null,
-                                        tint = Color.Gray,
-                                        modifier = Modifier.size(18.dp)
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "NIP atau Nama",
+                                        tint = Color(0xFF15803D)
                                     )
-                                }
-                            },
-                            isError = isError,
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        if (isError) {
-                            Text(
-                                text = errorMessage.ifBlank { "PIN salah. Gunakan PIN pribadi yang tersimpan di database." },
-                                color = Color(0xFFDC2626),
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        } else {
-                            Text(
-                                text = "🔒 Skema Login Pintar: PIN default '117 / BPBD117 / TRC2026' ditolak. Masukkan PIN pribadi tersimpan atau 6 digit akhir NIP.",
-                                color = Color(0xFF0F766E),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-
-                        if (authResultText.isNotBlank()) {
-                            Text(
-                                text = authResultText,
-                                color = if (authResultText.startsWith("Login Biometrik Berhasil")) Color(0xFF15803D) else Color(0xFF1E40AF),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-
-                        // Visual Biometric Scanner Animation Banner when active
-                        AnimatedVisibility(
-                            visible = isBiometricScanning,
-                            enter = fadeIn(tween(220)) + expandVertically(tween(220)),
-                            exit = fadeOut(tween(180)) + shrinkVertically(tween(180))
-                        ) {
-                            BiometricScanningVisualBanner(
-                                officerName = selectedOfficer?.fullName ?: "Petugas Pusdalops",
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF15803D),
+                                    unfocusedBorderColor = Color(0xFFCBD5E1),
+                                    focusedContainerColor = Color(0xFFF8FAFC),
+                                    unfocusedContainerColor = Color(0xFFF8FAFC)
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 8.dp)
-                                    .testTag("biometric_scanning_animation_banner")
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        val buttonScanTransition = rememberInfiniteTransition(label = "biometricButtonPulse")
-                        val buttonIconScale by buttonScanTransition.animateFloat(
-                            initialValue = 1f,
-                            targetValue = if (isBiometricScanning) 1.24f else 1f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(650, easing = FastOutSlowInEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "buttonIconScale"
-                        )
-
-                        OutlinedButton(
-                            onClick = {
-                                val officer = selectedOfficer
-                                if (officer == null) {
-                                    isError = true
-                                    errorMessage = "Pilih petugas dari daftar terlebih dahulu."
-                                    triggerBiometricVibration(context, "ERROR")
-                                    return@OutlinedButton
-                                }
-                                isError = false
-                                isBiometricScanning = true
-                                authResultText = "Memindai sensor sidik jari / biometrik..."
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                triggerBiometricVibration(context, "SCAN_START")
-
-                                val fallbackOption = AuthenticationRequest.Biometric.Fallback.CustomOption(
-                                    "Gunakan PIN",
-                                    AuthenticationRequest.Biometric.Fallback.ICON_TYPE_PASSWORD
-                                )
-                                val biometricRequest = AuthenticationRequest.Biometric.Builder(
-                                    "Login Biometrik Petugas Pusdalops",
-                                    fallbackOption
-                                )
-                                    .setSubtitle("${officer.fullName} (${maskNipLast6(officer.nip)})")
-                                    .build()
-                                authLauncher.launch(biometricRequest)
-                            },
-                            enabled = !isHarvestingSync,
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                width = if (isBiometricScanning) 1.5.dp else 1.dp,
-                                color = if (isBiometricScanning) Color(0xFF0284C7) else Color(0xFF2563EB)
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (isBiometricScanning) Color(0xFFE0F2FE) else Color.Transparent
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 44.dp)
-                                .testTag("officer_biometric_login_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Fingerprint,
-                                contentDescription = "Login Biometrik",
-                                tint = if (isBiometricScanning) Color(0xFF0284C7) else Color(0xFF2563EB),
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .graphicsLayer {
-                                        scaleX = if (isBiometricScanning) buttonIconScale else 1f
-                                        scaleY = if (isBiometricScanning) buttonIconScale else 1f
-                                    }
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (isBiometricScanning) "Memindai Sidik Jari..." else "Gunakan Sidik Jari / Biometrik",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isBiometricScanning) Color(0xFF0369A1) else Color(0xFF2563EB)
-                            )
-                        }
-
-                    } else {
-                        // MODE 1: FORM INPUT NAMA PETUGAS BESERTA NIP ASN/TRC BPBD
-                        Text(
-                            text = "Formulir pendaftaran nama personil Pusdalops BPBD Kabupaten Mukomuko (Operator, Petugas Jaga, dan Personil Lapangan TRC) dengan format identitas resmi ASN/TRC.",
-                            fontSize = 11.sp,
-                            color = Color(0xFF4B5563),
-                            lineHeight = 15.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = inputFullName,
-                            onValueChange = {
-                                inputFullName = it
-                                formValidationError = ""
-                            },
-                            label = { Text("Nama Petugas & Gelar", fontSize = 11.sp) },
-                            placeholder = { Text("Contoh: Budi Santoso, S.Sos / Rian Hidayat", fontSize = 11.sp) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = inputNip,
-                            onValueChange = {
-                                inputNip = it
-                                formValidationError = ""
-                            },
-                            label = { Text("NIP Pegawai ASN / No. Reg TRC", fontSize = 11.sp) },
-                            placeholder = { Text("Contoh: 19850101 201001 1 001 atau TRC-MMK-2024-025", fontSize = 11.sp) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Text(
-                            text = "Penugasan di Pusdalops BPBD:",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF334155)
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // 3 Role choices: Operator, Petugas Jaga, Lapangan TRC
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            val roleChoices = listOf(
-                                Triple(OfficerRoles.PENGAWAS, "🏛️ Pengawas BPBD", "Pimpinan pengawasan siaga & koordinasi komando kebijakan bencana"),
-                                Triple(OfficerRoles.MANAJER, "⭐ Manajer Pusdalops PB", "Penanggung jawab koordinasi operasional komando penanggulangan bencana"),
-                                Triple(OfficerRoles.SUPERVISOR, "🛡️ Supervisor BPBD", "Supervisi kesiapsiagaan posko darurat dan pemantauan personil"),
-                                Triple(OfficerRoles.KOORD_ADMINISTRASI, "📋 Koord. Administrasi", "Pengelolaan administrasi data posko dan logistik kebencanaan"),
-                                Triple(OfficerRoles.OPERATOR, "🎧 Operator Pusdalops", "Pusat panggilan 117, radio HT, & data spasial"),
-                                Triple(OfficerRoles.PETUGAS_JAGA, "🛡️ Petugas Jaga Siaga", "Piket Posko Siaga Bencana 24 Jam Pusdalops"),
-                                Triple(OfficerRoles.PETUGAS_LAPANGAN, "🚜 Petugas Lapangan TRC", "Tim Reaksi Cepat evakuasi & kaji cepat darurat")
+                                    .testTag("officer_nip_input")
                             )
 
-                            roleChoices.forEach { (roleVal, roleTitle, roleDesc) ->
-                                val isSelected = inputRole == roleVal
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (isSelected) Color(0xFFEFF6FF) else Color(0xFFF8FAFC),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        width = if (isSelected) 1.5.dp else 1.dp,
-                                        color = if (isSelected) Color(0xFF2563EB) else Color(0xFFE2E8F0)
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { inputRole = roleVal }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = roleTitle,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isSelected) Color(0xFF1D4ED8) else Color(0xFF1E293B)
-                                            )
-                                            Text(
-                                                text = roleDesc,
-                                                fontSize = 11.sp,
-                                                color = Color(0xFF64748B)
-                                            )
-                                        }
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.CheckCircle,
-                                                contentDescription = null,
-                                                tint = Color(0xFF2563EB),
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = inputShift,
-                                onValueChange = { inputShift = it },
-                                label = { Text("Regu / Shift", fontSize = 11.sp) },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = inputUnit,
-                                onValueChange = { inputUnit = it },
-                                label = { Text("Unit / Satuan", fontSize = 11.sp) },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        if (formValidationError.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = formValidationError,
-                                color = Color(0xFFDC2626),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = { dialogMode = 0 },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Batal / Kembali", fontSize = 11.sp)
-                            }
-
-                            Button(
-                                onClick = {
-                                    if (inputFullName.trim().length < 3) {
-                                        formValidationError = "Nama petugas minimal 3 karakter."
-                                        return@Button
-                                    }
-                                    if (inputNip.trim().length < 4) {
-                                        formValidationError = "NIP ASN / No. Reg TRC minimal 4 karakter."
-                                        return@Button
-                                    }
-                                    val addResult = officerAuthManager.addOfficer(
-                                        fullName = inputFullName,
-                                        nip = inputNip,
-                                        role = inputRole,
-                                        shift = inputShift,
-                                        unit = inputUnit
-                                    )
-                                    if (addResult.isSuccess) {
-                                        val newOff = addResult.getOrNull()
-                                        // Also persist to Room Database
-                                        coroutineScope.launch {
-                                            personnelRepository.insert(
-                                                com.example.data.local.Personnel(
-                                                    name = inputFullName.trim(),
-                                                    nip = inputNip.trim(),
-                                                    role = inputRole,
-                                                    shift = inputShift.trim(),
-                                                    unit = inputUnit.trim()
-                                                )
-                                            )
-                                            val newCred = OfficerCredentialEntity.createDefault(
-                                                nip = inputNip.trim(),
-                                                fullName = inputFullName.trim(),
-                                                role = inputRole,
-                                                unit = inputUnit.trim(),
-                                                shift = inputShift.trim()
-                                            )
-                                            AppDatabase.getInstance(context).credentialDao().insertCredential(newCred)
-                                            FirestoreHelper.syncCredentialToCloud(newCred)
-                                        }
-                                        roster = officerAuthManager.getOfficerRoster()
-                                        selectedOfficer = newOff
-                                        dialogMode = 0
-                                        formValidationError = ""
-                                        Toast.makeText(
-                                            context,
-                                            "Petugas '${newOff?.fullName}' berhasil didaftarkan ke sistem & kredensial tersimpan di database!",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else {
-                                        formValidationError = addResult.exceptionOrNull()?.message ?: "Gagal mendaftarkan petugas."
-                                    }
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                                modifier = Modifier.weight(1.3f)
-                            ) {
-                                Text("Simpan & Pilih Petugas", fontSize = 11.sp)
-                            }
+                            Spacer(modifier = Modifier.height(12.dp))
                         }
                     }
-                }
-            },
-            confirmButton = {
-                if (dialogMode == 0) {
-                    Button(
-                        onClick = {
-                            val officer = selectedOfficer
-                            if (officer == null) {
-                                isError = true
-                                errorMessage = "Pilih petugas dari daftar terlebih dahulu."
-                                return@Button
-                            }
 
-                            val nonNullOfficer = officer
-                            val trimmedPin = inputPin.trim()
-                            if (trimmedPin.isBlank()) {
-                                isError = true
-                                errorMessage = "Masukkan PIN pribadi petugas dinas."
-                                return@Button
-                            }
-
-                            // STRICT CHECK: Reject generic default PINs without exception
-                            if (SmartOfficerAuthRepository.FORBIDDEN_DEFAULT_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) {
-                                isError = true
-                                errorMessage = "PIN default '$trimmedPin' dinonaktifkan demi keamanan. Wajib login menggunakan PIN pribadi yang telah tersimpan di database."
-                                return@Button
-                            }
-
-                            coroutineScope.launch {
-                                isHarvestingSync = true
-                                val authResult = smartAuthRepo.authenticateOfficer(
-                                    nip = nonNullOfficer.nip,
-                                    inputPin = trimmedPin
-                                )
-                                selectedCredential = smartAuthRepo.getCredential(nonNullOfficer.nip)
-                                isHarvestingSync = false
-
-                                if (authResult.isSuccess) {
-                                    val profile = authResult.getOrNull() ?: nonNullOfficer
-                                    val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
-                                        officerNip = profile.nip,
-                                        officerName = profile.fullName,
-                                        officerRole = profile.role
-                                    )
-                                    val verifiedSession = sessionRes.getOrNull()
-                                    val isDeviceAuthorized = sessionRes.isSuccess && (verifiedSession?.accessGranted == true)
-                                    if (!isDeviceAuthorized) {
-                                        val denyReason = sessionRes.exceptionOrNull()?.message
-                                            ?: "Integritas perangkat tidak memenuhi syarat keamanan (${verifiedSession?.verdict ?: "UNVERIFIED"}) untuk mengakses Ruang Kerja."
-                                        securityAccessResult = SecurityAccessResult(
-                                            isAuthorized = false,
-                                            message = denyReason,
-                                            session = verifiedSession
-                                        )
-                                        officerAuthManager.logoutOfficer()
-                                        isOfficerLoggedIn = false
-                                        isError = true
-                                        errorMessage = denyReason
-                                        Toast.makeText(context, denyReason, Toast.LENGTH_LONG).show()
-                                        return@launch
-                                    }
-                                    securityAccessResult = SecurityAccessResult(
-                                        isAuthorized = true,
-                                        message = "Perangkat terverifikasi valid.",
-                                        session = verifiedSession
-                                    )
-                                    isOfficerLoggedIn = true
-                                    officerName = profile.fullName
-                                    officerBadgeId = profile.nip
-                                    officerShift = profile.shift
-                                    officerRole = profile.role
-                                    showOfficerLoginDialog = false
-                                    onOfficerLoginDismissed?.invoke()
-                                    selectedTab = 4 // Direct to Konsol Petugas
-
-                                    val targetId = pendingStatusReportId
-                                    val targetStatus = pendingStatusTarget
-                                    if (targetId != null && targetStatus != null) {
-                                        onUpdateReportStatus(targetId, targetStatus)
-                                        Toast.makeText(
-                                            context,
-                                            "Terverifikasi sebagai ${profile.fullName} (NIP: ${maskNipLast6(profile.nip)}). Status laporan diperbarui menjadi '$targetStatus'",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else {
-                                        Toast.makeText(
-                                            context,
-                                            "Selamat bertugas, ${profile.fullName} (NIP: ${maskNipLast6(profile.nip)})! (Kredensial Database Terverifikasi)",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                    pendingStatusReportId = null
-                                    pendingStatusTarget = null
-                                } else {
-                                    isError = true
-                                    val errMsg = authResult.exceptionOrNull()?.message
-                                        ?: "Gagal sinkronisasi, periksa koneksi internet"
-                                    errorMessage = errMsg
-                                    Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
-                                }
+                    // Kolom PIN (Selalu tampil di Skenario A sebagai Kolom 2, dan satu-satunya kolom di Skenario B)
+                    OutlinedTextField(
+                        value = inputPin,
+                        onValueChange = {
+                            if (it.length <= 20) {
+                                inputPin = it
+                                isError = false
+                                errorMessage = ""
                             }
                         },
-                        enabled = !isHarvestingSync,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+                        placeholder = {
+                            Text(
+                                text = "Masukkan PIN",
+                                fontSize = 14.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        },
+                        singleLine = true,
+                        isError = isError,
+                        visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (!isSubmitting) {
+                                    submitOfficerLogin()
+                                }
+                            }
+                        ),
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Ikon PIN",
+                                tint = Color(0xFF15803D)
+                            )
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { isPinVisible = !isPinVisible }) {
+                                Icon(
+                                    imageVector = if (isPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (isPinVisible) "Sembunyikan PIN" else "Tampilkan PIN",
+                                    tint = Color(0xFF64748B)
+                                )
+                            }
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF15803D),
+                            unfocusedBorderColor = Color(0xFFCBD5E1),
+                            focusedContainerColor = Color(0xFFF8FAFC),
+                            unfocusedContainerColor = Color(0xFFF8FAFC)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("officer_pin_input")
+                    )
+
+                    if (isError && errorMessage.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = errorMessage,
+                            color = Color(0xFFDC2626),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    if (syncStatusMessage.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = syncStatusMessage,
+                            color = Color(0xFF15803D),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Tombol "MASUK" berwarna solid
+                    Button(
+                        onClick = { submitOfficerLogin() },
+                        enabled = !isSubmitting && !isSyncingCloud,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF15803D),
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("officer_login_submit_button")
                     ) {
-                        if (isHarvestingSync) {
+                        if (isSubmitting) {
                             CircularProgressIndicator(
                                 color = Color.White,
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Memverifikasi...")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "MEMVERIFIKASI...",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
                         } else {
-                            Text("Verifikasi & Masuk")
+                            Text(
+                                text = "MASUK",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                letterSpacing = 0.5.sp
+                            )
                         }
                     }
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = {
-                        showOfficerLoginDialog = false
-                        pendingStatusReportId = null
-                        pendingStatusTarget = null
+
+                    // 4. Opsi Ganti Akun (Penting): Muncul pada Skenario B untuk menghapus saved_nip dari Secure Storage
+                    // dan kembali ke tampilan Dua Kolom Input (Skenario A) secara seamless tanpa restart aplikasi.
+                    AnimatedVisibility(visible = hasSavedNip) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = "Bukan Anda? Ganti Akun",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFDC2626),
+                                textDecoration = TextDecoration.Underline,
+                                modifier = Modifier
+                                    .testTag("officer_switch_account_button")
+                                    .clickable(enabled = !isSubmitting && !isSyncingCloud) {
+                                        officerAuthManager.clearSavedNipFromSecureStorage()
+                                        savedNip = ""
+                                        savedName = ""
+                                        inputNipOrName = ""
+                                        inputPin = ""
+                                        isError = false
+                                        errorMessage = ""
+                                        syncStatusMessage = ""
+                                    }
+                                    .padding(vertical = 6.dp, horizontal = 12.dp)
+                            )
+                        }
                     }
-                ) {
-                    Text("Tutup")
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Tautan teks kecil "Sinkronisasi Cloud" di paling bawah layar
+                    Text(
+                        text = if (isSyncingCloud) "Menyinkronkan Cloud..." else "Sinkronisasi Cloud",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF64748B),
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier
+                            .clickable(enabled = !isSyncingCloud && !isSubmitting) {
+                                isError = false
+                                errorMessage = ""
+                                syncStatusMessage = ""
+                                coroutineScope.launch {
+                                    isSyncingCloud = true
+                                    try {
+                                        smartAuthRepo.harvestAndSyncAllOfficers()
+                                        smartAuthRepo.pullCredentialsFromCloud { success, count ->
+                                            isSyncingCloud = false
+                                            syncStatusMessage = if (success) {
+                                                "Sinkronisasi berhasil ($count kredensial diperbarui)"
+                                            } else {
+                                                "Kredensial database lokal sudah mutakhir"
+                                            }
+                                            Toast.makeText(
+                                                context,
+                                                syncStatusMessage,
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        isSyncingCloud = false
+                                        isError = true
+                                        errorMessage = "Gagal sinkronisasi: ${e.message ?: "Periksa koneksi internet"}"
+                                    }
+                                }
+                            }
+                            .padding(vertical = 6.dp, horizontal = 12.dp)
+                    )
                 }
             }
-        )
+        }
     }
 
     // Dialog Info Lanskap & Wallpaper HD (diakses dari info aplikasi setelah login)

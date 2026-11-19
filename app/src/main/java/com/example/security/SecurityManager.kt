@@ -783,50 +783,34 @@ class SecurityManager private constructor(private val context: Context) {
     }
 
     /**
-     * Memverifikasi input PIN/Sandi Master Admin secara langsung terhadap dokumen
-     * `app_settings/admin_config` (field `masterPin`) di Cloud Firestore.
+     * Memverifikasi sandi Master Admin secara penuh di sisi Server (`POST /api/verify-admin-pass`)
+     * melalui [AdminAccessSecurityManager] sehingga tidak ada password plaintext atau hardcode
+     * yang dikirim/dibandingkan di sisi klien. Mencatat Audit Log otomatis (berhasil/gagal).
      */
-    suspend fun verifyMasterAdminPin(inputPin: String): Result<Boolean> = withContext(Dispatchers.IO) {
-        val trimmedInput = inputPin.trim()
-        if (trimmedInput.isEmpty()) {
-            return@withContext Result.failure(IllegalArgumentException("PIN Master Admin tidak boleh kosong."))
-        }
-        val db = firestore ?: return@withContext Result.failure(
-            IllegalStateException("Layanan Cloud Firestore tidak tersedia.")
-        )
-        try {
-            try {
-                FirebaseAppCheck.getInstance().getAppCheckToken(false).await()
-            } catch (_: Exception) {}
-
-            val docRef = db.collection(COLLECTION_APP_SETTINGS).document(DOC_ADMIN_CONFIG)
-            val snapshot = try {
-                docRef.get(Source.SERVER).await()
-            } catch (_: Exception) {
-                docRef.get().await()
-            }
-
-            if (!snapshot.exists()) {
-                return@withContext Result.failure(
-                    IllegalStateException("Dokumen app_settings/admin_config belum dikonfigurasi di Firebase Console.")
-                )
-            }
-
-            val rawMasterPin = snapshot.get("masterPin")?.toString()?.trim().orEmpty()
-            if (rawMasterPin.isEmpty()) {
-                return@withContext Result.failure(
-                    IllegalStateException("Field 'masterPin' kosong atau belum diatur pada app_settings/admin_config.")
-                )
-            }
-
-            Result.success(trimmedInput == rawMasterPin)
-        } catch (e: Exception) {
-            Log.e(TAG, "Gagal memverifikasi Master Admin PIN dari Firestore: ${e.message}", e)
-            Result.failure(e)
+    suspend fun verifyMasterAdminPin(
+        inputPin: String,
+        officerNip: String = "",
+        officerName: String = "",
+        officerRole: String = "",
+        actionTitle: String = "Otorisasi Administrator"
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        when (
+            val result = AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken(
+                context = context,
+                masterPassword = inputPin,
+                officerNip = officerNip,
+                officerName = officerName,
+                officerRole = officerRole,
+                actionTitle = actionTitle
+            )
+        ) {
+            is AdminVerificationResult.Authorized -> Result.success(true)
+            is AdminVerificationResult.Denied -> Result.failure(SecurityException(result.message))
         }
     }
 
     fun clearLocalSession() {
+        AdminAccessSecurityManager.revokeToken()
         context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE).edit().clear().apply()
     }
 

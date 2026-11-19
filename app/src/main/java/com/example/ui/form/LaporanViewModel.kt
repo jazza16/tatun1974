@@ -41,15 +41,49 @@ class LaporanViewModel : ViewModel() {
     var listLogistikSementara = mutableListOf<DistribusiLogistikEntity>()
 
     // 4. Fungsi untuk menyimpan ke Database Room
-    fun simpanKeDatabase(dao: LaporanHarianDao, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    // Mengambil namaOperator dan idStasiun langsung dari token sesi terverifikasi (bukan dari input form body)
+    fun simpanKeDatabase(
+        dao: LaporanHarianDao,
+        verifiedUser: com.example.util.SessionManager.VerifiedOperatorUser? = null,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
         viewModelScope.launch {
             try {
-                // Simpan Laporan Utama
-                val laporanId = dao.insertLaporan(laporanSementara).toInt()
+                val isKondusif = laporanSementara.jenisBencana.contains("Kondusif", ignoreCase = true) ||
+                    laporanSementara.jenisBencana.contains("Tidak Ada", ignoreCase = true)
 
-                // Simpan semua Log yang ada di dalam list
+                val coordCheck = com.example.util.CoordinateValidator.validateKoordinatString(
+                    koordinat = laporanSementara.koordinat,
+                    allowKondusifDash = isKondusif
+                )
+                if (coordCheck.isFailure) {
+                    onError(coordCheck.exceptionOrNull()?.message ?: com.example.util.CoordinateValidator.ERROR_INVALID_RANGE)
+                    return@launch
+                }
+
+                val namaOperator = verifiedUser?.name?.takeIf { it.isNotBlank() }
+                    ?: laporanSementara.petugasJaga.ifBlank { com.example.util.SessionManager.DEFAULT_NAMA_PETUGAS }
+                val idStasiun = verifiedUser?.stationId?.takeIf { it.isNotBlank() }
+                    ?: com.example.util.SessionManager.DEFAULT_STATION_ID
+                val nipOperator = verifiedUser?.nip?.takeIf { it.isNotBlank() }
+                    ?: com.example.util.SessionManager.DEFAULT_NIP_PETUGAS
+
+                val verifiedLaporan = laporanSementara.copy(
+                    petugasJaga = namaOperator,
+                    stationId = idStasiun
+                )
+                laporanSementara = verifiedLaporan
+
+                // Jika lolos validasi koordinat & token, simpan Laporan Utama ke database
+                val laporanId = dao.insertLaporan(verifiedLaporan).toInt()
+
+                // Simpan semua Log yang ada di dalam list dengan identitas operator terverifikasi
                 for (log in listLogSementara) {
-                    val logDenganId = log.copy(laporanId = laporanId)
+                    val logDenganId = log.copy(
+                        laporanId = laporanId,
+                        operatorName = namaOperator
+                    )
                     dao.insertLog(logDenganId)
                 }
 

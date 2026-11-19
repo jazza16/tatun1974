@@ -28,6 +28,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:padding="16dp">
 
                 <TextView
@@ -48,23 +50,50 @@
                     android:layout_marginTop="4dp"
                     android:layout_marginBottom="16dp"/>
 
-                <!-- Tombol Tarik Data Sejajar -->
+                <!-- Tombol Tarik Data Sejajar dengan Badge Notifikasi Merah -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
                     android:orientation="horizontal">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnTarikLaporanWarga"
+                    <FrameLayout
                         android:layout_width="0dp"
-                        android:layout_height="48dp"
+                        android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_marginEnd="8dp"
-                        android:text="DARI WARGA"
-                        android:textSize="12sp"
-                        android:maxLines="1"
-                        app:backgroundTint="#4CAF50"
-                        app:cornerRadius="8dp"/>
+                        android:clipChildren="false"
+                        android:clipToPadding="false">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnTarikLaporanWarga"
+                            android:layout_width="match_parent"
+                            android:layout_height="48dp"
+                            android:text="DARI WARGA"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:maxLines="1"
+                            app:backgroundTint="#2E7D32"
+                            app:cornerRadius="8dp"/>
+
+                        <TextView
+                            android:id="@+id/tvBadgeDariWarga"
+                            android:layout_width="wrap_content"
+                            android:layout_height="22dp"
+                            android:minWidth="22dp"
+                            android:layout_gravity="top|end"
+                            android:layout_marginTop="-6dp"
+                            android:layout_marginEnd="-4dp"
+                            android:paddingHorizontal="6dp"
+                            android:gravity="center"
+                            android:elevation="6dp"
+                            android:text="3"
+                            android:textColor="#FFFFFF"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:visibility="gone"/>
+                    </FrameLayout>
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnTarikLaporanKemarin"
@@ -74,10 +103,19 @@
                         android:layout_marginStart="8dp"
                         android:text="UPDATE KEJADIAN"
                         android:textSize="12sp"
+                        android:textStyle="bold"
                         android:maxLines="1"
-                        app:backgroundTint="#FF9800"
+                        app:backgroundTint="#EF6C00"
                         app:cornerRadius="8dp"/>
                 </LinearLayout>
+
+                <!-- Preview Foto & Ringkasan Laporan Warga yang Digunakan -->
+                <androidx.compose.ui.platform.ComposeView
+                    android:id="@+id/composeAttachedCitizenPreview"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone"/>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

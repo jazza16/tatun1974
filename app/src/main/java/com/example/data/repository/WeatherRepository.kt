@@ -481,7 +481,7 @@ class WeatherRepository(
         val initialList = listOf(
             CitizenDisasterReportEntity(
                 id = "LAP-MMK-20261025-001",
-                disasterType = "Gelombang Pasang & Abrasi Pantai",
+                disasterType = "Gelombang Pasang / Rob",
                 incidentTime = "25 Okt 2026, 08:30 WIB",
                 incidentLocation = "Pesisir Pantai Pasar Ipuh, Dekat TPI Nelayan",
                 district = "Ipuh",
@@ -493,16 +493,16 @@ class WeatherRepository(
                 casualtiesDead = 0,
                 casualtiesInjured = 0,
                 casualtiesMissing = 0,
-                photoUri = null,
-                reporterName = "Nelayan Siaga Ipuh",
-                reporterPhone = "0812-7890-xxxx",
+                photoUri = "android.resource://com.example/drawable/citizen_report_coastal_surge",
+                reporterName = "Nelayan Siaga Ipuh (Bpk. Hendra)",
+                reporterPhone = "0812-7890-4412",
                 additionalNotes = "Ombak pasang mencapai bibir tanggul pengaman, perahu nelayan dievakuasi ke dataran lebih tinggi.",
-                timestamp = System.currentTimeMillis() - 75 * 60 * 1000,
+                timestamp = System.currentTimeMillis() - 25 * 60 * 1000,
                 status = "Divalidasi"
             ),
             CitizenDisasterReportEntity(
                 id = "LAP-MMK-20261025-002",
-                disasterType = "Pohon Tumbang & Angin Kencang",
+                disasterType = "Cuaca Ekstrem / Badai",
                 incidentTime = "25 Okt 2026, 06:15 WIB",
                 incidentLocation = "Jl. Lintas Barat Sumatera Km 7, Depan SPBU",
                 district = "Kota Mukomuko",
@@ -514,16 +514,16 @@ class WeatherRepository(
                 casualtiesDead = 0,
                 casualtiesInjured = 1,
                 casualtiesMissing = 0,
-                photoUri = null,
-                reporterName = "Warga RT 03 Koto Jaya",
-                reporterPhone = "0852-6712-xxxx",
+                photoUri = "android.resource://com.example/drawable/citizen_report_fallen_tree",
+                reporterName = "Warga RT 03 Koto Jaya (Ibu Rina)",
+                reporterPhone = "0852-6712-8891",
                 additionalNotes = "Dahan pohon trembesi patah melintang di badan jalan lintas, arus lalu lintas sempat terhambat. Tim BPBD sudah tiba memotong kayu.",
-                timestamp = System.currentTimeMillis() - 210 * 60 * 1000,
-                status = "Selesai"
+                timestamp = System.currentTimeMillis() - 95 * 60 * 1000,
+                status = "Divalidasi"
             ),
             CitizenDisasterReportEntity(
                 id = "LAP-MMK-20261024-003",
-                disasterType = "Genangan Luapan Saluran Primer",
+                disasterType = "Banjir Luapan Sungai",
                 incidentTime = "24 Okt 2026, 17:45 WIB",
                 incidentLocation = "Dekat Jembatan Irigasi Manjunto",
                 district = "Lubuk Pinang",
@@ -535,11 +535,11 @@ class WeatherRepository(
                 casualtiesDead = 0,
                 casualtiesInjured = 0,
                 casualtiesMissing = 0,
-                photoUri = null,
-                reporterName = "Kelompok Petani Manjunto",
-                reporterPhone = "0813-9021-xxxx",
+                photoUri = "android.resource://com.example/drawable/hero_banner_bpbd",
+                reporterName = "Kelompok Petani Manjunto (Bpk. Darmawan)",
+                reporterPhone = "0813-9021-3304",
                 additionalNotes = "Air saluran primer meluap sekitar 20 cm ke pekarangan jalan tani akibat hujan lebat perbukitan.",
-                timestamp = System.currentTimeMillis() - 14 * 60 * 60 * 1000,
+                timestamp = System.currentTimeMillis() - 180 * 60 * 1000,
                 status = "Diproses"
             )
         )

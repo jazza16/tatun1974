@@ -1,0 +1,18 @@
+{
+  "Infogempa": {
+    "gempa": {
+      "Tanggal": "18 Nov 2026",
+      "Jam": "06:45:12 WIB",
+      "DateTime": "2026-11-18T06:45:12+07:00",
+      "Coordinates": "-2.58,101.11",
+      "Lintang": "2.58 LS",
+      "Bujur": "101.11 BT",
+      "Magnitude": "7.2",
+      "Kedalaman": "14 km",
+      "Wilayah": "25 km BaratDaya MUKOMUKO-BENGKULU",
+      "Potensi": "Berpotensi TSUNAMI untuk diteruskan pada masyarakat",
+      "Dirasakan": "V-VI Mukomuko, IV Bengkulu Utara",
+      "Shakemap": "20261118064512.mmi.jpg"
+    }
+  }
+}

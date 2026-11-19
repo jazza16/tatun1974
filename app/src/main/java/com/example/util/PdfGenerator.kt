@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.graphics.pdf.PdfRenderer
 import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
@@ -25,9 +26,12 @@ import android.widget.Toast
 import com.example.data.local.DistribusiLogistikEntity
 import com.example.data.local.LaporanHarianEntity
 import com.example.data.local.LogKomunikasiEntity
+import com.example.data.repository.DocumentSettingsRepository
+import com.example.model.DocumentSettings
 import com.example.model.WeatherFullReport
 import com.example.ui.components.MonthlyDisasterSummary
 import com.example.ui.components.PieSliceData
+import java.io.File
 import java.util.Calendar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,9 +46,6 @@ import java.net.URL
 import kotlin.math.max
 
 object PdfGenerator {
-
-    private const val FOOTER_ATRIBUSI_TEXT =
-        "Dicetak melalui Aplikasi SIPAGAR KITA - Pusdalops PB BPBD Kabupaten Mukomuko"
 
     private const val PAGE_WIDTH = 595
     private const val PAGE_HEIGHT = 842
@@ -294,15 +295,35 @@ object PdfGenerator {
     }
 
     /**
-     * Menghasilkan data PDF Laporan Harian (4 Halaman) dalam bentuk ByteArray secara asynchronous
-     * di background thread (Dispatchers.IO), termasuk pengunduhan peta satelit/statis.
+     * Menghasilkan data PDF Laporan Harian secara Data-Driven (Dispatchers.IO):
+     * 1. Membaca konfigurasi terbaru (`GET /document-settings` / Firestore / cache lokal).
+     * 2. Jika Remote Template PDF aktif dan backend tersedia, mengunduh file PDF yang telah
+     *    di-render oleh server (`GET /reports/{reportId}/pdf` atau `POST /reports/render-pdf`).
+     * 3. Fallback Lokal (offline / backend belum dikonfigurasi): merender PDF 4 halaman di perangkat
+     *    berdasarkan konfigurasi JSON `DocumentSettings` + auto-shrink teks otomatis.
      */
     suspend fun generateLaporanPdfBytes(
         context: Context,
         laporan: LaporanHarianEntity,
         listLog: List<LogKomunikasiEntity>,
-        listLogistik: List<DistribusiLogistikEntity> = emptyList()
+        listLogistik: List<DistribusiLogistikEntity> = emptyList(),
+        overrideSettings: DocumentSettings? = null
     ): ByteArray = withContext(Dispatchers.IO) {
+        val settings = (overrideSettings ?: DocumentSettingsRepository.fetchDocumentSettings(context)).clamped()
+
+        // 1. Remote Template PDF: minta PDF siap cetak dari Backend lebih dulu
+        val remoteResult = DocumentSettingsRepository.fetchRemotePdfIfAvailable(
+            context = context,
+            laporan = laporan,
+            listLog = listLog,
+            listLogistik = listLogistik,
+            settings = settings
+        )
+        if (remoteResult != null && DocumentSettingsRepository.isValidPdfBytes(remoteResult.pdfBytes)) {
+            return@withContext remoteResult.pdfBytes
+        }
+
+        // 2. Fallback Lokal berbasis konfigurasi JSON `DocumentSettings`
         val latLng = extractLatLng(laporan.koordinat)
         val latStr = latLng?.first ?: "-2.5830"
         val lngStr = latLng?.second ?: "101.1240"
@@ -328,7 +349,8 @@ object PdfGenerator {
             monthlyData = monthlyData,
             pieSlices = pieSlices,
             selectedYear = currentYear,
-            allDistrictsSummary = allDistrictsSummary
+            allDistrictsSummary = allDistrictsSummary,
+            settings = settings
         )
     }
 
@@ -349,11 +371,8 @@ object PdfGenerator {
     }
 
     /**
-     * Mencetak Laporan Harian Pusdalops 2 Halaman ke PDF secara asynchronous:
-     * - Halaman 1: Kop Surat Resmi, Tabel Kejadian Bencana (termasuk Kondisi Cuaca),
-     *   Layer Citra Peta OpenStreetMap (dengan bingkai tipis & fallback aman), dan Tabel Komunikasi.
-     * - Halaman 2: Tanpa Kop Surat, Tabel Distribusi Logistik / Aset Bantuan, dan
-     *   Blok Tanda Tangan Piramida Terbalik 3 Kolom (Tata Naskah Dinas).
+     * Mencetak Laporan Harian Pusdalops ke PDF secara Data-Driven (Remote Template PDF lebih dulu,
+     * dengan fallback lokal berbasis `GET /document-settings` & Auto-Shrink Text).
      */
     fun cetakLaporanKePdf(
         context: Context,
@@ -363,13 +382,16 @@ object PdfGenerator {
     ) {
         pdfScope.launch {
             try {
-                // 1. Unduh citra peta statis OSM dan susun dokumen PDF 2 halaman di background thread
+                // 1. Ambil PDF dari server template atau susun secara lokal menggunakan DocumentSettings
                 val pdfBytes = generateLaporanPdfBytes(
                     context = context,
                     laporan = laporan,
                     listLog = listLog,
                     listLogistik = listLogistik
                 )
+                val detectedPages = withContext(Dispatchers.IO) {
+                    detectPdfPageCount(context, pdfBytes)
+                }
 
                 // 2. Tampilkan dialog cetak / simpan PDF di Main Thread menggunakan PrintDocumentAdapter native
                 val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
@@ -384,7 +406,7 @@ object PdfGenerator {
 
                     printManager.print(
                         jobName,
-                        PdfBytesPrintAdapter(jobName, pdfBytes, pageCount = 4),
+                        PdfBytesPrintAdapter(jobName, pdfBytes, pageCount = detectedPages),
                         printAttributes
                     )
                 } else {
@@ -404,6 +426,25 @@ object PdfGenerator {
         }
     }
 
+    private fun detectPdfPageCount(context: Context, pdfBytes: ByteArray): Int {
+        var tempFile: File? = null
+        return try {
+            tempFile = File.createTempFile("bpbd_pdf_count_", ".pdf", context.cacheDir)
+            FileOutputStream(tempFile).use { it.write(pdfBytes) }
+            ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+                PdfRenderer(pfd).use { renderer ->
+                    renderer.pageCount.coerceAtLeast(1)
+                }
+            }
+        } catch (_: Exception) {
+            PrintDocumentInfo.PAGE_COUNT_UNKNOWN
+        } finally {
+            try {
+                tempFile?.delete()
+            } catch (_: Exception) {}
+        }
+    }
+
     private fun buildTwoPagePdfBytes(
         context: Context,
         laporan: LaporanHarianEntity,
@@ -413,20 +454,21 @@ object PdfGenerator {
         monthlyData: List<MonthlyDisasterSummary> = emptyList(),
         pieSlices: List<PieSliceData> = emptyList(),
         selectedYear: Int = Calendar.getInstance().get(Calendar.YEAR),
-        allDistrictsSummary: List<WeatherFullReport> = emptyList()
+        allDistrictsSummary: List<WeatherFullReport> = emptyList(),
+        settings: DocumentSettings = DocumentSettingsRepository.getCachedOrDefaultSettings(context)
     ): ByteArray {
         val pdfDocument = PdfDocument()
         try {
             // ==================== HALAMAN 1 (DENGAN KOP SURAT) ====================
             val page1Info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create()
             val page1 = pdfDocument.startPage(page1Info)
-            drawPage1(context, page1.canvas, laporan, listLog, mapBitmap)
+            drawPage1(context, page1.canvas, laporan, listLog, mapBitmap, settings)
             pdfDocument.finishPage(page1)
 
             // ==================== HALAMAN 2 (TANPA KOP SURAT) ====================
             val page2Info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 2).create()
             val page2 = pdfDocument.startPage(page2Info)
-            drawPage2(context, page2.canvas, listLogistik)
+            drawPage2(context, page2.canvas, listLogistik, settings)
             pdfDocument.finishPage(page2)
 
             // ==================== HALAMAN 3 (LAMPIRAN STATISTIK BENCANA BULANAN) ====================
@@ -439,7 +481,8 @@ object PdfGenerator {
                     monthlyData = monthlyData,
                     pieSlices = pieSlices,
                     selectedYear = selectedYear,
-                    scopeLabel = "15 Kecamatan Kab. Mukomuko"
+                    scopeLabel = "15 Kecamatan Kab. Mukomuko",
+                    documentSettings = settings
                 )
                 pdfDocument.finishPage(page3)
             }
@@ -452,7 +495,8 @@ object PdfGenerator {
                 canvas = page4.canvas,
                 pageWidth = PAGE_WIDTH,
                 pageHeight = PAGE_HEIGHT,
-                allDistrictsSummary = allDistrictsSummary
+                allDistrictsSummary = allDistrictsSummary,
+                documentSettings = settings
             )
             pdfDocument.finishPage(page4)
 
@@ -469,7 +513,8 @@ object PdfGenerator {
         canvas: Canvas,
         laporan: LaporanHarianEntity,
         listLog: List<LogKomunikasiEntity>,
-        mapBitmap: Bitmap?
+        mapBitmap: Bitmap?,
+        settings: DocumentSettings
     ) {
         val margin = PAGE_MARGIN
         val contentWidth = PAGE_WIDTH - (margin * 2f)
@@ -487,13 +532,14 @@ object PdfGenerator {
             rawCuaca.removePrefix("Kondisi Cuaca:").trim()
         }
 
-        // 1. Kop Surat Resmi (HANYA di Halaman 1)
+        // 1. Kop Surat Resmi (HANYA di Halaman 1, teks header dari DocumentSettings)
         var y = ReportExporter.drawKopSuratResmi(
             context = context,
             canvas = canvas,
             pageWidth = PAGE_WIDTH,
             margin = margin,
-            pageNumber = 1
+            pageNumber = 1,
+            documentSettings = settings
         )
 
         // 2. Judul Laporan & Paragraf Pengantar
@@ -557,21 +603,19 @@ object PdfGenerator {
         }
         val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(15, 23, 42)
-            textSize = 8.0f
+            textSize = settings.bodyFontSize
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         val valuePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(15, 23, 42)
-            textSize = 8.0f
+            textSize = settings.bodyFontSize
         }
 
         val labelColWidth = contentWidth * 0.28f
         val valueColWidth = contentWidth - labelColWidth
 
         for ((label, rawValue) in infoRows) {
-            val cleanValue = rawValue.replace("\n", " ").trim().let {
-                if (it.length > 135) it.take(132) + "..." else it
-            }
+            val cleanValue = settings.truncateIfNeeded(rawValue)
             val valLayout = StaticLayout.Builder
                 .obtain(cleanValue, 0, cleanValue.length, valuePaint, (valueColWidth - 10f).toInt().coerceAtLeast(40))
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
@@ -739,52 +783,116 @@ object PdfGenerator {
             }
         }
 
-        // Baris Paling Bawah Bagian III: Kolom Identitas & Tanda Tangan Operator Pusdalops
-        val operatorRowH = 44f
-        if (y + operatorRowH <= PAGE_HEIGHT - 30f) {
+        // Baris Paling Bawah Bagian III: Kolom Identitas & Tanda Tangan Operator Pusdalops (Data-Driven + Auto-Shrink)
+        val operatorRowH = 48f
+        if (y + operatorRowH <= PAGE_HEIGHT - 28f) {
             val leftInfoW = contentWidth * 0.60f
             val rightSigW = contentWidth - leftInfoW
             canvas.drawRect(margin, y, margin + leftInfoW, y + operatorRowH, borderPaint)
             canvas.drawRect(margin + leftInfoW, y, margin + contentWidth, y + operatorRowH, borderPaint)
 
-            val resolvedOperator = laporan.operatorName
-                .takeUnless { it.startsWith("enc_v1:") }
-                ?.ifBlank { "HITATUN ARAZAK" }
-                ?: "HITATUN ARAZAK"
+            val resolvedOperator = DocumentSettingsRepository.resolveOfficerIdentity(
+                context = context,
+                rawName = laporan.operatorName,
+                settings = settings
+            )
             val resolvedStation = laporan.stationId.ifBlank { "PUSDALOPS-MM-01" }
 
-            canvas.drawText("Stasiun Pelapor : $resolvedStation", margin + 6f, y + 13f, labelPaint)
-            canvas.drawText(
-                "Tanggal Surat / Terima : ${laporan.tanggalSurat.ifBlank { "-" }} / ${laporan.tanggalTerima.ifBlank { "-" }}",
-                margin + 6f,
-                y + 25f,
-                valuePaint
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Stasiun Pelapor : $resolvedStation",
+                x = margin + 6f,
+                y = y + 12f,
+                maxWidth = leftInfoW - 12f,
+                basePaint = labelPaint,
+                initialFontSize = settings.bodyFontSize,
+                minFontSize = settings.minFontSize
             )
-            canvas.drawText(
-                "Status Berita : Terverifikasi Pusdalops-PB BPBD Kab. Mukomuko",
-                margin + 6f,
-                y + 37f,
-                valuePaint
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Petugas / Operator : ${resolvedOperator.formattedName} (${resolvedOperator.nipLine})",
+                x = margin + 6f,
+                y = y + 24f,
+                maxWidth = leftInfoW - 12f,
+                basePaint = valuePaint,
+                initialFontSize = settings.bodyFontSize,
+                minFontSize = settings.minFontSize,
+                maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+            )
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Tanggal Surat / Terima : ${laporan.tanggalSurat.ifBlank { "-" }} / ${laporan.tanggalTerima.ifBlank { "-" }}",
+                x = margin + 6f,
+                y = y + 35f,
+                maxWidth = leftInfoW - 12f,
+                basePaint = valuePaint,
+                initialFontSize = settings.bodyFontSize,
+                minFontSize = settings.minFontSize
+            )
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Status Berita : Terverifikasi Pusdalops-PB BPBD Kab. Mukomuko",
+                x = margin + 6f,
+                y = y + 44f,
+                maxWidth = leftInfoW - 12f,
+                basePaint = valuePaint,
+                initialFontSize = settings.bodyFontSize,
+                minFontSize = settings.minFontSize
             )
 
             val sigCenterX = margin + leftInfoW + (rightSigW / 2f)
+            val sigMaxTextW = (rightSigW - 10f).coerceAtLeast(48f)
             val opHeaderPaint = Paint(labelPaint).apply { textAlign = Paint.Align.CENTER }
             val opNamePaint = Paint(labelPaint).apply {
                 textAlign = Paint.Align.CENTER
                 isUnderlineText = true
             }
-            canvas.drawText("Operator Pusdalops", sigCenterX, y + 11f, opHeaderPaint)
-            canvas.drawText(resolvedOperator, sigCenterX, y + 38f, opNamePaint)
+            val opNipPaint = Paint(valuePaint).apply {
+                textAlign = Paint.Align.CENTER
+                textSize = (settings.bodyFontSize - 0.4f).coerceAtLeast(settings.minFontSize)
+            }
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Operator Pusdalops",
+                x = sigCenterX,
+                y = y + 11f,
+                maxWidth = sigMaxTextW,
+                basePaint = opHeaderPaint,
+                initialFontSize = settings.bodyFontSize,
+                minFontSize = settings.minFontSize
+            )
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = resolvedOperator.formattedName,
+                x = sigCenterX,
+                y = y + 34f,
+                maxWidth = sigMaxTextW,
+                basePaint = opNamePaint,
+                initialFontSize = settings.fontSize,
+                minFontSize = settings.minFontSize,
+                maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+            )
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = resolvedOperator.nipLine,
+                x = sigCenterX,
+                y = y + 44f,
+                maxWidth = sigMaxTextW,
+                basePaint = opNipPaint,
+                initialFontSize = (settings.fontSize - 0.8f).coerceAtLeast(settings.minFontSize),
+                minFontSize = settings.minFontSize
+            )
             y += operatorRowH
         }
 
-        drawPageFooter(canvas)
+        drawPageFooter(canvas, settings)
     }
 
     private fun drawPage2(
         context: Context,
         canvas: Canvas,
-        listLogistik: List<DistribusiLogistikEntity>
+        listLogistik: List<DistribusiLogistikEntity>,
+        settings: DocumentSettings
     ) {
         val margin = PAGE_MARGIN
         val contentWidth = PAGE_WIDTH - (margin * 2f)
@@ -795,7 +903,8 @@ object PdfGenerator {
             canvas = canvas,
             pageWidth = PAGE_WIDTH,
             margin = margin,
-            pageNumber = 2
+            pageNumber = 2,
+            documentSettings = settings
         )
 
         val sectionTitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -935,70 +1044,123 @@ object PdfGenerator {
             }
         }
 
-        // Blok Tanda Tangan Pejabat (Tata Naskah Dinas — Piramida Terbalik 3 Kolom)
+        // Blok Tanda Tangan Pejabat (Tata Naskah Dinas — Piramida Terbalik 3 Kolom, Data-Driven + Auto-Shrink)
         val sigStartY = max(y + 36f, 230f)
-        drawBlokTandaTanganPiramidaTerbalik(canvas, PAGE_WIDTH, sigStartY, margin)
+        drawBlokTandaTanganPiramidaTerbalik(context, canvas, PAGE_WIDTH, sigStartY, margin, settings)
 
-        drawPageFooter(canvas)
+        drawPageFooter(canvas, settings)
     }
 
     /**
-     * Menggambar Blok Tanda Tangan Pejabat sesuai Tata Naskah Dinas (Piramida Terbalik 3 Kolom):
-     * - Baris 1 Kolom Kiri  : Koord. Administrasi Pusdalops-PB (AAN FITRADINATA, SE)
-     * - Baris 1 Kolom Kanan : Manajer Pusdalops PB BPBD Mukomuko (HITATUN)
-     * - Baris 2 Tengah      : Pengawas / Kepala Pelaksana BPBD Mukomuko (RURI IRWANDI, ST.MT)
+     * Menggambar Blok Tanda Tangan Pejabat sesuai Tata Naskah Dinas (Piramida Terbalik 3 Kolom)
+     * secara 100% Data-Driven berdasarkan konfigurasi server (`GET /document-settings` & `GET /officers`)
+     * dengan Auto-Shrink Text agar nama & gelar sepanjang apapun tetap rapi di dalam lebar kotak.
      */
     private fun drawBlokTandaTanganPiramidaTerbalik(
+        context: Context,
         canvas: Canvas,
         pageWidth: Int,
         startY: Float,
-        margin: Float
+        margin: Float,
+        settings: DocumentSettings
     ) {
+        val signatories = DocumentSettingsRepository.resolveSignatories(context, settings)
+        val koordAdmin = signatories[DocumentSettings.SLOT_KOORD_ADMIN]
+        val manajerPusdalops = signatories[DocumentSettings.SLOT_MANAJER_PUSDALOPS]
+        val pengawasKalaksa = signatories[DocumentSettings.SLOT_PENGAWAS]
+
         val contentWidth = pageWidth - (margin * 2f)
         val colWidth = contentWidth / 3f
+        val sideBoxMaxW = (colWidth - 8f).coerceAtLeast(60f)
+        val centerBoxMaxW = (contentWidth * 0.56f).coerceAtLeast(sideBoxMaxW)
+
         val leftColCenterX = margin + (colWidth * 0.5f)
         val centerColCenterX = margin + (colWidth * 1.5f)
         val rightColCenterX = margin + (colWidth * 2.5f)
 
+        val roleFontSize = (settings.fontSize - 0.2f).coerceAtLeast(settings.minFontSize)
+        val nameFontSize = settings.fontSize
+        val nipFontSize = (settings.fontSize - 0.6f).coerceAtLeast(settings.minFontSize)
+
         val rolePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(15, 23, 42)
-            textSize = 9.0f
+            textSize = roleFontSize
             textAlign = Paint.Align.CENTER
         }
         val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(15, 23, 42)
-            textSize = 9.2f
+            textSize = nameFontSize
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isUnderlineText = true
             textAlign = Paint.Align.CENTER
         }
         val nipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(30, 41, 59)
-            textSize = 8.5f
+            textSize = nipFontSize
             textAlign = Paint.Align.CENTER
+        }
+
+        fun drawSignatoryColumn(
+            sig: com.example.model.ResolvedSignatory?,
+            centerX: Float,
+            topY: Float,
+            maxWidth: Float
+        ) {
+            if (sig == null) return
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = sig.roleLine1,
+                x = centerX,
+                y = topY,
+                maxWidth = maxWidth,
+                basePaint = rolePaint,
+                initialFontSize = roleFontSize,
+                minFontSize = settings.minFontSize
+            )
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = sig.roleLine2,
+                x = centerX,
+                y = topY + 12f,
+                maxWidth = maxWidth,
+                basePaint = rolePaint,
+                initialFontSize = roleFontSize,
+                minFontSize = settings.minFontSize
+            )
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = sig.formattedName,
+                x = centerX,
+                y = topY + 62f,
+                maxWidth = maxWidth,
+                basePaint = namePaint,
+                initialFontSize = nameFontSize,
+                minFontSize = settings.minFontSize,
+                maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+            )
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = sig.nipLine,
+                x = centerX,
+                y = topY + 74f,
+                maxWidth = maxWidth,
+                basePaint = nipPaint,
+                initialFontSize = nipFontSize,
+                minFontSize = settings.minFontSize
+            )
         }
 
         // Baris 1: Kiri (Koord. Administrasi) & Kanan (Manajer Pusdalops)
         val row1TopY = startY
-        canvas.drawText("Koord. Administrasi", leftColCenterX, row1TopY, rolePaint)
-        canvas.drawText("Pusdalops-PB", leftColCenterX, row1TopY + 12f, rolePaint)
-        canvas.drawText("AAN FITRADINATA, SE", leftColCenterX, row1TopY + 62f, namePaint)
-        canvas.drawText("NIP. 197903122006041007", leftColCenterX, row1TopY + 74f, nipPaint)
-
-        canvas.drawText("Manajer Pusdalops PB", rightColCenterX, row1TopY, rolePaint)
-        canvas.drawText("BPBD Mukomuko", rightColCenterX, row1TopY + 12f, rolePaint)
-        canvas.drawText("HITATUN", rightColCenterX, row1TopY + 62f, namePaint)
-        canvas.drawText("NIP. 197401282006041006", rightColCenterX, row1TopY + 74f, nipPaint)
+        drawSignatoryColumn(koordAdmin, leftColCenterX, row1TopY, sideBoxMaxW)
+        drawSignatoryColumn(manajerPusdalops, rightColCenterX, row1TopY, sideBoxMaxW)
 
         // Baris 2: Bawah Tengah (Pengawas / Kepala Pelaksana BPBD Mukomuko)
         val row2TopY = row1TopY + 102f
-        canvas.drawText("Pengawas", centerColCenterX, row2TopY, rolePaint)
-        canvas.drawText("Kepala Pelaksana BPBD Mukomuko", centerColCenterX, row2TopY + 12f, rolePaint)
-        canvas.drawText("RURI IRWANDI, ST.MT", centerColCenterX, row2TopY + 62f, namePaint)
-        canvas.drawText("NIP. 197906072006041011", centerColCenterX, row2TopY + 74f, nipPaint)
+        drawSignatoryColumn(pengawasKalaksa, centerColCenterX, row2TopY, centerBoxMaxW)
     }
 
-    private fun drawPageFooter(canvas: Canvas) {
+    private fun drawPageFooter(canvas: Canvas, settings: DocumentSettings) {
         val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(203, 213, 225)
             strokeWidth = 0.8f
@@ -1009,7 +1171,16 @@ object PdfGenerator {
             textAlign = Paint.Align.CENTER
         }
         canvas.drawLine(PAGE_MARGIN, PAGE_HEIGHT - 28f, PAGE_WIDTH - PAGE_MARGIN, PAGE_HEIGHT - 28f, linePaint)
-        canvas.drawText(FOOTER_ATRIBUSI_TEXT, PAGE_WIDTH / 2f, PAGE_HEIGHT - 17f, footerTextPaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = settings.footerText,
+            x = PAGE_WIDTH / 2f,
+            y = PAGE_HEIGHT - 17f,
+            maxWidth = PAGE_WIDTH - (PAGE_MARGIN * 2f),
+            basePaint = footerTextPaint,
+            initialFontSize = 7.5f,
+            minFontSize = settings.minFontSize
+        )
     }
 
     /**

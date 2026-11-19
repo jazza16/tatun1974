@@ -270,29 +270,36 @@ service cloud.firestore {
 
     // 5. Pusdalops & TRC Individual Officer Credentials & Custom PIN Sync (No plaintext initial PIN)
     match /officer_credentials/{nip} {
-      allow get: if isSignedIn() && isValidId(nip) && existing().ownerUid == request.auth.uid;
+      // Allow single-document lookup by exact NIP for mandatory Cloud PIN verification (including fresh install).
+      // Collection-wide `list` remains strictly blocked for unauthenticated callers to prevent enumeration.
+      allow get: if isValidId(nip);
       allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
-      allow create: if isSignedIn()
-                    && isValidId(nip)
-                    && incoming().ownerUid == request.auth.uid
+      allow create: if isValidId(nip)
                     && incoming().keys().hasAll(['nip', 'ownerUid', 'fullName', 'pinHash', 'salt'])
                     && incoming().keys().hasOnly([
                          'nip', 'ownerUid', 'fullName', 'role', 'unit', 'shift', 'phone',
                          'pinHash', 'salt', 'isCustomPinSet', 'isPinChanged',
                          'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
                        ])
-                    && isValidOfficerCredential(incoming());
-      allow update: if isSignedIn()
-                    && isValidId(nip)
                     && isValidOfficerCredential(incoming())
-                    && existing().ownerUid == request.auth.uid
+                    && incoming().nip == nip
+                    && (
+                         (isSignedIn() && incoming().ownerUid == request.auth.uid)
+                         || (!isSignedIn() && incoming().ownerUid == ('officer_nip_' + nip))
+                       );
+      allow update: if isValidId(nip)
+                    && isValidOfficerCredential(incoming())
                     && incoming().ownerUid == existing().ownerUid
                     && incoming().nip == existing().nip
                     && incoming().diff(existing()).affectedKeys().hasOnly([
                          'fullName', 'role', 'unit', 'shift', 'phone',
                          'pinHash', 'salt', 'isCustomPinSet', 'isPinChanged',
                          'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
-                       ]);
+                       ])
+                    && (
+                         (isSignedIn() && existing().ownerUid == request.auth.uid)
+                         || (existing().ownerUid == ('officer_nip_' + nip))
+                       );
       allow delete: if false;
     }
 

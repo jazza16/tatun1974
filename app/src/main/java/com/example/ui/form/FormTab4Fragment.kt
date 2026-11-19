@@ -27,6 +27,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,8 +37,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -89,16 +92,9 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val officerAuthManager = remember { com.example.data.local.OfficerAuthManager(context) }
     val session = remember { com.example.util.SessionManager(context) }
-    val resolvedOfficerName = remember {
-        officerAuthManager.getOfficerName().ifBlank {
-            session.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
-        }
-    }
-    val resolvedOfficerNip = remember {
-        officerAuthManager.getOfficerBadgeId().ifBlank {
-            session.getNipPetugas().ifBlank { "-" }
-        }
-    }
+    val verifiedUser = remember { session.authenticateToken() }
+    val resolvedOfficerName = verifiedUser.name
+    val resolvedOfficerNip = verifiedUser.nip
     val defaultDate = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()) }
     var tanggalSurat by remember {
         mutableStateOf(
@@ -111,16 +107,28 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
         )
     }
     var operatorName by remember {
-        mutableStateOf(
-            sharedViewModel?.laporanSementara?.petugasJaga?.takeUnless { it.startsWith("enc_v1:") }?.ifBlank {
-                resolvedOfficerName
-            } ?: resolvedOfficerName
-        )
+        mutableStateOf(verifiedUser.name)
     }
     var stationId by remember {
-        mutableStateOf(
-            sharedViewModel?.laporanSementara?.stationId?.ifBlank { "PUSDALOPS-MM-01" } ?: "PUSDALOPS-MM-01"
-        )
+        mutableStateOf(verifiedUser.stationId)
+    }
+
+    LaunchedEffect(Unit) {
+        sharedViewModel?.let { vm ->
+            vm.laporanSementara = vm.laporanSementara.copy(
+                petugasJaga = operatorName,
+                stationId = stationId
+            )
+        }
+        session.namaPetugasFlow.collect { sessionName ->
+            val activeName = officerAuthManager.getOfficerName().ifBlank { sessionName }
+            if (activeName.isNotBlank()) {
+                operatorName = activeName
+                sharedViewModel?.let { vm ->
+                    vm.laporanSementara = vm.laporanSementara.copy(petugasJaga = activeName)
+                }
+            }
+        }
     }
 
     val logsList = remember {
@@ -183,11 +191,16 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
     }
 
     fun savePdfToDevice() {
-        val laporan = sharedViewModel?.laporanSementara ?: com.example.data.local.LaporanHarianEntity(
+        val currentTokenUser = session.authenticateToken()
+        val baseLaporan = sharedViewModel?.laporanSementara ?: com.example.data.local.LaporanHarianEntity(
             tanggalSurat = tanggalSurat,
             tanggalTerima = tanggalTerima,
-            petugasJaga = operatorName,
-            stationId = stationId
+            operatorName = currentTokenUser.name,
+            stationId = currentTokenUser.stationId
+        )
+        val laporan = baseLaporan.copy(
+            petugasJaga = currentTokenUser.name,
+            stationId = currentTokenUser.stationId
         )
         val listLog = if (!sharedViewModel?.listLogSementara.isNullOrEmpty()) {
             sharedViewModel?.listLogSementara ?: emptyList()
@@ -274,29 +287,62 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
                     )
                 }
 
+                val syncedOperatorProfile = remember(operatorName) {
+                    officerAuthManager.resolveSyncedOfficer(rawName = operatorName, rawNip = resolvedOfficerNip)
+                }
                 OutlinedTextField(
-                    value = operatorName,
-                    onValueChange = {
-                        operatorName = it
-                        sharedViewModel?.let { vm ->
-                            vm.laporanSementara = vm.laporanSementara.copy(petugasJaga = it)
-                        }
+                    value = "${syncedOperatorProfile.fullName} (NIP. ${syncedOperatorProfile.nip})",
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = false,
+                    label = { Text("Nama & NIP Operator Pusdalops") },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Terkunci otomatis dari sesi login",
+                            modifier = Modifier.size(18.dp)
+                        )
                     },
-                    label = { Text("Nama Operator Pusdalops") },
-                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFF3F4F6),
+                        unfocusedContainerColor = Color(0xFFF3F4F6),
+                        disabledContainerColor = Color(0xFFF3F4F6),
+                        disabledTextColor = Color(0xFF374151),
+                        disabledLabelColor = Color(0xFF6B7280),
+                        disabledBorderColor = Color(0xFFD1D5DB),
+                        disabledTrailingIconColor = Color(0xFF9CA3AF)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_operator_pusdalops"),
                     singleLine = true
                 )
 
                 OutlinedTextField(
                     value = stationId,
-                    onValueChange = {
-                        stationId = it
-                        sharedViewModel?.let { vm ->
-                            vm.laporanSementara = vm.laporanSementara.copy(stationId = it)
-                        }
-                    },
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = false,
                     label = { Text("ID Stasiun / Pos Komando") },
-                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Terkunci otomatis dari sesi stasiun",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFF3F4F6),
+                        unfocusedContainerColor = Color(0xFFF3F4F6),
+                        disabledContainerColor = Color(0xFFF3F4F6),
+                        disabledTextColor = Color(0xFF374151),
+                        disabledLabelColor = Color(0xFF6B7280),
+                        disabledBorderColor = Color(0xFFD1D5DB),
+                        disabledTrailingIconColor = Color(0xFF9CA3AF)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_station_id"),
                     singleLine = true
                 )
             }
@@ -498,11 +544,16 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
                 ) {
                     Button(
                         onClick = {
-                            val laporan = sharedViewModel?.laporanSementara ?: com.example.data.local.LaporanHarianEntity(
+                            val currentTokenUser = session.authenticateToken()
+                            val baseLaporan = sharedViewModel?.laporanSementara ?: com.example.data.local.LaporanHarianEntity(
                                 tanggalSurat = tanggalSurat,
                                 tanggalTerima = tanggalTerima,
-                                petugasJaga = operatorName,
-                                stationId = stationId
+                                operatorName = currentTokenUser.name,
+                                stationId = currentTokenUser.stationId
+                            )
+                            val laporan = baseLaporan.copy(
+                                petugasJaga = currentTokenUser.name,
+                                stationId = currentTokenUser.stationId
                             )
                             val listLog = if (!sharedViewModel?.listLogSementara.isNullOrEmpty()) {
                                 sharedViewModel?.listLogSementara ?: emptyList()

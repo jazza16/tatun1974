@@ -89,8 +89,9 @@ test("Citizen disaster reports allow cross-device officer read and status update
   );
 });
 
-// 3. Officer credentials: block plaintext initialSecurePin & cross-user overwrite
-test("Officer credentials block plaintext initialSecurePin and cross-user tampering", async () => {
+// 3. Officer credentials: single-doc NIP lookup allowed for Cloud PIN verification, block list, plaintext initialSecurePin & cross-user overwrite
+test("Officer credentials allow single-doc NIP lookup while blocking list, plaintext initialSecurePin, and cross-user tampering", async () => {
+  const unauth = testEnv.unauthenticatedContext().firestore();
   const alice = testEnv.authenticatedContext(ALICE_UID).firestore();
   const bob = testEnv.authenticatedContext(BOB_UID).firestore();
 
@@ -108,6 +109,11 @@ test("Officer credentials block plaintext initialSecurePin and cross-user tamper
 
   await assertSucceeds(alice.collection("officer_credentials").doc("197906072006041011").set(validCred));
 
+  // Single-document lookup by exact NIP succeeds for fresh-install Cloud PIN verification
+  await assertSucceeds(unauth.collection("officer_credentials").doc("197906072006041011").get());
+  // Collection listing remains strictly denied for unauthenticated callers
+  await assertFails(unauth.collection("officer_credentials").get());
+
   // Reject non-empty initialSecurePin
   await assertFails(
     alice.collection("officer_credentials").doc("197906072006041012").set({
@@ -117,8 +123,7 @@ test("Officer credentials block plaintext initialSecurePin and cross-user tamper
     })
   );
 
-  // Bob cannot read or overwrite Alice's credential
-  await assertFails(bob.collection("officer_credentials").doc("197906072006041011").get());
+  // Bob cannot overwrite Alice's Google-owned credential, and nobody can delete it
   await assertFails(
     bob.collection("officer_credentials").doc("197906072006041011").set({
       ...validCred,

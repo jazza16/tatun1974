@@ -73,7 +73,10 @@ data class LogKomunikasiEntity(
         stationIdFrom = stationIdFrom,
         stationIdTo = stationIdTo,
         subjek = subjek,
-        operatorName = operatorNama.ifBlank { "HITATUN ARAZAK" }
+        operatorName = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(
+            rawName = operatorNama.ifBlank { "HITATUN ARAZAK" },
+            rawNip = operatorNip
+        ).name
     )
 
     // Secondary constructor untuk kompatibilitas pemanggilan sebelumnya
@@ -94,20 +97,22 @@ data class LogKomunikasiEntity(
         stationIdFrom = saluran,
         stationIdTo = pihakDihubungi,
         subjek = pesan,
-        operatorName = operatorLog.ifBlank { "HITATUN ARAZAK" }
+        operatorName = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(
+            rawName = operatorLog.ifBlank { "HITATUN ARAZAK" }
+        ).name
     )
 
-    // Getter kompatibilitas agar kode UI tetap berjalan mulus
+    // Getter kompatibilitas agar kode UI & cetak PDF selalu tersinkronisasi Nama & NIP petugasnya
     val logId: Int get() = id
     val waktuKomunikasi: String get() = waktu
     val saluran: String get() = stationIdFrom
     val pihakDihubungi: String get() = stationIdTo
     val pesan: String get() = subjek
     val arahanTindakan: String get() = ""
-    val operator: String get() = operatorName
-    val operatorLog: String get() = operatorName
-    val operatorNama: String get() = operatorName
-    val operatorNip: String get() = "197401282006041006"
+    val operator: String get() = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(operatorName).name
+    val operatorLog: String get() = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(operatorName).name
+    val operatorNama: String get() = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(operatorName).name
+    val operatorNip: String get() = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(operatorName).nip
     val timestamp: Long get() = System.currentTimeMillis()
 }
 

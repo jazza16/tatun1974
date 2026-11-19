@@ -1,14 +1,14 @@
 package com.example.ui.components
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocalHospital
@@ -33,22 +35,25 @@ import androidx.compose.material.icons.filled.LocalPolice
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Power
-import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,147 +61,59 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-data class EmergencyContactItem(
-    val name: String,
-    val category: String, // SAR & Bencana, Medis, Kepolisian, Damkar, Teknis
-    val phoneNumber: String,
-    val displayPhone: String,
-    val description: String,
-    val address: String,
-    val icon: ImageVector,
-    val themeColor: Color,
-    val isTollFree: Boolean = false
-)
-
-private val MUKOMUKO_EMERGENCY_CONTACTS = listOf(
-    EmergencyContactItem(
-        name = "Call Center Bencana BPBD Mukomuko / BNPB",
-        category = "SAR & Bencana",
-        phoneNumber = "117",
-        displayPhone = "117 (Bebas Pulsa)",
-        description = "Layanan gawat darurat bencana alam, evakuasi banjir luapan, pohon tumbang, gempa & tsunami.",
-        address = "Posko Pusdalops PB Pemda Mukomuko",
-        icon = Icons.Default.Shield,
-        themeColor = Color(0xFFDC2626),
-        isTollFree = true
-    ),
-    EmergencyContactItem(
-        name = "Pusdalops BPBD Kabupaten Mukomuko",
-        category = "SAR & Bencana",
-        phoneNumber = "073771112",
-        displayPhone = "(0737) 71112",
-        description = "Pos Komando Penanggulangan Bencana Daerah Mukomuko siaga operasional 24 jam.",
-        address = "Jl. Danau Nibung, Kompleks Perkantoran Pemkab Mukomuko",
-        icon = Icons.Default.SupportAgent,
-        themeColor = Color(0xFFEA580C)
-    ),
-    EmergencyContactItem(
-        name = "Polres Mukomuko (Kepolisian)",
-        category = "Kepolisian",
-        phoneNumber = "110",
-        displayPhone = "110",
-        description = "POLISI BERSAMA MASYARAKAT • Sentra Pelayanan Kepolisian Terpadu (SPKT) keamanan warga, laka lintas, dan pengaduan masyarakat.",
-        address = "Gedung Pelayanan Terpadu Sarja Arya Racana, Bandar Ratu, Kota Mukomuko",
-        icon = Icons.Default.LocalPolice,
-        themeColor = Color(0xFF1D4ED8),
-        isTollFree = true
-    ),
-    EmergencyContactItem(
-        name = "RSUD Kabupaten Mukomuko (IGD 24 Jam)",
-        category = "Medis",
-        phoneNumber = "073771018",
-        displayPhone = "(0737) 71018 / 0812-7890-1234",
-        description = "Instalasi Gawat Darurat rumah sakit rujukan utama dengan armada ambulans siaga bencana.",
-        address = "Jl. Danau Nibung Km. 4, Mukomuko",
-        icon = Icons.Default.LocalHospital,
-        themeColor = Color(0xFF15803D)
-    ),
-    EmergencyContactItem(
-        name = "Dinas Pemadam Kebakaran & Penyelamatan",
-        category = "Damkar",
-        phoneNumber = "113",
-        displayPhone = "113 / (0737) 71113",
-        description = "Evakuasi sarang tawon, penanganan karhutla, kebakaran permukiman dan penyelamatan satwa berbahaya.",
-        address = "Jl. Imam Bonjol, Pasar Mukomuko",
-        icon = Icons.Default.LocalFireDepartment,
-        themeColor = Color(0xFFB91C1C),
-        isTollFree = true
-    ),
-    EmergencyContactItem(
-        name = "Basarnas Pos SAR Mukomuko / Bengkulu",
-        category = "SAR & Bencana",
-        phoneNumber = "115",
-        displayPhone = "115 / (0736) 21115",
-        description = "Operasi pencarian orang hilang, pertolongan kapal/perahu nelayan karam di perairan laut Mukomuko.",
-        address = "Dermaga Pelabuhan Pasar Ipuh & Pos SAR Pantai Mukomuko",
-        icon = Icons.Default.Emergency,
-        themeColor = Color(0xFFD97706),
-        isTollFree = true
-    ),
-    EmergencyContactItem(
-        name = "PMI (Palang Merah Indonesia) Mukomuko",
-        category = "Medis",
-        phoneNumber = "073771050",
-        displayPhone = "(0737) 71050",
-        description = "Dapur umum darurat, unit transfusi darah, dan pertolongan pertama evakuasi korban luka.",
-        address = "Jl. Fatmawati, Kota Mukomuko",
-        icon = Icons.Default.LocalHospital,
-        themeColor = Color(0xFFDC2626)
-    ),
-    EmergencyContactItem(
-        name = "PLN Unit Layanan Mukomuko (Gangguan Kelistrikan)",
-        category = "Teknis",
-        phoneNumber = "123",
-        displayPhone = "123 (Kode Area 0737)",
-        description = "Pemadaman darurat saat tiang roboh, kawat putus tertimpa dahan pohon, dan banjir merendam gardu.",
-        address = "Jl. Soekarno-Hatta, Mukomuko",
-        icon = Icons.Default.Power,
-        themeColor = Color(0xFF0284C7)
-    ),
-    EmergencyContactItem(
-        name = "Puskesmas Perawatan Ipuh (IGD Rawat Inap)",
-        category = "Medis",
-        phoneNumber = "073771190",
-        displayPhone = "(0737) 71190",
-        description = "Pusat rujukan medis darurat terdekat bagi warga pesisir selatan Mukomuko.",
-        address = "Jl. Lintas Barat, Medan Jaya, Ipuh",
-        icon = Icons.Default.LocalHospital,
-        themeColor = Color(0xFF059669)
-    )
-)
+import com.example.data.repository.EmergencyContactsRepository
+import com.example.data.repository.EmergencyContactsSource
+import com.example.data.repository.PublicEmergencyContact
+import kotlinx.coroutines.launch
 
 /**
- * 'Kontak Penting' Emergency Directory for Mukomuko Regency
+ * Tab "Kontak Penting" pada halaman Laporan Warga.
+ *
+ * Menampilkan daftar dinamis instansi layanan darurat publik (BPBD/117, Kepolisian/110,
+ * Damkar/113, Ambulans/RSUD, Basarnas/115, dll.) yang diambil dari server API
+ * (`GET /emergency-contacts`) tanpa menampilkan data personil ASN/NIP.
  */
 @Composable
 fun CitizenEmergencyContactsView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    var loadResult by remember { mutableStateOf(EmergencyContactsRepository.getCachedOrDefault(context)) }
+    var isRefreshing by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf("Semua") }
 
-    val categories = listOf("Semua", "SAR & Bencana", "Medis", "Kepolisian", "Damkar", "Teknis")
-
-    val filteredContacts = remember(selectedCategory) {
-        if (selectedCategory == "Semua") {
-            MUKOMUKO_EMERGENCY_CONTACTS
-        } else {
-            MUKOMUKO_EMERGENCY_CONTACTS.filter { it.category == selectedCategory }
+    // Sinkronisasi otomatis dari API server saat tab dibuka
+    LaunchedEffect(Unit) {
+        isRefreshing = true
+        try {
+            loadResult = EmergencyContactsRepository.fetchPublicContacts(context)
+        } finally {
+            isRefreshing = false
         }
     }
 
-    androidx.compose.foundation.layout.BoxWithConstraints(
+    val categories = remember(loadResult.contacts) {
+        listOf("Semua") + loadResult.contacts.map { it.category }.distinct()
+    }
+
+    val filteredContacts = remember(selectedCategory, loadResult.contacts) {
+        if (selectedCategory == "Semua") {
+            loadResult.contacts
+        } else {
+            loadResult.contacts.filter { it.category.equals(selectedCategory, ignoreCase = true) }
+        }
+    }
+
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFF9FAFB))
+            .background(Color(0xFFF8FAFC))
             .testTag("citizen_emergency_contacts_view")
     ) {
         val columnCount = if (maxWidth >= 600.dp) 2 else 1
@@ -204,82 +121,154 @@ fun CitizenEmergencyContactsView(
             filteredContacts.chunked(columnCount)
         }
 
-        Column(
-            modifier = Modifier.fillMaxSize()
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("public_emergency_contacts_list"),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 32.dp)
         ) {
-            // Contact Items List (Adaptive 1 or 2 Columns) with Collapsible Header Banner
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 32.dp)
-            ) {
-                // Item 1: Top Info Banner (ikut ter-scroll / collapse saat daftar digulir ke atas)
-                item(key = "header_emergency_banner") {
+            // Header Banner Darurat Publik + Tombol Sinkronisasi API
+            item(key = "header_emergency_banner") {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Surface(
-                        color = Color(0xFFFEF2F2),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
+                        color = Color(0xFFFFF7ED),
+                        border = BorderStroke(1.dp, Color(0xFFFED7AA)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(Color(0xFFDC2626), CircleShape),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.PhoneInTalk,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .background(Color(0xFFEA580C), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PhoneInTalk,
+                                        contentDescription = "Kontak Darurat Publik",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column {
+                                    Text(
+                                        text = "Kontak Darurat Publik 24 Jam",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF9A3412)
+                                    )
+                                    Text(
+                                        text = "Tekan tombol Panggil untuk langsung membuka dialer ponsel.",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF7C2D12),
+                                        lineHeight = 16.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.CloudDone,
+                                            contentDescription = null,
+                                            tint = if (loadResult.source == EmergencyContactsSource.REMOTE_API) {
+                                                Color(0xFF15803D)
+                                            } else {
+                                                Color(0xFFEA580C)
+                                            },
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = loadResult.source.label,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF64748B)
+                                        )
+                                    }
+                                }
                             }
 
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column {
-                                Text(
-                                    text = "Direktori Kontak Darurat Mukomuko",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    color = Color(0xFF991B1B)
-                                )
-                                Text(
-                                    text = "Ketuk tombol 'Panggil' untuk langsung membuka dialer ponsel ke instansi terkait.",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF7F1D1D)
+                            IconButton(
+                                onClick = {
+                                    if (!isRefreshing) {
+                                        isRefreshing = true
+                                        coroutineScope.launch {
+                                            try {
+                                                loadResult = EmergencyContactsRepository.fetchPublicContacts(context)
+                                                Toast.makeText(
+                                                    context,
+                                                    "Daftar kontak darurat diperbarui (${loadResult.source.label})",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            } finally {
+                                                isRefreshing = false
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("btn_refresh_emergency_contacts")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Perbarui daftar kontak dari server",
+                                    tint = Color(0xFFEA580C)
                                 )
                             }
                         }
                     }
-                }
 
-                // Item 2: Horizontal Category Filter
-                item(key = "header_category_filter") {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(categories) { cat ->
-                            val isSelected = selectedCategory == cat
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isSelected) Color(0xFFDC2626) else Color.White,
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    if (isSelected) Color(0xFFDC2626) else Color(0xFFE5E7EB)
-                                ),
-                                modifier = Modifier.clickable { selectedCategory = cat }
+                    if (isRefreshing) {
+                        LinearProgressIndicator(
+                            color = Color(0xFFEA580C),
+                            trackColor = Color(0xFFFED7AA),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            // Filter Kategori Instansi (Dinamis sesuai respons server)
+            item(key = "header_category_filter") {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(categories) { category ->
+                        val isSelected = selectedCategory == category
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = if (isSelected) Color(0xFFEA580C) else Color.White,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) Color(0xFFEA580C) else Color(0xFFE2E8F0)
+                            ),
+                            modifier = Modifier
+                                .heightIn(min = 38.dp)
+                                .clickable { selectedCategory = category }
+                                .testTag("chip_contact_category_$category")
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                             ) {
                                 Text(
-                                    text = cat,
-                                    fontSize = 11.sp,
+                                    text = category,
+                                    fontSize = 12.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else Color(0xFF4B5563),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    color = if (isSelected) Color.White else Color(0xFF334155),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     softWrap = false
@@ -288,41 +277,50 @@ fun CitizenEmergencyContactsView(
                         }
                     }
                 }
+            }
 
-                items(chunkedContacts) { rowItems ->
-                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        if (columnCount > 1) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                rowItems.forEach { item ->
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        EmergencyContactCard(
-                                            contact = item,
-                                            onDial = {
-                                                EmergencyDialer.dial(context, item.phoneNumber)
-                                                Toast.makeText(context, "Membuka dialer untuk ${item.name}...", Toast.LENGTH_SHORT).show()
-                                            }
-                                        )
-                                    }
-                                }
-                                if (rowItems.size < columnCount) {
-                                    for (i in 0 until (columnCount - rowItems.size)) {
-                                        Spacer(modifier = Modifier.weight(1f))
-                                    }
+            // Daftar / Grid Bersih Instansi Darurat Publik
+            items(chunkedContacts, key = { row -> row.joinToString("_") { it.id } }) { rowItems ->
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    if (columnCount > 1) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            rowItems.forEach { contact ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    PublicEmergencyContactCard(
+                                        contact = contact,
+                                        onCallClick = {
+                                            EmergencyDialer.dial(context, contact.phoneNumber)
+                                            Toast.makeText(
+                                                context,
+                                                "Membuka dialer ${contact.agencyName} (${contact.displayPhone})",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    )
                                 }
                             }
-                        } else {
-                            val item = rowItems.first()
-                            EmergencyContactCard(
-                                contact = item,
-                                onDial = {
-                                    EmergencyDialer.dial(context, item.phoneNumber)
-                                    Toast.makeText(context, "Membuka dialer untuk ${item.name}...", Toast.LENGTH_SHORT).show()
+                            if (rowItems.size < columnCount) {
+                                repeat(columnCount - rowItems.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
                                 }
-                            )
+                            }
                         }
+                    } else {
+                        val contact = rowItems.first()
+                        PublicEmergencyContactCard(
+                            contact = contact,
+                            onCallClick = {
+                                EmergencyDialer.dial(context, contact.phoneNumber)
+                                Toast.makeText(
+                                    context,
+                                    "Membuka dialer ${contact.agencyName} (${contact.displayPhone})",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
                     }
                 }
             }
@@ -331,182 +329,192 @@ fun CitizenEmergencyContactsView(
 }
 
 @Composable
-private fun EmergencyContactCard(
-    contact: EmergencyContactItem,
-    onDial: () -> Unit
+private fun PublicEmergencyContactCard(
+    contact: PublicEmergencyContact,
+    onCallClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val accentColor = remember(contact.accentHex) { parseSafeHexColor(contact.accentHex) }
+    val agencyIcon = remember(contact.iconKey) { resolveAgencyIcon(contact.iconKey) }
+
     Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
-        modifier = Modifier.fillMaxWidth()
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.22f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("card_emergency_contact_${contact.id}")
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Top) {
+                // Kiri: Ikon Instansi + Nama Instansi + Nomor Telepon Besar & Jelas
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
-                            .background(contact.themeColor.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
+                            .size(50.dp)
+                            .background(accentColor.copy(alpha = 0.12f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = contact.icon,
-                            contentDescription = null,
-                            tint = contact.themeColor,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = agencyIcon,
+                            contentDescription = contact.agencyName,
+                            tint = accentColor,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = contact.name,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF111827)
-                            )
-                        }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = contact.agencyName,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(top = 2.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = contact.themeColor.copy(alpha = 0.10f)
-                            ) {
-                                Text(
-                                    text = contact.category,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = contact.themeColor,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    softWrap = false
-                                )
+                            Text(
+                                text = contact.displayPhone,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = accentColor,
+                                letterSpacing = 0.4.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
+                            if (contact.isTollFree) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = accentColor.copy(alpha = 0.10f)
+                                ) {
+                                    Text(
+                                        text = "Bebas Pulsa",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = accentColor,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                // Badge Panggil Mode Bulat (Identik dengan Mode Bulat pada Judul Direktori Kontak)
-                Surface(
-                    shape = CircleShape,
-                    color = contact.themeColor,
-                    shadowElevation = 2.dp,
+                // Kanan: Tombol "Panggil" dengan ikon telepon langsung membuka Dial Pad
+                Button(
+                    onClick = onCallClick,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                     modifier = Modifier
-                        .size(40.dp)
-                        .clickable(onClick = onDial)
-                        .testTag("dial_badge_${contact.phoneNumber}")
+                        .heightIn(min = 48.dp)
+                        .testTag("btn_call_${contact.phoneNumber}")
                 ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhoneInTalk,
-                            contentDescription = "Panggil ${contact.name}",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            val annotatedDescription = buildAnnotatedString {
-                val boldPhrase = "POLISI BERSAMA MASYARAKAT"
-                val startIndex = contact.description.indexOf(boldPhrase)
-                if (startIndex >= 0) {
-                    append(contact.description.substring(0, startIndex))
-                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append(boldPhrase)
-                    }
-                    append(contact.description.substring(startIndex + boldPhrase.length))
-                } else {
-                    append(contact.description)
-                }
-            }
-
-            Text(
-                text = annotatedDescription,
-                fontSize = 11.sp,
-                color = Color(0xFF4B5563),
-                lineHeight = 15.sp
-            )
-
-            HorizontalDivider(
-                color = Color(0xFFF3F4F6),
-                thickness = 1.dp,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.PhoneInTalk,
-                        contentDescription = null,
-                        tint = Color(0xFF6B7280),
-                        modifier = Modifier.size(13.dp)
+                        imageVector = Icons.Default.Call,
+                        contentDescription = "Panggil ${contact.agencyName}",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = contact.displayPhone,
-                        fontSize = 12.sp,
+                        text = "Panggil",
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = contact.themeColor
+                        color = Color.White
                     )
                 }
+            }
 
+            if (contact.subtitle.isNotBlank()) {
+                Text(
+                    text = contact.subtitle,
+                    fontSize = 12.sp,
+                    color = Color(0xFF475569),
+                    lineHeight = 17.sp
+                )
+            }
+
+            if (contact.address.isNotBlank()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        val query = if (contact.name.contains("Polres Mukomuko", ignoreCase = true)) {
-                            "Polres+Mukomuko+Bandar+Ratu"
-                        } else {
-                            Uri.encode("${contact.name} ${contact.address}")
+                    modifier = Modifier
+                        .clickable {
+                            val query = Uri.encode("${contact.agencyName} ${contact.address}")
+                            try {
+                                val intent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://www.google.com/maps/search/?api=1&query=$query")
+                                )
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "Tidak dapat membuka Google Maps", Toast.LENGTH_SHORT).show()
+                            }
                         }
-                        try {
-                            val intent = Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://www.google.com/maps/search/?api=1&query=$query")
-                            )
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Tidak dapat membuka Google Maps", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                        .padding(vertical = 2.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.LocationOn,
-                        contentDescription = null,
-                        tint = Color(0xFF9CA3AF),
-                        modifier = Modifier.size(12.dp)
+                        contentDescription = "Lihat lokasi ${contact.agencyName}",
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(14.dp)
                     )
-                    Spacer(modifier = Modifier.width(2.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = contact.address.take(24) + if (contact.address.length > 24) "..." else "",
+                        text = contact.address,
                         fontSize = 11.sp,
-                        color = Color(0xFF6B7280)
+                        color = Color(0xFF64748B),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         }
+    }
+}
+
+private fun resolveAgencyIcon(iconKey: String): ImageVector {
+    return when (iconKey.lowercase()) {
+        "bpbd", "shield" -> Icons.Default.Shield
+        "police", "polisi" -> Icons.Default.LocalPolice
+        "fire", "damkar" -> Icons.Default.LocalFireDepartment
+        "ambulance", "hospital", "medis", "rsud" -> Icons.Default.LocalHospital
+        "sar", "basarnas" -> Icons.Default.Emergency
+        "power", "pln" -> Icons.Default.Power
+        "support", "pusdalops" -> Icons.Default.SupportAgent
+        else -> Icons.Default.PhoneInTalk
+    }
+}
+
+private fun parseSafeHexColor(hex: String): Color {
+    return try {
+        Color(android.graphics.Color.parseColor(hex))
+    } catch (_: Exception) {
+        Color(0xFFEA580C)
     }
 }

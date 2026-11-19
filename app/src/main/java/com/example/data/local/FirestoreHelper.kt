@@ -1,7 +1,10 @@
 package com.example.data.local
 
+import android.content.Context
 import android.util.Log
+import com.example.R
 import com.example.model.CitizenDisasterReport
+import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -13,9 +16,28 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 /**
+ * Hasil verifikasi/pembacaan dokumen kredensial petugas `officer_credentials/{nip}`
+ * langsung dari server Cloud Firestore (`Source.SERVER`).
+ */
+sealed class CloudCredentialLookupResult {
+    data class Found(
+        val credential: OfficerCredentialEntity,
+        val serverPlainPin: String? = null
+    ) : CloudCredentialLookupResult()
+
+    data object NotFound : CloudCredentialLookupResult()
+
+    data class Error(
+        val userMessage: String,
+        val errorCode: String = "UNKNOWN",
+        val cause: Throwable? = null
+    ) : CloudCredentialLookupResult()
+}
+
+/**
  * Cloud Firestore Helper for real-time bidirectional synchronization
  * of Personnel (Officers), Officer Credentials, Backups, and Citizen Disaster Reports.
- * Enforces Firebase Authentication gating and UID ownership scoping across all cloud operations.
+ * Always targets the project's Named Firestore Database ID (`firestore_database_id`).
  */
 object FirestoreHelper {
     private const val TAG = "FirestoreHelper"
@@ -24,15 +46,30 @@ object FirestoreHelper {
     private const val COLLECTION_CITIZEN_REPORTS = "citizen_disaster_reports"
     private const val COLLECTION_BACKUPS = "database_backups"
     private const val COLLECTION_OFFICER_CREDENTIALS = "officer_credentials"
+    private const val COLLECTION_APP_SETTINGS = "app_settings"
+    private const val DOC_DOCUMENT_SETTINGS = "document_settings"
 
     @Volatile
     private var cachedFirestore: FirebaseFirestore? = null
 
     /**
-     * Optional test hook allowing JVM/Robolectric tests to inject an emulator-bound Firestore instance.
+     * Optional test hooks allowing JVM/Robolectric tests to inject deterministic Cloud Firestore
+     * credential verification & persistence behavior without network flakes.
      */
     @Volatile
     var overrideFirestoreForTesting: FirebaseFirestore? = null
+
+    @Volatile
+    var overrideCloudCredentialFetcherForTesting: (suspend (String) -> CloudCredentialLookupResult)? = null
+
+    @Volatile
+    var overrideCloudCredentialWriterForTesting: (suspend (OfficerCredentialEntity) -> Result<Unit>)? = null
+
+    fun resetTestHooks() {
+        overrideFirestoreForTesting = null
+        overrideCloudCredentialFetcherForTesting = null
+        overrideCloudCredentialWriterForTesting = null
+    }
 
     private fun currentUid(): String? = try {
         FirebaseAuth.getInstance().currentUser?.uid
@@ -67,14 +104,31 @@ object FirestoreHelper {
     }
 
     private val firestore: FirebaseFirestore?
-        get() = getFirestoreOrThrow().getOrNull()
+        get() = getFirestoreOrThrow(null).getOrNull()
 
-    private fun getFirestoreOrThrow(): Result<FirebaseFirestore> {
+    private fun getFirestoreOrThrow(context: Context? = null): Result<FirebaseFirestore> {
         overrideFirestoreForTesting?.let { return Result.success(it) }
         cachedFirestore?.let { return Result.success(it) }
         return try {
-            val instance = FirebaseFirestore.getInstance(DATABASE_ID)
-            requireNotNull(instance) { "FirebaseFirestore.getInstance(DATABASE_ID) mengembalikan null" }
+            val appContext = context?.applicationContext
+            val firebaseApp = if (appContext != null) {
+                if (FirebaseApp.getApps(appContext).isEmpty()) {
+                    FirebaseApp.initializeApp(appContext)
+                        ?: throw IllegalStateException("FirebaseApp gagal diinisialisasi. Periksa google-services.json.")
+                } else {
+                    FirebaseApp.getInstance()
+                }
+            } else {
+                FirebaseApp.getInstance()
+            }
+            val resolvedDbId = try {
+                appContext?.getString(R.string.firestore_database_id)?.trim()?.ifBlank { DATABASE_ID }
+                    ?: DATABASE_ID
+            } catch (_: Exception) {
+                DATABASE_ID
+            }
+            val instance = FirebaseFirestore.getInstance(firebaseApp, resolvedDbId)
+            requireNotNull(instance) { "FirebaseFirestore.getInstance($resolvedDbId) mengembalikan null" }
             cachedFirestore = instance
             Result.success(instance)
         } catch (e: Exception) {
@@ -570,33 +624,37 @@ object FirestoreHelper {
 
     /**
      * Synchronizes a single officer credential to Cloud Firestore without storing plaintext initialSecurePin.
+     * Supports both Google-authenticated UID and self-service officer NIP ownership (`officer_nip_{nip}`).
      */
     fun syncCredentialToCloud(
         credential: OfficerCredentialEntity,
+        context: Context? = null,
         onSuccess: (() -> Unit)? = null,
         onFailure: ((Exception) -> Unit)? = null
     ) {
-        val uid = currentUid()
-        if (uid == null) {
-            onFailure?.invoke(SecurityException("Autentikasi Google diperlukan untuk sinkronisasi kredensial cloud."))
+        val trimmedNip = credential.nip.trim()
+        if (trimmedNip.isBlank()) {
+            onFailure?.invoke(IllegalArgumentException("NIP tidak boleh kosong saat sinkronisasi kredensial."))
             return
         }
-        val dbResult = getFirestoreOrThrow()
+        val effectiveOwnerUid = currentUid() ?: "officer_nip_$trimmedNip"
+        val dbResult = getFirestoreOrThrow(context)
         val db = dbResult.getOrNull()
         if (db == null) {
             val initErr = dbResult.exceptionOrNull()
             onFailure?.invoke(
                 IllegalStateException(
-                    "Gagal sinkronisasi: ${initErr?.localizedMessage ?: "FirebaseFirestore instance null"}",
+                    "Gagal sinkronisasi ke Firebase: ${initErr?.localizedMessage ?: "FirebaseFirestore instance null"}",
                     initErr
                 )
             )
             return
         }
+        ensureAppCheckTokenAttached()
         try {
             val data = mapOf(
-                "nip" to credential.nip,
-                "ownerUid" to uid,
+                "nip" to trimmedNip,
+                "ownerUid" to effectiveOwnerUid,
                 "fullName" to credential.fullName,
                 "role" to credential.role,
                 "unit" to credential.unit,
@@ -612,14 +670,14 @@ object FirestoreHelper {
                 "updatedAt" to credential.updatedAt
             )
             db.collection(COLLECTION_OFFICER_CREDENTIALS)
-                .document(credential.nip)
+                .document(trimmedNip)
                 .set(data, SetOptions.merge())
                 .addOnSuccessListener {
-                    Log.d(TAG, "Credential synced to Firestore")
+                    Log.d(TAG, "Credential synced to Firestore (officer_credentials/$trimmedNip)")
                     onSuccess?.invoke()
                 }
                 .addOnFailureListener { e ->
-                    Log.w(TAG, "Failed to sync credential to Firestore", e)
+                    logFirestoreError("syncCredentialToCloud(officer_credentials/$trimmedNip)", e)
                     onFailure?.invoke(e)
                 }
         } catch (e: Exception) {
@@ -628,82 +686,153 @@ object FirestoreHelper {
         }
     }
 
-    suspend fun syncCredentialToCloudSuspend(credential: OfficerCredentialEntity): Result<Unit> =
-        suspendCancellableCoroutine { cont ->
+    suspend fun syncCredentialToCloudSuspend(
+        credential: OfficerCredentialEntity,
+        context: Context? = null
+    ): Result<Unit> {
+        overrideCloudCredentialWriterForTesting?.let { writer ->
+            return writer(credential)
+        }
+        return suspendCancellableCoroutine { cont ->
             syncCredentialToCloud(
                 credential = credential,
+                context = context,
                 onSuccess = {
                     if (cont.isActive) cont.resume(Result.success(Unit))
                 },
                 onFailure = { e ->
                     if (cont.isActive) {
-                        cont.resume(
-                            Result.failure(
-                                IllegalStateException(
-                                    "Gagal sinkronisasi: ${e.localizedMessage}",
-                                    e
-                                )
-                            )
-                        )
+                        val fsEx = e as? FirebaseFirestoreException
+                        val msg = when (fsEx?.code) {
+                            FirebaseFirestoreException.Code.UNAVAILABLE,
+                            FirebaseFirestoreException.Code.DEADLINE_EXCEEDED ->
+                                "Koneksi internet bermasalah. Gagal menyimpan PIN baru ke server Firebase."
+                            FirebaseFirestoreException.Code.PERMISSION_DENIED ->
+                                "Izin tulis ke koleksi officer_credentials ditolak oleh Firestore Rules."
+                            else -> "Gagal menyimpan kredensial ke Firebase: ${e.localizedMessage ?: "Kesalahan tidak diketahui"}"
+                        }
+                        cont.resume(Result.failure(IllegalStateException(msg, e)))
                     }
                 }
             )
         }
+    }
 
-    suspend fun fetchCredentialByNipFromCloud(nip: String): Result<OfficerCredentialEntity?> =
-        suspendCancellableCoroutine { cont ->
-            if (currentUid() == null) {
-                if (cont.isActive) {
-                    cont.resume(Result.failure(SecurityException("Autentikasi Google diperlukan untuk akses cloud.")))
-                }
-                return@suspendCancellableCoroutine
-            }
-            val dbResult = getFirestoreOrThrow()
-            val db = dbResult.getOrNull()
-            if (db == null) {
-                val initErr = dbResult.exceptionOrNull()
-                if (cont.isActive) {
-                    cont.resume(
-                        Result.failure(
-                            IllegalStateException(
-                                "Gagal sinkronisasi: ${initErr?.localizedMessage ?: "FirebaseFirestore instance null"}",
-                                initErr
-                            )
-                        )
-                    )
-                }
-                return@suspendCancellableCoroutine
-            }
-            val trimmedNip = nip.trim()
+    /**
+     * Mandatory Cloud Verification read (`Source.SERVER`) on `officer_credentials/{nip}`.
+     * Never falls back to offline cache or hardcoded default PINs.
+     */
+    suspend fun fetchOfficerCredentialStrictFromServer(
+        nip: String,
+        context: Context? = null
+    ): CloudCredentialLookupResult {
+        val trimmedNip = nip.trim()
+        if (trimmedNip.isBlank()) {
+            return CloudCredentialLookupResult.NotFound
+        }
+
+        overrideCloudCredentialFetcherForTesting?.let { fetcher ->
+            return fetcher(trimmedNip)
+        }
+
+        val dbResult = getFirestoreOrThrow(context)
+        val db = dbResult.getOrNull()
+        if (db == null) {
+            val initErr = dbResult.exceptionOrNull()
+            return CloudCredentialLookupResult.Error(
+                userMessage = "Firebase belum siap untuk verifikasi PIN. Pastikan koneksi internet aktif lalu coba lagi.",
+                errorCode = "FIRESTORE_INIT_ERROR",
+                cause = initErr
+            )
+        }
+
+        ensureAppCheckTokenAttached()
+        return suspendCancellableCoroutine { cont ->
             try {
+                try {
+                    db.enableNetwork()
+                } catch (_: Exception) {
+                }
+
                 db.collection(COLLECTION_OFFICER_CREDENTIALS)
                     .document(trimmedNip)
                     .get(Source.SERVER)
                     .addOnSuccessListener { doc ->
                         if (!cont.isActive) return@addOnSuccessListener
-                        val parsed = if (doc != null && doc.exists()) parseCredentialDocument(doc) else null
-                        cont.resume(Result.success(parsed))
+                        if (doc == null || !doc.exists()) {
+                            cont.resume(CloudCredentialLookupResult.NotFound)
+                            return@addOnSuccessListener
+                        }
+                        val parsed = parseCredentialDocument(doc)
+                        if (parsed == null) {
+                            cont.resume(CloudCredentialLookupResult.NotFound)
+                            return@addOnSuccessListener
+                        }
+                        // Support optional server-side PIN field if configured directly by Admin in Firestore Console
+                        val plainPinField = doc.getString("pin")?.trim()?.takeIf { it.isNotBlank() }
+                            ?: doc.getString("personalPin")?.trim()?.takeIf { it.isNotBlank() }
+                        cont.resume(
+                            CloudCredentialLookupResult.Found(
+                                credential = parsed,
+                                serverPlainPin = plainPinField
+                            )
+                        )
                     }
                     .addOnFailureListener { e ->
-                        Log.w(TAG, "Failed to fetch credential from Firestore server", e)
-                        if (cont.isActive) {
-                            cont.resume(
-                                Result.failure(
-                                    IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
-                                )
+                        logFirestoreError("fetchOfficerCredentialStrictFromServer(officer_credentials/$trimmedNip)", e)
+                        if (!cont.isActive) return@addOnFailureListener
+                        val fsEx = e as? FirebaseFirestoreException
+                        val errorResult = when (fsEx?.code) {
+                            FirebaseFirestoreException.Code.UNAVAILABLE -> CloudCredentialLookupResult.Error(
+                                userMessage = "Koneksi internet bermasalah atau server Firebase tidak terjangkau (UNAVAILABLE). Verifikasi PIN wajib online.",
+                                errorCode = "UNAVAILABLE",
+                                cause = e
+                            )
+                            FirebaseFirestoreException.Code.DEADLINE_EXCEEDED -> CloudCredentialLookupResult.Error(
+                                userMessage = "Waktu verifikasi ke server Firebase habis (DEADLINE_EXCEEDED). Periksa sinyal lalu coba lagi.",
+                                errorCode = "DEADLINE_EXCEEDED",
+                                cause = e
+                            )
+                            FirebaseFirestoreException.Code.PERMISSION_DENIED -> CloudCredentialLookupResult.Error(
+                                userMessage = "Akses verifikasi ke koleksi officer_credentials ditolak server (PERMISSION_DENIED).",
+                                errorCode = "PERMISSION_DENIED",
+                                cause = e
+                            )
+                            else -> CloudCredentialLookupResult.Error(
+                                userMessage = "Gagal terhubung ke server Firebase untuk verifikasi PIN: ${e.localizedMessage ?: "Periksa koneksi internet."}",
+                                errorCode = fsEx?.code?.name ?: "NETWORK_ERROR",
+                                cause = e
                             )
                         }
+                        cont.resume(errorResult)
                     }
             } catch (e: Exception) {
+                logFirestoreError("fetchOfficerCredentialStrictFromServer(exception)", e)
                 if (cont.isActive) {
                     cont.resume(
-                        Result.failure(
-                            IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
+                        CloudCredentialLookupResult.Error(
+                            userMessage = "Terjadi kesalahan saat memverifikasi PIN ke Firebase: ${e.localizedMessage ?: "Coba lagi."}",
+                            errorCode = "EXCEPTION",
+                            cause = e
                         )
                     )
                 }
             }
         }
+    }
+
+    suspend fun fetchCredentialByNipFromCloud(
+        nip: String,
+        context: Context? = null
+    ): Result<OfficerCredentialEntity?> {
+        return when (val lookup = fetchOfficerCredentialStrictFromServer(nip, context)) {
+            is CloudCredentialLookupResult.Found -> Result.success(lookup.credential)
+            is CloudCredentialLookupResult.NotFound -> Result.success(null)
+            is CloudCredentialLookupResult.Error -> Result.failure(
+                IllegalStateException(lookup.userMessage, lookup.cause)
+            )
+        }
+    }
 
     suspend fun fetchAllCredentialsFromCloudSuspend(): Result<List<OfficerCredentialEntity>> =
         suspendCancellableCoroutine { cont ->
@@ -798,6 +927,93 @@ object FirestoreHelper {
             onResult(emptyList())
         }
     }
+
+    /**
+     * Mengambil konfigurasi dokumen PDF dinamis (`fontSize`, `maxLengthBeforeTruncate`, `gelarFormat`,
+     * `signatories`, `officers`, kop surat, footer) dari Firestore `app_settings/document_settings`.
+     */
+    suspend fun fetchDocumentSettingsFromCloudSuspend(): Result<Map<String, Any>?> =
+        suspendCancellableCoroutine { cont ->
+            val dbResult = getFirestoreOrThrow()
+            val db = dbResult.getOrNull()
+            if (db == null) {
+                val err = dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia")
+                if (cont.isActive) cont.resume(Result.failure(err))
+                return@suspendCancellableCoroutine
+            }
+            ensureAppCheckTokenAttached()
+            try {
+                db.collection(COLLECTION_APP_SETTINGS)
+                    .document(DOC_DOCUMENT_SETTINGS)
+                    .get(Source.SERVER)
+                    .addOnSuccessListener { doc ->
+                        if (!cont.isActive) return@addOnSuccessListener
+                        val data = if (doc != null && doc.exists()) doc.data else null
+                        cont.resume(Result.success(data))
+                    }
+                    .addOnFailureListener { e ->
+                        logFirestoreError("fetchDocumentSettingsFromCloudSuspend", e)
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                logFirestoreError("fetchDocumentSettingsFromCloudSuspend(exception)", e)
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
+
+    /**
+     * Mengambil direktori personil (Nama, Gelar, NIP, Jabatan) terbaru dari koleksi Firestore `officers`.
+     */
+    suspend fun fetchOfficersDirectoryFromCloudSuspend(): Result<List<OfficerProfile>> =
+        suspendCancellableCoroutine { cont ->
+            val uid = currentUid()
+            if (uid == null) {
+                if (cont.isActive) cont.resume(Result.success(emptyList()))
+                return@suspendCancellableCoroutine
+            }
+            val dbResult = getFirestoreOrThrow()
+            val db = dbResult.getOrNull()
+            if (db == null) {
+                val err = dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia")
+                if (cont.isActive) cont.resume(Result.failure(err))
+                return@suspendCancellableCoroutine
+            }
+            ensureAppCheckTokenAttached()
+            try {
+                db.collection(COLLECTION_OFFICERS)
+                    .whereEqualTo("ownerUid", uid)
+                    .get(Source.SERVER)
+                    .addOnSuccessListener { snapshot ->
+                        if (!cont.isActive) return@addOnSuccessListener
+                        val list = mutableListOf<OfficerProfile>()
+                        if (snapshot != null) {
+                            for (doc in snapshot.documents) {
+                                val id = doc.getString("id") ?: doc.id
+                                val fullName = doc.getString("fullName") ?: continue
+                                list.add(
+                                    OfficerProfile(
+                                        id = id,
+                                        fullName = fullName,
+                                        nip = doc.getString("nip") ?: "",
+                                        role = doc.getString("role") ?: OfficerRoles.PETUGAS_JAGA,
+                                        unit = doc.getString("unit") ?: "Pusdalops BPBD Kab. Mukomuko",
+                                        shift = doc.getString("shift") ?: "Shift Siaga 24 Jam",
+                                        phone = doc.getString("phone") ?: ""
+                                    )
+                                )
+                            }
+                        }
+                        cont.resume(Result.success(list))
+                    }
+                    .addOnFailureListener { e ->
+                        logFirestoreError("fetchOfficersDirectoryFromCloudSuspend", e)
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                logFirestoreError("fetchOfficersDirectoryFromCloudSuspend(exception)", e)
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
 
     private fun isGpsVerified(value: Boolean): Boolean = value
 }

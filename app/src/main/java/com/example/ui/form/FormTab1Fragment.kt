@@ -29,6 +29,44 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.graphics.Color as AndroidColor
+import android.graphics.drawable.GradientDrawable
+import android.widget.TextView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -65,6 +103,9 @@ class FormTab1Fragment : Fragment() {
     private lateinit var etPenyebab: TextInputEditText
     private lateinit var etSumberInformasi: TextInputEditText
     private lateinit var btnAmbilGps: View
+    private var tvBadgeDariWarga: TextView? = null
+    private var composeAttachedCitizenPreview: ComposeView? = null
+    private var cachedIncomingReports: List<IncomingCitizenReportItem> = emptyList()
 
     private var cuacaSaatKejadianTerkini: String = "Data cuaca tidak tersedia"
 
@@ -102,41 +143,46 @@ class FormTab1Fragment : Fragment() {
             ?: view.findViewById(R.id.btnImporLaporanWarga)
         btnTarikLaporanWarga = btnTarik
         btnImporLaporanWarga = btnTarik
+        tvBadgeDariWarga = view.findViewById(R.id.tvBadgeDariWarga)
+        composeAttachedCitizenPreview = view.findViewById(R.id.composeAttachedCitizenPreview)
+        setupRedNotificationBadgeStyle()
+        refreshIncomingCitizenReportsAndBadge()
 
         // Pastikan field cuaca bersifat read-only
         dropdownCuaca.keyListener = null
         dropdownCuaca.isFocusable = false
         dropdownCuaca.isClickable = false
 
-        // Inisialisasi Info Sesi Petugas
+        // Inisialisasi Info Sesi Petugas (Sinkron Nama & NIP dari Daftar Kontak Personil)
         val officerAuthManager = com.example.data.local.OfficerAuthManager(requireContext())
         val sessionManager = SessionManager(requireContext())
-        petugasAktifNama = officerAuthManager.getOfficerName().ifBlank {
-            sessionManager.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
-        }
-        petugasAktifNip = officerAuthManager.getOfficerBadgeId().ifBlank {
-            sessionManager.getNipPetugas().ifBlank { "-" }
-        }
+        val verifiedUser = sessionManager.authenticateToken()
+        petugasAktifNama = verifiedUser.name
+        petugasAktifNip = verifiedUser.nip
         val tvNamaPetugas = view.findViewById<android.widget.TextView>(R.id.tvNamaPetugas)
         val tvInfoPetugas = view.findViewById<android.widget.TextView>(R.id.tvInfoPetugas)
-        tvNamaPetugas?.text = petugasAktifNama
-        tvInfoPetugas?.text = "Diisi oleh: $petugasAktifNama"
+        tvNamaPetugas?.text = "$petugasAktifNama (NIP. $petugasAktifNip)"
+        tvInfoPetugas?.text = "Diisi oleh: $petugasAktifNama (NIP. $petugasAktifNip)"
 
         // Di dalam onViewCreated FormTab1Fragment:
         lifecycleScope.launch {
             sessionManager.namaPetugasFlow.collect { decryptedNama ->
-                val nama = officerAuthManager.getOfficerName().ifBlank {
+                val rawNama = officerAuthManager.getOfficerName().ifBlank {
                     decryptedNama.takeUnless { it.startsWith("enc_v1:") }.orEmpty().ifBlank { "HITATUN ARAZAK" }
                 }
-                val nip = officerAuthManager.getOfficerBadgeId().ifBlank {
-                    sessionManager.getNipPetugas().takeUnless { it.startsWith("enc_v1:") }.orEmpty().ifBlank { "-" }
+                val rawNip = officerAuthManager.getOfficerBadgeId().ifBlank {
+                    sessionManager.getNipPetugas().takeUnless { it.startsWith("enc_v1:") }.orEmpty()
                 }
+                val synced = officerAuthManager.resolveSyncedOfficer(rawName = rawNama, rawNip = rawNip)
 
-                petugasAktifNama = nama
-                petugasAktifNip = nip
+                petugasAktifNama = synced.fullName
+                petugasAktifNip = synced.nip
 
-                tvNamaPetugas?.text = nama
-                tvInfoPetugas?.text = "Diisi oleh: $nama"
+                tvNamaPetugas?.text = "${synced.fullName} (NIP. ${synced.nip})"
+                tvInfoPetugas?.text = "Diisi oleh: ${synced.fullName} (NIP. ${synced.nip})"
+                sharedViewModel.laporanSementara = sharedViewModel.laporanSementara.copy(
+                    petugasJaga = synced.fullName
+                )
             }
         }
 
@@ -209,27 +255,7 @@ class FormTab1Fragment : Fragment() {
         }
 
         btnTarik.setOnClickListener {
-            val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
-            val tanggalHariIni = sdf.format(Date())
-
-            lifecycleScope.launch(Dispatchers.IO) {
-                var laporanWargaList = database.laporanWargaDao().getLaporanWargaByDate(tanggalHariIni)
-                if (laporanWargaList.isEmpty()) {
-                    laporanWargaList = database.laporanWargaDao().getLaporanWargaByDate("09-11-2026")
-                }
-                if (laporanWargaList.isEmpty()) {
-                    laporanWargaList = database.laporanWargaDao().getAllLaporanWargaSync()
-                }
-
-                withContext(Dispatchers.Main) {
-                    if (laporanWargaList.isNotEmpty()) {
-                        val laporanTerbaru = laporanWargaList[0]
-                        isiFormDariLaporanWarga(laporanTerbaru)
-                    } else {
-                        Toast.makeText(requireContext(), "Tidak ada Laporan Warga masuk hari ini.", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
+            tampilkanModalDaftarLaporanWarga()
         }
 
         val btnTarikKemarin = view.findViewById<MaterialButton>(R.id.btnTarikLaporanKemarin)
@@ -278,7 +304,40 @@ class FormTab1Fragment : Fragment() {
         }
 
         btnAmbilGps.setOnClickListener {
-            Toast.makeText(requireContext(), "Fitur GPS sedang disiapkan...", Toast.LENGTH_SHORT).show()
+            val locationManager = requireContext().getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
+            val hasFine = androidx.core.content.ContextCompat.checkSelfPermission(
+                requireContext(),
+                android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            val hasCoarse = androidx.core.content.ContextCompat.checkSelfPermission(
+                requireContext(),
+                android.Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            val lastLocation = if ((hasFine || hasCoarse) && locationManager != null) {
+                try {
+                    locationManager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+                        ?: locationManager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                } catch (_: SecurityException) {
+                    null
+                }
+            } else null
+
+            if (lastLocation != null) {
+                val formatted = String.format(Locale.US, "%.5f, %.5f", lastLocation.latitude, lastLocation.longitude)
+                etKoordinat.setText(formatted)
+                simpanDataKeViewModel()
+                Toast.makeText(requireContext(), "Koordinat GPS perangkat berhasil diambil: $formatted", Toast.LENGTH_SHORT).show()
+            } else {
+                val selectedKec = dropdownKecamatan.text?.toString()?.trim().orEmpty()
+                val district = MukomukoDistricts.list.firstOrNull {
+                    it.name.equals(selectedKec, ignoreCase = true)
+                } ?: MukomukoDistricts.list.first()
+                val formatted = String.format(Locale.US, "%.4f, %.4f", district.latitude, district.longitude)
+                etKoordinat.setText(formatted)
+                simpanDataKeViewModel()
+                Toast.makeText(requireContext(), "Koordinat GPS (${district.name}) berhasil diambil: $formatted", Toast.LENGTH_SHORT).show()
+            }
         }
 
         // Pulihkan nilai awal dari ViewModel bila sudah ada dan pasang TextWatcher agar langsung tersinkronisasi
@@ -466,24 +525,127 @@ class FormTab1Fragment : Fragment() {
     fun getLokasi(): String = etLokasiBencana.text.toString()
     fun getKoordinat(): String = etKoordinat.text.toString()
 
-    private fun isiFormDariLaporanWarga(laporan: com.example.data.local.LaporanWargaEntity) {
-        dropdownJenisBencana.setText(laporan.jenisBencana, false)
-        etTanggalKejadian.setText(laporan.tanggal)
-        etWaktuKejadian.setText(if (laporan.waktu.isNotBlank()) laporan.waktu else "08:30 WIB")
-        val detailLokasi = if (laporan.desa.isNotBlank() && laporan.kecamatan.isNotBlank()) {
-            "${laporan.lokasi}, Desa ${laporan.desa}, Kec. ${laporan.kecamatan}"
-        } else {
-            laporan.lokasi
+    private fun setupRedNotificationBadgeStyle() {
+        val badgeView = tvBadgeDariWarga ?: return
+        val density = resources.displayMetrics.density
+        val bg = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 999f * density
+            setColor(AndroidColor.parseColor("#D32F2F"))
+            setStroke((1.5f * density).toInt().coerceAtLeast(2), AndroidColor.WHITE)
         }
-        etLokasiBencana.setText(detailLokasi)
-        if (laporan.koordinat.isNotBlank()) {
-            etKoordinat.setText(laporan.koordinat)
-        } else if (laporan.latitude != 0.0 && laporan.longitude != 0.0) {
-            etKoordinat.setText("${laporan.latitude}, ${laporan.longitude}")
+        badgeView.background = bg
+    }
+
+    private fun refreshIncomingCitizenReportsAndBadge() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val loaded = CitizenIncomingReportsProvider.loadIncomingCitizenReports(
+                context = requireContext(),
+                database = database
+            )
+            cachedIncomingReports = loaded
+            val unreadCount = loaded.count { it.isUnreadOrUnprocessed }
+            tvBadgeDariWarga?.apply {
+                if (unreadCount > 0) {
+                    text = if (unreadCount > 99) "99+" else unreadCount.toString()
+                    visibility = View.VISIBLE
+                } else {
+                    visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    private fun tampilkanModalDaftarLaporanWarga() {
+        if (!isAdded) return
+        val ctx = requireContext()
+        val bottomSheetDialog = BottomSheetDialog(ctx)
+        val composeView = ComposeView(ctx).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         }
 
-        val namaKec = laporan.kecamatan.ifBlank {
-            MukomukoDistricts.list.firstOrNull { detailLokasi.contains(it.name, ignoreCase = true) }?.name.orEmpty()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val latestReports = CitizenIncomingReportsProvider.loadIncomingCitizenReports(
+                context = ctx,
+                database = database
+            )
+            cachedIncomingReports = latestReports
+            val unreadCount = latestReports.count { it.isUnreadOrUnprocessed }
+            tvBadgeDariWarga?.apply {
+                if (unreadCount > 0) {
+                    text = if (unreadCount > 99) "99+" else unreadCount.toString()
+                    visibility = View.VISIBLE
+                } else {
+                    visibility = View.GONE
+                }
+            }
+
+            composeView.setContent {
+                MaterialTheme {
+                    var reportsState by remember { mutableStateOf(latestReports) }
+                    var isLoadingState by remember { mutableStateOf(false) }
+                    Surface(
+                        color = Color(0xFFF8FAFC),
+                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                    ) {
+                        CitizenIncomingReportsSheetContent(
+                            reports = reportsState,
+                            isLoading = isLoadingState,
+                            onDismiss = { bottomSheetDialog.dismiss() },
+                            onRefresh = {
+                                viewLifecycleOwner.lifecycleScope.launch {
+                                    isLoadingState = true
+                                    reportsState = CitizenIncomingReportsProvider.loadIncomingCitizenReports(
+                                        context = ctx,
+                                        database = database
+                                    )
+                                    isLoadingState = false
+                                }
+                            },
+                            onUseReportData = { selectedItem: IncomingCitizenReportItem ->
+                                bottomSheetDialog.dismiss()
+                                gunakanDataLaporanWargaTerpilih(selectedItem)
+                            }
+                        )
+                    }
+                }
+            }
+
+            bottomSheetDialog.setContentView(composeView)
+            bottomSheetDialog.behavior.apply {
+                state = BottomSheetBehavior.STATE_EXPANDED
+                skipCollapsed = true
+            }
+            bottomSheetDialog.show()
+        }
+    }
+
+    private fun gunakanDataLaporanWargaTerpilih(selectedItem: IncomingCitizenReportItem) {
+        val switchKondusif = view?.findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switchKondusif)
+        if (switchKondusif?.isChecked == true) {
+            switchKondusif.isChecked = false
+        }
+        etTanggalKejadian.isEnabled = true
+        etKedalaman.isEnabled = true
+
+        // 1. Autofill Kolom-kolom di "Informasi Dasar Kejadian"
+        dropdownJenisBencana.setText(selectedItem.disasterType, false)
+        etTanggalKejadian.setText(
+            selectedItem.dateText.ifBlank {
+                SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
+            }
+        )
+        etWaktuKejadian.setText(selectedItem.timeText.ifBlank { "08:30 WIB" })
+        val fullLokasi = selectedItem.fullFormattedLocation()
+        etLokasiBencana.setText(fullLokasi)
+        if (selectedItem.coordinates.isNotBlank()) {
+            etKoordinat.setText(selectedItem.coordinates)
+        }
+
+        val namaKec = selectedItem.district.ifBlank {
+            MukomukoDistricts.list.firstOrNull {
+                fullLokasi.contains(it.name, ignoreCase = true)
+            }?.name.orEmpty()
         }
         if (namaKec.isNotBlank()) {
             dropdownKecamatan.setText(namaKec, false)
@@ -491,21 +653,109 @@ class FormTab1Fragment : Fragment() {
         } else {
             setCuacaReadOnly("Data cuaca tidak tersedia")
         }
-        if (laporan.deskripsi.isNotBlank()) {
-            etCakupanDampak.setText(detailLokasi)
-            etKondisiMutakhir.setText(laporan.deskripsi)
-        }
-        etSumberInformasi.setText("Laporan Warga (${laporan.namaPelapor})")
+
+        etCakupanDampak.setText("$fullLokasi — ${selectedItem.description}")
+        etKondisiMutakhir.setText(selectedItem.description)
+        etSumberInformasi.setText("Laporan Warga (${selectedItem.reporterName} - ${selectedItem.reporterPhone})")
         if (etUpayaDilakukan.text.isNullOrBlank()) {
-            etUpayaDilakukan.setText("Tim Reaksi Cepat (TRC) Pusdalops BPBD Mukomuko melakukan verifikasi lapangan dan kaji cepat.")
+            etUpayaDilakukan.setText("Tim Reaksi Cepat (TRC) Pusdalops BPBD Mukomuko melakukan verifikasi lapangan dan kaji cepat atas laporan warga.")
         }
+
+        // Sinkronisasi ke ViewModel (termasuk jumlah korban dari warga)
         simpanDataKeViewModel()
+        sharedViewModel.laporanSementara = sharedViewModel.laporanSementara.copy(
+            korbanMeninggal = selectedItem.casualtiesDead,
+            korbanLuka = selectedItem.casualtiesInjured
+        )
+
+        // 2. Tampilkan preview foto & ringkasan laporan warga yang dipakai di bawah tombol
+        tampilkanPreviewLaporanWargaTerlampir(selectedItem)
+
+        // 3. Tandai laporan sudah diproses oleh petugas & perbarui badge notifikasi merah
+        viewLifecycleOwner.lifecycleScope.launch {
+            CitizenIncomingReportsProvider.markReportAsUsedByOfficer(
+                context = requireContext(),
+                database = database,
+                report = selectedItem
+            )
+            refreshIncomingCitizenReportsAndBadge()
+        }
 
         Toast.makeText(
             requireContext(),
-            "Data laporan warga (${laporan.jenisBencana} - ${laporan.namaPelapor}) berhasil ditarik ke form!",
+            "Data laporan warga (${selectedItem.disasterType} - ${selectedItem.reporterName}) berhasil diisi ke formulir!",
             Toast.LENGTH_SHORT
         ).show()
+    }
+
+    private fun tampilkanPreviewLaporanWargaTerlampir(item: IncomingCitizenReportItem) {
+        val previewContainer = composeAttachedCitizenPreview ?: return
+        previewContainer.visibility = View.VISIBLE
+        previewContainer.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+        previewContainer.setContent {
+            MaterialTheme {
+                var showZoomDialog by remember { mutableStateOf(false) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFF1F8E9))
+                        .border(1.dp, Color(0xFFA5D6A7), RoundedCornerShape(10.dp))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CitizenReportPhotoThumbnail(
+                        photoUrl = item.photoUrl,
+                        fallbackDrawableRes = item.fallbackDrawableRes,
+                        contentDescription = "Foto laporan ${item.reporterName}",
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showZoomDialog = true }
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF2E7D32),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Autofill Aktif dari Laporan Warga",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1B5E20)
+                            )
+                        }
+                        Text(
+                            text = "${item.reporterName} • ${item.disasterType}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF212121),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${item.dateText}, ${item.timeText} • Ketuk foto untuk perbesar",
+                            fontSize = 11.sp,
+                            color = Color(0xFF4E6E52),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                if (showZoomDialog) {
+                    CitizenReportFullPhotoDialog(
+                        report = item,
+                        onDismiss = { showZoomDialog = false }
+                    )
+                }
+            }
+        }
     }
 
     override fun onPause() {
@@ -535,12 +785,26 @@ class FormTab1Fragment : Fragment() {
         val cuacaFinal = cuacaSaatKejadianTerkini.ifBlank { "Data cuaca tidak tersedia" }
         val prev = sharedViewModel.laporanSementara
 
+        val rawKoordinat = etKoordinat.text?.toString()?.trim().orEmpty()
+        val jenisBencanaVal = dropdownJenisBencana.text.toString().ifBlank { prev.jenisBencana }
+        val isKondusif = jenisBencanaVal.contains("Kondusif", ignoreCase = true) ||
+            jenisBencanaVal.contains("Tidak Ada", ignoreCase = true)
+        if (rawKoordinat.isNotEmpty()) {
+            val coordCheck = com.example.util.CoordinateValidator.validateKoordinatString(
+                koordinat = rawKoordinat,
+                allowKondusifDash = isKondusif
+            )
+            etKoordinat.error = coordCheck.exceptionOrNull()?.message
+        } else {
+            etKoordinat.error = null
+        }
+
         sharedViewModel.laporanSementara = prev.copy(
-            jenisBencana = dropdownJenisBencana.text.toString().ifBlank { prev.jenisBencana },
+            jenisBencana = jenisBencanaVal,
             tanggalKejadian = etTanggalKejadian.text.toString().ifBlank { prev.tanggalKejadian },
             waktuKejadian = etWaktuKejadian.text.toString().ifBlank { prev.waktuKejadian },
             lokasiBencana = lokasiGabungan.ifBlank { prev.lokasiBencana },
-            koordinat = etKoordinat.text.toString().ifBlank { prev.koordinat },
+            koordinat = rawKoordinat.ifBlank { prev.koordinat },
             kedalaman = etKedalaman.text.toString().ifBlank { prev.kedalaman },
             kondisiCuaca = cuacaFinal,
             cuacaSaatKejadian = cuacaFinal,

@@ -375,12 +375,7 @@ fun WeeklyRainfallBarChartCard(
 
             // Recharts-Style Interactive Tooltip Box
             Surface(
-                color = when {
-                    activeItem.precipitationMm >= 50f -> Color(0xFFFEF2F2)
-                    activeItem.precipitationMm >= 20f -> Color(0xFFFFFBEB)
-                    activeItem.precipitationMm >= 5f -> Color(0xFFEFF6FF)
-                    else -> Color(0xFFF0FDF4)
-                },
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                 shape = RoundedCornerShape(14.dp),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
@@ -388,8 +383,8 @@ fun WeeklyRainfallBarChartCard(
                         activeItem.precipitationMm >= 50f -> Color(0xFFFCA5A5)
                         activeItem.precipitationMm >= 20f -> Color(0xFFFDE68A)
                         activeItem.precipitationMm >= 5f -> Color(0xFFBFDBFE)
-                        else -> Color(0xFFBBF7D0)
-                    }
+                        else -> Color(0xFF22C55E)
+                    }.copy(alpha = 0.45f)
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -486,7 +481,7 @@ fun WeeklyRainfallBarChartCard(
                             text = activeItem.weatherCondition,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -495,7 +490,7 @@ fun WeeklyRainfallBarChartCard(
                     Text(
                         text = activeItem.recommendation,
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 14.sp
                     )
                 }

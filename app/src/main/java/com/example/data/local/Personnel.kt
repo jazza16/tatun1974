@@ -71,17 +71,17 @@ object OfficialAsnBpbdPersonnel {
         "FIRMANSYAH" to "199305102025211171",
         "HARI KURNIAWAN" to "198607092015021001",
         "HERMANDAHLI" to "197106092025211033",
-        "HITATUN" to "197401282006041006",
+        "HITATUN ARAZAK" to "197401282006041006",
         "LISMIE NOVTRIANTI" to "199711282025212144",
         "MECCA RIZKA, S.M." to "199908042025212096",
         "MEI SAHPUTRA" to "199405252019031005",
-        "MUHAMMAD RIGAN JASWARI, S.Akun." to "200201252025211014",
+        "M. RIGAN JASWARI, S.Akun." to "200201252025211014",
         "NITA KUSWANI" to "197809192010012010",
         "NOKI PRADINATA, S.Agr" to "199211292025211127",
         "NOVRANDA EKA PUTRA" to "199011042019031006",
         "PUTRI MAYANG SARI" to "199906302025212010",
         "ROMI YANTI, S.Pd" to "199108092025212036",
-        "RURI IRWANDI" to "197906072006041011",
+        "RURI IRWANDI, ST, MT" to "197906072006041011",
         "SAMSUL BAHRI" to "198306102009041001",
         "SATRIA AMANDA PUTRA, S.M." to "200003112025211067",
         "SUMARNI" to "197502102009042001",
@@ -105,7 +105,7 @@ object OfficialAsnBpbdPersonnel {
             shift = "Manajerial 24 Jam"
         ),
         Personnel(
-            name = "DESTRI GANDALIA, S.STP.M.AP",
+            name = "DESTRI GANDALIA, S.STP, M.A.P",
             nip = "198812242010102001",
             role = ROLE_SUPERVISOR,
             unit = "BPBD Kab. Mukomuko",
@@ -122,7 +122,7 @@ object OfficialAsnBpbdPersonnel {
 
     val OPERATORS = listOf(
         Personnel(
-            name = "YUDHA SOFRIANTO,S.A.P",
+            name = "YUDHA SOFRIANTO, S.A.P.",
             nip = "199807202025061002",
             role = ROLE_OPERATOR,
             unit = "Pusdalops BPBD Kab. Mukomuko",
@@ -136,21 +136,21 @@ object OfficialAsnBpbdPersonnel {
             shift = "Shift Siaga 24 Jam"
         ),
         Personnel(
-            name = "MUHAMMAD RIGAN JASWARI",
+            name = "M. RIGAN JASWARI, S.Akun.",
             nip = "200201252025211014",
             role = ROLE_OPERATOR,
             unit = "Pusdalops BPBD Kab. Mukomuko",
             shift = "Shift Siaga 24 Jam"
         ),
         Personnel(
-            name = "AINUN MARDIATI.S.Pd.SD",
+            name = "AINUN MARDIATI CANIAGO, S.Pd",
             nip = "198812302025212141",
             role = ROLE_OPERATOR,
             unit = "Pusdalops BPBD Kab. Mukomuko",
             shift = "Shift Siaga 24 Jam"
         ),
         Personnel(
-            name = "SATRIA AMANDA PUTRA",
+            name = "SATRIA AMANDA PUTRA, S.M.",
             nip = "200003112025211067",
             role = ROLE_OPERATOR,
             unit = "Pusdalops BPBD Kab. Mukomuko",
@@ -164,14 +164,14 @@ object OfficialAsnBpbdPersonnel {
             shift = "Shift Siaga 24 Jam"
         ),
         Personnel(
-            name = "ARIF WIJOYO",
+            name = "ARIF WIJOYO, S.E",
             nip = "198606282025211024",
             role = ROLE_OPERATOR,
             unit = "Pusdalops BPBD Kab. Mukomuko",
             shift = "Shift Siaga 24 Jam"
         ),
         Personnel(
-            name = "DAVID HARIANTO",
+            name = "DAVID HARIYANTO, S.I.P",
             nip = "199303302025211135",
             role = ROLE_OPERATOR,
             unit = "Pusdalops BPBD Kab. Mukomuko",
@@ -194,6 +194,120 @@ object OfficialAsnBpbdPersonnel {
         }
 
     val ALL_OFFICIAL_PERSONNEL = LEADERSHIP + OPERATORS + STAF_LOGISTIK_TRC
+
+    /**
+     * Normalizes an officer name/NIP string for fuzzy lookup (e.g. "HITATUN" -> "HITATUN ARAZAK",
+     * "RURI IRWANDI, ST.MT" -> "RURI IRWANDI, ST, MT", "AINUN MARDIATI.S.Pd.SD" -> "AINUN MARDIATI CANIAGO, S.Pd").
+     */
+    private fun normalizeAlphaNum(value: String): String {
+        return value.uppercase().replace(Regex("[^A-Z0-9]"), "")
+    }
+
+    /**
+     * Extracts clean name and optional embedded NIP from formatted strings like:
+     * "HITATUN ARAZAK (NIP: 197401282006041006)" or "HITATUN ARAZAK / 197401282006041006"
+     */
+    fun extractCleanNameAndNip(rawText: String): Pair<String, String> {
+        val trimmed = rawText.trim()
+        if (trimmed.isEmpty()) return "" to ""
+        val nipInParens = Regex("""\((?:NIP|Reg\s*TRC|ID/NIP)[.:\s]*([A-Za-z0-9\-_]+)\)""", RegexOption.IGNORE_CASE)
+            .find(trimmed)
+        if (nipInParens != null) {
+            val extractedNip = nipInParens.groupValues[1].trim()
+            val cleanName = trimmed.removeRange(nipInParens.range).trim().trimEnd('-', '•', '/')
+            return cleanName to extractedNip
+        }
+        if (trimmed.contains(" / ")) {
+            val parts = trimmed.split(" / ", limit = 2)
+            val left = parts[0].trim()
+            val right = parts[1].trim()
+            if (right.any { it.isDigit() }) {
+                return left to right
+            }
+        }
+        val eighteenDigits = Regex("""\b(\d{18})\b""").find(trimmed)
+        if (eighteenDigits != null && trimmed.length > 18) {
+            val extractedNip = eighteenDigits.groupValues[1]
+            val cleanName = trimmed
+                .replace(extractedNip, "")
+                .replace(Regex("""\(\s*(?:NIP|ID)?[.:\s]*\)""", RegexOption.IGNORE_CASE), "")
+                .trim()
+                .trimEnd('-', '•', '/', ',')
+                .trim()
+            return cleanName to extractedNip
+        }
+        return trimmed to ""
+    }
+
+    /**
+     * Finds an official ASN/BPBD personnel record by NIP or Name (exact or prefix/base-name match).
+     */
+    fun findByNipOrName(query: String): Personnel? {
+        val raw = query.trim()
+        if (raw.isBlank() || raw == "-") return null
+        val (cleanName, embeddedNip) = extractCleanNameAndNip(raw)
+        val candidates = listOf(embeddedNip, raw, cleanName).filter { it.isNotBlank() && it != "-" }
+
+        // 1. Exact NIP match
+        for (c in candidates) {
+            val byNip = ALL_OFFICIAL_PERSONNEL.firstOrNull { it.nip.equals(c, ignoreCase = true) }
+            if (byNip != null) return byNip
+        }
+
+        // 2. Exact full name match
+        for (c in candidates) {
+            val byExactName = ALL_OFFICIAL_PERSONNEL.firstOrNull { it.name.equals(c, ignoreCase = true) }
+            if (byExactName != null) return byExactName
+        }
+
+        // 3. Normalized alphanumeric or base-name match (without degree suffix)
+        for (c in candidates) {
+            val normQuery = normalizeAlphaNum(c)
+            val baseQuery = normalizeAlphaNum(c.substringBefore(","))
+            if (normQuery.length < 3) continue
+            val match = ALL_OFFICIAL_PERSONNEL.firstOrNull { p ->
+                val normTarget = normalizeAlphaNum(p.name)
+                val baseTarget = normalizeAlphaNum(p.name.substringBefore(","))
+                normTarget == normQuery ||
+                    (baseQuery.length >= 4 && baseTarget == baseQuery) ||
+                    (baseQuery.length >= 5 && (normTarget.startsWith(baseQuery) || baseTarget.startsWith(baseQuery)))
+            }
+            if (match != null) return match
+        }
+        return null
+    }
+
+    /**
+     * Resolves any raw name & NIP combination against the official BPBD roster.
+     * Guarantees both canonical `name` and `nip` are returned in sync.
+     */
+    fun resolveCanonicalPersonnel(
+        rawName: String,
+        rawNip: String = "",
+        defaultRole: String = ROLE_OPERATOR
+    ): Personnel {
+        val (extractedName, extractedNip) = extractCleanNameAndNip(rawName)
+        val effectiveNip = rawNip.trim().takeIf { it.isNotBlank() && it != "-" } ?: extractedNip
+        val effectiveName = extractedName.ifBlank { rawName.trim() }
+
+        val byNip = if (effectiveNip.isNotBlank()) findByNipOrName(effectiveNip) else null
+        if (byNip != null) return byNip
+
+        val byName = if (effectiveName.isNotBlank()) findByNipOrName(effectiveName) else null
+        if (byName != null) return byName
+
+        // Fallback if custom officer not in default 34 ASN list
+        val fallbackDefault = LEADERSHIP.first { it.role == ROLE_MANAJER } // HITATUN ARAZAK (197401282006041006)
+        val finalName = effectiveName.ifBlank { fallbackDefault.name }
+        val finalNip = effectiveNip.ifBlank {
+            if (finalName.contains("HITATUN", ignoreCase = true)) fallbackDefault.nip else "-"
+        }
+        return Personnel(
+            name = finalName,
+            nip = finalNip,
+            role = defaultRole
+        )
+    }
 
     fun toOfficerProfiles(): List<OfficerProfile> {
         return ALL_OFFICIAL_PERSONNEL.map {
@@ -232,9 +346,9 @@ object OfficialAsnBpbdPersonnel {
 /**
  * Seeding 34 data ASN BPBD Kabupaten Mukomuko ke dalam tabel `personnel` dan `officer_credentials`.
  * - Mengecek keberadaan NIP terlebih dahulu di database Room.
- * - Jika NIP belum terdaftar, menyimpan entitas baru dengan Role default 'Staf Logistik/TRC'
+ * - Menyimpan entitas sesuai jabatan resminya di `OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL`
  *   dan PIN default 6 digit terakhir NIP.
- * - Jika NIP sudah terdaftar, dilewati (skip) agar tidak terjadi duplikasi atau menimpa PIN yang sudah diubah.
+ * - Jika NIP sudah terdaftar, menyinkronkan nama lengkap resmi tanpa menimpa PIN yang sudah diubah.
  */
 fun seedDataAsnMukomuko2026(context: Context) {
     val appContext = context.applicationContext
@@ -243,9 +357,9 @@ fun seedDataAsnMukomuko2026(context: Context) {
         val personnelDao = db.personnelDao()
         val credentialDao = db.credentialDao()
 
-        for ((rawName, rawNip) in OfficialAsnBpbdPersonnel.ASN_MUKOMUKO_2026_LIST) {
-            val name = rawName.trim()
-            val nip = rawNip.trim()
+        for (official in OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL) {
+            val name = official.name.trim()
+            val nip = official.nip.trim()
             if (name.isEmpty() || nip.isEmpty()) continue
 
             // 1. Cek dan masukkan ke tabel personnel jika NIP belum terdaftar
@@ -255,32 +369,17 @@ fun seedDataAsnMukomuko2026(context: Context) {
                     Personnel(
                         name = name,
                         nip = nip,
-                        role = OfficialAsnBpbdPersonnel.ROLE_STAF_LOGISTIK_TRC,
-                        unit = "BPBD Kab. Mukomuko",
-                        shift = "Shift Siaga 24 Jam"
+                        role = official.role,
+                        unit = official.unit,
+                        shift = official.shift,
+                        phone = official.phone
                     )
                 )
             }
 
-            // 2. Cek dan masukkan ke tabel officer_credentials jika NIP belum terdaftar
-            val existingCredential = credentialDao.getCredentialByNip(nip)
-            if (existingCredential == null) {
-                val defaultPin = nip.takeLast(6)
-                val salt = OfficerCredentialEntity.generateCryptographicSalt()
-                val newCredential = OfficerCredentialEntity(
-                    nip = nip,
-                    fullName = name,
-                    role = existingPersonnel?.role ?: OfficialAsnBpbdPersonnel.ROLE_STAF_LOGISTIK_TRC,
-                    unit = existingPersonnel?.unit ?: "BPBD Kab. Mukomuko",
-                    shift = existingPersonnel?.shift ?: "Shift Siaga 24 Jam",
-                    phone = existingPersonnel?.phone ?: "",
-                    pinHash = OfficerCredentialEntity.hashWithSalt(defaultPin, salt),
-                    salt = salt,
-                    isCustomPinSet = false,
-                    initialSecurePin = defaultPin
-                )
-                credentialDao.insertCredential(newCredential)
-            }
+            // KEAMANAN: Jangan pernah melakukan auto-seed PIN default ke tabel lokal `officer_credentials`!
+            // Seluruh kredensial & PIN petugas ASN dikelola dan diverifikasi wajib di Cloud Firestore
+            // (`officer_credentials/{nip}`) agar tidak pernah kembali ke PIN default saat update / install ulang.
         }
     }
 }

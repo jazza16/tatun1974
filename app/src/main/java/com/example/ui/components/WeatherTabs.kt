@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocationCity
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Security
@@ -73,6 +74,7 @@ fun WeatherTabs(
         TabItem("Statistik Bencana", Icons.Default.BarChart),
         TabItem("Prakiraan Cuaca", Icons.Default.CalendarMonth),
         TabItem("Peringatan & Gempa WRS", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
+        TabItem("Monitoring Karhutla", Icons.Default.LocalFireDepartment),
         TabItem("Peta & SOP Evakuasi", Icons.Default.Map),
         TabItem("inaRISK BNPB", Icons.Default.Security),
         TabItem("Cuaca Historis", Icons.Default.History),
@@ -185,6 +187,7 @@ fun WeatherNavigationRail(
         TabItem("Statistik", Icons.Default.BarChart),
         TabItem("Prakiraan", Icons.Default.CalendarMonth),
         TabItem("Peringatan", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
+        TabItem("Karhutla", Icons.Default.LocalFireDepartment),
         TabItem("Peta & SOP", Icons.Default.Map),
         TabItem("inaRISK", Icons.Default.Security),
         TabItem("Historis", Icons.Default.History),

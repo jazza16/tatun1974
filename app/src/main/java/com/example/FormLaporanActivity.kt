@@ -48,17 +48,17 @@ class FormLaporanActivity : AppCompatActivity() {
         btnSebelumnya = findViewById(R.id.btnSebelumnya)
         btnSelanjutnya = findViewById(R.id.btnSelanjutnya)
 
-        // Sesi Petugas Pengisi Form
-        val officerAuthManager = com.example.data.local.OfficerAuthManager(this)
+        // Sesi Petugas Pengisi Form (Sinkron Nama & NIP dari Daftar Kontak Personil)
         val sessionManager = com.example.util.SessionManager(this)
-        val namaPetugas = officerAuthManager.getOfficerName().ifBlank {
-            sessionManager.getNamaPetugas().ifBlank { "HITATUN ARAZAK" }
-        }
-        toolbar.subtitle = "Diisi oleh: $namaPetugas"
+        val verifiedUser = sessionManager.authenticateToken()
+        val namaPetugas = verifiedUser.name
+        val nipPetugas = verifiedUser.nip
+        toolbar.subtitle = "Diisi oleh: $namaPetugas (NIP. $nipPetugas)"
 
         val today = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
         sharedViewModel.laporanSementara = sharedViewModel.laporanSementara.copy(
             petugasJaga = namaPetugas,
+            stationId = verifiedUser.stationId,
             tanggalLaporanDibuat = sharedViewModel.laporanSementara.tanggalLaporanDibuat.ifBlank { today }
         )
 
@@ -108,14 +108,19 @@ class FormLaporanActivity : AppCompatActivity() {
         btnSelanjutnya.isEnabled = false
         btnSelanjutnya.text = "MENYIMPAN..."
 
-        // Kita simpan data laporan dan log yang sedang diinput ke dalam variabel lokal dulu
-        // agar bisa dilempar ke fungsi PDF nanti
-        val dataLaporan = sharedViewModel.laporanSementara
-        val dataLog = sharedViewModel.listLogSementara.toList()
+        val verifiedUser = com.example.util.SessionManager(this).authenticateToken()
+        val dataLaporan = sharedViewModel.laporanSementara.copy(
+            petugasJaga = verifiedUser.name,
+            stationId = verifiedUser.stationId
+        )
+        val dataLog = sharedViewModel.listLogSementara.map {
+            it.copy(operatorName = verifiedUser.name)
+        }
         val dataLogistik = sharedViewModel.listLogistikSementara.toList()
 
         sharedViewModel.simpanKeDatabase(
             dao = db.laporanHarianDao(),
+            verifiedUser = verifiedUser,
             onSuccess = {
                 runOnUiThread {
                     Toast.makeText(this, "Laporan Berhasil Disimpan! Membuka menu cetak...", Toast.LENGTH_LONG).show()

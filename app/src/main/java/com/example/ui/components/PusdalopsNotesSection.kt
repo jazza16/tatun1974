@@ -762,12 +762,12 @@ private fun NoteEditorView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .testTag("note_editor_view")
     ) {
         // 1. Top Editor Action Bar
         Surface(
-            color = Color.White,
+            color = MaterialTheme.colorScheme.surface,
             shadowElevation = 2.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -787,7 +787,7 @@ private fun NoteEditorView(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Kembali ke Daftar",
-                                tint = Color(0xFF0F172A)
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Spacer(modifier = Modifier.width(6.dp))
@@ -798,12 +798,12 @@ private fun NoteEditorView(
                             text = if (isWideScreen) "Editor Catatan Lapangan" else "Detail Catatan",
                             fontSize = 13.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Oleh: ${note.authorName} (${note.authorRole})",
                             fontSize = 11.sp,
-                            color = Color(0xFF64748B)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -866,6 +866,8 @@ private fun NoteEditorView(
                 placeholder = { Text("Judul Catatan Operasional...", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
                 singleLine = true,
                 colors = TextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     focusedIndicatorColor = Color(0xFF64748B),
@@ -1077,8 +1079,10 @@ private fun NoteEditorView(
                 },
                 minLines = 14,
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFFF8FAFC),
-                    unfocusedContainerColor = Color(0xFFF8FAFC),
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                     focusedIndicatorColor = OrangePrimary,
                     unfocusedIndicatorColor = Color(0xFFE2E8F0)
                 ),
@@ -1098,6 +1102,8 @@ private fun NoteEditorView(
                 placeholder = { Text("Label / Tag (misal: Logistik, Pesisir, Tenda, Sungai)", fontSize = 11.5.sp) },
                 singleLine = true,
                 colors = TextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     focusedIndicatorColor = Color(0xFFCBD5E1),

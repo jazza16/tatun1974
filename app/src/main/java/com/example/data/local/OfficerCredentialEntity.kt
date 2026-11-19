@@ -48,41 +48,34 @@ data class OfficerCredentialEntity(
         get() = isCustomPinSet
 
     /**
-     * Helper to verify if an input PIN matches this credential.
+     * Helper to verify if an input PIN matches this credential's cryptographic hash.
      * - Strictly rejects generic default PINs ('117', 'BPBD117', 'TRC2026', etc.).
-     * - Before PIN change (isCustomPinSet == false), accepts the last 6 digits of NIP as the valid initial PIN.
-     * - After PIN change (isCustomPinSet == true), strictly blocks the 6-digit NIP and ONLY accepts the custom pinHash.
+     * - NEVER blindly accepts unverified local/default PINs; ALWAYS validates against
+     *   the salted cryptographic `pinHash` + `salt` fetched from Cloud Firestore.
      */
     fun verifyPin(inputPin: String): Boolean {
         val trimmed = inputPin.trim()
         if (trimmed.isEmpty()) return false
 
-        // 1. Reject forbidden generic default PINs unconditionally (does NOT block 6-digit NIP)
+        // 1. Reject forbidden generic default PINs unconditionally
         val forbiddenDefaults = listOf("117", "BPBD117", "ADMIN117", "TRC2026", "PUSDALOPS117", "0000", "1234")
         if (forbiddenDefaults.any { it.equals(trimmed, ignoreCase = true) }) {
             return false
         }
 
-        val sixDigitNip = generateInitialPinForNip(nip)
-        val rawLastSixNip = nip.trim().takeLast(6)
-        val isMatchingInitialNip = trimmed.equals(sixDigitNip, ignoreCase = true) ||
-            (rawLastSixNip.length == 6 && trimmed.equals(rawLastSixNip, ignoreCase = true)) ||
-            (initialSecurePin.isNotBlank() && trimmed.equals(initialSecurePin, ignoreCase = true))
-
         // 2. If officer has ALREADY changed their PIN (isCustomPinSet == true),
         // 6-digit NIP is strictly forbidden for login
         if (isCustomPinSet) {
+            val sixDigitNip = generateInitialPinForNip(nip)
+            val rawLastSixNip = nip.trim().takeLast(6)
+            val isMatchingInitialNip = trimmed.equals(sixDigitNip, ignoreCase = true) ||
+                (rawLastSixNip.length == 6 && trimmed.equals(rawLastSixNip, ignoreCase = true))
             if (isMatchingInitialNip) {
                 return false
             }
-            return verifyHash(trimmed, salt, pinHash)
         }
 
-        // 3. Before officer changes PIN (isCustomPinSet == false), accept 6-digit NIP as valid initial PIN
-        if (isMatchingInitialNip) {
-            return true
-        }
-
+        // 3. Strictly verify against cryptographic pinHash & salt from Cloud Firestore
         return verifyHash(trimmed, salt, pinHash)
     }
 
@@ -103,6 +96,14 @@ data class OfficerCredentialEntity(
             return MessageDigest.isEqual(
                 a.lowercase().toByteArray(Charsets.UTF_8),
                 b.lowercase().toByteArray(Charsets.UTF_8)
+            )
+        }
+
+        fun constantTimeEqualsPlain(a: String, b: String): Boolean {
+            if (a.isEmpty() || b.isEmpty()) return false
+            return MessageDigest.isEqual(
+                a.toByteArray(Charsets.UTF_8),
+                b.toByteArray(Charsets.UTF_8)
             )
         }
 
@@ -151,9 +152,8 @@ data class OfficerCredentialEntity(
         }
 
         /**
-         * Generates an initial secure deterministic PIN for an official officer based on their NIP.
-         * For 18-digit ASN NIP: uses the last 6 digits (e.g. NIP 199807202025061002 -> 061002).
-         * For TRC badge IDs: extracts digits or fallback 6-digit hash.
+         * Generates an initial deterministic 6-digit NIP reference string (used only to block
+         * reusing last 6 digits of NIP as a new custom PIN, NEVER to auto-seed local login defaults).
          */
         fun generateInitialPinForNip(nip: String): String {
             val digitsOnly = nip.filter { it.isDigit() }
@@ -169,7 +169,7 @@ data class OfficerCredentialEntity(
         }
 
         /**
-         * Creates a new credential entry for an official officer.
+         * Creates a credential entry WITHOUT storing plaintext PINs.
          */
         fun createDefault(
             nip: String,
@@ -181,9 +181,9 @@ data class OfficerCredentialEntity(
             customPin: String? = null
         ): OfficerCredentialEntity {
             val salt = generateCryptographicSalt()
-            val initialPin = generateInitialPinForNip(nip)
-            val effectivePin = customPin?.trim()?.ifBlank { null } ?: initialPin
-            val isCustom = customPin != null && customPin.isNotBlank()
+            val trimmedCustom = customPin?.trim().orEmpty()
+            val isCustom = trimmedCustom.isNotBlank()
+            val pinHash = if (isCustom) hashWithSalt(trimmedCustom, salt) else ""
 
             return OfficerCredentialEntity(
                 nip = nip.trim(),
@@ -192,10 +192,10 @@ data class OfficerCredentialEntity(
                 unit = unit.trim(),
                 shift = shift.trim(),
                 phone = phone.trim(),
-                pinHash = hashWithSalt(effectivePin, salt),
-                salt = salt,
+                pinHash = pinHash,
+                salt = if (isCustom) salt else "",
                 isCustomPinSet = isCustom,
-                initialSecurePin = if (isCustom) "" else initialPin,
+                initialSecurePin = "",
                 lastLoginAt = 0L,
                 lastLoginDevice = "",
                 isSyncedWithCloud = false,

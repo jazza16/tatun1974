@@ -983,7 +983,7 @@ private fun NewFeaturesExplanationSection(
                     FeatureDetailItem(
                         emoji = "📞",
                         title = "Pusat Bantuan & Kontak Penting 117",
-                        desc = "Akses terpadu satu ketukan ke Call Center Bebas Pulsa 117 BPBD, Posko Pusdalops, IGD Rumah Sakit, dan jajaran Polsek se-Mukomuko.",
+                        desc = "Akses terpadu satu ketukan ke Call Center Bebas Pulsa 117 BPBD, Posko Pusdalops, IGD Rumah Sakit, dan Polres Mukomuko.",
                         isDark = isDark
                     )
                 }
@@ -1034,18 +1034,55 @@ private fun VersionChangelogSection(
     updateState: AppUpdateState,
     isDark: Boolean
 ) {
-    Column {
-        Text(
-            text = "Riwayat Catatan Rilis Versi",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+    val accordionLogs = remember(updateState.changelogs) {
+        val baseList = com.example.model.RELEASE_HISTORY_ACCORDION_CHANGELOGS
+        val customLogs = updateState.changelogs.filter { custom ->
+            baseList.none { it.version == custom.version }
+        }
+        customLogs + baseList
+    }
+
+    var expandedVersion by remember {
+        mutableStateOf<String?>(accordionLogs.firstOrNull { it.isLatest }?.version ?: "1.0.5")
+    }
+
+    Column(modifier = Modifier.testTag("release_notes_accordion_section")) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Riwayat Catatan Rilis Versi",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Surface(
+                color = OrangePrimary.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Text(
+                    text = "${accordionLogs.size} Rilis",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OrangePrimary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        updateState.changelogs.forEach { log ->
-            CollapsibleVersionCard(log = log, isDark = isDark)
+        accordionLogs.forEach { log ->
+            CollapsibleVersionCard(
+                log = log,
+                isExpanded = expandedVersion == log.version,
+                onToggleExpand = {
+                    expandedVersion = if (expandedVersion == log.version) null else log.version
+                },
+                isDark = isDark
+            )
         }
     }
 }
@@ -1053,26 +1090,35 @@ private fun VersionChangelogSection(
 @Composable
 private fun CollapsibleVersionCard(
     log: com.example.model.VersionChangelog,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
     isDark: Boolean
 ) {
-    var isExpanded by remember { mutableStateOf(log.isLatest) }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clip(RoundedCornerShape(14.dp))
-            .clickable { isExpanded = !isExpanded },
+            .clickable { onToggleExpand() }
+            .testTag("accordion_version_${log.version}"),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (isExpanded) {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
         ),
         border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            width = if (log.isLatest || isExpanded) 1.2.dp else 1.dp,
+            color = if (log.isLatest || isExpanded) {
+                OrangePrimary.copy(alpha = 0.55f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            }
         )
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1084,7 +1130,7 @@ private fun CollapsibleVersionCard(
                 ) {
                     Text(
                         text = "Versi ${log.version}",
-                        fontSize = 13.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -1096,10 +1142,10 @@ private fun CollapsibleVersionCard(
                         ) {
                             Text(
                                 text = "TERBARU",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     } else if (log.isCurrent) {
@@ -1110,10 +1156,10 @@ private fun CollapsibleVersionCard(
                         ) {
                             Text(
                                 text = "TERPASANG",
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     }
@@ -1123,14 +1169,14 @@ private fun CollapsibleVersionCard(
                     Text(
                         text = log.releaseDate,
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (isExpanded) "Persempit" else "Buka",
+                        contentDescription = if (isExpanded) "Tutup rincian" else "Buka rincian",
                         tint = OrangePrimary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -1138,32 +1184,64 @@ private fun CollapsibleVersionCard(
             if (!isExpanded) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "${log.highlights.size} catatan pembaruan • Ketuk untuk rincian",
+                    text = "${log.highlights.size} catatan pembaruan • Ketuk untuk membuka",
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             AnimatedVisibility(visible = isExpanded) {
-                Column(modifier = Modifier.padding(top = 8.dp)) {
+                Column(modifier = Modifier.padding(top = 10.dp)) {
+                    androidx.compose.material3.HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                     log.highlights.forEach { item ->
+                        val colonIndex = item.indexOf(':')
                         Row(
-                            modifier = Modifier.padding(vertical = 2.dp),
+                            modifier = Modifier.padding(vertical = 3.dp),
                             verticalAlignment = Alignment.Top
                         ) {
                             Text(
                                 text = "• ",
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = OrangePrimary
                             )
-                            Text(
-                                text = item,
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                modifier = Modifier.weight(1f)
-                            )
+                            if (colonIndex > 0 && colonIndex < 48) {
+                                val labelPart = item.substring(0, colonIndex + 1)
+                                val descPart = item.substring(colonIndex + 1)
+                                Text(
+                                    text = androidx.compose.ui.text.buildAnnotatedString {
+                                        pushStyle(
+                                            androidx.compose.ui.text.SpanStyle(
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        )
+                                        append(labelPart)
+                                        pop()
+                                        pushStyle(
+                                            androidx.compose.ui.text.SpanStyle(
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        )
+                                        append(descPart)
+                                        pop()
+                                    },
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 16.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            } else {
+                                Text(
+                                    text = item,
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 16.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }

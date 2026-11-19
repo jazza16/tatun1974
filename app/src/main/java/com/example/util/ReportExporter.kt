@@ -23,9 +23,11 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.data.local.AppDatabase
 import com.example.data.local.OfficerAuthManager
+import com.example.data.repository.DocumentSettingsRepository
 import com.example.model.AirQuality
 import com.example.model.CitizenDisasterReport
 import com.example.model.CurrentWeather
+import com.example.model.DocumentSettings
 import com.example.model.MarineWeather
 import com.example.model.MukomukoDistricts
 import com.example.model.WeatherFullReport
@@ -56,9 +58,6 @@ object ReportExporter {
     private const val A4_PAGE_WIDTH = 595
     private const val A4_PAGE_HEIGHT = 842
     private const val STANDARD_MARGIN = 36f
-
-    private const val FOOTER_ATRIBUSI_TEXT =
-        "Dicetak melalui Aplikasi SIPAGAR KITA - Pusdalops PB BPBD Kabupaten Mukomuko"
 
     @Volatile
     private var cachedMukomukoLogo: Bitmap? = null
@@ -250,35 +249,39 @@ object ReportExporter {
         canvas: Canvas,
         pageWidth: Int,
         margin: Float = 30f,
-        pageNumber: Int = 1
+        pageNumber: Int = 1,
+        documentSettings: DocumentSettings? = null
     ): Float {
         // Kop surat hanya dicetak pada Halaman 1; halaman 2 dst langsung dimulai dari konten.
         if (pageNumber > 1) {
             return margin
         }
+        val settings = (documentSettings ?: DocumentSettingsRepository.getCachedOrDefaultSettings(context)).clamped()
         val targetLogoHeight = 44f
         val logoTop = 50f
         val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
         // 1. Logo KIRI: Kabupaten Mukomuko (Perisai proporsional, transparan tanpa background)
+        var leftLogoWidth = 42f
         try {
             val leftLogo = getCleanTransparentLogo(context, isMukomukoShield = true)
             if (leftLogo != null && leftLogo.height > 0) {
                 val aspect = leftLogo.width.toFloat() / leftLogo.height.toFloat()
-                val leftWidth = targetLogoHeight * aspect
-                val dstLeft = RectF(margin, logoTop, margin + leftWidth, logoTop + targetLogoHeight)
+                leftLogoWidth = targetLogoHeight * aspect
+                val dstLeft = RectF(margin, logoTop, margin + leftLogoWidth, logoTop + targetLogoHeight)
                 canvas.drawBitmap(leftLogo, null, dstLeft, bitmapPaint)
             }
         } catch (_: Exception) {}
 
         // 2. Logo KANAN: BPBD Kabupaten Mukomuko (Lingkaran proporsional, sejajar & transparan tanpa background)
+        var rightLogoWidth = 44f
         try {
             val rightLogo = getCleanTransparentLogo(context, isMukomukoShield = false)
             if (rightLogo != null && rightLogo.height > 0) {
                 val aspect = rightLogo.width.toFloat() / rightLogo.height.toFloat()
-                val rightWidth = targetLogoHeight * aspect
+                rightLogoWidth = targetLogoHeight * aspect
                 val dstRight = RectF(
-                    pageWidth - margin - rightWidth,
+                    pageWidth - margin - rightLogoWidth,
                     logoTop,
                     pageWidth - margin,
                     logoTop + targetLogoHeight
@@ -287,7 +290,7 @@ object ReportExporter {
             }
         } catch (_: Exception) {}
 
-        // 3. Teks Instansi di Tengah (sejajar secara vertikal dengan titik tengah kedua logo)
+        // 3. Teks Instansi di Tengah (Data-Driven dari DocumentSettings + Auto-Shrink agar tidak menabrak logo)
         val headerTitlePaint = Paint().apply {
             color = Color.rgb(15, 23, 42)
             textSize = 11.5f
@@ -309,24 +312,53 @@ object ReportExporter {
             textAlign = Paint.Align.CENTER
         }
 
+        val maxLogoReserve = max(leftLogoWidth, rightLogoWidth) + 10f
+        val centerTextMaxW = (pageWidth - (margin + maxLogoReserve) * 2f).coerceAtLeast(220f)
+
         var y = 58f
         val centerX = pageWidth / 2f
-        canvas.drawText("PEMERINTAH KABUPATEN MUKOMUKO", centerX, y, headerTitlePaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = settings.kopHeaderLine1,
+            x = centerX,
+            y = y,
+            maxWidth = centerTextMaxW,
+            basePaint = headerTitlePaint,
+            initialFontSize = 11.5f,
+            minFontSize = settings.minFontSize
+        )
         y += 13f
-        canvas.drawText("BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)", centerX, y, headerTitlePaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = settings.kopHeaderLine2,
+            x = centerX,
+            y = y,
+            maxWidth = centerTextMaxW,
+            basePaint = headerTitlePaint,
+            initialFontSize = 11.5f,
+            minFontSize = settings.minFontSize
+        )
         y += 12f
-        canvas.drawText(
-            "PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)",
-            centerX,
-            y,
-            headerSubtitlePaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = settings.kopHeaderLine3,
+            x = centerX,
+            y = y,
+            maxWidth = centerTextMaxW,
+            basePaint = headerSubtitlePaint,
+            initialFontSize = 9.0f,
+            minFontSize = settings.minFontSize
         )
         y += 11f
-        canvas.drawText(
-            "Jl. Danau Nibung, Kompleks Perkantoran Pemkab Mukomuko • Call Center Darurat 117 • Sistem SIPAGAR KITA",
-            centerX,
-            y,
-            headerAddressPaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = settings.kopAddressLine,
+            x = centerX,
+            y = y,
+            maxWidth = pageWidth - (margin * 2f),
+            basePaint = headerAddressPaint,
+            initialFontSize = 7.4f,
+            minFontSize = settings.minFontSize
         )
 
         // 4. Garis Penutup Kop Surat Ganda Resmi
@@ -349,14 +381,16 @@ object ReportExporter {
     }
 
     /**
-     * Menggambar atribusi footer resmi di bagian paling bawah setiap halaman PDF.
+     * Menggambar atribusi footer resmi di bagian paling bawah setiap halaman PDF (Data-Driven).
      */
     fun drawFooterAtribusiResmi(
         canvas: Canvas,
         pageWidth: Int,
         pageHeight: Int,
-        margin: Float = 30f
+        margin: Float = 30f,
+        documentSettings: DocumentSettings? = null
     ) {
+        val settings = (documentSettings ?: DocumentSettingsRepository.getCachedOrDefaultSettings(null)).clamped()
         val footerLineY = pageHeight - 28f
         val footerTextY = pageHeight - 16f
 
@@ -373,14 +407,22 @@ object ReportExporter {
         }
 
         canvas.drawLine(margin, footerLineY, pageWidth - margin, footerLineY, linePaint)
-        canvas.drawText(FOOTER_ATRIBUSI_TEXT, pageWidth / 2f, footerTextY, footerPaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = settings.footerText,
+            x = pageWidth / 2f,
+            y = footerTextY,
+            maxWidth = pageWidth - (margin * 2f),
+            basePaint = footerPaint,
+            initialFontSize = 7.2f,
+            minFontSize = settings.minFontSize
+        )
     }
 
     /**
-     * Menggambar blok tanda tangan Tata Naskah Dinas dengan formasi Piramida Terbalik (3 Kolom):
-     * - Baris 1 Kolom 1 (Kiri)  : Koord. Administrasi Pusdalops-PB (Rata Tengah)
-     * - Baris 1 Kolom 3 (Kanan) : Manajer Pusdalops PB (Rata Tengah)
-     * - Baris 2 (Merge 3 Kolom) : Pengawas di bawah tengah (Rata Tengah)
+     * Menggambar blok tanda tangan Tata Naskah Dinas dengan formasi Piramida Terbalik (3 Kolom)
+     * secara 100% Data-Driven (mengambil nama, gelar, jabatan, NIP dari `DocumentSettings` / API)
+     * disertai Auto-Shrink Text agar teks nama/gelar panjang mengecil otomatis di dalam batas kolom.
      *
      * @return Posisi Y akhir setelah blok tanda tangan.
      */
@@ -388,63 +430,101 @@ object ReportExporter {
         canvas: Canvas,
         pageWidth: Int,
         startY: Float,
-        margin: Float = 36f
+        margin: Float = 36f,
+        context: Context? = null,
+        documentSettings: DocumentSettings? = null
     ): Float {
+        val settings = (documentSettings ?: DocumentSettingsRepository.getCachedOrDefaultSettings(context)).clamped()
+        val signatories = DocumentSettingsRepository.resolveSignatories(context, settings)
+        val koordSig = signatories[DocumentSettings.SLOT_KOORD_ADMIN]
+        val manajerSig = signatories[DocumentSettings.SLOT_MANAJER_PUSDALOPS]
+        val pengawasSig = signatories[DocumentSettings.SLOT_PENGAWAS]
+
         val usableWidth = pageWidth - (margin * 2f)
         val colWidth = usableWidth / 3f
+        val sideBoxMaxW = (colWidth - 8f).coerceAtLeast(60f)
+        val centerBoxMaxW = (usableWidth * 0.56f).coerceAtLeast(sideBoxMaxW)
 
         // Titik tengah masing-masing kolom (3 kolom: Kiri, Tengah, Kanan)
         val leftColCenterX = margin + (colWidth * 0.5f)
         val centerColCenterX = pageWidth / 2f
         val rightColCenterX = pageWidth - margin - (colWidth * 0.5f)
 
+        val roleFontSize = (settings.fontSize - 0.5f).coerceAtLeast(settings.minFontSize)
+        val nameFontSize = settings.fontSize
+        val nipFontSize = (settings.fontSize - 0.8f).coerceAtLeast(settings.minFontSize)
+
         val rolePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(30, 41, 59)
-            textSize = 8.5f
+            textSize = roleFontSize
             textAlign = Paint.Align.CENTER
         }
         val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(15, 23, 42)
-            textSize = 8.8f
+            textSize = nameFontSize
             isFakeBoldText = true
             isUnderlineText = true
             textAlign = Paint.Align.CENTER
         }
         val nipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(51, 65, 85)
-            textSize = 8f
+            textSize = nipFontSize
             textAlign = Paint.Align.CENTER
         }
 
         // --- BARIS 1: Kiri (Koord. Administrasi) & Kanan (Manajer Pusdalops PB) ---
         var yRow1 = startY
-        canvas.drawText("Koord. Administrasi", leftColCenterX, yRow1, rolePaint)
-        canvas.drawText("Manajer Pusdalops PB", rightColCenterX, yRow1, rolePaint)
+        koordSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.roleLine1, leftColCenterX, yRow1, sideBoxMaxW, rolePaint, roleFontSize, settings.minFontSize)
+        }
+        manajerSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.roleLine1, rightColCenterX, yRow1, sideBoxMaxW, rolePaint, roleFontSize, settings.minFontSize)
+        }
 
         yRow1 += 11f
-        canvas.drawText("Pusdalops-PB", leftColCenterX, yRow1, rolePaint)
-        canvas.drawText("BPBD Mukomuko", rightColCenterX, yRow1, rolePaint)
+        koordSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.roleLine2, leftColCenterX, yRow1, sideBoxMaxW, rolePaint, roleFontSize, settings.minFontSize)
+        }
+        manajerSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.roleLine2, rightColCenterX, yRow1, sideBoxMaxW, rolePaint, roleFontSize, settings.minFontSize)
+        }
 
         // Ruang tanda tangan basah/stempel
         yRow1 += 38f
-        canvas.drawText("AAN FITRADINATA, SE", leftColCenterX, yRow1, namePaint)
-        canvas.drawText("HITATUN", rightColCenterX, yRow1, namePaint)
+        koordSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.formattedName, leftColCenterX, yRow1, sideBoxMaxW, namePaint, nameFontSize, settings.minFontSize, settings.maxLengthBeforeTruncate)
+        }
+        manajerSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.formattedName, rightColCenterX, yRow1, sideBoxMaxW, namePaint, nameFontSize, settings.minFontSize, settings.maxLengthBeforeTruncate)
+        }
 
         yRow1 += 11f
-        canvas.drawText("NIP. 197903122006041007", leftColCenterX, yRow1, nipPaint)
-        canvas.drawText("NIP. 197401282006041006", rightColCenterX, yRow1, nipPaint)
+        koordSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.nipLine, leftColCenterX, yRow1, sideBoxMaxW, nipPaint, nipFontSize, settings.minFontSize)
+        }
+        manajerSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.nipLine, rightColCenterX, yRow1, sideBoxMaxW, nipPaint, nipFontSize, settings.minFontSize)
+        }
 
         // --- BARIS 2 (Merge 3 Kolom - Bawah Tengah): Pengawas ---
         var yRow2 = yRow1 + 22f
-        canvas.drawText("Pengawas", centerColCenterX, yRow2, rolePaint)
+        pengawasSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.roleLine1, centerColCenterX, yRow2, centerBoxMaxW, rolePaint, roleFontSize, settings.minFontSize)
+        }
         yRow2 += 11f
-        canvas.drawText("Kepala Pelaksana BPBD Mukomuko", centerColCenterX, yRow2, rolePaint)
+        pengawasSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.roleLine2, centerColCenterX, yRow2, centerBoxMaxW, rolePaint, roleFontSize, settings.minFontSize)
+        }
 
         // Ruang tanda tangan Pengawas
         yRow2 += 38f
-        canvas.drawText("RURI IRWANDI, ST.MT", centerColCenterX, yRow2, namePaint)
+        pengawasSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.formattedName, centerColCenterX, yRow2, centerBoxMaxW, namePaint, nameFontSize, settings.minFontSize, settings.maxLengthBeforeTruncate)
+        }
         yRow2 += 11f
-        canvas.drawText("NIP. 197906072006041011", centerColCenterX, yRow2, nipPaint)
+        pengawasSig?.let {
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.nipLine, centerColCenterX, yRow2, centerBoxMaxW, nipPaint, nipFontSize, settings.minFontSize)
+        }
 
         return yRow2 + 8f
     }
@@ -585,13 +665,30 @@ object ReportExporter {
             val sdf = SimpleDateFormat("dd MMMM yyyy, HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
             val printDate = sdf.format(Date())
 
-            var y = drawKopSuratResmi(context, canvas, pageWidth, margin = 36f)
+            val settings = DocumentSettingsRepository.getCachedOrDefaultSettings(context).clamped()
+            var y = drawKopSuratResmi(context, canvas, pageWidth, margin = 36f, documentSettings = settings)
+            val resolvedOfficer = DocumentSettingsRepository.resolveOfficerIdentity(
+                context = context,
+                rawName = officerName,
+                rawNip = officerNip,
+                settings = settings
+            )
 
             // Document Title
             canvas.drawText("REKAPITULASI RESMI LAPORAN BENCANA WARGA TERVALIDASI", (pageWidth / 2).toFloat(), y, titlePaint)
             y += 14f
             textPaint.textAlign = Paint.Align.LEFT
-            canvas.drawText("Waktu Cetak: $printDate  |  Petugas Validasi: $officerName", 36f, y, textPaint)
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Waktu Cetak: $printDate  |  Petugas Validasi: ${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})",
+                x = 36f,
+                y = y,
+                maxWidth = (pageWidth - 72).toFloat(),
+                basePaint = textPaint,
+                initialFontSize = settings.bodyFontSize,
+                minFontSize = settings.minFontSize,
+                maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+            )
             y += 12f
 
             // Summary KPI Box
@@ -626,7 +723,7 @@ object ReportExporter {
             val maxRowBottomY = pageHeight - 52f
             reports.forEachIndexed { idx, rep ->
                 if (y > maxRowBottomY - 40f) {
-                    drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f)
+                    drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f, documentSettings = settings)
                     pdfDoc.finishPage(currentPage)
 
                     currentPageNumber += 1
@@ -635,7 +732,7 @@ object ReportExporter {
                     currentCanvas = currentPage.canvas
 
                     // Halaman 2+ langsung dimulai dari konten tabel tanpa Kop Surat
-                    y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = 36f, pageNumber = currentPageNumber)
+                    y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = 36f, pageNumber = currentPageNumber, documentSettings = settings)
                     currentCanvas.drawRect(36f, y, (pageWidth - 36).toFloat(), y + 18f, headerBoxPaint)
                     currentCanvas.drawText("No", 42f, y + 12f, boldPaint)
                     currentCanvas.drawText("ID Laporan", 68f, y + 12f, boldPaint)
@@ -653,7 +750,7 @@ object ReportExporter {
                         append(" (${rep.incidentLocation})")
                     }
                 }
-                val noteText = rep.additionalNotes.ifBlank { "-" }
+                val noteText = settings.truncateIfNeeded(rep.additionalNotes.ifBlank { "-" })
 
                 currentCanvas.drawText("${idx + 1}.", 42f, rowTopY + 8f, textPaint)
                 currentCanvas.drawText("#${rep.id.takeLast(7)}", 68f, rowTopY + 8f, boldPaint)
@@ -702,7 +799,7 @@ object ReportExporter {
             }
 
             // Tanpa blok tanda tangan pejabat (khusus Rekapitulasi Laporan Warga)
-            drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f)
+            drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f, documentSettings = settings)
 
             pdfDoc.finishPage(currentPage)
 
@@ -738,7 +835,9 @@ object ReportExporter {
      */
     fun exportToCsv(
         context: Context,
-        reports: List<CitizenDisasterReport>
+        reports: List<CitizenDisasterReport>,
+        officerName: String = "",
+        officerNip: String = ""
     ) {
         if (reports.isEmpty()) {
             Toast.makeText(context, "Tidak ada data laporan untuk diekspor ke CSV", Toast.LENGTH_SHORT).show()
@@ -746,10 +845,17 @@ object ReportExporter {
         }
 
         try {
+            val settings = DocumentSettingsRepository.getCachedOrDefaultSettings(context).clamped()
+            val resolvedOfficer = DocumentSettingsRepository.resolveOfficerIdentity(
+                context = context,
+                rawName = officerName,
+                rawNip = officerNip,
+                settings = settings
+            )
             val csvFile = File(getExportCacheDir(context), "Laporan_Bencana_Pusdalops_Mukomuko.csv")
             csvFile.bufferedWriter().use { writer ->
-                // CSV Header
-                writer.write("No,ID_Laporan,Jenis_Bencana,Waktu_Kejadian,Kecamatan,Desa,Detail_Lokasi,Latitude,Longitude,Akurasi_GPS_m,Korban_Meninggal,Korban_Luka,Korban_Hilang,Status,Catatan_Tindak_Lanjut_TRC,Nama_Pelapor,Nomor_Telepon\n")
+                // CSV Header (Dilengkapi Nama & NIP Petugas Validasi yang tersinkronisasi & Data-Driven)
+                writer.write("No,ID_Laporan,Jenis_Bencana,Waktu_Kejadian,Kecamatan,Desa,Detail_Lokasi,Latitude,Longitude,Akurasi_GPS_m,Korban_Meninggal,Korban_Luka,Korban_Hilang,Status,Catatan_Tindak_Lanjut_TRC,Nama_Pelapor,Nomor_Telepon,Petugas_Validasi,NIP_Petugas_Validasi\n")
 
                 // CSV Data Rows (sanitized against CSV formula injection & RFC-4180 quoted)
                 reports.forEachIndexed { idx, rep ->
@@ -770,7 +876,9 @@ object ReportExporter {
                         sanitizeCsvCell(rep.status),
                         sanitizeCsvCell(rep.additionalNotes),
                         sanitizeCsvCell(rep.reporterName),
-                        sanitizeCsvCell(rep.reporterPhone)
+                        sanitizeCsvCell(rep.reporterPhone),
+                        sanitizeCsvCell(resolvedOfficer.formattedName),
+                        sanitizeCsvCell(resolvedOfficer.nip)
                     ).joinToString(",")
                     writer.write(row + "\n")
                 }
@@ -859,7 +967,8 @@ object ReportExporter {
         }
 
         val margin = STANDARD_MARGIN
-        var y = drawKopSuratResmi(context, canvas, pageWidth, margin)
+        val settings = DocumentSettingsRepository.getCachedOrDefaultSettings(context).clamped()
+        var y = drawKopSuratResmi(context, canvas, pageWidth, margin, documentSettings = settings)
 
         // Judul Dokumen
         val docTitlePaint = Paint().apply {
@@ -873,12 +982,26 @@ object ReportExporter {
 
         val sdf = SimpleDateFormat("EEEE, dd MMMM yyyy - HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
         val currentTimeStr = sdf.format(Date())
+        val resolvedOfficer = DocumentSettingsRepository.resolveOfficerIdentity(
+            context = context,
+            settings = settings
+        )
         val metaPaint = Paint().apply {
             color = Color.rgb(71, 85, 105)
-            textSize = 8.5f
+            textSize = 8.0f
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("Waktu Penerbitan: $currentTimeStr | Mode Overlay Aktif: $activeLayerName", pageWidth / 2f, y, metaPaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Waktu Penerbitan: $currentTimeStr | Mode Overlay: $activeLayerName | Petugas: ${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})",
+            x = pageWidth / 2f,
+            y = y,
+            maxWidth = pageWidth - (margin * 2f),
+            basePaint = metaPaint,
+            initialFontSize = settings.bodyFontSize,
+            minFontSize = settings.minFontSize,
+            maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+        )
         y += 18f
 
         // Kotak Ringkasan Ekstrem Cuaca (Presisi dalam batas margin halaman A4)
@@ -1134,7 +1257,7 @@ object ReportExporter {
         )
 
         // Tanpa blok tanda tangan pejabat (khusus Peta Cuaca 15 Kecamatan)
-        drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin)
+        drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin, documentSettings = settings)
 
         pdfDoc.finishPage(page)
 
@@ -1330,7 +1453,8 @@ object ReportExporter {
         monthlyData: List<MonthlyDisasterSummary>,
         pieSlices: List<PieSliceData>,
         selectedYear: Int,
-        scopeLabel: String
+        scopeLabel: String,
+        documentSettings: DocumentSettings? = null
     ) {
         val currentMonthIndex = Calendar.getInstance().get(Calendar.MONTH)
         val activeMonthlyData = monthlyData
@@ -1341,8 +1465,12 @@ object ReportExporter {
         val lastMonthNameUpper = activeMonthlyData.last().monthFull.uppercase(Locale.getDefault())
         val lastMonthShort = activeMonthlyData.last().monthShort
 
-        val officerAuth = OfficerAuthManager(context)
-        val rawOfficerName = officerAuth.getOfficerName().ifBlank { "Petugas Operator Siaga Pusdalops-PB" }
+        val settings = (documentSettings ?: DocumentSettingsRepository.getCachedOrDefaultSettings(context)).clamped()
+        val resolvedOfficer = DocumentSettingsRepository.resolveOfficerIdentity(
+            context = context,
+            settings = settings
+        )
+        val rawOfficerName = "${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})"
 
         val pageWidth = A4_PAGE_WIDTH
         val pageHeight = A4_PAGE_HEIGHT
@@ -1383,7 +1511,7 @@ object ReportExporter {
         }
 
         // 1. Kop Surat Resmi Terstandarisasi (Kiri: Kab. Mukomuko, Kanan: BPBD)
-        var y = drawKopSuratResmi(context, canvas, pageWidth, margin)
+        var y = drawKopSuratResmi(context, canvas, pageWidth, margin, documentSettings = settings)
 
         // 2. Judul Dokumen & Metadata
         val docTitlePaint = Paint(titlePaint).apply {
@@ -1404,11 +1532,16 @@ object ReportExporter {
             textAlign = Paint.Align.CENTER
             color = Color.rgb(71, 85, 105)
         }
-        canvas.drawText(
-            "Cakupan Wilayah: $scopeLabel  |  Waktu Unduh: $printDateStr  |  Petugas: $rawOfficerName",
-            pageWidth / 2f,
-            y,
-            metaPaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Cakupan Wilayah: $scopeLabel  |  Waktu Unduh: $printDateStr  |  Petugas: $rawOfficerName",
+            x = pageWidth / 2f,
+            y = y,
+            maxWidth = pageWidth - (margin * 2f),
+            basePaint = metaPaint,
+            initialFontSize = 7.8f,
+            minFontSize = settings.minFontSize,
+            maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
         )
         y += 22f
 
@@ -1930,7 +2063,7 @@ object ReportExporter {
 
         y += noteBoxHeight + 8f
 
-        drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin)
+        drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin, documentSettings = settings)
     }
 
     /**
@@ -2080,7 +2213,8 @@ object ReportExporter {
         canvas: Canvas,
         pageWidth: Int,
         pageHeight: Int,
-        allDistrictsSummary: List<WeatherFullReport>
+        allDistrictsSummary: List<WeatherFullReport>,
+        documentSettings: DocumentSettings? = null
     ) {
         val margin = STANDARD_MARGIN
         val tableLeft = margin
@@ -2088,10 +2222,14 @@ object ReportExporter {
         val tableWidth = tableRight - tableLeft // 523pt pada A4
 
         val rows = buildBmkgForecastRows(allDistrictsSummary)
-        val officerAuth = OfficerAuthManager(context)
-        val rawOfficerName = officerAuth.getOfficerName().ifBlank { "Petugas Operator Siaga Pusdalops-PB" }
+        val settings = (documentSettings ?: DocumentSettingsRepository.getCachedOrDefaultSettings(context)).clamped()
+        val resolvedOfficer = DocumentSettingsRepository.resolveOfficerIdentity(
+            context = context,
+            settings = settings
+        )
+        val rawOfficerName = "${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})"
 
-        var y = drawKopSuratResmi(context, canvas, pageWidth, margin)
+        var y = drawKopSuratResmi(context, canvas, pageWidth, margin, documentSettings = settings)
 
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(30, 58, 138)
@@ -2114,11 +2252,16 @@ object ReportExporter {
             textSize = 8f
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText(
-            "Waktu Penerbitan: $printDateStr  |  Sumber: Stasiun Meteorologi BMKG & Pusdalops BPBD  |  Petugas: $rawOfficerName",
-            pageWidth / 2f,
-            y,
-            metaPaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Waktu Penerbitan: $printDateStr  |  Sumber: Stasiun Meteorologi BMKG & Pusdalops BPBD  |  Petugas: $rawOfficerName",
+            x = pageWidth / 2f,
+            y = y,
+            maxWidth = tableWidth,
+            basePaint = metaPaint,
+            initialFontSize = settings.bodyFontSize,
+            minFontSize = settings.minFontSize,
+            maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
         )
         y += 18f
 
@@ -2354,7 +2497,7 @@ object ReportExporter {
         noteBodyLayout.draw(canvas)
         canvas.restore()
 
-        drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin)
+        drawFooterAtribusiResmi(canvas, pageWidth, pageHeight, margin, documentSettings = settings)
     }
 
     private fun getCategoryRgbColor(cat: DisasterChartCategory): Int {

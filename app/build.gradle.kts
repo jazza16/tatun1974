@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.cuacamukomuko.wmzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "1.0.4"
+    versionCode = 7
+    versionName = "1.0.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -138,9 +138,7 @@ dependencies {
   implementation(libs.play.integrity)
   implementation(libs.play.app.update)
   implementation(libs.play.app.update.ktx)
-  implementation("com.github.javiersantos:AppUpdater:2.7") {
-    exclude(group = "com.android.support")
-  }
+  implementation("com.github.jenly1314:AppUpdater:1.2.0")
   implementation("com.google.firebase:firebase-appcheck-playintegrity")
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.firebase.appcheck.recaptcha)
@@ -152,6 +150,7 @@ dependencies {
   implementation(libs.okhttp)
   implementation(libs.play.services.location)
   implementation(libs.retrofit)
+  implementation("org.osmdroid:osmdroid-android:6.1.20")
   implementation("androidx.appcompat:appcompat:1.7.0")
   implementation("com.google.android.material:material:1.12.0")
   implementation("androidx.constraintlayout:constraintlayout:2.2.0")

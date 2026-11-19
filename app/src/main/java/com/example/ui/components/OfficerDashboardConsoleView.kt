@@ -217,13 +217,39 @@ fun OfficerDashboardConsoleView(
     var showChangePinDialog by remember { mutableStateOf(false) }
     var hasCustomPin by remember { mutableStateOf(officerAuthManager.hasCustomPin()) }
 
-    // Cloud Master Admin Auth Dialog State (protects Kelola Personil, Database Explorer, Cabut Akses, & Sync)
+    // Server-Side Admin Auth Dialog & Temporary Access Token State (protects Kelola Personil, Database Explorer, Cabut Akses, & Sync)
     var isAdminAuthDialogVisible by remember { mutableStateOf(false) }
     var adminAuthActionTitle by remember { mutableStateOf("") }
     var pendingAdminAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var activeAdminToken by remember {
+        mutableStateOf(com.example.security.AdminAccessSecurityManager.getActiveTokenForOfficer(officerBadgeId))
+    }
 
     // Room Database & Personnel Repository
     val coroutineScope = rememberCoroutineScope()
+
+    val requestAdminProtectedAction: (String, () -> Unit) -> Unit = { title, action ->
+        val validToken = com.example.security.AdminAccessSecurityManager.getActiveTokenForOfficer(officerBadgeId)
+        activeAdminToken = validToken
+        if (validToken != null) {
+            // Token Akses Sementara (5–15 menit) masih aktif: catat Audit Log pemakaian ulang & langsung buka
+            coroutineScope.launch {
+                com.example.security.AdminAccessSecurityManager.recordTokenReuseAttempt(
+                    context = context,
+                    officerNip = officerBadgeId,
+                    officerName = officerName,
+                    officerRole = officerRole,
+                    actionTitle = title,
+                    token = validToken
+                )
+            }
+            action()
+        } else {
+            adminAuthActionTitle = title
+            pendingAdminAction = action
+            isAdminAuthDialogVisible = true
+        }
+    }
     val database = remember { AppDatabase.getInstance(context) }
     val personnelRepository = remember { PersonnelRepository(database.personnelDao()) }
     val dbPersonnelList by personnelRepository.allPersonnel.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -238,6 +264,7 @@ fun OfficerDashboardConsoleView(
 
     var showDatabaseExplorer by remember { mutableStateOf(false) }
     var showFormLaporanHarian by remember { mutableStateOf(false) }
+    var showDalaModule by remember { mutableStateOf(false) }
     var integrityCheckResult by remember { mutableStateOf<com.example.data.sync.IntegrityCheckResult?>(null) }
     var isCheckingIntegrity by remember { mutableStateOf(false) }
     var editingPersonnel by remember { mutableStateOf<com.example.data.local.Personnel?>(null) }
@@ -542,15 +569,13 @@ fun OfficerDashboardConsoleView(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (isOfficerLoggedIn) {
-                            // Badge Personil
+                            // Badge Personil (Dilindungi Verifikasi Server-Side + Temporary Access Token + Audit Log)
                             OutlinedButton(
                                 onClick = {
-                                    adminAuthActionTitle = "Kelola Direktori Personil BPBD"
-                                    pendingAdminAction = {
+                                    requestAdminProtectedAction("Kelola Direktori Personil BPBD") {
                                         rosterList = officerAuthManager.getOfficerRoster()
                                         showRosterDialog = true
                                     }
-                                    isAdminAuthDialogVisible = true
                                 },
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
@@ -810,23 +835,42 @@ fun OfficerDashboardConsoleView(
                             }
                         }
 
-                        // EXPORT DIGITAL ARCHIVE (PDF & CSV) ACTIONS
-                        // Hanya bisa muncul dan diakses oleh Manajer, Koord. Administrasi, dan Operator
+                        // EXPORT DIGITAL ARCHIVE (PDF & CSV) + MODUL PASCA BENCANA / DALA
                         val isExportAuthorized = isOfficerLoggedIn && (
                             officerRole.contains("Manajer", ignoreCase = true) ||
                             officerRole.contains("Administrasi", ignoreCase = true) ||
                             officerRole.contains("Operator", ignoreCase = true)
                         )
-                        if (isExportAuthorized) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
-                            Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Modul Pasca Bencana / DALA (Kaji Cepat Rapid Assessment)
+                            Button(
+                                onClick = { showDalaModule = true },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .heightIn(min = 40.dp)
+                                    .testTag("btn_open_dala_module")
                             ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Assignment,
+                                    contentDescription = "Buka Modul Pasca Bencana DALA",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "Pasca Bencana / DALA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            if (isExportAuthorized) {
                                 // PDF Export Button
                                 Button(
                                     onClick = {
@@ -852,7 +896,7 @@ fun OfficerDashboardConsoleView(
                                 // CSV Export Button
                                 Button(
                                     onClick = {
-                                        ReportExporter.exportToCsv(context, reports)
+                                        ReportExporter.exportToCsv(context, reports, officerName, officerBadgeId)
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
@@ -940,11 +984,9 @@ fun OfficerDashboardConsoleView(
                             .clickable {
                                 if (idx == 3) {
                                     if (dashboardSubTab != 3) {
-                                        adminAuthActionTitle = "Sinkronisasi Multi-Perangkat (Sync xHP)"
-                                        pendingAdminAction = {
+                                        requestAdminProtectedAction("Sinkronisasi Multi-Perangkat (Sync xHP)") {
                                             dashboardSubTab = 3
                                         }
-                                        isAdminAuthDialogVisible = true
                                     }
                                 } else {
                                     dashboardSubTab = idx
@@ -984,7 +1026,7 @@ fun OfficerDashboardConsoleView(
                         .testTag("card_pusdalops_notes_container")
                 ) {
                     PusdalopsNotesSection(
-                        officerName = officerName,
+                        officerName = if (officerBadgeId.isNotBlank()) "$officerName (NIP. $officerBadgeId)" else officerName,
                         officerRole = officerRole,
                         currentDistrict = currentDistrict.name,
                         modifier = Modifier.fillMaxSize()
@@ -1005,8 +1047,7 @@ fun OfficerDashboardConsoleView(
                     isCheckingIntegrity = isCheckingIntegrity,
                     securitySessions = securitySessionsList,
                     onRevokeSecuritySession = { session ->
-                        adminAuthActionTitle = "Cabut Akses Perangkat (${session.officerName})"
-                        pendingAdminAction = {
+                        requestAdminProtectedAction("Cabut Akses Perangkat (${session.officerName})") {
                             val normalizedNip = session.officerNip.trim().lowercase()
                             revokedNipsInSession = revokedNipsInSession + normalizedNip
                             securitySessionsList = securitySessionsList.filterNot {
@@ -1029,7 +1070,6 @@ fun OfficerDashboardConsoleView(
                                 }
                             }
                         }
-                        isAdminAuthDialogVisible = true
                     },
                     onRunIntegrityCheck = {
                         isCheckingIntegrity = true
@@ -1058,11 +1098,9 @@ fun OfficerDashboardConsoleView(
                         }
                     },
                     onOpenDatabaseExplorer = {
-                        adminAuthActionTitle = "Database Explorer (Room SQLite)"
-                        pendingAdminAction = {
+                        requestAdminProtectedAction("Database Explorer (Room SQLite)") {
                             showDatabaseExplorer = true
                         }
-                        isAdminAuthDialogVisible = true
                     },
                     onOpenFormLaporanHarian = {
                         showFormLaporanHarian = true
@@ -1528,7 +1566,7 @@ fun OfficerDashboardConsoleView(
                                     onUpdateReportStatus(report.id, targetStatus)
                                     Toast.makeText(
                                         context,
-                                        "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName",
+                                        "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName (NIP. $officerBadgeId)",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -1545,7 +1583,7 @@ fun OfficerDashboardConsoleView(
                                     onUpdateReportStatus(report.id, targetStatus)
                                     Toast.makeText(
                                         context,
-                                        "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName",
+                                        "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName (NIP. $officerBadgeId)",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -1553,7 +1591,7 @@ fun OfficerDashboardConsoleView(
                                 onUpdateReportStatus(report.id, targetStatus)
                                 Toast.makeText(
                                     context,
-                                    "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName",
+                                    "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName (NIP. $officerBadgeId)",
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
@@ -1844,7 +1882,7 @@ fun OfficerDashboardConsoleView(
                                 val result = smartRepo.changePersonalPin(officerBadgeId, oldPinInput, newPinInput)
                                 isProcessingSecurity = false
                                 result.onSuccess { msg ->
-                                    officerAuthManager.setCustomOfficerPin(newPinInput)
+                                    officerAuthManager.markCloudCustomPinStatus(true)
                                     hasCustomPin = true
                                     showChangePinDialog = false
                                     Toast.makeText(context, "$msg (Play Integrity: ${integrityResult.verdict})", Toast.LENGTH_LONG).show()
@@ -1863,28 +1901,27 @@ fun OfficerDashboardConsoleView(
                                 val integrityResult = PlayIntegritySecurityManager.getInstance(context)
                                     .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "RESET_PIN")
                                 val smartRepo = SmartOfficerAuthRepository.getInstance(context)
-                                val currentCred = smartRepo.getCredential(officerBadgeId)
-                                val isAdminAuthorized = securityManager.verifyMasterAdminPin(trimmedResetInput).getOrDefault(false) ||
-                                    officerAuthManager.verifyAdminPassword(trimmedResetInput)
-                                val isSelfPinAuthorized = currentCred != null && currentCred.verifyPin(trimmedResetInput)
+                                val isAdminAuthorized = securityManager.verifyMasterAdminPin(
+                                    inputPin = trimmedResetInput,
+                                    officerNip = officerBadgeId,
+                                    officerName = officerName,
+                                    officerRole = officerRole,
+                                    actionTitle = "Reset PIN Petugas ($officerBadgeId)"
+                                ).getOrDefault(false)
+                                val isSelfPinAuthorized = if (!isAdminAuthorized) {
+                                    smartRepo.verifyOfficerPinAgainstCloud(officerBadgeId, trimmedResetInput)
+                                } else {
+                                    false
+                                }
                                 if (!isAdminAuthorized && !isSelfPinAuthorized) {
                                     isProcessingSecurity = false
-                                    val lockSec = officerAuthManager.getAdminLockoutRemainingSeconds()
-                                    errorMessage = if (lockSec > 0) {
-                                        "Terlalu banyak percobaan sandi admin. Coba lagi dalam ${lockSec} detik."
-                                    } else {
-                                        "Sandi Administrator atau PIN pribadi lama salah. Otorisasi reset ditolak."
-                                    }
+                                    errorMessage = "Verifikasi Sandi Administrator ke server atau PIN pribadi lama ditolak. Percobaan dicatat di Audit Log."
                                     return@launch
                                 }
                                 val result = smartRepo.resetToInitialNipSecret(officerBadgeId)
                                 isProcessingSecurity = false
                                 result.onSuccess { msg ->
-                                    if (isAdminAuthorized) {
-                                        officerAuthManager.resetPinWithAdmin(trimmedResetInput)
-                                    } else {
-                                        officerAuthManager.resetPinToDefault(trimmedResetInput)
-                                    }
+                                    officerAuthManager.markCloudCustomPinStatus(false)
                                     hasCustomPin = false
                                     showChangePinDialog = false
                                     Toast.makeText(context, "$msg (Play Integrity: ${integrityResult.verdict})", Toast.LENGTH_LONG).show()
@@ -1917,16 +1954,19 @@ fun OfficerDashboardConsoleView(
         )
     }
 
-    // 7A. DIALOG AUTENTIKASI MASTER ADMIN CLOUD (FIRESTORE app_settings/admin_config)
+    // 7A. DIALOG AUTENTIKASI ADMIN SERVER-SIDE (POST /api/verify-admin-pass + TOKEN SEMENTARA + AUDIT LOG)
     if (isAdminAuthDialogVisible) {
         AdminAuthDialog(
             actionTitle = adminAuthActionTitle,
-            securityManager = securityManager,
+            officerNip = officerBadgeId,
+            officerName = officerName,
+            officerRole = officerRole,
             onDismiss = {
                 isAdminAuthDialogVisible = false
                 pendingAdminAction = null
             },
-            onAuthorized = {
+            onAuthorized = { issuedToken ->
+                activeAdminToken = issuedToken
                 isAdminAuthDialogVisible = false
                 val action = pendingAdminAction
                 pendingAdminAction = null
@@ -1935,8 +1975,20 @@ fun OfficerDashboardConsoleView(
         )
     }
 
-    // 7B. DIALOG MANAJEMEN PERSONIL PUSDALOPS & TRC BPBD (OPERATOR, PETUGAS JAGA, PETUGAS LAPANGAN)
+    // 7B. DIALOG MANAJEMEN PERSONIL PUSDALOPS & TRC BPBD (WAJIB TEMPORARY ACCESS TOKEN AKTIF)
     if (showRosterDialog) {
+        val currentToken = com.example.security.AdminAccessSecurityManager.getActiveTokenForOfficer(officerBadgeId)
+        if (currentToken == null) {
+            LaunchedEffect(Unit) {
+                activeAdminToken = null
+                showRosterDialog = false
+                Toast.makeText(
+                    context,
+                    "Token akses sementara telah kedaluwarsa. Silakan verifikasi ulang ke server.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
         var rosterMode by remember { mutableStateOf(0) } // 0 = Daftar Personil, 1 = Form Input Personil Baru
         var selectedRoleTab by remember { mutableStateOf("Semua") }
         var rosterSearchQuery by remember { mutableStateOf("") }
@@ -1996,6 +2048,50 @@ fun OfficerDashboardConsoleView(
                         .verticalScroll(rememberScrollState())
                 ) {
                     if (rosterMode == 0) {
+                        val validTokenBanner = com.example.security.AdminAccessSecurityManager.getActiveTokenForOfficer(officerBadgeId)
+                        if (validTokenBanner != null) {
+                            val remMin = (validTokenBanner.remainingSeconds() / 60L).coerceAtLeast(0L)
+                            val remSec = validTokenBanner.remainingSeconds() % 60L
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFF0FDF4),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp)
+                                    .testTag("banner_admin_temp_token")
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Token Sementara Aktif • Sisa ${remMin}m ${remSec}d",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF15803D)
+                                    )
+                                    Text(
+                                        text = "Kunci Sesi",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFDC2626),
+                                        modifier = Modifier
+                                            .clickable {
+                                                com.example.security.AdminAccessSecurityManager.revokeToken()
+                                                activeAdminToken = null
+                                                showRosterDialog = false
+                                                Toast.makeText(context, "Token akses sementara dikunci.", Toast.LENGTH_SHORT).show()
+                                            }
+                                            .testTag("btn_revoke_admin_token")
+                                    )
+                                }
+                            }
+                        }
+
                         Text(
                             text = "Daftar resmi nama personil ASN & TRC BPBD Kabupaten Mukomuko yang bertugas sebagai Operator, Petugas Jaga, dan Personil Lapangan di Pusdalops.",
                             fontSize = 11.sp,
@@ -2650,6 +2746,20 @@ fun OfficerDashboardConsoleView(
         }
     }
 
+    // FULL SCREEN DIALOG MODUL PASCA BENCANA / DALA (KAJI CEPAT)
+    if (showDalaModule) {
+        Dialog(
+            onDismissRequest = { showDalaModule = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            DalaAssessmentScreen(
+                officerName = officerName,
+                officerNip = officerBadgeId,
+                onClose = { showDalaModule = false }
+            )
+        }
+    }
+
     // 8. OFFICIAL OFFICER FOLLOW-UP NOTE EDITOR DIALOG
     if (noteEditingReport != null) {
         val activeRep = noteEditingReport!!
@@ -2771,7 +2881,7 @@ fun OfficerDashboardConsoleView(
                         }
                         Toast.makeText(
                             context,
-                            "Log tindak lanjut tersimpan resmi oleh $officerName",
+                            "Log tindak lanjut tersimpan resmi oleh $officerName (NIP. $officerBadgeId)",
                             Toast.LENGTH_SHORT
                         ).show()
                         noteEditingReport = null
@@ -4236,15 +4346,52 @@ private fun SyncDiagnosticsSection(
 @Composable
 fun AdminAuthDialog(
     actionTitle: String,
-    securityManager: SecurityManager,
+    officerNip: String,
+    officerName: String,
+    officerRole: String,
     onDismiss: () -> Unit,
-    onAuthorized: () -> Unit
+    onAuthorized: (com.example.security.AdminTemporaryAccessToken) -> Unit
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var inputPin by remember { mutableStateOf("") }
-    var isPinVisible by remember { mutableStateOf(false) }
+    var inputPassword by remember { mutableStateOf("") }
+    var isPasswordVisible by remember { mutableStateOf(false) }
     var isVerifying by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isRetryableError by remember { mutableStateOf(false) }
+
+    val executeVerification: () -> Unit = {
+        val trimmed = inputPassword.trim()
+        if (trimmed.isEmpty()) {
+            errorMessage = "Masukkan PIN Master Admin terlebih dahulu."
+            isRetryableError = false
+        } else {
+            isVerifying = true
+            errorMessage = null
+            isRetryableError = false
+            coroutineScope.launch {
+                val result = com.example.security.AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken(
+                    context = context,
+                    masterPassword = trimmed,
+                    officerNip = officerNip,
+                    officerName = officerName,
+                    officerRole = officerRole,
+                    actionTitle = actionTitle
+                )
+                isVerifying = false
+                when (result) {
+                    is com.example.security.AdminVerificationResult.Authorized -> {
+                        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                        onAuthorized(result.accessToken)
+                    }
+                    is com.example.security.AdminVerificationResult.Denied -> {
+                        errorMessage = result.message
+                        isRetryableError = result.canRetry
+                    }
+                }
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = { if (!isVerifying) onDismiss() },
@@ -4257,7 +4404,7 @@ fun AdminAuthDialog(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.AdminPanelSettings,
-                        contentDescription = null,
+                        contentDescription = "Verifikasi Admin Server-Side",
                         tint = Color(0xFFDC2626),
                         modifier = Modifier.size(26.dp)
                     )
@@ -4275,27 +4422,38 @@ fun AdminAuthDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Akses ke fitur \"$actionTitle\" dibatasi khusus Administrator. Masukkan PIN / Sandi Master Admin untuk diverifikasi ke server Cloud.",
+                    text = "Akses ke \"$actionTitle\" diverifikasi langsung ke server Cloud Firestore (app_settings/admin_config). " +
+                        "Jika PIN valid, Token Akses Sementara (10 menit) diterbitkan dan setiap percobaan dicatat di Audit Log.",
                     fontSize = 11.5.sp,
                     color = Color(0xFF475569),
                     lineHeight = 16.sp
                 )
+                if (officerNip.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Petugas: ${officerName.ifBlank { "-" }} (NIP: $officerNip)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF1E293B)
+                    )
+                }
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
-                    value = inputPin,
+                    value = inputPassword,
                     onValueChange = {
-                        inputPin = it
+                        inputPassword = it
                         errorMessage = null
+                        isRetryableError = false
                     },
-                    label = { Text("PIN / Sandi Master Admin", fontSize = 11.sp) },
+                    label = { Text("PIN Master Admin", fontSize = 11.sp) },
                     placeholder = { Text("Masukkan PIN Master Admin", fontSize = 11.sp) },
-                    visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     trailingIcon = {
-                        IconButton(onClick = { isPinVisible = !isPinVisible }) {
+                        IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
                             Icon(
-                                imageVector = if (isPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = null,
+                                imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (isPasswordVisible) "Sembunyikan PIN" else "Tampilkan PIN",
                                 tint = Color.Gray,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -4308,45 +4466,68 @@ fun AdminAuthDialog(
                         .testTag("input_master_admin_pin")
                 )
                 if (!errorMessage.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = errorMessage.orEmpty(),
-                        color = Color(0xFFDC2626),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isRetryableError) Color(0xFFFFFBEB) else Color(0xFFFEF2F2),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isRetryableError) Color(0xFFF59E0B) else Color(0xFFFECACA)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("card_admin_auth_error")
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = errorMessage.orEmpty(),
+                                color = if (isRetryableError) Color(0xFF92400E) else Color(0xFFDC2626),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                lineHeight = 15.sp
+                            )
+                            if (isRetryableError) {
+                                OutlinedButton(
+                                    onClick = executeVerification,
+                                    enabled = !isVerifying,
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD97706)),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 44.dp)
+                                        .testTag("btn_retry_admin_pin")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Coba Lagi verifikasi server",
+                                        tint = Color(0xFFB45309),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Coba Lagi",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFB45309)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = {
-                    val trimmed = inputPin.trim()
-                    if (trimmed.isEmpty()) {
-                        errorMessage = "Masukkan PIN / Sandi Master Admin terlebih dahulu."
-                        return@Button
-                    }
-                    isVerifying = true
-                    errorMessage = null
-                    coroutineScope.launch {
-                        val res = securityManager.verifyMasterAdminPin(trimmed)
-                        isVerifying = false
-                        res.fold(
-                            onSuccess = { matched ->
-                                if (matched) {
-                                    onAuthorized()
-                                } else {
-                                    errorMessage = "PIN Master Admin salah. Akses ditolak."
-                                }
-                            },
-                            onFailure = { err ->
-                                errorMessage = err.message ?: "Gagal memverifikasi PIN Master Admin ke server."
-                            }
-                        )
-                    }
-                },
+                onClick = executeVerification,
                 enabled = !isVerifying,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isRetryableError) Color(0xFFEA580C) else Color(0xFF15803D)
+                ),
                 modifier = Modifier.testTag("btn_verify_master_admin_pin")
             ) {
                 if (isVerifying) {
@@ -4358,7 +4539,7 @@ fun AdminAuthDialog(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Memverifikasi...")
                 } else {
-                    Text("Verifikasi")
+                    Text(if (isRetryableError) "Coba Lagi" else "Verifikasi Server")
                 }
             }
         },
@@ -4372,3 +4553,4 @@ fun AdminAuthDialog(
         }
     )
 }
+

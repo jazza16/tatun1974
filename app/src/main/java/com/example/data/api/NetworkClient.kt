@@ -50,4 +50,71 @@ object NetworkClient {
             .build()
             .create(ArchiveWeatherApi::class.java)
     }
+
+    /**
+     * Membuat instance Retrofit untuk layanan Remote PDF Template & `GET /document-settings`.
+     * URL dasar diambil dari konfigurasi BuildConfig/Secrets tanpa hardcode di kode sumber.
+     */
+    fun createDocumentTemplateApi(
+        baseUrl: String,
+        timeoutMs: Long = 8_000L
+    ): DocumentTemplateApi {
+        val normalizedBaseUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+        val clampedTimeoutMs = timeoutMs.coerceIn(1_500L, 30_000L)
+        val client = okHttpClient.newBuilder()
+            .connectTimeout(clampedTimeoutMs, TimeUnit.MILLISECONDS)
+            .readTimeout(clampedTimeoutMs, TimeUnit.MILLISECONDS)
+            .writeTimeout(clampedTimeoutMs, TimeUnit.MILLISECONDS)
+            .build()
+        return Retrofit.Builder()
+            .baseUrl(normalizedBaseUrl)
+            .client(client)
+            .build()
+            .create(DocumentTemplateApi::class.java)
+    }
+
+    /**
+     * Membuat instance Retrofit untuk layanan dinamis `GET /emergency-contacts`.
+     */
+    fun createEmergencyContactsApi(
+        baseUrl: String,
+        timeoutMs: Long = 5_000L
+    ): EmergencyContactsApi {
+        val normalizedBaseUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+        val clampedTimeoutMs = timeoutMs.coerceIn(1_500L, 20_000L)
+        val client = okHttpClient.newBuilder()
+            .connectTimeout(clampedTimeoutMs, TimeUnit.MILLISECONDS)
+            .readTimeout(clampedTimeoutMs, TimeUnit.MILLISECONDS)
+            .build()
+        return Retrofit.Builder()
+            .baseUrl(normalizedBaseUrl)
+            .client(client)
+            .build()
+            .create(EmergencyContactsApi::class.java)
+    }
+
+    /**
+     * Membuat instance Retrofit untuk verifikasi server-side `POST /api/verify-admin-pass`
+     * dan pencatatan `POST /api/admin-audit-log`.
+     */
+    fun createAdminAuthApi(
+        baseUrl: String,
+        timeoutMs: Long = 8_000L
+    ): AdminAuthApi {
+        val normalizedBaseUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+        val clampedTimeoutMs = timeoutMs.coerceIn(1_500L, 25_000L)
+        val client = okHttpClient.newBuilder()
+            .connectTimeout(clampedTimeoutMs, TimeUnit.MILLISECONDS)
+            .readTimeout(clampedTimeoutMs, TimeUnit.MILLISECONDS)
+            .writeTimeout(clampedTimeoutMs, TimeUnit.MILLISECONDS)
+            .build()
+        return Retrofit.Builder()
+            .baseUrl(normalizedBaseUrl)
+            .client(client)
+            .build()
+            .create(AdminAuthApi::class.java)
+    }
 }
+
+
+
