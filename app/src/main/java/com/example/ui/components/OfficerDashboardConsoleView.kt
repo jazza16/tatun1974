@@ -376,7 +376,8 @@ fun OfficerDashboardConsoleView(
             }
             val (sessions, activities) = securityManager.syncAllOfficerLoginActivities(
                 auditLogs = auditLogs,
-                knownOfficialNips = knownOfficialNips
+                knownOfficialNips = knownOfficialNips,
+                officerNipFilter = officerBadgeId
             )
             securitySessionsList = sessions.filterNot {
                 revokedNipsInSession.contains(it.officerNip.trim().lowercase())
@@ -399,7 +400,22 @@ fun OfficerDashboardConsoleView(
     }
 
     DisposableEffect(currentFirebaseUid, isOfficerLoggedIn, officerBadgeId) {
-        val sessionListener = securityManager.listenSecuritySessionsRealtime { list ->
+        val sessionListener = securityManager.listenSecuritySessionsRealtime(
+            officerNipFilter = officerBadgeId,
+            onActiveSessionRevoked = {
+                if (isOfficerLoggedIn) {
+                    Toast.makeText(
+                        context,
+                        "Akses sesi perangkat Anda telah dicabut dari server. Logout paksa dijalankan.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    securityManager.clearLocalSession()
+                    com.example.data.auth.AuthManager.getInstance(context).signOut()
+                    officerAuthManager.logoutOfficer()
+                    onLogoutClick()
+                }
+            }
+        ) { list ->
             securitySessionsList = list.filterNot {
                 revokedNipsInSession.contains(it.officerNip.trim().lowercase())
             }
@@ -1283,33 +1299,26 @@ fun OfficerDashboardConsoleView(
                         }
                     },
                     onRevokeSecuritySession = { session ->
-                        requestAdminProtectedAction("Cabut Akses Perangkat (${session.officerName})") {
-                            val normalizedNip = session.officerNip.trim().lowercase()
-                            revokedNipsInSession = revokedNipsInSession + normalizedNip
-                            securitySessionsList = securitySessionsList.filterNot {
-                                it.officerNip.trim().equals(session.officerNip.trim(), ignoreCase = true)
-                            }
-                            coroutineScope.launch {
-                                val ok = securityManager.deleteSecuritySession(
-                                    officerNip = session.officerNip,
-                                    purgeActivities = false,
-                                    revokedByAdmin = officerName.ifBlank { "Admin Pusdalops" }
-                                )
-                                loginActivitiesList = securityManager.fetchLoginActivities()
-                                if (ok) {
-                                    Toast.makeText(
-                                        context,
-                                        "Akses perangkat ${session.officerName} (NIP ${session.officerNip}) berhasil dicabut.",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "Gagal menghapus sesi dari Firestore. Periksa koneksi internet Anda.",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
+                        val normalizedNip = session.officerNip.trim().lowercase()
+                        revokedNipsInSession = revokedNipsInSession + normalizedNip
+                        securitySessionsList = securitySessionsList.filterNot {
+                            it.officerNip.trim().equals(session.officerNip.trim(), ignoreCase = true)
+                        }
+                        coroutineScope.launch {
+                            securityManager.deleteSecuritySession(
+                                officerNip = session.officerNip,
+                                purgeActivities = false,
+                                revokedByAdmin = officerName.ifBlank { "Petugas Pusdalops" }
+                            )
+                            securityManager.clearLocalSession()
+                            com.example.data.auth.AuthManager.getInstance(context).signOut()
+                            officerAuthManager.logoutOfficer()
+                            Toast.makeText(
+                                context,
+                                "Akses sesi ${session.officerName} (NIP ${session.officerNip}) berhasil dicabut. Logout paksa dijalankan.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            onLogoutClick()
                         }
                     },
                     onRunIntegrityCheck = {
@@ -2151,7 +2160,7 @@ fun OfficerDashboardConsoleView(
                                     officerAuthManager.markCloudCustomPinStatus(true)
                                     hasCustomPin = true
                                     showChangePinDialog = false
-                                    Toast.makeText(context, "$msg (Play Integrity: ${integrityResult.verdict})", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "$msg (${integrityResult.verdict})", Toast.LENGTH_LONG).show()
                                 }.onFailure { err ->
                                     errorMessage = err.message ?: "Gagal memperbarui PIN."
                                 }
@@ -2190,7 +2199,7 @@ fun OfficerDashboardConsoleView(
                                     officerAuthManager.markCloudCustomPinStatus(false)
                                     hasCustomPin = false
                                     showChangePinDialog = false
-                                    Toast.makeText(context, "$msg (Play Integrity: ${integrityResult.verdict})", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "$msg (${integrityResult.verdict})", Toast.LENGTH_LONG).show()
                                 }.onFailure { err ->
                                     errorMessage = err.message ?: "Otorisasi reset PIN gagal."
                                 }

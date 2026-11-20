@@ -65,7 +65,3 @@
 -keepclassmembers class * {
     @androidx.annotation.Keep *;
 }
-
-# 8. AppUpdater (com.github.jenly1314:AppUpdater - AndroidX)
--dontwarn com.king.app.updater.**
--keep class com.king.app.updater.** { *; }

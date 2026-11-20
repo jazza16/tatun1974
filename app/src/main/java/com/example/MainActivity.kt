@@ -19,10 +19,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.util.Log
 import androidx.fragment.app.FragmentActivity
-import com.king.app.updater.AppUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -301,10 +299,10 @@ class MainActivity : FragmentActivity() {
 }
 
 data class GitHubReleaseUpdate(
+    val tagName: String,
     val latestVersion: String,
-    val releaseNotes: String,
-    val apkDownloadUrl: String,
-    val releasePageUrl: String
+    val htmlUrl: String,
+    val releaseNotes: String = ""
 )
 
 private val githubUpdateHttpClient: OkHttpClient by lazy {
@@ -315,139 +313,140 @@ private val githubUpdateHttpClient: OkHttpClient by lazy {
 }
 
 /**
- * Memeriksa pembaruan aplikasi dari GitHub Releases (jazza16/tatun1974) dan mengunduh APK
- * menggunakan com.king.app.updater.AppUpdater (jenly1314:AppUpdater berbasis AndroidX).
- * Memastikan izin REQUEST_INSTALL_PACKAGES telah diberikan sebelum proses unduh APK dimulai.
+ * Mengambil versi aplikasi yang sedang terinstal menggunakan PackageManager (setara PackageInfo.fromPlatform()).
+ */
+fun getInstalledAppVersion(context: Context): String {
+    return try {
+        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.getPackageInfo(
+                context.packageName,
+                PackageManager.PackageInfoFlags.of(0)
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        }
+        packageInfo.versionName?.trim()?.removePrefix("v")?.removePrefix("V")
+            ?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.VERSION_NAME
+    } catch (e: Exception) {
+        Log.d("GitHubUpdateChecker", "Fallback menggunakan BuildConfig.VERSION_NAME: ${e.message}")
+        BuildConfig.VERSION_NAME
+    }
+}
+
+/**
+ * Mem-parsing JSON respons dari https://api.github.com/repos/jazza16/tatun1974/releases/latest
+ * untuk mengekstrak `tag_name` (misal: v1.0.7 -> 1.0.7) dan `html_url`.
+ */
+fun parseGitHubLatestReleaseJson(bodyStr: String): GitHubReleaseUpdate? {
+    return try {
+        if (bodyStr.isBlank()) return null
+        val json = JSONObject(bodyStr)
+        val rawTag = json.optString("tag_name", "").trim()
+        val cleanVersion = rawTag.removePrefix("v").removePrefix("V").trim()
+        if (cleanVersion.isBlank()) return null
+
+        val htmlUrl = json.optString(
+            "html_url",
+            "https://github.com/jazza16/tatun1974/releases/latest"
+        ).trim().ifBlank { "https://github.com/jazza16/tatun1974/releases/latest" }
+        val notes = json.optString("body", "").trim()
+
+        GitHubReleaseUpdate(
+            tagName = rawTag,
+            latestVersion = cleanVersion,
+            htmlUrl = htmlUrl,
+            releaseNotes = notes
+        )
+    } catch (e: Exception) {
+        Log.d("GitHubUpdateChecker", "Gagal mem-parsing respons JSON GitHub Releases: ${e.message}")
+        null
+    }
+}
+
+/**
+ * Memeriksa pembaruan aplikasi secara otomatis (auto-check update) melalui GitHub Releases API
+ * khusus untuk repositori `jazza16/tatun1974` (`https://api.github.com/repos/jazza16/tatun1974/releases/latest`).
+ * Jika versi GitHub lebih baru dari versi aplikasi yang terinstal saat ini, menampilkan AlertDialog
+ * "Versi baru tersedia" dan membuka `html_url` di browser default HP tanpa menginstal APK secara otomatis.
  */
 fun checkForAppUpdates(context: Context) {
     CoroutineScope(Dispatchers.IO).launch {
         try {
+            val currentVersion = getInstalledAppVersion(context)
             val request = Request.Builder()
                 .url("https://api.github.com/repos/jazza16/tatun1974/releases/latest")
                 .header("Accept", "application/vnd.github+json")
-                .header("User-Agent", "SIPAGAR-KITA-Android/${BuildConfig.VERSION_NAME}")
+                .header("User-Agent", "SIPAGAR-KITA-Android/$currentVersion")
+                .get()
                 .build()
 
             val releaseUpdate = githubUpdateHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@use null
                 val bodyStr = response.body?.string().orEmpty()
-                if (bodyStr.isBlank()) return@use null
-
-                val json = JSONObject(bodyStr)
-                val rawTag = json.optString("tag_name", "").trim()
-                val cleanVer = rawTag.removePrefix("v").removePrefix("V").trim()
-                if (cleanVer.isBlank()) return@use null
-
-                val notes = json.optString("body", "").trim()
-                    .ifBlank { "Pembaruan rilis resmi SIPAGAR KITA v$cleanVer tersedia di GitHub Releases." }
-                val htmlUrl = json.optString("html_url", "https://github.com/jazza16/tatun1974/releases/latest")
-
-                var apkUrl = ""
-                val assets = json.optJSONArray("assets")
-                if (assets != null) {
-                    for (i in 0 until assets.length()) {
-                        val asset = assets.optJSONObject(i) ?: continue
-                        val dlUrl = asset.optString("browser_download_url", "")
-                        if (dlUrl.endsWith(".apk", ignoreCase = true)) {
-                            apkUrl = dlUrl
-                            break
-                        }
-                    }
-                }
-
-                GitHubReleaseUpdate(
-                    latestVersion = cleanVer,
-                    releaseNotes = notes,
-                    apkDownloadUrl = apkUrl,
-                    releasePageUrl = htmlUrl
-                )
+                parseGitHubLatestReleaseJson(bodyStr)
             } ?: return@launch
 
             val isUpdateAvailable = com.example.util.AppVersionHelper.isVersionNewer(
-                currentVersion = BuildConfig.VERSION_NAME,
+                currentVersion = currentVersion,
                 targetVersion = releaseUpdate.latestVersion
             )
 
             if (isUpdateAvailable) {
                 withContext(Dispatchers.Main) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-                        !context.packageManager.canRequestPackageInstalls()
-                    ) {
-                        showRequestInstallPackagesDialog(context, releaseUpdate)
-                    } else {
-                        showUpdateDialog(context, releaseUpdate)
-                    }
+                    showUpdateDialog(context, releaseUpdate)
                 }
             }
         } catch (t: Throwable) {
-            Log.w("AppUpdater", "Gagal memeriksa update GitHub (jazza16/tatun1974): ${t.message}")
+            // Jangan tampilkan pesan error yang mengganggu jika tidak ada koneksi; cukup log di console.
+            Log.d("GitHubUpdateChecker", "Pemeriksaan pembaruan GitHub dilewati: ${t.message}")
         }
     }
 }
 
+/**
+ * Menampilkan AlertDialog dengan pesan "Versi baru tersedia".
+ * Jika pengguna menekan "Unduh", membuka `html_url` (link halaman rilis GitHub) di browser default HP.
+ */
 fun showUpdateDialog(context: Context, update: GitHubReleaseUpdate? = null) {
-    if (context is android.app.Activity && context.isFinishing) return
-    val latestVer = update?.latestVersion ?: "terbaru"
-    val releaseNotes = update?.releaseNotes?.takeIf { it.isNotBlank() }
-        ?: "Pembaruan rilis resmi SIPAGAR KITA tersedia di GitHub Releases."
-    val apkUrl = update?.apkDownloadUrl.orEmpty()
-    val fallbackUrl = update?.releasePageUrl?.takeIf { it.isNotBlank() }
-        ?: "https://github.com/jazza16/tatun1974/releases/latest"
+    try {
+        if (context is android.app.Activity && (context.isFinishing || context.isDestroyed)) return
+        val latestVer = update?.latestVersion?.takeIf { it.isNotBlank() } ?: "terbaru"
+        val htmlUrl = update?.htmlUrl?.takeIf { it.isNotBlank() }
+            ?: "https://github.com/jazza16/tatun1974/releases/latest"
+        val notes = update?.releaseNotes?.takeIf { it.isNotBlank() }
+        val messageText = if (notes != null) {
+            "Versi baru tersedia (v$latestVer).\n\n$notes"
+        } else {
+            "Versi baru tersedia (v$latestVer). Silakan unduh pembaruan melalui halaman rilis resmi GitHub."
+        }
 
-    runCatching {
         AlertDialog.Builder(context)
-            .setTitle("Pembaruan Tersedia (v$latestVer)")
-            .setMessage(releaseNotes)
-            .setPositiveButton("Unduh & Pasang") { _, _ ->
-                if (apkUrl.isNotBlank()) {
-                    try {
-                        AppUpdater(context, apkUrl).start()
-                    } catch (e: Throwable) {
-                        Log.w("AppUpdater", "Fallback membuka URL rilis: ${e.message}")
-                        runCatching {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl)).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        }
-                    }
-                } else {
-                    runCatching {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                    }
-                }
+            .setTitle("Versi baru tersedia")
+            .setMessage(messageText)
+            .setPositiveButton("Unduh") { dialog, _ ->
+                dialog.dismiss()
+                openGitHubReleaseUrlInBrowser(context, htmlUrl)
             }
-            .setNegativeButton("Nanti", null)
+            .setNegativeButton("Nanti") { dialog, _ ->
+                dialog.dismiss()
+            }
             .show()
+    } catch (e: Exception) {
+        Log.d("GitHubUpdateChecker", "Gagal menampilkan dialog pembaruan: ${e.message}")
     }
 }
 
-private fun showRequestInstallPackagesDialog(context: Context, update: GitHubReleaseUpdate) {
-    if (context is android.app.Activity && context.isFinishing) return
-    runCatching {
-        AlertDialog.Builder(context)
-            .setTitle("Izin Instalasi Pembaruan Diperlukan")
-            .setMessage(
-                "Tersedia pembaruan SIPAGAR KITA versi ${update.latestVersion}. " +
-                    "Izinkan instalasi paket dari sumber ini agar pembaruan dapat diunduh dan dipasang secara otomatis."
-            )
-            .setCancelable(false)
-            .setPositiveButton("Berikan Izin") { _, _ ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:${context.packageName}")
-                    ).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(intent)
-                }
-            }
-            .setNegativeButton("Nanti", null)
-            .show()
+fun openGitHubReleaseUrlInBrowser(context: Context, htmlUrl: String) {
+    try {
+        val safeUrl = htmlUrl.trim().ifBlank { "https://github.com/jazza16/tatun1974/releases/latest" }
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(safeUrl)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Log.d("GitHubUpdateChecker", "Gagal membuka browser untuk URL rilis ($htmlUrl): ${e.message}")
     }
 }
 

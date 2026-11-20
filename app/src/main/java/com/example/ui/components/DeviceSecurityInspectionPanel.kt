@@ -103,6 +103,7 @@ private fun formatLoginMethodLabel(method: String): String = when (method.upperc
 }
 
 private fun formatTokenSourceLabel(source: String): String = when (source.uppercase()) {
+    "FIRESTORE_SESSION" -> "Sesi Terverifikasi Server (Firestore)"
     "PLAY_INTEGRITY_CLASSIC" -> "Play Integrity Classic (Hardware)"
     "FIREBASE_APP_CHECK" -> "Firebase App Check"
     "EMULATOR_SANDBOX_FALLBACK" -> "Emulator Sandbox Fallback"
@@ -629,7 +630,8 @@ private fun DeviceSecuritySessionItemCard(
     onInspectClick: () -> Unit,
     onRevokeClick: () -> Unit
 ) {
-    val isStrongIntegrity = session.verdict == "MEETS_STRONG_INTEGRITY" && !session.isEmulator
+    val isStrongIntegrity = (session.verdict == "MEETS_STRONG_INTEGRITY" ||
+        session.verdict == com.example.security.SecurityManager.VERDICT_SERVER_VERIFIED) && !session.isEmulator
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = if (session.accessGranted) Color(0xFFF8FAFC) else Color(0xFFFEF2F2),

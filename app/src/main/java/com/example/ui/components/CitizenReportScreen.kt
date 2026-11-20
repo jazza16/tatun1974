@@ -141,6 +141,7 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -319,10 +320,40 @@ fun CitizenReportScreen(
     val database = remember { AppDatabase.getInstance(context) }
     val personnelRepository = remember { PersonnelRepository(database.personnelDao()) }
 
-    // Enterprise Play Integrity SecurityManager
+    // Firestore Session Management (officer_sessions)
     val securityManager = remember { SecurityManager.getInstance(context) }
     var securityAccessResult by remember { mutableStateOf<SecurityAccessResult?>(null) }
     var isVerifyingSecurity by remember { mutableStateOf(false) }
+
+    DisposableEffect(isOfficerLoggedIn, officerBadgeId) {
+        val activeNip = officerBadgeId.ifBlank { authManager.getBadgeOrUid() }.trim()
+        val registration = if (isOfficerLoggedIn && activeNip.isNotBlank()) {
+            securityManager.listenSecuritySessionsRealtime(
+                officerNipFilter = activeNip,
+                onActiveSessionRevoked = {
+                    securityManager.clearLocalSession()
+                    authManager.signOut()
+                    officerAuthManager.logoutOfficer()
+                    isOfficerLoggedIn = false
+                    securityAccessResult = null
+                    if (selectedTab == 4) {
+                        selectedTab = 0
+                    }
+                    Toast.makeText(
+                        context,
+                        "Akses sesi perangkat Anda telah dicabut dari server. Logout paksa dijalankan.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                },
+                onUpdate = { _ -> }
+            )
+        } else {
+            null
+        }
+        onDispose {
+            registration?.remove()
+        }
+    }
 
     LaunchedEffect(selectedTab, isOfficerLoggedIn, officerBadgeId) {
         if (selectedTab == 4 && (authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn())) {
@@ -332,6 +363,13 @@ fun CitizenReportScreen(
                 val result = securityManager.verifySessionBeforeGrantingRuangKerja(targetNip)
                 securityAccessResult = result
                 isVerifyingSecurity = false
+                if (!result.isAuthorized && result.session != null && !result.session.accessGranted) {
+                    securityManager.clearLocalSession()
+                    authManager.signOut()
+                    officerAuthManager.logoutOfficer()
+                    isOfficerLoggedIn = false
+                    selectedTab = 0
+                }
             }
         }
     }

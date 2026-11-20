@@ -20,10 +20,6 @@ import android.net.Uri
 import com.example.util.EarthquakeNotificationHelper
 import com.example.util.WeatherAlertSettings
 import com.example.util.WeatherNotificationHelper
-import com.google.android.play.core.appupdate.AppUpdateManagerFactory
-import com.google.android.play.core.appupdate.AppUpdateOptions
-import com.google.android.play.core.install.model.AppUpdateType
-import com.google.android.play.core.install.model.UpdateAvailability
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -881,43 +877,8 @@ class WeatherViewModel(
         viewModelScope.launch {
             val targetVer = currentState.latestVersion
 
-            // 1. If not in QA simulation mode, check Google Play In-App Update first
+            // 1. If not in QA simulation mode, open GitHub release page (html_url) in default browser
             if (!currentState.isSimulationActive && context != null) {
-                val playUpdateStarted = try {
-                    val activity = findActivity(context)
-                    val appUpdateManager = AppUpdateManagerFactory.create(context.applicationContext)
-                    val info = withTimeoutOrNull(3500L) { appUpdateManager.appUpdateInfo.await() }
-                    if (activity != null && info != null &&
-                        info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
-                        info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
-                    ) {
-                        appUpdateManager.startUpdateFlowForResult(
-                            info,
-                            activity,
-                            AppUpdateOptions.defaultOptions(AppUpdateType.FLEXIBLE),
-                            2026
-                        )
-                        true
-                    } else {
-                        false
-                    }
-                } catch (_: Exception) {
-                    false
-                }
-
-                if (playUpdateStarted) {
-                    _uiState.value = _uiState.value.copy(
-                        isUpdateDialogOpen = false,
-                        updateState = _uiState.value.updateState.copy(
-                            isDownloading = false,
-                            downloadProgress = 0.5f,
-                            updateStatusMessage = "Mengunduh pembaruan resmi melalui Google Play Store..."
-                        )
-                    )
-                    return@launch
-                }
-
-                // 2. Fallback for sideloaded / GitHub OTA builds: open verified HTTPS release URL
                 val hasNewerRemote = com.example.util.AppVersionHelper.isVersionNewer(currentState.currentVersion, targetVer)
                 if (hasNewerRemote) {
                     val safeUrl = com.example.data.api.AppUpdateRemoteService.validateDownloadUrl(currentState.downloadUrl)
@@ -934,7 +895,7 @@ class WeatherViewModel(
                             updateState = _uiState.value.updateState.copy(
                                 isDownloading = false,
                                 downloadProgress = 1f,
-                                updateStatusMessage = "Membuka tautan rilis resmi terverifikasi untuk SIPAGAR KITA v$targetVer..."
+                                updateStatusMessage = "Membuka halaman rilis GitHub resmi untuk SIPAGAR KITA v$targetVer di browser..."
                             )
                         )
                         return@launch

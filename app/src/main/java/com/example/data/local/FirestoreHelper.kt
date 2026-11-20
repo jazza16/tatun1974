@@ -1340,6 +1340,17 @@ object FirestoreHelper {
         withTimeoutOrNull(8_000L) {
             try {
                 suspendCancellableCoroutine<Unit> { cont ->
+                    db.collection("officer_sessions")
+                        .document(trimmedNip)
+                        .delete()
+                        .addOnCompleteListener {
+                            if (cont.isActive) cont.resume(Unit)
+                        }
+                }
+            } catch (_: Exception) {
+            }
+            try {
+                suspendCancellableCoroutine<Unit> { cont ->
                     db.collection("device_security_sessions")
                         .document(trimmedNip)
                         .delete()

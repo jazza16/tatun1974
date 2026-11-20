@@ -226,6 +226,49 @@ service cloud.firestore {
           && (!('additionalDetails' in data) || (data.additionalDetails is string && data.additionalDetails.size() <= 1000));
     }
 
+    function isValidOfficerSession(data) {
+      return data.nip is string && data.nip.size() >= 1 && data.nip.size() <= 64
+          && data.device_name is string && data.device_name.size() >= 1 && data.device_name.size() <= 120
+          && data.os_version is string && data.os_version.size() >= 1 && data.os_version.size() <= 80
+          && data.login_time is int
+          && data.is_active is bool
+          && (!('sessionId' in data) || (data.sessionId is string && data.sessionId.size() <= 128))
+          && (!('ownerUid' in data) || (data.ownerUid is string && data.ownerUid.size() <= 128))
+          && (!('officerNip' in data) || (data.officerNip is string && data.officerNip.size() <= 64))
+          && (!('officerName' in data) || (data.officerName is string && data.officerName.size() <= 150))
+          && (!('officerRole' in data) || (data.officerRole is string && data.officerRole.size() <= 80))
+          && (!('integrityToken' in data) || (data.integrityToken is string && data.integrityToken.size() <= 8192))
+          && (!('tokenHash' in data) || (data.tokenHash is string && data.tokenHash.size() <= 128))
+          && (!('tokenLength' in data) || (data.tokenLength is int && data.tokenLength >= 0 && data.tokenLength <= 8192))
+          && (!('tokenSource' in data) || (data.tokenSource is string && data.tokenSource.size() <= 80))
+          && (!('classicNonce' in data) || (data.classicNonce is string && data.classicNonce.size() <= 256))
+          && (!('verdict' in data) || (data.verdict is string && data.verdict.size() <= 80))
+          && (!('deviceVerdict' in data) || (data.deviceVerdict is string && data.deviceVerdict.size() <= 120))
+          && (!('deviceId' in data) || (data.deviceId is string && data.deviceId.size() <= 128))
+          && (!('deviceModel' in data) || (data.deviceModel is string && data.deviceModel.size() <= 120))
+          && (!('deviceBrand' in data) || (data.deviceBrand is string && data.deviceBrand.size() <= 80))
+          && (!('deviceManufacturer' in data) || (data.deviceManufacturer is string && data.deviceManufacturer.size() <= 80))
+          && (!('deviceHardware' in data) || (data.deviceHardware is string && data.deviceHardware.size() <= 80))
+          && (!('deviceFingerprintHash' in data) || (data.deviceFingerprintHash is string && data.deviceFingerprintHash.size() <= 128))
+          && (!('isEmulator' in data) || data.isEmulator is bool)
+          && (!('osVersion' in data) || (data.osVersion is string && data.osVersion.size() <= 80))
+          && (!('sdkInt' in data) || (data.sdkInt is int && data.sdkInt >= 0 && data.sdkInt <= 100))
+          && (!('appVersion' in data) || (data.appVersion is string && data.appVersion.size() <= 64))
+          && (!('loginMethod' in data) || (data.loginMethod is string && data.loginMethod.size() <= 64))
+          && (!('loginStatus' in data) || (data.loginStatus is string && data.loginStatus.size() <= 64))
+          && (!('loginAction' in data) || (data.loginAction is string && data.loginAction.size() <= 120))
+          && (!('loginCount' in data) || (data.loginCount is int && data.loginCount >= 0 && data.loginCount <= 1000000))
+          && (!('lastActivityDetail' in data) || (data.lastActivityDetail is string && data.lastActivityDetail.size() <= 500))
+          && (!('isVerified' in data) || data.isVerified is bool)
+          && (!('accessGranted' in data) || data.accessGranted is bool)
+          && (!('adminVerified' in data) || data.adminVerified is bool)
+          && (!('adminVerifiedBy' in data) || (data.adminVerifiedBy is string && data.adminVerifiedBy.size() <= 150))
+          && (!('adminVerifiedAt' in data) || (data.adminVerifiedAt is int && data.adminVerifiedAt >= 0))
+          && (!('adminVerificationNote' in data) || (data.adminVerificationNote is string && data.adminVerificationNote.size() <= 500))
+          && (!('targetModule' in data) || (data.targetModule is string && data.targetModule.size() <= 64))
+          && (!('timestamp' in data) || data.timestamp is int);
+    }
+
     // --- COLLECTION RULES ---
 
     // 1. User Preferences & Notification Settings (User-scoped subcollection)
@@ -450,7 +493,8 @@ service cloud.firestore {
                          'osVersion', 'sdkInt', 'appVersion', 'loginMethod', 'loginStatus',
                          'loginAction', 'loginCount', 'lastActivityDetail',
                          'isVerified', 'accessGranted', 'adminVerified', 'adminVerifiedBy',
-                         'adminVerifiedAt', 'adminVerificationNote', 'targetModule', 'timestamp'
+                         'adminVerifiedAt', 'adminVerificationNote', 'targetModule', 'timestamp',
+                         'device_name', 'os_version', 'login_time', 'is_active'
                        ])
                     && isValidDeviceSecuritySession(incoming());
       allow delete: if isValidId(officerNip)
@@ -458,6 +502,15 @@ service cloud.firestore {
                          (isSignedIn() && existing().ownerUid == request.auth.uid)
                          || (!isSignedIn() && (existing().ownerUid == officerNip || existing().ownerUid == ('officer_nip_' + officerNip)))
                        );
+    }
+
+    // 9b. Firestore-Backed Officer Sessions (Session Management replacing Play Integrity)
+    match /officer_sessions/{sessionId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(sessionId)
+                    && incoming().keys().hasAll(['nip', 'device_name', 'os_version', 'login_time', 'is_active'])
+                    && isValidOfficerSession(incoming());
+      allow delete: if isValidId(sessionId);
     }
 
     // 10. Play Integrity Security Audit & Validation Failures Logging (Append-Only)

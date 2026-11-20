@@ -652,29 +652,40 @@ class ExampleRobolectricTest {
       officerName = "YUDHA SOFRIANTO,S.A.P",
       officerRole = "Operator Pusdalops"
     )
-    assertTrue("Login authenticity check must succeed with fallback warning", loginRes.isSuccess)
+    assertTrue("Login authenticity check must succeed with server session verification", loginRes.isSuccess)
     val session = loginRes.getOrNull()
     assertNotNull(session)
-    assertEquals("APP_CHECK_FALLBACK_AUTHORIZED", session!!.verdict)
+    assertEquals("Akses Sah (Terverifikasi Server)", session!!.verdict)
     assertTrue(session.accessGranted)
+    assertTrue(session.isActive)
+    assertTrue(session.deviceName.isNotBlank())
+    assertTrue(session.osVersion.isNotBlank())
+    assertTrue(session.loginTime > 0L)
     assertTrue(session.isVerified)
     assertTrue(session.integrityToken.isNotBlank())
+    val sessionMap = session.toMap()
+    assertEquals("199807202025061002", sessionMap["nip"])
+    assertEquals(true, sessionMap["is_active"])
+    assertNotNull(sessionMap["device_name"])
+    assertNotNull(sessionMap["os_version"])
+    assertNotNull(sessionMap["login_time"])
 
-    val cachedSessions = securityManager.fetchSecuritySessions()
+    val cachedSessions = securityManager.fetchSecuritySessions(officerNipFilter = "199807202025061002")
     assertTrue("Logged-in device session must be returned by fetchSecuritySessions", cachedSessions.any { it.officerNip == "199807202025061002" })
 
     val accessResult = securityManager.verifySessionBeforeGrantingRuangKerja("199807202025061002")
-    assertTrue("Ruang Kerja local session check must authorize after fallback login", accessResult.isAuthorized)
+    assertTrue("Ruang Kerja local session check must authorize after session login", accessResult.isAuthorized)
 
     val deleted = securityManager.deleteSecuritySession("199807202025061002")
     assertTrue("deleteSecuritySession must succeed", deleted)
     assertTrue(
       "Revoked session must immediately disappear from fetchSecuritySessions",
-      securityManager.fetchSecuritySessions().none { it.officerNip == "199807202025061002" }
+      securityManager.fetchSecuritySessions(officerNipFilter = "199807202025061002").none { it.officerNip == "199807202025061002" }
     )
 
     val criticalRes = playIntegrity.verifyCriticalAction("199807202025061002", "CHANGE_PIN")
-    assertTrue("PlayIntegritySecurityManager critical action must fallback gracefully", criticalRes.isSecure)
+    assertTrue("PlayIntegritySecurityManager critical action must succeed via session check", criticalRes.isSecure)
+    assertEquals("Akses Sah (Terverifikasi Server)", criticalRes.verdict)
     assertTrue(!criticalRes.token.isNullOrBlank())
   }
 

@@ -263,6 +263,27 @@
         "timestamp": { "type": "integer" }
       },
       "required": ["failureId", "ownerUid", "officerNip", "reason", "timestamp"]
+    },
+    "OfficerSession": {
+      "title": "OfficerSession",
+      "description": "Firestore-backed active officer session record",
+      "type": "object",
+      "properties": {
+        "nip": { "type": "string" },
+        "device_name": { "type": "string" },
+        "os_version": { "type": "string" },
+        "login_time": { "type": "integer" },
+        "is_active": { "type": "boolean" },
+        "sessionId": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "officerNip": { "type": "string" },
+        "officerName": { "type": "string" },
+        "officerRole": { "type": "string" },
+        "verdict": { "type": "string" },
+        "accessGranted": { "type": "boolean" },
+        "timestamp": { "type": "integer" }
+      },
+      "required": ["nip", "device_name", "os_version", "login_time", "is_active"]
     }
   },
   "firestore": {
@@ -301,6 +322,10 @@
     "/device_security_sessions/{officerNip}": {
       "schema": "DeviceSecuritySession",
       "description": "Play Integrity verified device sessions authorizing access to Ruang Kerja"
+    },
+    "/officer_sessions/{sessionId}": {
+      "schema": "OfficerSession",
+      "description": "Firestore-backed active officer session management documents"
     },
     "/device_login_activities/{activityId}": {
       "schema": "DeviceLoginActivity",
