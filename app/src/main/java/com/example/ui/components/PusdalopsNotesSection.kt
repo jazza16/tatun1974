@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -447,6 +448,7 @@ private fun NotesListView(
         }
 
         // 2. Search & Filter Bar
+        val searchKeyboardActions = rememberFormKeyboardActions()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -472,6 +474,8 @@ private fun NotesListView(
                     }
                 },
                 singleLine = true,
+                keyboardOptions = formDoneKeyboardOptions(),
+                keyboardActions = searchKeyboardActions,
                 shape = RoundedCornerShape(12.dp),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color(0xFFF8FAFC),
@@ -482,6 +486,7 @@ private fun NotesListView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
+                    .formScrollPadding()
                     .testTag("note_search_field")
             )
 
@@ -853,11 +858,13 @@ private fun NoteEditorView(
         }
 
         // 2. Main Editor Content Scroll
+        val noteKeyboardActions = rememberFormKeyboardActions()
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp)
         ) {
             // Title Input
             OutlinedTextField(
@@ -865,6 +872,8 @@ private fun NoteEditorView(
                 onValueChange = { title = it },
                 placeholder = { Text("Judul Catatan Operasional...", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
                 singleLine = true,
+                keyboardOptions = formNextKeyboardOptions(),
+                keyboardActions = noteKeyboardActions,
                 colors = TextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onSurface,
                     unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -876,6 +885,7 @@ private fun NoteEditorView(
                 textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .formScrollPadding()
                     .testTag("note_title_input")
             )
 
@@ -1078,6 +1088,8 @@ private fun NoteEditorView(
                     )
                 },
                 minLines = 14,
+                keyboardOptions = formNextKeyboardOptions(),
+                keyboardActions = noteKeyboardActions,
                 colors = TextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onSurface,
                     unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -1090,6 +1102,7 @@ private fun NoteEditorView(
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 19.sp),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .formScrollPadding()
                     .testTag("note_content_input")
             )
 
@@ -1101,6 +1114,8 @@ private fun NoteEditorView(
                 onValueChange = { tags = it },
                 placeholder = { Text("Label / Tag (misal: Logistik, Pesisir, Tenda, Sungai)", fontSize = 11.5.sp) },
                 singleLine = true,
+                keyboardOptions = formDoneKeyboardOptions(),
+                keyboardActions = noteKeyboardActions,
                 colors = TextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onSurface,
                     unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -1110,7 +1125,9 @@ private fun NoteEditorView(
                     unfocusedIndicatorColor = Color(0xFFE2E8F0)
                 ),
                 textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .formScrollPadding()
             )
         }
     }

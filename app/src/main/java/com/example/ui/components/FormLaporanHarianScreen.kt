@@ -16,11 +16,16 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -361,8 +366,10 @@ fun FormLaporanHarianScreen(
     val weatherOptions = listOf("Cerah", "Cerah Berawan", "Berawan", "Hujan Ringan", "Hujan Lebat", "Angin Kencang")
 
     Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
         modifier = modifier
             .fillMaxSize()
+            .safeDrawingPadding()
             .testTag("form_laporan_harian_screen"),
         topBar = {
             TopAppBar(
@@ -394,7 +401,7 @@ fun FormLaporanHarianScreen(
             )
         },
         bottomBar = {
-            // Tombol Navigasi Bawah sesuai Layout XML
+            // Tombol Navigasi Bawah dengan Safe Area (navigationBarsPadding + imePadding) agar tidak tertutup area gestur HP
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = Color.White,
@@ -403,7 +410,9 @@ fun FormLaporanHarianScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -918,11 +927,13 @@ private fun Step1DataKejadian(
     sumberInformasi: String,
     onSumberInformasiChange: (String) -> Unit
 ) {
+    val keyboardActions = rememberFormKeyboardActions()
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // KARTU 1: INFO PETUGAS & TOMBOL "DARI WARGA" DENGAN BADGE NOTIFIKASI MERAH
@@ -947,7 +958,11 @@ private fun Step1DataKejadian(
                     value = tanggalLaporan,
                     onValueChange = onTanggalLaporanChange,
                     label = { Text("Tanggal Laporan") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
 
@@ -1024,7 +1039,11 @@ private fun Step1DataKejadian(
                     value = lokasi,
                     onValueChange = onLokasiChange,
                     label = { Text("Detail Lokasi Kejadian (Kecamatan / Desa)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFDC2626)) }
                 )
 
@@ -1046,8 +1065,11 @@ private fun Step1DataKejadian(
                             { Text(text = koordinatError, fontSize = 10.sp) }
                         } else null,
                         label = { Text("Koordinat GPS", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
                         modifier = Modifier
                             .weight(1f)
+                            .formScrollPadding()
                             .testTag("input_koordinat_gps"),
                         singleLine = true
                     )
@@ -1055,7 +1077,11 @@ private fun Step1DataKejadian(
                         value = kedalaman,
                         onValueChange = onKedalamanChange,
                         label = { Text("Kedalaman", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
-                        modifier = Modifier.weight(0.7f),
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
+                        modifier = Modifier
+                            .weight(0.7f)
+                            .formScrollPadding(),
                         singleLine = true
                     )
                 }
@@ -1079,7 +1105,11 @@ private fun Step1DataKejadian(
                     value = cakupanDampak,
                     onValueChange = onCakupanDampakChange,
                     label = { Text("Cakupan Dampak (Wilayah / Desa / KK Terdampak)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
 
@@ -1087,7 +1117,11 @@ private fun Step1DataKejadian(
                     value = upayaDilakukan,
                     onValueChange = onUpayaDilakukanChange,
                     label = { Text("Upaya Dilakukan (Penanganan BPBD / TRC)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
 
@@ -1095,7 +1129,11 @@ private fun Step1DataKejadian(
                     value = kondisiMutakhir,
                     onValueChange = onKondisiMutakhirChange,
                     label = { Text("Kondisi Mutakhir Lapangan") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
 
@@ -1103,7 +1141,11 @@ private fun Step1DataKejadian(
                     value = kerusakan,
                     onValueChange = onKerusakanChange,
                     label = { Text("Kerusakan (Rumah / Fasilitas / Infrastruktur)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
 
@@ -1111,7 +1153,11 @@ private fun Step1DataKejadian(
                     value = penyebab,
                     onValueChange = onPenyebabChange,
                     label = { Text("Penyebab Terjadinya Bencana") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
 
@@ -1119,7 +1165,11 @@ private fun Step1DataKejadian(
                     value = sumberInformasi,
                     onValueChange = onSumberInformasiChange,
                     label = { Text("Sumber Informasi") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
             }
@@ -1137,11 +1187,16 @@ private fun CompactOutlinedTextField(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val colors = OutlinedTextFieldDefaults.colors()
+    val keyboardActions = rememberFormKeyboardActions()
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .formScrollPadding(),
         singleLine = true,
+        keyboardOptions = formNextKeyboardOptions(),
+        keyboardActions = keyboardActions,
         textStyle = TextStyle(
             fontSize = 12.5.sp,
             fontWeight = FontWeight.Medium,
@@ -1193,11 +1248,13 @@ private fun Step2DampakDanKorban(
     penyebab: String,
     onPenyebabChange: (String) -> Unit
 ) {
+    val keyboardActions = rememberFormKeyboardActions()
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
@@ -1212,7 +1269,11 @@ private fun Step2DampakDanKorban(
                     value = cakupanDampak,
                     onValueChange = onCakupanDampakChange,
                     label = { Text("Cakupan Wilayah Terdampak & KK") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
 
@@ -1276,7 +1337,11 @@ private fun Step2DampakDanKorban(
                     value = kerusakan,
                     onValueChange = onKerusakanChange,
                     label = { Text("Kerusakan Fasilitas / Rumah / Infrastruktur") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 3
                 )
 
@@ -1284,7 +1349,11 @@ private fun Step2DampakDanKorban(
                     value = penyebab,
                     onValueChange = onPenyebabChange,
                     label = { Text("Penyebab Terjadinya Bencana") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
             }
@@ -1301,11 +1370,13 @@ private fun Step3UpayaDanKondisi(
     sumberInformasi: String,
     onSumberInformasiChange: (String) -> Unit
 ) {
+    val keyboardActions = rememberFormKeyboardActions()
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
@@ -1320,7 +1391,11 @@ private fun Step3UpayaDanKondisi(
                     value = upayaDilakukan,
                     onValueChange = onUpayaDilakukanChange,
                     label = { Text("Upaya Penanganan BPBD / TNI / Polri / Warga") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 4
                 )
 
@@ -1328,7 +1403,11 @@ private fun Step3UpayaDanKondisi(
                     value = kondisiMutakhir,
                     onValueChange = onKondisiMutakhirChange,
                     label = { Text("Kondisi Mutakhir Lapangan") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 3
                 )
 
@@ -1336,7 +1415,11 @@ private fun Step3UpayaDanKondisi(
                     value = sumberInformasi,
                     onValueChange = onSumberInformasiChange,
                     label = { Text("Sumber Informasi Awal") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
             }
@@ -1363,6 +1446,7 @@ private fun Step4AdministrasiDanKomunikasi(
     onCetakPdfClick: () -> Unit = {},
     onSimpanPdfClick: () -> Unit = {}
 ) {
+    val keyboardActions = rememberFormKeyboardActions()
     var namaBarangInput by remember { mutableStateOf("") }
     var jumlahInput by remember { mutableStateOf("") }
     var satuanInput by remember { mutableStateOf("") }
@@ -1371,8 +1455,9 @@ private fun Step4AdministrasiDanKomunikasi(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
@@ -1388,14 +1473,22 @@ private fun Step4AdministrasiDanKomunikasi(
                         value = tanggalSurat,
                         onValueChange = onTanggalSuratChange,
                         label = { Text("Tanggal Surat", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
-                        modifier = Modifier.weight(1f),
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
+                        modifier = Modifier
+                            .weight(1f)
+                            .formScrollPadding(),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = tanggalTerima,
                         onValueChange = onTanggalTerimaChange,
                         label = { Text("Tanggal Terima", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
-                        modifier = Modifier.weight(1f),
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
+                        modifier = Modifier
+                            .weight(1f)
+                            .formScrollPadding(),
                         singleLine = true
                     )
                 }
@@ -1489,7 +1582,11 @@ private fun Step4AdministrasiDanKomunikasi(
                     value = namaBarangInput,
                     onValueChange = { namaBarangInput = it },
                     label = { Text("Nama Barang (cth: Tenda Gulung, Beras, Air Mineral)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
 
@@ -1501,14 +1598,22 @@ private fun Step4AdministrasiDanKomunikasi(
                         value = jumlahInput,
                         onValueChange = { jumlahInput = it },
                         label = { Text("Jumlah", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
-                        modifier = Modifier.weight(1f),
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
+                        modifier = Modifier
+                            .weight(1f)
+                            .formScrollPadding(),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = satuanInput,
                         onValueChange = { satuanInput = it },
                         label = { Text("Satuan (Unit/Karung/Dus)", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false) },
-                        modifier = Modifier.weight(1f),
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
+                        modifier = Modifier
+                            .weight(1f)
+                            .formScrollPadding(),
                         singleLine = true
                     )
                 }
@@ -1517,7 +1622,11 @@ private fun Step4AdministrasiDanKomunikasi(
                     value = keteranganInput,
                     onValueChange = { keteranganInput = it },
                     label = { Text("Keterangan (cth: Diserahkan ke Kecamatan X)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
 
@@ -1771,6 +1880,7 @@ private fun DialogTambahLogKomunikasi(
     onAddLog: (LogKomunikasi) -> Unit
 ) {
     val context = LocalContext.current
+    val keyboardActions = rememberFormKeyboardActions()
     val officerAuthManager = remember { com.example.data.local.OfficerAuthManager(context) }
     val session = remember { SessionManager(context) }
     var waktu by remember {
@@ -1795,6 +1905,7 @@ private fun DialogTambahLogKomunikasi(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .imePadding()
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -1802,7 +1913,11 @@ private fun DialogTambahLogKomunikasi(
                     value = waktu,
                     onValueChange = { waktu = it },
                     label = { Text("Waktu Komunikasi") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
 
@@ -1825,7 +1940,11 @@ private fun DialogTambahLogKomunikasi(
                     value = pihakDihubungi,
                     onValueChange = { pihakDihubungi = it },
                     label = { Text("Pihak yang Dihubungi / Menerima") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
 
@@ -1833,7 +1952,11 @@ private fun DialogTambahLogKomunikasi(
                     value = pesan,
                     onValueChange = { pesan = it },
                     label = { Text("Isi Pesan Koordinasi") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
 
@@ -1841,7 +1964,11 @@ private fun DialogTambahLogKomunikasi(
                     value = arahanTindakan,
                     onValueChange = { arahanTindakan = it },
                     label = { Text("Arahan / Tindakan Hasil Komunikasi") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
 

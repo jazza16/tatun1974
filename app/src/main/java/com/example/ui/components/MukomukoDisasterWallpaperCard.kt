@@ -162,6 +162,7 @@ fun MukomukoDisasterWallpaperCard(
                     painter = painterResource(id = R.drawable.img_mukomuko_disaster_wallpaper),
                     contentDescription = "Infografis Mitigasi Bencana Mukomuko",
                     contentScale = ContentScale.Crop,
+                    alignment = Alignment.TopCenter,
                     modifier = Modifier.fillMaxSize()
                 )
 

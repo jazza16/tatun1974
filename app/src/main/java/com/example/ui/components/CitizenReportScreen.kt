@@ -183,6 +183,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.security.PlayIntegritySecurityManager
 import com.example.security.SecurityManager
 import com.example.security.SecurityAccessResult
+import com.example.security.UserRole
 import kotlinx.coroutines.launch
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -286,6 +287,7 @@ fun CitizenReportScreen(
     onSyncReports: (((Int) -> Unit) -> Unit)? = null,
     onUpdateReportStatusAndNotes: ((String, String, String) -> Unit)? = null,
     onSubmitReportWithResult: ((CitizenDisasterReport, (com.example.data.repository.WeatherRepository.CitizenReportSubmitResult) -> Unit) -> Unit)? = null,
+    onDeleteReport: ((String) -> Unit)? = null,
     initialShowOfficerLogin: Boolean = false,
     initialOpenRuangKerja: Boolean = false,
     onOfficerLoginDismissed: (() -> Unit)? = null,
@@ -303,6 +305,15 @@ fun CitizenReportScreen(
     var officerBadgeId by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerBadgeId().ifBlank { authManager.getBadgeOrUid() }) }
     var officerShift by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerShift()) }
     var officerRole by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerRole()) }
+    var historyReportPendingDeletion by remember { mutableStateOf<CitizenDisasterReport?>(null) }
+
+    // RBAC Multi-Tier: Tier 3 (Operator/Logistik/TRC/null) hanya akses menu operasional (tanpa Statistik)
+    val canShowStatisticsTab = !isOfficerLoggedIn || UserRole.canViewStatistics(officerRole)
+    LaunchedEffect(canShowStatisticsTab, selectedTab) {
+        if (!canShowStatisticsTab && selectedTab == 5) {
+            selectedTab = 0
+        }
+    }
 
     val coroutineScope = rememberCoroutineScope()
     val database = remember { AppDatabase.getInstance(context) }
@@ -676,15 +687,16 @@ fun CitizenReportScreen(
             color = Color(0xFF15803D),
             modifier = Modifier.fillMaxWidth()
         ) {
+            val effectiveTabIndex = if (canShowStatisticsTab) selectedTab else selectedTab.coerceAtMost(4)
             ScrollableTabRow(
-                selectedTabIndex = selectedTab,
+                selectedTabIndex = effectiveTabIndex,
                 containerColor = Color(0xFF15803D),
                 contentColor = Color.White,
                 edgePadding = 8.dp,
                 indicator = { tabPositions ->
-                    if (selectedTab < tabPositions.size) {
+                    if (effectiveTabIndex < tabPositions.size) {
                         TabRowDefaults.SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[effectiveTabIndex]),
                             height = 3.dp,
                             color = Color(0xFFFBBF24)
                         )
@@ -825,28 +837,31 @@ fun CitizenReportScreen(
                     }
                 )
 
-                // Tab 5: Statistik & Tren Bulanan (Grafik Batang & Pie Chart)
-                Tab(
-                    selected = selectedTab == 5,
-                    onClick = { selectedTab = 5 },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Analytics,
-                                contentDescription = null,
-                                tint = if (selectedTab == 5) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Tren Bulanan",
-                                fontWeight = if (selectedTab == 5) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 12.sp,
-                                color = if (selectedTab == 5) Color.White else Color.White.copy(alpha = 0.7f)
-                            )
+                // Tab 5: Statistik & Tren Bulanan (RBAC: Disembunyikan untuk petugas Tier 3 Operator/Logistik/TRC)
+                if (canShowStatisticsTab) {
+                    Tab(
+                        selected = selectedTab == 5,
+                        onClick = { selectedTab = 5 },
+                        modifier = Modifier.testTag("tab_tren_bulanan_statistik"),
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Analytics,
+                                    contentDescription = null,
+                                    tint = if (selectedTab == 5) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Tren Bulanan",
+                                    fontWeight = if (selectedTab == 5) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 12.sp,
+                                    color = if (selectedTab == 5) Color.White else Color.White.copy(alpha = 0.7f)
+                                )
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
 
@@ -873,12 +888,13 @@ fun CitizenReportScreen(
                     when (selectedTab) {
                 0 -> {
                     // TAB 0: FORMULIR INPUT (Matches Screenshot)
+                    val citizenFormKeyboardActions = rememberFormKeyboardActions()
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
                             .imePadding()
                             .padding(horizontal = 20.dp),
-                        contentPadding = PaddingValues(vertical = 12.dp),
+                        contentPadding = PaddingValues(top = 12.dp, bottom = 110.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         if (isOfficerLoggedIn) {
@@ -1148,9 +1164,12 @@ fun CitizenReportScreen(
                                     value = incidentLocation,
                                     onValueChange = { incidentLocation = it },
                                     placeholder = { Text("Nama jalan, dusun, atau patokan lokasi...", fontSize = 13.sp, color = Color(0xFF6B7280)) },
+                                    keyboardOptions = formNextKeyboardOptions(),
+                                    keyboardActions = citizenFormKeyboardActions,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(top = 4.dp),
+                                        .padding(top = 4.dp)
+                                        .formScrollPadding(),
                                     singleLine = true,
                                     colors = TextFieldDefaults.colors(
                                         focusedContainerColor = Color.Transparent,
@@ -1623,8 +1642,11 @@ fun CitizenReportScreen(
                                                 color = Color(0xFF6B7280)
                                             )
                                         },
+                                        keyboardOptions = formNextKeyboardOptions(),
+                                        keyboardActions = citizenFormKeyboardActions,
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .formScrollPadding()
                                             .testTag("input_deskripsi_kejadian_lainnya"),
                                         minLines = 3,
                                         maxLines = 6,
@@ -1652,9 +1674,12 @@ fun CitizenReportScreen(
                                     value = reporterName,
                                     onValueChange = { reporterName = it },
                                     placeholder = { Text("Contoh: Budi (Warga RT 02)", fontSize = 13.sp) },
+                                    keyboardOptions = formDoneKeyboardOptions(),
+                                    keyboardActions = citizenFormKeyboardActions,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(top = 4.dp),
+                                        .padding(top = 4.dp)
+                                        .formScrollPadding(),
                                     singleLine = true
                                 )
                             }
@@ -2178,38 +2203,36 @@ fun CitizenReportScreen(
                                 CitizenReportItemCard(
                                     report = report,
                                     isOfficerLoggedIn = isOfficerLoggedIn,
+                                    officerRole = officerRole,
                                     onUpdateStatus = { newStatus ->
                                         if (isOfficerLoggedIn) {
                                             if (newStatus.equals("Divalidasi", ignoreCase = true)) {
-                                                val isOperator = officerRole.contains("Operator", ignoreCase = true)
-                                                if (!isOperator) {
+                                                if (!UserRole.canValidateReports(officerRole)) {
                                                     Toast.makeText(
                                                         context,
-                                                        "Akses Ditolak: Tombol Validasi Laporan hanya dapat dieksekusi oleh Operator Pusdalops sebagai wujud tanggung jawab petugas.",
+                                                        "Akses Ditolak (RBAC): Tombol Validasi Laporan hanya untuk Manajer, Pengawas, Supervisor, atau Koord. Administrasi.",
                                                         Toast.LENGTH_LONG
                                                     ).show()
                                                 } else {
                                                     onUpdateReportStatus(report.id, newStatus)
                                                     Toast.makeText(
                                                         context,
-                                                        "Status laporan #${report.id.takeLast(7)} diubah menjadi '$newStatus' oleh Petugas $officerName",
+                                                        "Status laporan #${report.id.takeLast(7)} divalidasi oleh $officerName ($officerRole)",
                                                         Toast.LENGTH_SHORT
                                                     ).show()
                                                 }
                                             } else if (newStatus.equals("Selesai", ignoreCase = true)) {
-                                                val isAuthorizedLeader = officerRole.contains("Manajer", ignoreCase = true) ||
-                                                        officerRole.contains("Administrasi", ignoreCase = true)
-                                                if (!isAuthorizedLeader) {
+                                                if (!UserRole.canCompleteReports(officerRole)) {
                                                     Toast.makeText(
                                                         context,
-                                                        "Akses Ditolak: Tombol Selesai hanya dapat dieksekusi oleh Manajer Pusdalops atau Koord. Administrasi sebagai wujud tanggung jawab petugas.",
+                                                        "Akses Ditolak (RBAC): Status Selesai hanya dapat dieksekusi oleh Tier 1 (Manajer) atau Tier 2 (Pengawas/Supervisor/Koord. Administrasi).",
                                                         Toast.LENGTH_LONG
                                                     ).show()
                                                 } else {
                                                     onUpdateReportStatus(report.id, newStatus)
                                                     Toast.makeText(
                                                         context,
-                                                        "Status laporan #${report.id.takeLast(7)} diubah menjadi '$newStatus' oleh Petugas $officerName",
+                                                        "Status laporan #${report.id.takeLast(7)} diubah menjadi '$newStatus' oleh $officerName",
                                                         Toast.LENGTH_SHORT
                                                     ).show()
                                                 }
@@ -2232,6 +2255,11 @@ fun CitizenReportScreen(
                                     onViewPhoto = { photoUri ->
                                         previewPhotoUri = photoUri
                                         previewPhotoReport = report
+                                    },
+                                    onDeleteReport = if (isOfficerLoggedIn && UserRole.canDeleteReports(officerRole) && onDeleteReport != null) {
+                                        { historyReportPendingDeletion = report }
+                                    } else {
+                                        null
                                     }
                                 )
                             }
@@ -2362,7 +2390,8 @@ fun CitizenReportScreen(
                                     previewPhotoUri = photoUri
                                     previewPhotoReport = rep
                                 },
-                                onSyncReports = onSyncReports
+                                onSyncReports = onSyncReports,
+                                onDeleteReport = onDeleteReport
                             )
                         }
                     } else {
@@ -2419,19 +2448,21 @@ fun CitizenReportScreen(
                     }
                 }
                 5 -> {
-                    // TAB 5: TREN & STATISTIK BENCANA BULANAN (GRAFIK BATANG & PIE CHART)
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        item {
-                            MonthlyDisasterAnalyticsSection(
-                                reports = reports,
-                                currentDistrict = currentDistrict,
-                                isDark = false
-                            )
+                    // TAB 5: TREN & STATISTIK BENCANA BULANAN (RBAC: Tier 1 & Tier 2, atau publik non-petugas)
+                    if (canShowStatisticsTab) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            item {
+                                MonthlyDisasterAnalyticsSection(
+                                    reports = reports,
+                                    currentDistrict = currentDistrict,
+                                    isDark = false
+                                )
+                            }
                         }
                     }
                 }
@@ -2445,6 +2476,56 @@ fun CitizenReportScreen(
         }
     }
 }
+
+    // Konfirmasi Hapus Laporan (RBAC Tier 1: HANYA untuk Manajer)
+    val reportToDelete = historyReportPendingDeletion
+    if (reportToDelete != null && isOfficerLoggedIn && UserRole.canDeleteReports(officerRole)) {
+        AlertDialog(
+            onDismissRequest = { historyReportPendingDeletion = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Hapus Laporan",
+                    tint = Color(0xFFDC2626),
+                    modifier = Modifier.size(34.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Hapus Laporan Warga?",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "Laporan #${reportToDelete.id} (${reportToDelete.disasterType} - ${reportToDelete.village}) akan dihapus permanen dari perangkat dan server Cloud Firestore. Aksi eksklusif Tier 1 Manajer.",
+                    fontSize = 12.sp,
+                    color = Color(0xFF374151),
+                    lineHeight = 17.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val id = reportToDelete.id
+                        historyReportPendingDeletion = null
+                        onDeleteReport?.invoke(id)
+                        Toast.makeText(context, "Laporan #$id dihapus oleh Manajer $officerName", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.testTag("btn_confirm_history_delete_report")
+                ) {
+                    Text("Ya, Hapus Permanen")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { historyReportPendingDeletion = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 
     // Permission Guidance Dialog for CAMERA & LOCATION
     if (permissionDeniedDialogMessage != null) {
@@ -2974,6 +3055,13 @@ fun CitizenReportScreen(
                 }
             }
         ) {
+            val loginKeyboardActions = rememberFormKeyboardActions(
+                onDoneCallback = {
+                    if (!isSubmitting) {
+                        submitOfficerLogin()
+                    }
+                }
+            )
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = Color.White,
@@ -2981,11 +3069,13 @@ fun CitizenReportScreen(
                 shadowElevation = 12.dp,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .imePadding()
                     .padding(horizontal = 8.dp)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 24.dp, vertical = 28.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -3076,6 +3166,7 @@ fun CitizenReportScreen(
                                     keyboardType = KeyboardType.Text,
                                     imeAction = ImeAction.Next
                                 ),
+                                keyboardActions = loginKeyboardActions,
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Person,
@@ -3092,6 +3183,7 @@ fun CitizenReportScreen(
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .formScrollPadding()
                                     .testTag("officer_nip_input")
                             )
 
@@ -3123,13 +3215,7 @@ fun CitizenReportScreen(
                             keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Done
                         ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                if (!isSubmitting) {
-                                    submitOfficerLogin()
-                                }
-                            }
-                        ),
+                        keyboardActions = loginKeyboardActions,
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
@@ -3155,6 +3241,7 @@ fun CitizenReportScreen(
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .formScrollPadding()
                             .testTag("officer_pin_input")
                     )
 
@@ -3779,8 +3866,10 @@ private fun CasualtyCounterRow(
 private fun CitizenReportItemCard(
     report: CitizenDisasterReport,
     isOfficerLoggedIn: Boolean,
+    officerRole: String = OfficerRoles.PETUGAS_JAGA,
     onUpdateStatus: (String) -> Unit,
-    onViewPhoto: (String) -> Unit
+    onViewPhoto: (String) -> Unit,
+    onDeleteReport: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -4284,7 +4373,12 @@ private fun CitizenReportItemCard(
                 modifier = Modifier.padding(vertical = 8.dp)
             )
 
-            // Status Management Row with Buttons (Officer role-gated)
+            // Status Management & RBAC Action Row (Multi-Tier BPBD Mukomuko)
+            val activeUserRole = UserRole.fromRoleString(officerRole)
+            val canValidate = isOfficerLoggedIn && UserRole.canValidateReports(officerRole)
+            val canComplete = isOfficerLoggedIn && UserRole.canCompleteReports(officerRole)
+            val canDelete = isOfficerLoggedIn && UserRole.canDeleteReports(officerRole) && onDeleteReport != null
+
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -4304,10 +4398,14 @@ private fun CitizenReportItemCard(
                         Spacer(modifier = Modifier.width(3.dp))
                     }
                     Text(
-                        text = if (isOfficerLoggedIn) "Update Status (Petugas):" else "Status (Khusus Petugas):",
+                        text = if (isOfficerLoggedIn) {
+                            "Aksi (${activeUserRole.tierCode}):"
+                        } else {
+                            "Status (Khusus Petugas):"
+                        },
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isOfficerLoggedIn) Color(0xFF15803D) else Color(0xFF4B5563)
+                        color = if (isOfficerLoggedIn) Color(activeUserRole.badgeColorHex) else Color(0xFF4B5563)
                     )
                 }
 
@@ -4315,6 +4413,7 @@ private fun CitizenReportItemCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    // Operasional (Diproses): Tersedia untuk semua tier petugas (Tier 1, 2, 3) atau menampilkan dialog login untuk warga
                     ReportStatusChip(
                         label = "Diproses",
                         isSelected = report.status == "Diproses",
@@ -4322,19 +4421,66 @@ private fun CitizenReportItemCard(
                     ) {
                         onUpdateStatus("Diproses")
                     }
-                    ReportStatusChip(
-                        label = "Divalidasi",
-                        isSelected = report.status == "Divalidasi",
-                        color = Color(0xFF16A34A)
-                    ) {
-                        onUpdateStatus("Divalidasi")
+
+                    // Validasi Laporan: HANYA tampil untuk Tier 1 (Manajer) & Tier 2 (Pengawas/Supervisor/Koord. Administrasi)
+                    // Disembunyikan total untuk Tier 3 (Operator/Logistik/TRC/null)
+                    if (canValidate) {
+                        ReportStatusChip(
+                            label = "Validasi Laporan",
+                            isSelected = report.status == "Divalidasi",
+                            color = Color(0xFF16A34A),
+                            testTag = "btn_history_validate_report_${report.id}"
+                        ) {
+                            onUpdateStatus("Divalidasi")
+                        }
                     }
-                    ReportStatusChip(
-                        label = "Selesai",
-                        isSelected = report.status == "Selesai",
-                        color = Color(0xFF2563EB)
-                    ) {
-                        onUpdateStatus("Selesai")
+
+                    // Selesai: HANYA tampil untuk Tier 1 & Tier 2 (disembunyikan untuk Tier 3)
+                    if (canComplete) {
+                        ReportStatusChip(
+                            label = "Selesai",
+                            isSelected = report.status == "Selesai",
+                            color = Color(0xFF2563EB),
+                            testTag = "btn_history_complete_report_${report.id}"
+                        ) {
+                            onUpdateStatus("Selesai")
+                        }
+                    }
+
+                    // Hapus Laporan: HANYA tampil untuk Tier 1 (Manajer)
+                    if (canDelete) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFFEE2E2),
+                            border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                            modifier = Modifier
+                                .heightIn(min = 40.dp)
+                                .testTag("btn_history_delete_report_${report.id}")
+                                .clickable { onDeleteReport?.invoke() }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Hapus Laporan",
+                                    tint = Color(0xFFB91C1C),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Hapus Laporan",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFB91C1C),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -4347,6 +4493,7 @@ private fun ReportStatusChip(
     label: String,
     isSelected: Boolean,
     color: Color,
+    testTag: String? = null,
     onClick: () -> Unit
 ) {
     Surface(
@@ -4358,6 +4505,7 @@ private fun ReportStatusChip(
         ),
         modifier = Modifier
             .heightIn(min = 40.dp)
+            .let { base -> if (testTag != null) base.testTag(testTag) else base }
             .clickable { onClick() }
     ) {
         Box(

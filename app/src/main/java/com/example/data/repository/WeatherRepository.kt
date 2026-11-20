@@ -624,6 +624,30 @@ class WeatherRepository(
     }
 
     /**
+     * Menghapus laporan warga dari Room lokal & Cloud Firestore.
+     * Dilindungi RBAC Multi-Tier: HANYA diizinkan untuk Tier 1 (Manajer / Full Access).
+     */
+    suspend fun deleteCitizenReport(
+        reportId: String,
+        officerRole: String?
+    ): Boolean = withContext(databaseWriteDispatcher) {
+        if (!com.example.security.UserRole.canDeleteReports(officerRole)) {
+            android.util.Log.w(
+                "WeatherRepository",
+                "RBAC Ditolak: role='$officerRole' tidak memiliki izin Hapus Laporan (khusus Tier 1 Manajer)."
+            )
+            return@withContext false
+        }
+        val deletedLocal = weatherDao.deleteCitizenReportById(reportId)
+        val cloudResult = try {
+            com.example.data.local.FirestoreHelper.deleteReportFromCloudSuspend(reportId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+        deletedLocal > 0 || cloudResult.isSuccess
+    }
+
+    /**
      * Sinkronisasi dua arah (Pull + Push) antara Room lokal dan Cloud Firestore (Source.SERVER):
      * 1. Menarik seluruh laporan terbaru dari Firestore dan menerapkan pembaruan petugas aktif
      *    tanpa menimpa perubahan lokal yang belum terunggah dan lebih baru.

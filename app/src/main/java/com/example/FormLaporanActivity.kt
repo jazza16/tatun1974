@@ -6,6 +6,9 @@ import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import com.example.data.local.AppDatabase
@@ -40,6 +43,30 @@ class FormLaporanActivity : AppCompatActivity() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
 
         setContentView(R.layout.activity_form_laporan)
+
+        // Safe Area WindowInsets agar tombol "Selanjutnya" tidak tertutup Navigation Bar / area gestur HP
+        val rootView = findViewById<View>(R.id.rootFormLaporan)
+        val bottomNavContainer = findViewById<View>(R.id.bottomNavContainer)
+        val basePaddingPx = (16 * resources.displayMetrics.density).toInt()
+        if (rootView != null && bottomNavContainer != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, windowInsets ->
+                val bars = windowInsets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
+                )
+                view.updatePadding(
+                    left = bars.left,
+                    top = bars.top,
+                    right = bars.right
+                )
+                bottomNavContainer.updatePadding(
+                    left = basePaddingPx,
+                    top = basePaddingPx,
+                    right = basePaddingPx,
+                    bottom = basePaddingPx + bars.bottom
+                )
+                windowInsets
+            }
+        }
 
         // Inisialisasi View
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)

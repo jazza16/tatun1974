@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,6 +61,10 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import com.example.data.local.DistribusiLogistikEntity
 import com.example.data.local.LogKomunikasi
+import com.example.ui.components.formDoneKeyboardOptions
+import com.example.ui.components.formNextKeyboardOptions
+import com.example.ui.components.formScrollPadding
+import com.example.ui.components.rememberFormKeyboardActions
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -90,6 +95,7 @@ class FormTab4Fragment : Fragment() {
 @Composable
 fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val keyboardActions = rememberFormKeyboardActions()
     val officerAuthManager = remember { com.example.data.local.OfficerAuthManager(context) }
     val session = remember { com.example.util.SessionManager(context) }
     val verifiedUser = remember { session.authenticateToken() }
@@ -243,8 +249,9 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF5F5F5))
+            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
@@ -270,7 +277,11 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
                             }
                         },
                         label = { Text("Tanggal Surat") },
-                        modifier = Modifier.weight(1f),
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
+                        modifier = Modifier
+                            .weight(1f)
+                            .formScrollPadding(),
                         singleLine = true
                     )
                     OutlinedTextField(
@@ -282,7 +293,11 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
                             }
                         },
                         label = { Text("Tanggal Terima") },
-                        modifier = Modifier.weight(1f),
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
+                        modifier = Modifier
+                            .weight(1f)
+                            .formScrollPadding(),
                         singleLine = true
                     )
                 }
@@ -371,7 +386,11 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
                     value = namaBarangInput,
                     onValueChange = { namaBarangInput = it },
                     label = { Text("Nama Barang (cth: Tenda Gulung, Beras, Air Mineral)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
 
@@ -383,14 +402,22 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
                         value = jumlahInput,
                         onValueChange = { jumlahInput = it },
                         label = { Text("Jumlah") },
-                        modifier = Modifier.weight(1f),
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
+                        modifier = Modifier
+                            .weight(1f)
+                            .formScrollPadding(),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = satuanInput,
                         onValueChange = { satuanInput = it },
                         label = { Text("Satuan (Unit/Karung/Dus)") },
-                        modifier = Modifier.weight(1f),
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
+                        modifier = Modifier
+                            .weight(1f)
+                            .formScrollPadding(),
                         singleLine = true
                     )
                 }
@@ -399,7 +426,11 @@ fun FormTab4Content(sharedViewModel: LaporanViewModel? = null) {
                     value = keteranganInput,
                     onValueChange = { keteranganInput = it },
                     label = { Text("Keterangan (cth: Diserahkan ke Kecamatan X)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
 

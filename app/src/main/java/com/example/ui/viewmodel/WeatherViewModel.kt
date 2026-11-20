@@ -517,6 +517,20 @@ class WeatherViewModel(
         }
     }
 
+    fun deleteCitizenReport(
+        reportId: String,
+        officerRole: String?,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val deleted = repository.deleteCitizenReport(
+                reportId = reportId,
+                officerRole = officerRole
+            )
+            onComplete?.invoke(deleted)
+        }
+    }
+
     fun runAutomatedCleanup90Days() {
         viewModelScope.launch {
             repository.runAutomatedCleanup90Days()

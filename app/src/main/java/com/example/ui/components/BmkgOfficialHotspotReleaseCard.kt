@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -309,110 +312,215 @@ fun BmkgOfficialHotspotReleaseCard(
                         .fillMaxWidth()
                         .testTag("bmkg_release_monthly_chart_box")
                 ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        // Baris 1: Judul Grafik & Indikator Skala Puncak (Sejajar & Tidak Bertabrakan)
+                        val maxMonthlyCount = (filteredMonths.maxOfOrNull { it.totalHotspots } ?: 1).coerceAtLeast(1)
+                        val midMonthlyCount = (maxMonthlyCount / 2).coerceAtLeast(1)
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.BarChart,
                                     contentDescription = null,
                                     tint = BmkgOceanBlue,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(15.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = "Tren Bulanan (${filteredMonths.size} Bln)",
-                                    fontSize = 11.sp,
+                                    fontSize = 11.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                BmkgReleaseYearFilter.entries.forEach { filter ->
-                                    val selected = selectedYearFilter == filter
-                                    Surface(
-                                        color = if (selected) BmkgOceanBlue else Color.Transparent,
-                                        shape = RoundedCornerShape(6.dp),
-                                        border = BorderStroke(
-                                            0.8.dp,
-                                            if (selected) BmkgOceanBlue else BmkgOceanBlue.copy(alpha = 0.45f)
-                                        ),
-                                        modifier = Modifier.clickable {
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Surface(
+                                color = BmkgOceanBlue.copy(alpha = 0.14f),
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(0.8.dp, BmkgOceanBlue.copy(alpha = 0.35f))
+                            ) {
+                                Text(
+                                    text = "Maks: $maxMonthlyCount Titik",
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isDark) Color(0xFF38BDF8) else BmkgNavyBlue,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Baris 2: Filter Periode Tahun (Horizontal Rata & Single-Line tanpa Terpotong "Ki"/"ni")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            BmkgReleaseYearFilter.entries.forEach { filter ->
+                                val selected = selectedYearFilter == filter
+                                Surface(
+                                    color = if (selected) BmkgOceanBlue else Color.Transparent,
+                                    shape = RoundedCornerShape(7.dp),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selected) BmkgOceanBlue else BmkgOceanBlue.copy(alpha = 0.45f)
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
                                             selectedYearFilter = filter
                                             selectedMonthIndex = -1
                                         }
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp)
                                     ) {
                                         Text(
                                             text = filter.label,
-                                            fontSize = 9.sp,
+                                            fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp)
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            softWrap = false
                                         )
                                     }
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                        val maxMonthlyCount = (filteredMonths.maxOfOrNull { it.totalHotspots } ?: 1).coerceAtLeast(1)
-
+                        // Baris 3: Area Grafik Batang + Sumbu Y yang Sejajar dan Rapi
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(88.dp)
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                .height(100.dp),
                             verticalAlignment = Alignment.Bottom
                         ) {
-                            filteredMonths.forEachIndexed { idx, monthItem ->
-                                val isSelectedBar = selectedMonthIndex == idx
-                                val ratio = (monthItem.totalHotspots.toFloat() / maxMonthlyCount.toFloat()).coerceIn(0.15f, 1f)
-                                val barBrush = when {
-                                    isSelectedBar -> Brush.verticalGradient(listOf(OrangePrimary, Color(0xFFDC2626)))
-                                    monthItem.year >= 2026 -> Brush.verticalGradient(listOf(BmkgEmeraldGreen, BmkgOceanBlue))
-                                    else -> Brush.verticalGradient(listOf(BmkgOceanBlue, BmkgNavyBlue))
-                                }
+                            // Sumbu Y (Kiri): Label Skala Sejajar (Maks, Tengah, 0) dengan lebar tetap agar tidak menumpuk
+                            Column(
+                                modifier = Modifier
+                                    .widthIn(min = 26.dp)
+                                    .fillMaxHeight()
+                                    .padding(top = 4.dp, bottom = 16.dp, end = 6.dp),
+                                verticalArrangement = Arrangement.SpaceBetween,
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                Text(
+                                    text = "$maxMonthlyCount",
+                                    fontSize = 8.5.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Text(
+                                    text = "$midMonthlyCount",
+                                    fontSize = 8.5.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Text(
+                                    text = "0",
+                                    fontSize = 8.5.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
 
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Bottom,
-                                    modifier = Modifier
-                                        .width(32.dp)
-                                        .fillMaxHeight()
-                                        .clickable {
-                                            selectedMonthIndex = if (selectedMonthIndex == idx) -1 else idx
-                                        }
-                                ) {
-                                    Text(
-                                        text = "${monthItem.totalHotspots}",
-                                        fontSize = 8.5.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = if (isSelectedBar) OrangePrimary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Box(
+                            // Garis pembatas vertikal Sumbu Y
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .fillMaxHeight()
+                                    .padding(top = 4.dp, bottom = 16.dp)
+                                    .background(BmkgOceanBlue.copy(alpha = 0.28f))
+                            )
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            // Deretan Batang Bulanan (Scrollable dengan Padding Kanan Cukup)
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(end = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                filteredMonths.forEachIndexed { idx, monthItem ->
+                                    val isSelectedBar = selectedMonthIndex == idx
+                                    val ratio = (monthItem.totalHotspots.toFloat() / maxMonthlyCount.toFloat()).coerceIn(0.15f, 1f)
+                                    val barBrush = when {
+                                        isSelectedBar -> Brush.verticalGradient(listOf(OrangePrimary, Color(0xFFDC2626)))
+                                        monthItem.year >= 2026 -> Brush.verticalGradient(listOf(BmkgEmeraldGreen, BmkgOceanBlue))
+                                        else -> Brush.verticalGradient(listOf(BmkgOceanBlue, BmkgNavyBlue))
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Bottom,
                                         modifier = Modifier
-                                            .width(18.dp)
-                                            .fillMaxHeight(ratio * 0.68f)
-                                            .clip(RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
-                                            .background(barBrush)
-                                    )
-                                    Spacer(modifier = Modifier.height(3.dp))
-                                    Text(
-                                        text = monthItem.periodCode.substringAfter("-").let { m ->
-                                            "$m/'${monthItem.year.toString().takeLast(2)}"
-                                        },
-                                        fontSize = 8.sp,
-                                        fontWeight = if (isSelectedBar) FontWeight.ExtraBold else FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                        maxLines = 1
-                                    )
+                                            .width(36.dp)
+                                            .fillMaxHeight()
+                                            .clickable {
+                                                selectedMonthIndex = if (selectedMonthIndex == idx) -1 else idx
+                                            }
+                                    ) {
+                                        Text(
+                                            text = "${monthItem.totalHotspots}",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = if (isSelectedBar) OrangePrimary else MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .width(20.dp)
+                                                .fillMaxHeight(ratio * 0.66f)
+                                                .clip(RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
+                                                .background(barBrush)
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = monthItem.periodCode.substringAfter("-").let { m ->
+                                                "$m/'${monthItem.year.toString().takeLast(2)}"
+                                            },
+                                            fontSize = 8.5.sp,
+                                            fontWeight = if (isSelectedBar) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -687,13 +795,16 @@ private fun BmkgReleaseMetricBox(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
             Text(
                 text = value,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = accentColor
+                color = accentColor,
+                maxLines = 1,
+                softWrap = false
             )
             Text(
                 text = subtitle,
@@ -701,7 +812,8 @@ private fun BmkgReleaseMetricBox(
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
         }
     }
@@ -722,7 +834,9 @@ private fun ConfidenceMiniPill(
             fontSize = 8.5.sp,
             fontWeight = FontWeight.ExtraBold,
             color = color,
-            modifier = Modifier.padding(horizontal = 4.5.dp, vertical = 1.5.dp)
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
         )
     }
 }

@@ -267,6 +267,8 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="text"
+                        android:imeOptions="actionNext"
+                        android:nextFocusForward="@+id/etKoordinat"
                         android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -290,6 +292,8 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="text"
+                            android:imeOptions="actionNext"
+                            android:nextFocusForward="@+id/etKedalaman"
                             android:textColor="#333333"/>
                     </com.google.android.material.textfield.TextInputLayout>
 
@@ -339,6 +343,8 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="text"
+                        android:imeOptions="actionNext"
+                        android:nextFocusForward="@+id/etCakupanDampak"
                         android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -354,8 +360,10 @@
                         android:id="@+id/etCakupanDampak"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textMultiLine"
-                        android:minLines="2"
+                        android:inputType="text"
+                        android:maxLines="3"
+                        android:imeOptions="actionNext"
+                        android:nextFocusForward="@+id/etUpayaDilakukan"
                         android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -371,8 +379,10 @@
                         android:id="@+id/etUpayaDilakukan"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textMultiLine"
-                        android:minLines="2"
+                        android:inputType="text"
+                        android:maxLines="3"
+                        android:imeOptions="actionNext"
+                        android:nextFocusForward="@+id/etKondisiMutakhir"
                         android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -388,8 +398,10 @@
                         android:id="@+id/etKondisiMutakhir"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textMultiLine"
-                        android:minLines="2"
+                        android:inputType="text"
+                        android:maxLines="3"
+                        android:imeOptions="actionNext"
+                        android:nextFocusForward="@+id/etKerusakan"
                         android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -405,8 +417,10 @@
                         android:id="@+id/etKerusakan"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textMultiLine"
-                        android:minLines="2"
+                        android:inputType="text"
+                        android:maxLines="3"
+                        android:imeOptions="actionNext"
+                        android:nextFocusForward="@+id/etPenyebab"
                         android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -422,8 +436,10 @@
                         android:id="@+id/etPenyebab"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textMultiLine"
-                        android:minLines="2"
+                        android:inputType="text"
+                        android:maxLines="3"
+                        android:imeOptions="actionNext"
+                        android:nextFocusForward="@+id/etSumberInformasi"
                         android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -439,16 +455,17 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="text"
+                        android:imeOptions="actionDone"
                         android:textColor="#333333"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
         
-        <!-- Spasi bawah agar tidak tertutup tombol -->
+        <!-- Spasi bawah agar tidak tertutup tombol & keyboard -->
         <View
             android:layout_width="match_parent"
-            android:layout_height="80dp"/>
+            android:layout_height="110dp"/>
 
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

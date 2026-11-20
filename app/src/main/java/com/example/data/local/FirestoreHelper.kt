@@ -88,6 +88,9 @@ object FirestoreHelper {
     @Volatile
     var overrideCitizenReportStatusUpdaterForTesting: (suspend (String, String, String?, Long, String, String, String) -> Result<Unit>)? = null
 
+    @Volatile
+    var overrideOfficersCollectionRoleFetcherForTesting: (suspend (String) -> String?)? = null
+
     fun resetTestHooks() {
         overrideFirestoreForTesting = null
         overrideCloudCredentialFetcherForTesting = null
@@ -95,6 +98,7 @@ object FirestoreHelper {
         overrideCitizenReportFetcherForTesting = null
         overrideCitizenReportUploaderForTesting = null
         overrideCitizenReportStatusUpdaterForTesting = null
+        overrideOfficersCollectionRoleFetcherForTesting = null
     }
 
     private fun currentUid(): String? = try {
@@ -967,6 +971,35 @@ object FirestoreHelper {
     }
 
     /**
+     * Menghapus dokumen laporan warga di Cloud Firestore (khusus Tier 1 Manajer / Full Access).
+     */
+    suspend fun deleteReportFromCloudSuspend(reportId: String): Result<Unit> {
+        val dbResult = getFirestoreOrThrow()
+        val db = dbResult.getOrNull()
+            ?: return Result.failure(dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia"))
+        ensureAppCheckTokenAttached()
+        val safeId = sanitizeCitizenReportId(reportId)
+        return suspendCancellableCoroutine { cont ->
+            try {
+                db.collection(COLLECTION_CITIZEN_REPORTS)
+                    .document(safeId)
+                    .delete()
+                    .addOnSuccessListener {
+                        Log.d(TAG, "Report $safeId deleted from Firestore by Tier 1 Manajer")
+                        if (cont.isActive) cont.resume(Result.success(Unit))
+                    }
+                    .addOnFailureListener { e ->
+                        logFirestoreError("deleteReportFromCloudSuspend($safeId)", e)
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                logFirestoreError("deleteReportFromCloudSuspend($safeId)", e)
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
+    }
+
+    /**
      * Backs up the disaster report database to user-isolated Cloud Firestore backup storage.
      */
     fun backupReportsToCloud(
@@ -1704,6 +1737,52 @@ object FirestoreHelper {
                 if (cont.isActive) cont.resume(Result.failure(e))
             }
         }
+
+    /**
+     * Mengambil field `role` untuk NIP petugas tertentu dari koleksi Firestore `officers`
+     * (dengan timeout singkat agar tidak menghambat proses login jika koleksi `officers` belum diisi).
+     */
+    suspend fun fetchOfficerRoleFromOfficersCollectionSuspend(
+        nip: String,
+        context: Context? = null
+    ): String? {
+        val cleanNip = nip.trim()
+        if (cleanNip.isBlank()) return null
+
+        overrideOfficersCollectionRoleFetcherForTesting?.let { fetcher ->
+            return fetcher(cleanNip)
+        }
+
+        // Jika dalam mode unit test mock credential fetcher, lewati jaringan Firestore langsung
+        if (overrideCloudCredentialFetcherForTesting != null && overrideFirestoreForTesting == null) {
+            return null
+        }
+
+        val db = getFirestoreOrThrow(context).getOrNull() ?: return null
+        return withTimeoutOrNull(2500L) {
+            suspendCancellableCoroutine { cont ->
+                try {
+                    db.collection(COLLECTION_OFFICERS)
+                        .document(cleanNip)
+                        .get(Source.SERVER)
+                        .addOnSuccessListener { doc ->
+                            if (!cont.isActive) return@addOnSuccessListener
+                            val directRole = doc?.takeIf { it.exists() }?.getString("role")?.trim()
+                            if (!directRole.isNullOrBlank()) {
+                                cont.resume(directRole)
+                            } else {
+                                cont.resume(null)
+                            }
+                        }
+                        .addOnFailureListener {
+                            if (cont.isActive) cont.resume(null)
+                        }
+                } catch (_: Exception) {
+                    if (cont.isActive) cont.resume(null)
+                }
+            }
+        }
+    }
 
     private fun isGpsVerified(value: Boolean): Boolean = value
 }

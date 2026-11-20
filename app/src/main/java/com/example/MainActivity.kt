@@ -981,6 +981,13 @@ fun WeatherAppScreen(
                                         officerRole = officerAuth.getOfficerRole()
                                     )
                                 },
+                                onDeleteReport = { id ->
+                                    val officerAuth = com.example.data.local.OfficerAuthManager(context)
+                                    viewModel.deleteCitizenReport(
+                                        reportId = id,
+                                        officerRole = officerAuth.getOfficerRole()
+                                    )
+                                },
                                 onSyncReports = { onComplete ->
                                     viewModel.syncCitizenDisasterReportsOnline(onComplete)
                                 },

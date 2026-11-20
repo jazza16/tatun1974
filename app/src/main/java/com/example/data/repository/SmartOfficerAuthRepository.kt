@@ -9,6 +9,7 @@ import com.example.data.local.FirestoreHelper
 import com.example.data.local.OfficerAuthManager
 import com.example.data.local.OfficerCredentialEntity
 import com.example.data.local.OfficerProfile
+import com.example.data.local.OfficerRoles
 import com.example.data.local.OfficialAsnBpbdPersonnel
 import com.example.data.local.PersonnelAuditLogEntity
 import kotlinx.coroutines.CoroutineScope
@@ -767,24 +768,34 @@ class SmartOfficerAuthRepository(private val context: Context) {
         }
 
         // 4. CLOUD VERIFICATION SUCCEEDED:
+        // Ambil nilai field `role` secara dinamis dari koleksi `officers` di Firestore (Zero Hardcode NIP/Nama).
+        // Jika koleksi `officers` mengembalikan nilai field `role`, gunakan nilai tersebut (atau "Operator" jika field kosong).
+        // Jika dokumen `officers` tidak ditemukan, gunakan field `role` dari dokumen Firestore `officer_credentials` (atau "Operator" jika field kosong).
+        val dynamicRoleFromOfficers = FirestoreHelper.fetchOfficerRoleFromOfficersCollectionSuspend(
+            nip = credential.nip,
+            context = context
+        )
+        val effectiveDynamicRole = dynamicRoleFromOfficers?.trim()?.ifBlank { OfficerRoles.RBAC_OPERATOR }
+            ?: credential.role.trim().ifBlank { OfficerRoles.RBAC_OPERATOR }
+
         // Save ONLY NIP + non-secret profile locally (NEVER store raw PIN or local PIN hash on device!)
         failedAttemptMap.remove(lockoutKey)
         val now = System.currentTimeMillis()
         val deviceDesc = "$deviceModel (Android ${Build.VERSION.RELEASE})"
 
-        val sanitizedMetadata = sanitizeForLocalMetadataCache(
-            credential.copy(
-                lastLoginAt = now,
-                lastLoginDevice = deviceDesc,
-                updatedAt = now
-            )
+        val resolvedCredential = credential.copy(
+            role = effectiveDynamicRole,
+            lastLoginAt = now,
+            lastLoginDevice = deviceDesc,
+            updatedAt = now
         )
+        val sanitizedMetadata = sanitizeForLocalMetadataCache(resolvedCredential)
         safeCacheMetadata(sanitizedMetadata)
         activeCredential = sanitizedMetadata
 
         // Sync non-secret login timestamp/device metadata back to Cloud (preserving server pinHash, salt & ownerUid)
-        if (credential.pinHash.isNotBlank() && credential.salt.isNotBlank()) {
-            val cloudMetadataUpdate = credential.copy(
+        if (resolvedCredential.pinHash.isNotBlank() && resolvedCredential.salt.isNotBlank()) {
+            val cloudMetadataUpdate = resolvedCredential.copy(
                 lastLoginAt = now,
                 lastLoginDevice = deviceDesc,
                 initialSecurePin = "",
@@ -799,55 +810,55 @@ class SmartOfficerAuthRepository(private val context: Context) {
         }
 
         // Record ONLY non-secret custom PIN status flag (NEVER writes PIN or PIN hash to SharedPreferences)
-        officerAuthManager.markCloudCustomPinStatus(credential.isCustomPinSet)
+        officerAuthManager.markCloudCustomPinStatus(resolvedCredential.isCustomPinSet)
 
-        // Save ONLY NIP & non-secret display metadata to encrypted SharedPreferences AFTER Cloud success
+        // Save ONLY NIP, Nama, & dynamic Role to SharedPreferences AFTER Cloud success
         officerAuthManager.saveNipToSecureStorage(
-            nip = credential.nip,
-            fullName = credential.fullName,
-            role = credential.role,
-            shift = credential.shift
+            nip = resolvedCredential.nip,
+            fullName = resolvedCredential.fullName,
+            role = effectiveDynamicRole,
+            shift = resolvedCredential.shift
         )
         officerAuthManager.loginOfficerDirectly(
-            name = credential.fullName,
-            badgeId = credential.nip,
-            shift = credential.shift,
-            role = credential.role
+            name = resolvedCredential.fullName,
+            badgeId = resolvedCredential.nip,
+            shift = resolvedCredential.shift,
+            role = effectiveDynamicRole
         )
 
         safeInsertAuditLog(
             PersonnelAuditLogEntity(
                 nip = trimmedNip,
-                name = credential.fullName,
-                role = credential.role,
-                shift = credential.shift,
+                name = resolvedCredential.fullName,
+                role = effectiveDynamicRole,
+                shift = resolvedCredential.shift,
                 action = "LOGIN_SUCCESSFUL_CLOUD_VERIFIED",
-                deviceInfo = "Berhasil masuk di $deviceDesc (PIN Terverifikasi Server Firebase, NIP disimpan lokal)"
+                deviceInfo = "Berhasil masuk di $deviceDesc (PIN Terverifikasi Server Firebase, Role=$effectiveDynamicRole disimpan ke SharedPreferences)"
             )
         )
 
         // Sinkronkan aktivitas login PIN Cloud ke daftar Keamanan Perangkat & Sesi (Play Integrity Classic)
         try {
             com.example.security.SecurityManager.getInstance(context).verifyDeviceAuthenticityDuringLogin(
-                officerNip = credential.nip,
-                officerName = credential.fullName,
-                officerRole = credential.role,
+                officerNip = resolvedCredential.nip,
+                officerName = resolvedCredential.fullName,
+                officerRole = effectiveDynamicRole,
                 loginMethod = "PIN_CLOUD",
                 loginAction = "LOGIN_SUCCESSFUL_CLOUD_VERIFIED",
-                detail = "Login PIN Cloud terverifikasi di $deviceDesc"
+                detail = "Login PIN Cloud terverifikasi di $deviceDesc (Role=$effectiveDynamicRole)"
             )
         } catch (e: Exception) {
             Log.w(TAG, "Non-fatal Play Integrity session sync warning after PIN login: ${e.message}")
         }
 
         val profile = OfficerProfile(
-            id = "cred-${credential.nip}",
-            fullName = credential.fullName,
-            nip = credential.nip,
-            role = credential.role,
-            unit = credential.unit,
-            shift = credential.shift,
-            phone = credential.phone
+            id = "cred-${resolvedCredential.nip}",
+            fullName = resolvedCredential.fullName,
+            nip = resolvedCredential.nip,
+            role = effectiveDynamicRole,
+            unit = resolvedCredential.unit,
+            shift = resolvedCredential.shift,
+            phone = resolvedCredential.phone
         )
 
         return@withContext Result.success(profile)
@@ -922,23 +933,30 @@ class SmartOfficerAuthRepository(private val context: Context) {
             }
         }
 
+        val dynamicRoleFromOfficers = FirestoreHelper.fetchOfficerRoleFromOfficersCollectionSuspend(
+            nip = activeCred.nip,
+            context = context
+        )
+        val effectiveDynamicRole = dynamicRoleFromOfficers?.trim()?.ifBlank { OfficerRoles.RBAC_OPERATOR }
+            ?: activeCred.role.trim().ifBlank { OfficerRoles.RBAC_OPERATOR }
+
         val now = System.currentTimeMillis()
         val deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
         val deviceDesc = "$deviceModel (Android ${Build.VERSION.RELEASE} • Biometrik)"
 
-        val sanitizedMetadata = sanitizeForLocalMetadataCache(
-            activeCred.copy(
-                lastLoginAt = now,
-                lastLoginDevice = deviceDesc,
-                updatedAt = now
-            )
+        val resolvedActiveCred = activeCred.copy(
+            role = effectiveDynamicRole,
+            lastLoginAt = now,
+            lastLoginDevice = deviceDesc,
+            updatedAt = now
         )
+        val sanitizedMetadata = sanitizeForLocalMetadataCache(resolvedActiveCred)
         safeCacheMetadata(sanitizedMetadata)
         activeCredential = sanitizedMetadata
 
-        if (activeCred.pinHash.isNotBlank() && activeCred.salt.isNotBlank()) {
+        if (resolvedActiveCred.pinHash.isNotBlank() && resolvedActiveCred.salt.isNotBlank()) {
             FirestoreHelper.syncCredentialToCloud(
-                credential = activeCred.copy(
+                credential = resolvedActiveCred.copy(
                     lastLoginAt = now,
                     lastLoginDevice = deviceDesc,
                     initialSecurePin = "",
@@ -950,18 +968,18 @@ class SmartOfficerAuthRepository(private val context: Context) {
             )
         }
 
-        officerAuthManager.markCloudCustomPinStatus(activeCred.isCustomPinSet)
+        officerAuthManager.markCloudCustomPinStatus(resolvedActiveCred.isCustomPinSet)
         officerAuthManager.saveNipToSecureStorage(
-            nip = activeCred.nip,
-            fullName = activeCred.fullName,
-            role = activeCred.role,
-            shift = activeCred.shift
+            nip = resolvedActiveCred.nip,
+            fullName = resolvedActiveCred.fullName,
+            role = effectiveDynamicRole,
+            shift = resolvedActiveCred.shift
         )
         officerAuthManager.loginOfficerDirectly(
-            name = activeCred.fullName,
-            badgeId = activeCred.nip,
-            shift = activeCred.shift,
-            role = activeCred.role
+            name = resolvedActiveCred.fullName,
+            badgeId = resolvedActiveCred.nip,
+            shift = resolvedActiveCred.shift,
+            role = effectiveDynamicRole
         )
 
         safeInsertAuditLog(

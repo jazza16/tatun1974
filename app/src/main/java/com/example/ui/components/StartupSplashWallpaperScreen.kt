@@ -254,11 +254,12 @@ fun StartupSplashWallpaperScreen(
                 )
                 .testTag("startup_splash_wallpaper_screen")
         ) {
-            // 1. High-Resolution Wallpaper Photo Background
+            // 1. High-Resolution Wallpaper Photo Background (BoxFit.cover / ContentScale.Crop + Alignment.TopCenter)
             Image(
                 painter = painterResource(id = R.drawable.img_mukomuko_wallpaper),
                 contentDescription = "Foto Lanskap Alam & Mitigasi Bencana Mukomuko",
                 contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
                 modifier = Modifier.fillMaxSize()
             )
 
@@ -362,6 +363,7 @@ fun StartupSplashWallpaperScreen(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
                         .padding(bottom = 36.dp)
                 ) {
                     Text(
@@ -372,8 +374,12 @@ fun StartupSplashWallpaperScreen(
                     )
                 }
             } else {
-                // 3. Main Center Content: Symmetrical Proportional Spacing, Logo, Titles, Slogan & Login Menu
-                Box(modifier = Modifier.fillMaxSize()) {
+                // 3. Main Center Content: Safe Area + Top-Aligned Logo & Responsive Scroll
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .navigationBarsPadding()
+                ) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -381,8 +387,8 @@ fun StartupSplashWallpaperScreen(
                             .padding(
                                 start = 24.dp,
                                 end = 24.dp,
-                                top = 16.dp,
-                                bottom = 72.dp
+                                top = 28.dp,
+                                bottom = 88.dp
                             ),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
@@ -422,6 +428,7 @@ fun StartupSplashWallpaperScreen(
                                 painter = painterResource(id = R.drawable.ic_bpbd_mukomuko_circle),
                                 contentDescription = "Logo BPBD Mukomuko",
                                 contentScale = ContentScale.Crop,
+                                alignment = Alignment.TopCenter,
                                 modifier = Modifier
                                     .size(86.dp)
                                     .aspectRatio(1f)
@@ -609,34 +616,6 @@ fun StartupSplashWallpaperScreen(
                                 )
                             }
 
-                            OutlinedButton(
-                                onClick = onOpenEvacuationGuide,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 46.dp)
-                                    .testTag("btn_startup_sop_evakuasi"),
-                                shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.5.dp, OrangePrimary),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = Color.Black.copy(alpha = 0.45f),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                                    contentDescription = "SOP Evakuasi",
-                                    tint = OrangePrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "SOP Evakuasi (100% Offline)",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-
                             if (showBiometricButton) {
                                 OutlinedButton(
                                     onClick = {
@@ -693,8 +672,7 @@ fun StartupSplashWallpaperScreen(
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 32.dp)
-                            .navigationBarsPadding()
+                            .padding(bottom = 24.dp)
                     )
                 }
             }
@@ -728,7 +706,8 @@ fun MukomukoDisasterDetailSheet(onDismiss: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 18.dp)
+                .navigationBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 32.dp)
                 .verticalScroll(rememberScrollState())
         ) {
             // Header
@@ -791,6 +770,7 @@ fun MukomukoDisasterDetailSheet(onDismiss: () -> Unit) {
                         painter = painterResource(id = R.drawable.img_mukomuko_wallpaper),
                         contentDescription = "Dokumentasi Alam & Penanganan Bencana Mukomuko",
                         contentScale = ContentScale.Crop,
+                        alignment = Alignment.TopCenter,
                         modifier = Modifier.fillMaxSize()
                     )
                     Box(

@@ -86,7 +86,7 @@ fun DalaSummaryTab(
         modifier = Modifier
             .fillMaxSize()
             .testTag("dala_tab_summary_list"),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Banner Header Read-Only

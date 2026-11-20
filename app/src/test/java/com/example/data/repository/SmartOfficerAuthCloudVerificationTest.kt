@@ -599,4 +599,79 @@ class SmartOfficerAuthCloudVerificationTest {
         assertFalse("Obsolete simulation cloud flag must be cleaned", prefs.contains("hitatun_arazak_normalized_v1_cloud"))
         assertFalse("Raw PIN must never be stored in SharedPreferences", prefs.contains("officer_pin"))
     }
+
+    @Test
+    fun `dynamic Multi-Tier RBAC resolves Manajer, Pengawas, and Operator from Firestore officers collection`() = runBlocking {
+        // 1. Uji Tier 1 (Manajer), Tier 2 (Pengawas), dan Tier 3 (Operator / kosong)
+        val manajerNip = "199912312026011099"
+        val manajerPin = "884422"
+        val salt1 = OfficerCredentialEntity.generateCryptographicSalt()
+        val manajerCredDoc = OfficerCredentialEntity(
+            nip = manajerNip,
+            fullName = "MANAJER PUSDALOPS BPBD",
+            role = "Operator", // bahkan jika di officer_credentials tertulis Operator, koleksi `officers` menjadi sumber utama RBAC
+            pinHash = OfficerCredentialEntity.hashWithSalt(manajerPin, salt1),
+            salt = salt1,
+            isCustomPinSet = true,
+            initialSecurePin = "",
+            isSyncedWithCloud = true
+        )
+
+        val operatorNip = "197009122007011033"
+        val operatorPin = "773311"
+        val salt2 = OfficerCredentialEntity.generateCryptographicSalt()
+        val operatorCredDoc = OfficerCredentialEntity(
+            nip = operatorNip,
+            fullName = "PETUGAS DENGAN ROLE KOSONG DI FIRESTORE",
+            role = "",
+            pinHash = OfficerCredentialEntity.hashWithSalt(operatorPin, salt2),
+            salt = salt2,
+            isCustomPinSet = true,
+            initialSecurePin = "",
+            isSyncedWithCloud = true
+        )
+
+        FirestoreHelper.overrideCloudCredentialFetcherForTesting = { reqNip ->
+            when (reqNip) {
+                manajerNip -> CloudCredentialLookupResult.Found(manajerCredDoc)
+                operatorNip -> CloudCredentialLookupResult.Found(operatorCredDoc)
+                else -> CloudCredentialLookupResult.NotFound
+            }
+        }
+        FirestoreHelper.overrideCloudCredentialWriterForTesting = { Result.success(Unit) }
+
+        val dynamicOfficersRoleMap = mapOf(
+            manajerNip to "Manajer",
+            operatorNip to "" // Field role kosong -> default ke 'Operator' (Tier 3)
+        )
+        FirestoreHelper.overrideOfficersCollectionRoleFetcherForTesting = { reqNip ->
+            dynamicOfficersRoleMap[reqNip]
+        }
+
+        val repo = SmartOfficerAuthRepository(context)
+        val authManager = OfficerAuthManager(context)
+
+        // A. Login sebagai Manajer (Tier 1: Full Access)
+        val loginManajer = repo.authenticateOfficer(manajerNip, manajerPin)
+        assertTrue("Manajer login must succeed", loginManajer.isSuccess)
+        assertEquals("Manajer", loginManajer.getOrNull()?.role)
+        assertEquals("Manajer", authManager.getOfficerRole())
+        assertTrue("isManajer must be true", com.example.security.UserRole.isManajer(authManager.getOfficerRole()))
+        assertTrue("Manajer must see Kelola Personil", com.example.security.UserRole.canManagePersonnel(authManager.getOfficerRole()))
+        assertTrue("Manajer must see Pengaturan Sistem", com.example.security.UserRole.canAccessSystemSettings(authManager.getOfficerRole()))
+        assertTrue("Manajer must see Hapus Laporan", com.example.security.UserRole.canDeleteReports(authManager.getOfficerRole()))
+        assertTrue("Manajer must see Validasi Laporan", com.example.security.UserRole.canValidateReports(authManager.getOfficerRole()))
+
+        // B. Login sebagai petugas dengan field `role` kosong -> jatuh ke 'Operator' (Tier 3: Standard Operational)
+        val loginOperator = repo.authenticateOfficer(operatorNip, operatorPin)
+        assertTrue("Operator login must succeed", loginOperator.isSuccess)
+        assertEquals("Missing role field in Firestore must default to Operator", "Operator", loginOperator.getOrNull()?.role)
+        assertEquals("Operator", authManager.getOfficerRole())
+        assertFalse("isManajer must be false for Operator", com.example.security.UserRole.isManajer(authManager.getOfficerRole()))
+        assertFalse("Operator must NOT see Kelola Personil", com.example.security.UserRole.canManagePersonnel(authManager.getOfficerRole()))
+        assertFalse("Operator must NOT see Pengaturan Sistem", com.example.security.UserRole.canAccessSystemSettings(authManager.getOfficerRole()))
+        assertFalse("Operator must NOT see Hapus Laporan", com.example.security.UserRole.canDeleteReports(authManager.getOfficerRole()))
+        assertFalse("Operator must NOT see Validasi Laporan", com.example.security.UserRole.canValidateReports(authManager.getOfficerRole()))
+        assertTrue("Operator must see operational menus (Laporan Warga, Form Harian/DALA, Peta)", com.example.security.UserRole.canAccessOperationalMenus(authManager.getOfficerRole()))
+    }
 }

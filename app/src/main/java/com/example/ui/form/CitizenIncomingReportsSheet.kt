@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -753,6 +754,7 @@ fun CitizenIncomingReportsSheetContent(
             .fillMaxWidth()
             .fillMaxHeight(0.88f)
             .background(Color(0xFFF8FAFC))
+            .navigationBarsPadding()
             .testTag("sheet_daftar_laporan_warga")
     ) {
         // Header Modal
@@ -934,7 +936,7 @@ fun CitizenIncomingReportsSheetContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                contentPadding = PaddingValues(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 88.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 items(filteredReports, key = { it.id }) { item ->

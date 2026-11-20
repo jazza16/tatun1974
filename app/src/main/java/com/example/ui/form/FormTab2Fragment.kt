@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +37,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import com.example.ui.components.formDoneKeyboardOptions
+import com.example.ui.components.formNextKeyboardOptions
+import com.example.ui.components.formScrollPadding
+import com.example.ui.components.rememberFormKeyboardActions
 
 /**
  * Fragment untuk Tab 2: Dampak & Korban Bencana.
@@ -61,6 +66,7 @@ class FormTab2Fragment : Fragment() {
 
 @Composable
 fun FormTab2Content(sharedViewModel: LaporanViewModel? = null) {
+    val keyboardActions = rememberFormKeyboardActions()
     var cakupanDampak by remember {
         mutableStateOf(
             sharedViewModel?.laporanSementara?.cakupanDampak?.ifBlank {
@@ -101,8 +107,9 @@ fun FormTab2Content(sharedViewModel: LaporanViewModel? = null) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF5F5F5))
+            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
@@ -127,7 +134,11 @@ fun FormTab2Content(sharedViewModel: LaporanViewModel? = null) {
                         }
                     },
                     label = { Text("Cakupan Wilayah Terdampak & KK") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
 
@@ -204,7 +215,11 @@ fun FormTab2Content(sharedViewModel: LaporanViewModel? = null) {
                         }
                     },
                     label = { Text("Kerusakan Fasilitas / Rumah / Infrastruktur") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 3
                 )
 
@@ -217,7 +232,11 @@ fun FormTab2Content(sharedViewModel: LaporanViewModel? = null) {
                         }
                     },
                     label = { Text("Penyebab Terjadinya Bencana") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
             }

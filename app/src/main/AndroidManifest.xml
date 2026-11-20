@@ -59,18 +59,21 @@
             android:exported="false"
             android:label="Peta Sebaran Mukomuko"
             android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MyApplication" />
 
         <activity
             android:name=".ui.form.FormLaporanHarianActivity"
             android:exported="false"
             android:label="Form Laporan Harian"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MyApplication.FormLaporan" />
 
         <activity
             android:name=".FormLaporanActivity"
             android:exported="false"
             android:label="Form Laporan Harian"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MyApplication.FormLaporan" />
 
         <provider

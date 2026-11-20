@@ -18,14 +18,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AccountBalance
@@ -77,6 +80,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -226,8 +230,10 @@ fun DalaNumericField(
     helperTooltip: String,
     testTag: String,
     modifier: Modifier = Modifier,
-    maxDigits: Int = 7
+    maxDigits: Int = 7,
+    imeAction: ImeAction = ImeAction.Next
 ) {
+    val keyboardActions = rememberFormKeyboardActions()
     Column(modifier = modifier) {
         OutlinedTextField(
             value = valueText,
@@ -237,7 +243,11 @@ fun DalaNumericField(
             },
             label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = imeAction
+            ),
+            keyboardActions = keyboardActions,
             suffix = {
                 Text(
                     text = unitSuffix,
@@ -253,6 +263,7 @@ fun DalaNumericField(
             ),
             modifier = Modifier
                 .fillMaxWidth()
+                .formScrollPadding()
                 .testTag(testTag)
         )
         Row(
@@ -286,6 +297,7 @@ fun DalaCasualtiesTab(
     state: DalaAssessmentState,
     stateManager: DalaAssessmentStateManager
 ) {
+    val keyboardActions = rememberFormKeyboardActions()
     var newSiteName by rememberSaveable { mutableStateOf("") }
     var newSiteEvacuees by rememberSaveable { mutableStateOf("") }
     var newSiteNotes by rememberSaveable { mutableStateOf("") }
@@ -305,8 +317,9 @@ fun DalaCasualtiesTab(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .testTag("dala_tab_casualties_list"),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Identitas Kejadian (Collapsible agar tidak memenuhi layar)
@@ -325,9 +338,12 @@ fun DalaCasualtiesTab(
                     label = { Text("Nama / Jenis Kejadian Bencana") },
                     placeholder = { Text("Contoh: Banjir Bandang & Longsor") },
                     singleLine = true,
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .formScrollPadding()
                         .testTag("input_dala_disaster_title")
                 )
                 OutlinedTextField(
@@ -336,9 +352,12 @@ fun DalaCasualtiesTab(
                     label = { Text("Kecamatan / Wilayah Terdampak") },
                     placeholder = { Text("Contoh: Kec. Kota Mukomuko") },
                     singleLine = true,
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .formScrollPadding()
                         .testTag("input_dala_district")
                 )
             }
@@ -367,7 +386,8 @@ fun DalaCasualtiesTab(
                         unitSuffix = "Jiwa",
                         helperTooltip = "Korban terkonfirmasi MD",
                         testTag = "input_casualty_dead",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        imeAction = ImeAction.Next
                     )
                     DalaNumericField(
                         label = "Hilang",
@@ -378,7 +398,8 @@ fun DalaCasualtiesTab(
                         unitSuffix = "Jiwa",
                         helperTooltip = "Dalam pencarian SAR",
                         testTag = "input_casualty_missing",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        imeAction = ImeAction.Next
                     )
                 }
 
@@ -395,7 +416,8 @@ fun DalaCasualtiesTab(
                         unitSuffix = "Jiwa",
                         helperTooltip = "Perlu rawat inap RS",
                         testTag = "input_casualty_heavy",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        imeAction = ImeAction.Next
                     )
                     DalaNumericField(
                         label = "Luka Ringan",
@@ -406,7 +428,8 @@ fun DalaCasualtiesTab(
                         unitSuffix = "Jiwa",
                         helperTooltip = "Rawat jalan / P3K",
                         testTag = "input_casualty_light",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        imeAction = ImeAction.Next
                     )
                 }
 
@@ -418,7 +441,8 @@ fun DalaCasualtiesTab(
                     },
                     unitSuffix = "Jiwa",
                     helperTooltip = "Akumulasi pengungsi di seluruh posko & rumah kerabat",
-                    testTag = "input_total_evacuees"
+                    testTag = "input_total_evacuees",
+                    imeAction = ImeAction.Done
                 )
             }
         }
@@ -510,9 +534,12 @@ fun DalaCasualtiesTab(
                     label = { Text("Nama Titik Pengungsian") },
                     placeholder = { Text("Contoh: Balai Desa Tanah Rekah") },
                     singleLine = true,
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .formScrollPadding()
                         .testTag("input_new_evacuation_site_name")
                 )
                 Row(
@@ -527,7 +554,8 @@ fun DalaCasualtiesTab(
                         unitSuffix = "Jiwa",
                         helperTooltip = "Di titik ini",
                         testTag = "input_new_evacuation_site_count",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        imeAction = ImeAction.Next
                     )
                     OutlinedTextField(
                         value = newSiteNotes,
@@ -535,8 +563,12 @@ fun DalaCasualtiesTab(
                         label = { Text("Catatan Singkat") },
                         placeholder = { Text("Fasilitas / kondisi") },
                         singleLine = true,
+                        keyboardOptions = formDoneKeyboardOptions(),
+                        keyboardActions = keyboardActions,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1.2f)
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .formScrollPadding()
                     )
                 }
                 Button(
@@ -620,7 +652,8 @@ fun DalaCasualtiesTab(
                         unitSuffix = "Jiwa",
                         helperTooltip = "Total kategori ini",
                         testTag = "input_vulnerable_count",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        imeAction = ImeAction.Next
                     )
                     OutlinedTextField(
                         value = vulnerableNotesInput,
@@ -628,8 +661,12 @@ fun DalaCasualtiesTab(
                         label = { Text("Kebutuhan Khusus") },
                         placeholder = { Text("Susu, obat, dll") },
                         singleLine = true,
+                        keyboardOptions = formDoneKeyboardOptions(),
+                        keyboardActions = keyboardActions,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1.3f)
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .formScrollPadding()
                     )
                 }
 
@@ -712,13 +749,15 @@ fun DalaDamagesTab(
     state: DalaAssessmentState,
     stateManager: DalaAssessmentStateManager
 ) {
+    val keyboardActions = rememberFormKeyboardActions()
     val d = state.damages
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .testTag("dala_tab_damages_list"),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Kategori 1: Rumah
@@ -739,7 +778,8 @@ fun DalaDamagesTab(
                     },
                     unitSuffix = "Unit",
                     helperTooltip = "Roboh total / struktur utama rusak & tidak layak huni",
-                    testTag = "input_house_heavy"
+                    testTag = "input_house_heavy",
+                    imeAction = ImeAction.Next
                 )
                 DalaNumericField(
                     label = "Rumah Rusak Sedang (RS)",
@@ -749,7 +789,8 @@ fun DalaDamagesTab(
                     },
                     unitSuffix = "Unit",
                     helperTooltip = "Sebagian struktur rusak, masih dapat diperbaiki",
-                    testTag = "input_house_moderate"
+                    testTag = "input_house_moderate",
+                    imeAction = ImeAction.Next
                 )
                 DalaNumericField(
                     label = "Rumah Rusak Ringan (RR)",
@@ -759,7 +800,8 @@ fun DalaDamagesTab(
                     },
                     unitSuffix = "Unit",
                     helperTooltip = "Kerusakan non-struktural (atap, plafon, dinding retak)",
-                    testTag = "input_house_light"
+                    testTag = "input_house_light",
+                    imeAction = ImeAction.Done
                 )
             }
         }
@@ -782,7 +824,8 @@ fun DalaDamagesTab(
                     },
                     unitSuffix = "Unit",
                     helperTooltip = "SD, SMP, SMA, atau PAUD terdampak",
-                    testTag = "input_damage_school"
+                    testTag = "input_damage_school",
+                    imeAction = ImeAction.Next
                 )
                 DalaNumericField(
                     label = "Puskesmas / Faskes",
@@ -792,7 +835,8 @@ fun DalaDamagesTab(
                     },
                     unitSuffix = "Unit",
                     helperTooltip = "Puskesmas, Pustu, atau Polindes terdampak",
-                    testTag = "input_damage_puskesmas"
+                    testTag = "input_damage_puskesmas",
+                    imeAction = ImeAction.Next
                 )
                 DalaNumericField(
                     label = "Kantor Pemerintahan / Desa",
@@ -802,7 +846,8 @@ fun DalaDamagesTab(
                     },
                     unitSuffix = "Unit",
                     helperTooltip = "Kantor desa, kecamatan, atau layanan publik",
-                    testTag = "input_damage_office"
+                    testTag = "input_damage_office",
+                    imeAction = ImeAction.Done
                 )
             }
         }
@@ -825,7 +870,8 @@ fun DalaDamagesTab(
                     },
                     unitSuffix = "Meter",
                     helperTooltip = "Panjang total badan jalan amblas / tertimbun",
-                    testTag = "input_damage_road"
+                    testTag = "input_damage_road",
+                    imeAction = ImeAction.Next
                 )
                 DalaNumericField(
                     label = "Jembatan Rusak / Putus",
@@ -835,7 +881,8 @@ fun DalaDamagesTab(
                     },
                     unitSuffix = "Unit",
                     helperTooltip = "Jumlah titik jembatan rusak berat atau terputus",
-                    testTag = "input_damage_bridge"
+                    testTag = "input_damage_bridge",
+                    imeAction = ImeAction.Next
                 )
                 DalaNumericField(
                     label = "Saluran Irigasi / Tanggul",
@@ -845,7 +892,8 @@ fun DalaDamagesTab(
                     },
                     unitSuffix = "Meter",
                     helperTooltip = "Panjang jaringan irigasi jebol / tertutup sedimen",
-                    testTag = "input_damage_irrigation"
+                    testTag = "input_damage_irrigation",
+                    imeAction = ImeAction.Done
                 )
             }
         }
@@ -869,7 +917,8 @@ fun DalaDamagesTab(
                     unitSuffix = "Rp",
                     helperTooltip = "Terbaca: ${d.formatEstimatedLossRupiah()} (isi angka saja tanpa titik/koma)",
                     testTag = "input_estimated_loss_idr",
-                    maxDigits = 14
+                    maxDigits = 14,
+                    imeAction = ImeAction.Next
                 )
 
                 OutlinedTextField(
@@ -881,9 +930,12 @@ fun DalaDamagesTab(
                     placeholder = { Text("Jelaskan dampak genangan, akses jalan terisolir, kondisi jaringan listrik/air...") },
                     minLines = 3,
                     maxLines = 6,
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .formScrollPadding()
                         .testTag("input_damage_description")
                 )
             }
@@ -907,8 +959,9 @@ fun DalaUrgentNeedsTab(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .testTag("dala_tab_urgent_needs_list"),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Header Ringkasan + Tombol "+ Tambah Kebutuhan"
@@ -1193,6 +1246,7 @@ private fun AddUrgentNeedDialog(
     onDismiss: () -> Unit,
     onConfirm: (UrgentNeedCategory, Int, String, UrgentNeedStatus, String) -> Unit
 ) {
+    val keyboardActions = rememberFormKeyboardActions()
     var category by remember { mutableStateOf(UrgentNeedCategory.LOGISTIK) }
     var dropdownExpanded by remember { mutableStateOf(false) }
     var quantityText by remember { mutableStateOf("10") }
@@ -1210,7 +1264,12 @@ private fun AddUrgentNeedDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier
+                    .imePadding()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 ExposedDropdownMenuBox(
                     expanded = dropdownExpanded,
                     onExpandedChange = { dropdownExpanded = !dropdownExpanded }
@@ -1253,10 +1312,15 @@ private fun AddUrgentNeedDialog(
                         onValueChange = { quantityText = DalaAssessmentStateManager.sanitizeDigitsOnly(it, 7) },
                         label = { Text("Jumlah") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = keyboardActions,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .weight(1f)
+                            .formScrollPadding()
                             .testTag("input_need_quantity")
                     )
                     OutlinedTextField(
@@ -1264,9 +1328,12 @@ private fun AddUrgentNeedDialog(
                         onValueChange = { unitText = it },
                         label = { Text("Satuan") },
                         singleLine = true,
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = keyboardActions,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .weight(1f)
+                            .formScrollPadding()
                             .testTag("input_need_unit")
                     )
                 }
@@ -1300,9 +1367,12 @@ private fun AddUrgentNeedDialog(
                     label = { Text("Keterangan / Spesifikasi") },
                     placeholder = { Text("Contoh: Sembako siap saji untuk 3 hari") },
                     maxLines = 3,
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .formScrollPadding()
                         .testTag("input_need_notes")
                 )
             }

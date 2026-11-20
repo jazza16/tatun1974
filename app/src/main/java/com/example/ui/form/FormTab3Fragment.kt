@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +40,10 @@ import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import com.example.data.local.LogKomunikasiEntity
+import com.example.ui.components.formDoneKeyboardOptions
+import com.example.ui.components.formNextKeyboardOptions
+import com.example.ui.components.formScrollPadding
+import com.example.ui.components.rememberFormKeyboardActions
 
 /**
  * Fragment untuk Tab 3: Log BPBD & Upaya Penanganan.
@@ -100,6 +105,7 @@ fun FormTab3Content(
     sharedViewModel: LaporanViewModel? = null,
     onTambahLogClick: (waktu: String, from: String, to: String, subjek: String) -> Unit = { _, _, _, _ -> }
 ) {
+    val keyboardActions = rememberFormKeyboardActions()
     val currentDeviceTime = remember {
         java.text.SimpleDateFormat("HH:mm 'WIB'", java.util.Locale.getDefault()).format(java.util.Date())
     }
@@ -150,8 +156,9 @@ fun FormTab3Content(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF5F5F5))
+            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // KARTU LOG KOMUNIKASI BPBD
@@ -185,7 +192,11 @@ fun FormTab3Content(
                     value = waktuLog,
                     onValueChange = { waktuLog = it },
                     label = { Text("Waktu Komunikasi (Contoh: 08.20 WIB)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
 
@@ -193,7 +204,11 @@ fun FormTab3Content(
                     value = stationFrom,
                     onValueChange = { stationFrom = it },
                     label = { Text("Dari Stasiun (Station ID From)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
 
@@ -201,7 +216,11 @@ fun FormTab3Content(
                     value = stationTo,
                     onValueChange = { stationTo = it },
                     label = { Text("Ke Stasiun (Station ID To)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
 
@@ -209,7 +228,11 @@ fun FormTab3Content(
                     value = subjekLog,
                     onValueChange = { subjekLog = it },
                     label = { Text("Subjek / Isi Berita") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 2
                 )
 
@@ -301,7 +324,11 @@ fun FormTab3Content(
                         }
                     },
                     label = { Text("Upaya Penanganan BPBD / TNI / Polri / Warga") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 4
                 )
 
@@ -314,7 +341,11 @@ fun FormTab3Content(
                         }
                     },
                     label = { Text("Kondisi Mutakhir Lapangan") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     minLines = 3
                 )
 
@@ -327,7 +358,11 @@ fun FormTab3Content(
                         }
                     },
                     label = { Text("Sumber Informasi Awal") },
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = formDoneKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding(),
                     singleLine = true
                 )
             }

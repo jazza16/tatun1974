@@ -153,6 +153,62 @@ class FormTab1Fragment : Fragment() {
         dropdownCuaca.isFocusable = false
         dropdownCuaca.isClickable = false
 
+        // Konfigurasi scrollPadding (110dp di atas keyboard) dan Keyboard Action (Next / Done)
+        val nestedScrollView = view as? androidx.core.widget.NestedScrollView
+        val extraScrollPaddingPx = (110 * resources.displayMetrics.density).toInt()
+        val orderedFields = listOf(
+            etLokasiBencana,
+            etKoordinat,
+            etKedalaman,
+            etCakupanDampak,
+            etUpayaDilakukan,
+            etKondisiMutakhir,
+            etKerusakan,
+            etPenyebab,
+            etSumberInformasi
+        )
+        orderedFields.forEachIndexed { index, editText ->
+            val isLastField = index == orderedFields.lastIndex
+            editText.imeOptions = if (isLastField) {
+                android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+            } else {
+                android.view.inputmethod.EditorInfo.IME_ACTION_NEXT
+            }
+            editText.setOnFocusChangeListener { focusedView, hasFocus ->
+                if (hasFocus && nestedScrollView != null) {
+                    focusedView.postDelayed({
+                        val rect = android.graphics.Rect(
+                            0,
+                            0,
+                            focusedView.width,
+                            focusedView.height + extraScrollPaddingPx
+                        )
+                        focusedView.requestRectangleOnScreen(rect, false)
+                    }, 140)
+                }
+            }
+            editText.setOnEditorActionListener { v, actionId, _ ->
+                when (actionId) {
+                    android.view.inputmethod.EditorInfo.IME_ACTION_NEXT -> {
+                        val nextField = orderedFields.getOrNull(index + 1)
+                        if (nextField != null) {
+                            nextField.requestFocus()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    android.view.inputmethod.EditorInfo.IME_ACTION_DONE -> {
+                        v.clearFocus()
+                        val imm = requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                        imm?.hideSoftInputFromWindow(v.windowToken, 0)
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }
+
         // Inisialisasi Info Sesi Petugas (Sinkron Nama & NIP dari Daftar Kontak Personil)
         val officerAuthManager = com.example.data.local.OfficerAuthManager(requireContext())
         val sessionManager = SessionManager(requireContext())

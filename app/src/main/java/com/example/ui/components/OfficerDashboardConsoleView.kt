@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -81,6 +82,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -149,6 +151,8 @@ import com.example.security.DeviceSecuritySession
 import com.example.security.OfficerLoginActivity
 import com.example.security.PlayIntegritySecurityManager
 import com.example.security.SecurityManager
+import com.example.security.UserRole
+import androidx.compose.material.icons.filled.Settings
 import com.example.util.GoogleMapsHelper
 import com.example.util.ReportExporter
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -185,14 +189,32 @@ fun OfficerDashboardConsoleView(
     onLogoutClick: () -> Unit,
     onUpdateReportStatus: (String, String) -> Unit,
     onUpdateReportStatusAndNotes: ((String, String, String) -> Unit)? = null,
+    onDeleteReport: ((String) -> Unit)? = null,
     onViewPhoto: (String, CitizenDisasterReport) -> Unit,
     onSyncReports: (((Int) -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
 
-    // View Mode: 0 = Antrean Aktif, 1 = Modul Arsip (Selesai), 2 = Grafik Statistik
+    // Multi-Tier RBAC BPBD Kabupaten Mukomuko (Tier 1 Manajer, Tier 2 Pengawas/Koordinator, Tier 3 Operator/Lapangan)
+    val currentUserRole = remember(officerRole) { UserRole.fromRoleString(officerRole) }
+    val isManajerRole = UserRole.isManajer(officerRole)
+    val canAccessSystemSettings = UserRole.canAccessSystemSettings(officerRole)
+    val canValidateReports = UserRole.canValidateReports(officerRole)
+    val canViewStatistics = UserRole.canViewStatistics(officerRole)
+    val canDeleteReports = UserRole.canDeleteReports(officerRole)
+
+    // View Mode: 0 = Laporan/Antrean Aktif, 1 = Modul Arsip (Selesai), 2 = Grafik Statistik, 3 = Pengaturan Sistem/Sync, 4 = Catatan
     var dashboardSubTab by remember { mutableStateOf(0) }
+    var reportPendingDeletion by remember { mutableStateOf<CitizenDisasterReport?>(null) }
+
+    LaunchedEffect(currentUserRole) {
+        if (dashboardSubTab == 3 && !canAccessSystemSettings) {
+            dashboardSubTab = 0
+        } else if ((dashboardSubTab == 1 || dashboardSubTab == 2) && !canViewStatistics) {
+            dashboardSubTab = 0
+        }
+    }
 
     // Filters State
     var searchQuery by remember { mutableStateOf("") }
@@ -675,77 +697,75 @@ fun OfficerDashboardConsoleView(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (isOfficerLoggedIn) {
-                            // Badge Personil (Dilindungi Verifikasi Server-Side + Temporary Access Token + Audit Log)
-                            OutlinedButton(
-                                onClick = {
-                                    requestAdminProtectedAction("Kelola Direktori Personil BPBD") {
-                                        rosterList = officerAuthManager.getOfficerRoster()
-                                        showRosterDialog = true
-                                    }
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB)),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Badge,
-                                    contentDescription = "Personil BPBD",
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = "Personil",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            // TIER 1 KHUSUS MANAJER: Menu Rahasia "Kelola Personil" HANYA tampil jika role == Manajer
+                            if (isManajerRole) {
+                                OutlinedButton(
+                                    onClick = {
+                                        requestAdminProtectedAction("Kelola Direktori Personil BPBD") {
+                                            rosterList = officerAuthManager.getOfficerRoster()
+                                            showRosterDialog = true
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB)),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 36.dp)
+                                        .testTag("btn_rbac_kelola_personil")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Badge,
+                                        contentDescription = "Kelola Personil BPBD",
+                                        tint = Color(0xFF60A5FA),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = "Kelola Personil",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
 
-                            // Sinkron Cloud Multi-Perangkat
-                            OutlinedButton(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        val smartRepo = SmartOfficerAuthRepository.getInstance(context)
-                                        smartRepo.harvestAndSyncAllOfficers()
-                                        smartRepo.pullCredentialsFromCloud { success, count ->
-                                            Toast.makeText(
-                                                context,
-                                                if (success) "Sinkronisasi Berhasil: $count kredensial multi-perangkat diperbarui dari Cloud Firestore." else "Kredensial database lokal sudah mutakhir.",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                            // TIER 1 KHUSUS MANAJER: Menu "Pengaturan Sistem" & Sinkronisasi Sistem
+                            if (canAccessSystemSettings) {
+                                OutlinedButton(
+                                    onClick = {
+                                        requestAdminProtectedAction("Pengaturan Sistem & Keamanan Perangkat") {
+                                            dashboardSubTab = 3
                                         }
-                                    }
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF60A5FA)),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB)),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Sync,
-                                    contentDescription = "Sinkron Kredensial",
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = "Sinkron",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF0284C7)),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 36.dp)
+                                        .testTag("btn_rbac_pengaturan_sistem")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Pengaturan Sistem",
+                                        tint = Color(0xFF38BDF8),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = "Pengaturan Sistem",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
 
                             // Ubah PIN
@@ -754,10 +774,10 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFBBF24)),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD97706)),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .heightIn(min = 32.dp)
+                                    .heightIn(min = 36.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
@@ -768,7 +788,7 @@ fun OfficerDashboardConsoleView(
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = "Ubah PIN",
-                                    fontSize = 11.sp,
+                                    fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     softWrap = false,
@@ -782,10 +802,10 @@ fun OfficerDashboardConsoleView(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFCA5A5)),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF991B1B)),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .heightIn(min = 32.dp)
+                                    .heightIn(min = 36.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.LockOpen,
@@ -795,7 +815,7 @@ fun OfficerDashboardConsoleView(
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = "Keluar",
-                                    fontSize = 11.sp,
+                                    fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     softWrap = false,
@@ -878,10 +898,28 @@ fun OfficerDashboardConsoleView(
                                     Text(
                                         text = "$nipPrefix: $officerBadgeId • $officerRole • $officerShift • BPBD Kab. Mukomuko",
                                         fontSize = 11.sp,
-                                        color = Color(0xFF64748B),
+                                        color = Color(0xFF94A3B8),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(currentUserRole.badgeColorHex).copy(alpha = 0.22f),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            Color(currentUserRole.badgeColorHex)
+                                        ),
+                                        modifier = Modifier.testTag("badge_rbac_tier")
+                                    ) {
+                                        Text(
+                                            text = "${currentUserRole.tierCode} — ${currentUserRole.tierDisplayName}",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -941,12 +979,8 @@ fun OfficerDashboardConsoleView(
                             }
                         }
 
-                        // EXPORT DIGITAL ARCHIVE (PDF & CSV) + MODUL PASCA BENCANA / DALA
-                        val isExportAuthorized = isOfficerLoggedIn && (
-                            officerRole.contains("Manajer", ignoreCase = true) ||
-                            officerRole.contains("Administrasi", ignoreCase = true) ||
-                            officerRole.contains("Operator", ignoreCase = true)
-                        )
+                        // MENU OPERASIONAL (DALA & FORM HARIAN) + EKSPOR (TIER 1 & TIER 2)
+                        val isExportAuthorized = isOfficerLoggedIn && UserRole.canExportReports(officerRole)
                         Spacer(modifier = Modifier.height(12.dp))
                         HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
                         Spacer(modifier = Modifier.height(12.dp))
@@ -956,7 +990,7 @@ fun OfficerDashboardConsoleView(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Modul Pasca Bencana / DALA (Kaji Cepat Rapid Assessment)
+                            // Modul Pasca Bencana / DALA (Tersedia untuk Tier 1, Tier 2, Tier 3)
                             Button(
                                 onClick = { showDalaModule = true },
                                 shape = RoundedCornerShape(8.dp),
@@ -976,8 +1010,28 @@ fun OfficerDashboardConsoleView(
                                 Text(text = "Pasca Bencana / DALA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
 
+                            // Input Form Laporan Harian (Operasional untuk Tier 1, Tier 2, Tier 3)
+                            Button(
+                                onClick = { showFormLaporanHarian = true },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .heightIn(min = 40.dp)
+                                    .testTag("btn_open_form_harian")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Buka Form Laporan Harian",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "Form Harian", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
                             if (isExportAuthorized) {
-                                // PDF Export Button
+                                // PDF Export Button (Tier 1 & Tier 2)
                                 Button(
                                     onClick = {
                                         val exportList = reports.filter { it.status.equals("Divalidasi", ignoreCase = true) || it.status.equals("Selesai", ignoreCase = true) }
@@ -999,7 +1053,7 @@ fun OfficerDashboardConsoleView(
                                     Text(text = "Ekspor PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
 
-                                // CSV Export Button
+                                // CSV Export Button (Tier 1 & Tier 2)
                                 Button(
                                     onClick = {
                                         ReportExporter.exportToCsv(context, reports, officerName, officerBadgeId)
@@ -1065,8 +1119,22 @@ fun OfficerDashboardConsoleView(
             }
         }
 
-        // 2. SUB-TABS: ANTREAN AKTIF vs MODUL ARSIP vs STATISTIK vs DIAGNOSTIK SYNC
+        // 2. SUB-TABS BERDASARKAN TIER RBAC BPBD MUKOMUKO:
+        // - Tier 1 (Manajer): Laporan, Arsip, Statistik, Pengaturan Sistem, Catatan
+        // - Tier 2 (Pengawas/Supervisor/Koord. Administrasi): Laporan, Arsip, Statistik, Catatan (Pengaturan Sistem disembunyikan)
+        // - Tier 3 (Operator/Logistik/TRC/null): Laporan, Catatan (Statistik, Validasi, Kelola Personil, Pengaturan Sistem disembunyikan)
         item {
+            val visibleSubTabs = buildList {
+                add(0 to "🚨 Laporan (${pendingCount + validatedCount})")
+                if (canViewStatistics) {
+                    add(1 to "🗄️ Arsip ($resolvedCount)")
+                    add(2 to "📊 Statistik")
+                }
+                if (canAccessSystemSettings) {
+                    add(3 to "⚙️ Sistem (${activeDevices.size})")
+                }
+                add(4 to "📝 Catatan")
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1074,13 +1142,7 @@ fun OfficerDashboardConsoleView(
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                listOf(
-                    0 to "🚨 Antrean (${pendingCount + validatedCount})",
-                    1 to "🗄️ Arsip ($resolvedCount)",
-                    2 to "📊 Tren",
-                    3 to "📡 Sync (${activeDevices.size} HP)",
-                    4 to "📝 Catatan"
-                ).forEach { (idx, label) ->
+                visibleSubTabs.forEach { (idx, label) ->
                     val isSel = dashboardSubTab == idx
                     Surface(
                         shape = RoundedCornerShape(10.dp),
@@ -1089,8 +1151,8 @@ fun OfficerDashboardConsoleView(
                             .weight(1f)
                             .clickable {
                                 if (idx == 3) {
-                                    if (dashboardSubTab != 3) {
-                                        requestAdminProtectedAction("Sinkronisasi Multi-Perangkat (Sync xHP)") {
+                                    if (canAccessSystemSettings && dashboardSubTab != 3) {
+                                        requestAdminProtectedAction("Pengaturan Sistem & Sync Multi-Perangkat") {
                                             dashboardSubTab = 3
                                         }
                                     }
@@ -1098,6 +1160,7 @@ fun OfficerDashboardConsoleView(
                                     dashboardSubTab = idx
                                 }
                             }
+                            .testTag("dashboard_subtab_$idx")
                     ) {
                         Text(
                             text = label,
@@ -1105,15 +1168,17 @@ fun OfficerDashboardConsoleView(
                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSel) Color(0xFF0F172A) else Color(0xFF64748B),
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(vertical = 7.dp)
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp)
                         )
                     }
                 }
             }
         }
 
-        // 3. STATISTICAL BAR CHART VIEW (IF SELECTED)
-        if (dashboardSubTab == 2) {
+        // 3. STATISTICAL BAR CHART VIEW (TIER 1 & TIER 2 ONLY)
+        if (dashboardSubTab == 2 && canViewStatistics) {
             item {
                 DisasterMonthlyBarChartCard(reports = reports)
             }
@@ -1141,8 +1206,8 @@ fun OfficerDashboardConsoleView(
             }
         }
 
-        // 3B. DIAGNOSTIK SINKRONISASI VIEW (IF SELECTED)
-        if (dashboardSubTab == 3) {
+        // 3C. PENGATURAN SISTEM & DIAGNOSTIK SINKRONISASI (TIER 1 MANAJER ONLY)
+        if (dashboardSubTab == 3 && canAccessSystemSettings) {
             item {
                 SyncDiagnosticsSection(
                     latencyMs = latencyMs,
@@ -1490,12 +1555,14 @@ fun OfficerDashboardConsoleView(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     // Search box
+                    val searchKeyboardActions = rememberFormKeyboardActions()
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 48.dp)
+                            .formScrollPadding()
                             .testTag("officer_search_input"),
                         placeholder = { Text("Cari ID, jenis bencana, desa, atau pelapor...", fontSize = 11.sp) },
                         leadingIcon = {
@@ -1519,6 +1586,8 @@ fun OfficerDashboardConsoleView(
                             }
                         },
                         singleLine = true,
+                        keyboardOptions = formDoneKeyboardOptions(),
+                        keyboardActions = searchKeyboardActions,
                         shape = RoundedCornerShape(10.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.White,
@@ -1724,6 +1793,7 @@ fun OfficerDashboardConsoleView(
                     report = report,
                     isOfficerLoggedIn = isOfficerLoggedIn,
                     officerName = officerName,
+                    officerRole = officerRole,
                     onInspectMapPin = {
                         pinnedReportForMap = report
                         Toast.makeText(context, "Pin peta dipusatkan ke #${report.id.takeLast(7)} (${report.village})", Toast.LENGTH_SHORT).show()
@@ -1731,35 +1801,32 @@ fun OfficerDashboardConsoleView(
                     onUpdateStatus = { targetStatus ->
                         if (isOfficerLoggedIn) {
                             if (targetStatus.equals("Divalidasi", ignoreCase = true)) {
-                                val isOperator = officerRole.contains("Operator", ignoreCase = true)
-                                if (!isOperator) {
+                                if (!UserRole.canValidateReports(officerRole)) {
                                     Toast.makeText(
                                         context,
-                                        "Akses Ditolak: Tombol Validasi Laporan hanya dapat dieksekusi oleh Operator Pusdalops sebagai wujud tanggung jawab petugas.",
+                                        "Akses Ditolak (RBAC): Tombol Validasi Laporan hanya untuk Manajer, Pengawas, Supervisor, atau Koord. Administrasi.",
                                         Toast.LENGTH_LONG
                                     ).show()
                                 } else {
                                     onUpdateReportStatus(report.id, targetStatus)
                                     Toast.makeText(
                                         context,
-                                        "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName (NIP. $officerBadgeId)",
+                                        "Status laporan #${report.id.takeLast(7)} divalidasi oleh $officerName ($officerRole)",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             } else if (targetStatus.equals("Selesai", ignoreCase = true)) {
-                                val isAuthorizedLeader = officerRole.contains("Manajer", ignoreCase = true) ||
-                                        officerRole.contains("Administrasi", ignoreCase = true)
-                                if (!isAuthorizedLeader) {
+                                if (!UserRole.canCompleteReports(officerRole)) {
                                     Toast.makeText(
                                         context,
-                                        "Akses Ditolak: Tombol Selesai hanya dapat dieksekusi oleh Manajer Pusdalops atau Koord. Administrasi sebagai wujud tanggung jawab petugas.",
+                                        "Akses Ditolak (RBAC): Penyelesaian laporan hanya untuk Tier 1 (Manajer) atau Tier 2 (Pengawas/Supervisor/Koord. Administrasi).",
                                         Toast.LENGTH_LONG
                                     ).show()
                                 } else {
                                     onUpdateReportStatus(report.id, targetStatus)
                                     Toast.makeText(
                                         context,
-                                        "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName (NIP. $officerBadgeId)",
+                                        "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh $officerName ($officerRole)",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -1767,7 +1834,7 @@ fun OfficerDashboardConsoleView(
                                 onUpdateReportStatus(report.id, targetStatus)
                                 Toast.makeText(
                                     context,
-                                    "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh Petugas $officerName (NIP. $officerBadgeId)",
+                                    "Status laporan #${report.id.takeLast(7)} diperbarui menjadi '$targetStatus' oleh $officerName",
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
@@ -1775,6 +1842,11 @@ fun OfficerDashboardConsoleView(
                             onLoginClick()
                         }
                     },
+                    onDeleteReport = if (canDeleteReports && onDeleteReport != null) {
+                        {
+                            reportPendingDeletion = report
+                        }
+                    } else null,
                     onOpenNoteEditor = {
                         if (isOfficerLoggedIn) {
                             noteEditingReport = report
@@ -1837,7 +1909,13 @@ fun OfficerDashboardConsoleView(
                 )
             },
             text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                val pinKeyboardActions = rememberFormKeyboardActions()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .verticalScroll(rememberScrollState())
+                ) {
                     Text(
                         text = "Petugas: $officerName (ID/NIP: $officerBadgeId)",
                         fontSize = 11.sp,
@@ -1918,7 +1996,8 @@ fun OfficerDashboardConsoleView(
                             label = { Text("PIN / Sandi Lama", fontSize = 11.sp) },
                             placeholder = { Text("Masukkan PIN lama Anda", fontSize = 11.sp) },
                             visualTransformation = if (isOldPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+                            keyboardActions = pinKeyboardActions,
                             trailingIcon = {
                                 IconButton(onClick = { isOldPinVisible = !isOldPinVisible }) {
                                     Icon(
@@ -1930,7 +2009,9 @@ fun OfficerDashboardConsoleView(
                                 }
                             },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .formScrollPadding()
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -1944,7 +2025,8 @@ fun OfficerDashboardConsoleView(
                             label = { Text("PIN / Sandi Baru (Min. 4 Digit)", fontSize = 11.sp) },
                             placeholder = { Text("Buat PIN baru yang aman", fontSize = 11.sp) },
                             visualTransformation = if (isNewPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+                            keyboardActions = pinKeyboardActions,
                             trailingIcon = {
                                 IconButton(onClick = { isNewPinVisible = !isNewPinVisible }) {
                                     Icon(
@@ -1956,7 +2038,9 @@ fun OfficerDashboardConsoleView(
                                 }
                             },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .formScrollPadding()
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -1970,7 +2054,8 @@ fun OfficerDashboardConsoleView(
                             label = { Text("Konfirmasi PIN Baru", fontSize = 11.sp) },
                             placeholder = { Text("Ulangi PIN baru", fontSize = 11.sp) },
                             visualTransformation = if (isConfirmPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                            keyboardActions = pinKeyboardActions,
                             trailingIcon = {
                                 IconButton(onClick = { isConfirmPinVisible = !isConfirmPinVisible }) {
                                     Icon(
@@ -1982,7 +2067,9 @@ fun OfficerDashboardConsoleView(
                                 }
                             },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .formScrollPadding()
                         )
                     } else {
                         // MODE RESET PIN
@@ -2002,7 +2089,8 @@ fun OfficerDashboardConsoleView(
                             label = { Text("Sandi Administrator / PIN Lama", fontSize = 11.sp) },
                             placeholder = { Text("Masukkan sandi admin / PIN lama", fontSize = 11.sp) },
                             visualTransformation = if (isResetAdminVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                            keyboardActions = pinKeyboardActions,
                             trailingIcon = {
                                 IconButton(onClick = { isResetAdminVisible = !isResetAdminVisible }) {
                                     Icon(
@@ -2014,7 +2102,9 @@ fun OfficerDashboardConsoleView(
                                 }
                             },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .formScrollPadding()
                         )
                     }
 
@@ -2152,7 +2242,7 @@ fun OfficerDashboardConsoleView(
     }
 
     // 7B. DIALOG MANAJEMEN PERSONIL PUSDALOPS & TRC BPBD (WAJIB TEMPORARY ACCESS TOKEN AKTIF)
-    if (showRosterDialog) {
+    if (showRosterDialog && isManajerRole) {
         val currentToken = com.example.security.AdminAccessSecurityManager.getActiveTokenForOfficer(officerBadgeId)
         if (currentToken == null) {
             LaunchedEffect(Unit) {
@@ -2217,10 +2307,12 @@ fun OfficerDashboardConsoleView(
                 )
             },
             text = {
+                val rosterKeyboardActions = rememberFormKeyboardActions()
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 460.dp)
+                        .imePadding()
                         .verticalScroll(rememberScrollState())
                 ) {
                     if (rosterMode == 0) {
@@ -2296,10 +2388,13 @@ fun OfficerDashboardConsoleView(
                                     )
                                 },
                                 singleLine = true,
+                                keyboardOptions = formDoneKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
                                 textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp),
                                 modifier = Modifier
                                     .weight(1f)
                                     .heightIn(min = 48.dp)
+                                    .formScrollPadding()
                             )
 
                             Button(
@@ -2591,8 +2686,11 @@ fun OfficerDashboardConsoleView(
                             label = { Text("Nama Petugas & Gelar *", fontSize = 11.sp) },
                             placeholder = { Text("Contoh: Ramdani Pratama, S.T.", fontSize = 11.sp) },
                             singleLine = true,
+                            keyboardOptions = formNextKeyboardOptions(),
+                            keyboardActions = rosterKeyboardActions,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .formScrollPadding()
                                 .testTag("personnel_input_name")
                         )
 
@@ -2607,8 +2705,11 @@ fun OfficerDashboardConsoleView(
                             label = { Text("NIP Pegawai ASN / No. Reg TRC *", fontSize = 11.sp) },
                             placeholder = { Text("Contoh: 19850101 201001 1 001 atau TRC-MMK-2024-001", fontSize = 11.sp) },
                             singleLine = true,
+                            keyboardOptions = formNextKeyboardOptions(),
+                            keyboardActions = rosterKeyboardActions,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .formScrollPadding()
                                 .testTag("personnel_input_nip")
                         )
 
@@ -2688,14 +2789,22 @@ fun OfficerDashboardConsoleView(
                                 onValueChange = { inputShift = it },
                                 label = { Text("Regu / Shift", fontSize = 11.sp) },
                                 singleLine = true,
-                                modifier = Modifier.weight(1f)
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .formScrollPadding()
                             )
                             OutlinedTextField(
                                 value = inputUnit,
                                 onValueChange = { inputUnit = it },
                                 label = { Text("Unit / Satuan", fontSize = 11.sp) },
                                 singleLine = true,
-                                modifier = Modifier.weight(1f)
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .formScrollPadding()
                             )
                         }
 
@@ -2707,7 +2816,11 @@ fun OfficerDashboardConsoleView(
                             label = { Text("No. Kontak / Radio HT (Opsional)", fontSize = 11.sp) },
                             placeholder = { Text("Contoh: 0812-3456-7890 / Ch-117", fontSize = 11.sp) },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            keyboardOptions = formDoneKeyboardOptions(),
+                            keyboardActions = rosterKeyboardActions,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .formScrollPadding()
                         )
 
                         if (formError != null) {
@@ -2817,41 +2930,73 @@ fun OfficerDashboardConsoleView(
             onDismissRequest = { editingPersonnel = null },
             title = { Text("Edit Data Personil BPBD", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val editPersonnelKeyboardActions = rememberFormKeyboardActions()
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .verticalScroll(rememberScrollState())
+                ) {
                     OutlinedTextField(
                         value = editName,
                         onValueChange = { editName = it },
                         label = { Text("Nama Lengkap") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("input_edit_personnel_name")
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = editPersonnelKeyboardActions,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .formScrollPadding()
+                            .testTag("input_edit_personnel_name")
                     )
                     OutlinedTextField(
                         value = editNip,
                         onValueChange = { editNip = it },
                         label = { Text("NIP / Reg TRC") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("input_edit_personnel_nip")
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = editPersonnelKeyboardActions,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .formScrollPadding()
+                            .testTag("input_edit_personnel_nip")
                     )
                     OutlinedTextField(
                         value = editRole,
                         onValueChange = { editRole = it },
                         label = { Text("Jabatan / Peran") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("input_edit_personnel_role")
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = editPersonnelKeyboardActions,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .formScrollPadding()
+                            .testTag("input_edit_personnel_role")
                     )
                     OutlinedTextField(
                         value = editShift,
                         onValueChange = { editShift = it },
                         label = { Text("Shift Penugasan") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("input_edit_personnel_shift")
+                        keyboardOptions = formNextKeyboardOptions(),
+                        keyboardActions = editPersonnelKeyboardActions,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .formScrollPadding()
+                            .testTag("input_edit_personnel_shift")
                     )
                     OutlinedTextField(
                         value = editPhone,
                         onValueChange = { editPhone = it },
                         label = { Text("Nomor HP / WhatsApp") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("input_edit_personnel_phone")
+                        keyboardOptions = formDoneKeyboardOptions(),
+                        keyboardActions = editPersonnelKeyboardActions,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .formScrollPadding()
+                            .testTag("input_edit_personnel_phone")
                     )
                 }
             },
@@ -2896,8 +3041,8 @@ fun OfficerDashboardConsoleView(
         )
     }
 
-    // FULL SCREEN DIALOG DATABASE EXPLORER
-    if (showDatabaseExplorer) {
+    // FULL SCREEN DIALOG DATABASE EXPLORER (PENGATURAN SISTEM - KHUSUS TIER 1 MANAJER)
+    if (showDatabaseExplorer && canAccessSystemSettings) {
         Dialog(
             onDismissRequest = { showDatabaseExplorer = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -2909,11 +3054,66 @@ fun OfficerDashboardConsoleView(
         }
     }
 
+    // DIALOG KONFIRMASI HAPUS LAPORAN (KHUSUS TIER 1 MANAJER - FULL ACCESS)
+    if (reportPendingDeletion != null && canDeleteReports) {
+        val targetDelete = reportPendingDeletion!!
+        AlertDialog(
+            onDismissRequest = { reportPendingDeletion = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Hapus Laporan",
+                    tint = Color(0xFFDC2626),
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Hapus Laporan Warga?",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "Akses Tier 1 (Manajer): Laporan #${targetDelete.id.takeLast(7)} (${targetDelete.disasterType} - Desa ${targetDelete.village}) akan dihapus permanen dari database lokal dan Cloud Firestore.",
+                    fontSize = 12.sp,
+                    color = Color(0xFF334155)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteReport?.invoke(targetDelete.id)
+                        Toast.makeText(
+                            context,
+                            "Laporan #${targetDelete.id.takeLast(7)} berhasil dihapus oleh Manajer $officerName.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        reportPendingDeletion = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.testTag("btn_confirm_delete_report")
+                ) {
+                    Text("Ya, Hapus Permanen", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { reportPendingDeletion = null }) {
+                    Text("Batal", fontSize = 11.sp)
+                }
+            }
+        )
+    }
+
     // FULL SCREEN DIALOG FORM LAPORAN HARIAN
     if (showFormLaporanHarian) {
         Dialog(
             onDismissRequest = { showFormLaporanHarian = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
         ) {
             FormLaporanHarianScreen(
                 database = database,
@@ -2926,7 +3126,10 @@ fun OfficerDashboardConsoleView(
     if (showDalaModule) {
         Dialog(
             onDismissRequest = { showDalaModule = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
         ) {
             DalaAssessmentScreen(
                 officerName = officerName,
@@ -2966,7 +3169,13 @@ fun OfficerDashboardConsoleView(
                 )
             },
             text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                val followUpKeyboardActions = rememberFormKeyboardActions()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .verticalScroll(rememberScrollState())
+                ) {
                     Text(
                         text = "Laporan: #${activeRep.id.takeLast(7)} • ${activeRep.disasterType}",
                         fontSize = 12.sp,
@@ -2987,11 +3196,16 @@ fun OfficerDashboardConsoleView(
                         color = Color(0xFF1E293B)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
+                    val allowedStatuses = if (canValidateReports) {
+                        listOf("Diproses", "Divalidasi", "Selesai")
+                    } else {
+                        listOf("Diproses")
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        listOf("Diproses", "Divalidasi", "Selesai").forEach { st ->
+                        allowedStatuses.forEach { st ->
                             val isSel = followUpStatusTarget.equals(st, ignoreCase = true)
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -3030,7 +3244,10 @@ fun OfficerDashboardConsoleView(
                         onValueChange = { followUpNoteText = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(110.dp),
+                            .height(110.dp)
+                            .formScrollPadding(),
+                        keyboardOptions = formDoneKeyboardOptions(),
+                        keyboardActions = followUpKeyboardActions,
                         placeholder = {
                             Text(
                                 "Contoh: Regu TRC Posko Ipuh diterjunkan dengan 2 perahu karet & 1 unit genset. Logistik sembako disalurkan ke posko darurat balai desa.",
@@ -3322,13 +3539,18 @@ private fun OfficerIncidentReportCard(
     report: CitizenDisasterReport,
     isOfficerLoggedIn: Boolean,
     officerName: String,
+    officerRole: String = OfficerRoles.PETUGAS_JAGA,
     onInspectMapPin: () -> Unit,
     onUpdateStatus: (String) -> Unit,
+    onDeleteReport: (() -> Unit)? = null,
     onOpenNoteEditor: () -> Unit,
     onViewPhoto: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val canValidate = UserRole.canValidateReports(officerRole)
+    val canComplete = UserRole.canCompleteReports(officerRole)
+    val canDelete = UserRole.canDeleteReports(officerRole) && onDeleteReport != null
 
     val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(report.status)
     val statusColor = when (normalizedStatus) {
@@ -3796,61 +4018,93 @@ private fun OfficerIncidentReportCard(
             HorizontalDivider(color = Color(0xFFF1F5F9))
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Action Buttons: Validasi, Selesai, Tindak Lanjut, Rute Maps
+            // Action Buttons (Multi-Tier RBAC BPBD Mukomuko):
+            // - Validasi Laporan & Selesai: HANYA Tier 1 (Manajer) & Tier 2 (Pengawas/Supervisor/Koord. Administrasi)
+            // - Hapus Laporan: HANYA Tier 1 (Manajer)
+            // - Catatan & Rute Maps: Operasional untuk semua Tier (1, 2, 3)
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Status buttons
-                if (!report.status.equals("Divalidasi", ignoreCase = true)) {
+                // Tombol Validasi Laporan (Tier 1 & Tier 2 ONLY; disembunyikan untuk Tier 3)
+                if (canValidate && !report.status.equals("Divalidasi", ignoreCase = true)) {
                     Button(
                         onClick = { onUpdateStatus("Divalidasi") },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        modifier = Modifier.heightIn(min = 40.dp)
+                        modifier = Modifier
+                            .heightIn(min = 40.dp)
+                            .testTag("btn_validate_report_${report.id}")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = null,
+                            contentDescription = "Validasi Laporan",
                             tint = Color.White,
                             modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "Validasi (Operator)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Validasi Laporan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                if (!report.status.equals("Selesai", ignoreCase = true)) {
+                // Tombol Selesai / Buka Kembali (Tier 1 & Tier 2 ONLY; disembunyikan untuk Tier 3)
+                if (canComplete) {
+                    if (!report.status.equals("Selesai", ignoreCase = true)) {
+                        Button(
+                            onClick = { onUpdateStatus("Selesai") },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .heightIn(min = 40.dp)
+                                .testTag("btn_complete_report_${report.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Tandai Selesai",
+                                tint = Color.White,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(text = "Selesai", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { onUpdateStatus("Diproses") },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.heightIn(min = 40.dp)
+                        ) {
+                            Text(text = "Buka Kembali", fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                // Tombol Hapus Laporan (KHUSUS Tier 1 Manajer - Full Access)
+                if (canDelete) {
                     Button(
-                        onClick = { onUpdateStatus("Selesai") },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        onClick = { onDeleteReport?.invoke() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        modifier = Modifier.heightIn(min = 40.dp)
+                        modifier = Modifier
+                            .heightIn(min = 40.dp)
+                            .testTag("btn_delete_report_${report.id}")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Hapus Laporan",
                             tint = Color.White,
                             modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "Selesai (Pimpinan)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    OutlinedButton(
-                        onClick = { onUpdateStatus("Diproses") },
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        modifier = Modifier.heightIn(min = 40.dp)
-                    ) {
-                        Text(text = "Buka Kembali", fontSize = 11.sp)
+                        Text(text = "Hapus Laporan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                // Note editor
+                // Note editor (Operasional untuk Tier 1, 2, 3)
                 OutlinedButton(
                     onClick = onOpenNoteEditor,
                     shape = RoundedCornerShape(8.dp),
@@ -3862,7 +4116,7 @@ private fun OfficerIncidentReportCard(
                     Text(text = "Catatan", fontSize = 11.sp)
                 }
 
-                // Google Maps route
+                // Google Maps route (Operasional untuk Tier 1, 2, 3)
                 Button(
                     onClick = {
                         GoogleMapsHelper.openNavigationRoute(
@@ -3879,7 +4133,7 @@ private fun OfficerIncidentReportCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Navigation,
-                        contentDescription = null,
+                        contentDescription = "Rute Google Maps",
                         tint = Color.White,
                         modifier = Modifier.size(13.dp)
                     )
@@ -4455,7 +4709,13 @@ fun AdminAuthDialog(
             )
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            val adminPinKeyboardActions = rememberFormKeyboardActions(onDoneCallback = executeVerification)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
+            ) {
                 Text(
                     text = "Akses ke \"$actionTitle\" diverifikasi langsung ke server Cloud Firestore (app_settings/admin_config). " +
                         "Jika PIN valid, Token Akses Sementara (10 menit) diterbitkan dan setiap percobaan dicatat di Audit Log.",
@@ -4483,7 +4743,8 @@ fun AdminAuthDialog(
                     label = { Text("PIN Master Admin", fontSize = 11.sp) },
                     placeholder = { Text("Masukkan PIN Master Admin", fontSize = 11.sp) },
                     visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardActions = adminPinKeyboardActions,
                     trailingIcon = {
                         IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
                             Icon(
@@ -4498,6 +4759,7 @@ fun AdminAuthDialog(
                     enabled = !isVerifying,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .formScrollPadding()
                         .testTag("input_master_admin_pin")
                 )
                 if (!errorMessage.isNullOrBlank()) {

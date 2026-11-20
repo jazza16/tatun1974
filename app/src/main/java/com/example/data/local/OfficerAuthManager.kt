@@ -35,6 +35,8 @@ data class OfficerProfile(
 }
 
 object OfficerRoles {
+    const val SUPER_ADMIN = "SuperAdmin"
+    const val RBAC_OPERATOR = "Operator"
     const val PENGAWAS = "Pengawas BPBD"
     const val MANAJER = "Manajer Pusdalops-PB"
     const val SUPERVISOR = "Supervisor BPBD"
@@ -43,13 +45,14 @@ object OfficerRoles {
     const val PETUGAS_JAGA = "Petugas Jaga Siaga / Piket"
     const val PETUGAS_LAPANGAN = "Petugas Lapangan TRC / Logistik"
 
-    val ALL_ROLES = listOf(PENGAWAS, MANAJER, SUPERVISOR, KOORD_ADMINISTRASI, OPERATOR, PETUGAS_JAGA, PETUGAS_LAPANGAN)
+    val ALL_ROLES = listOf(SUPER_ADMIN, RBAC_OPERATOR, PENGAWAS, MANAJER, SUPERVISOR, KOORD_ADMINISTRASI, OPERATOR, PETUGAS_JAGA, PETUGAS_LAPANGAN)
 
     /**
      * Official hierarchy rank for duty personnel list.
      * Manajer Pusdalops is positioned immediately below Pengawas.
      */
     fun getRoleRank(role: String): Int = when {
+        role.equals(SUPER_ADMIN, ignoreCase = true) -> 0
         role.contains("Pengawas", ignoreCase = true) -> 1
         role.contains("Manajer", ignoreCase = true) || role.contains("Manager", ignoreCase = true) -> 2
         role.contains("Supervisor", ignoreCase = true) -> 3
@@ -210,14 +213,14 @@ class OfficerAuthManager(private val context: Context) {
     fun saveNipToSecureStorage(
         nip: String,
         fullName: String = "",
-        role: String = OfficerRoles.PETUGAS_JAGA,
+        role: String = OfficerRoles.RBAC_OPERATOR,
         shift: String = "Shift Siaga 24 Jam"
     ) {
         val matched = findOfficerInRoster(rawName = fullName, rawNip = nip)
         val cleanNip = matched?.nip ?: nip.trim()
-        val cleanName = matched?.fullName ?: fullName.trim()
-        val cleanRole = matched?.role?.takeIf { role.isBlank() || role == OfficerRoles.PETUGAS_JAGA } ?: role.trim()
-        val cleanShift = matched?.shift?.takeIf { shift.isBlank() } ?: shift.trim()
+        val cleanName = fullName.trim().ifBlank { matched?.fullName.orEmpty() }
+        val cleanRole = role.trim().ifBlank { OfficerRoles.RBAC_OPERATOR }
+        val cleanShift = shift.trim().ifBlank { matched?.shift ?: "Shift Siaga 24 Jam" }
         if (cleanNip.isBlank()) return
         val editor = sharedPrefs.edit()
         SecureStorageHelper.putEncrypted(editor, PREF_SAVED_NIP, cleanNip)
@@ -225,9 +228,7 @@ class OfficerAuthManager(private val context: Context) {
         if (cleanName.isNotBlank()) {
             SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_NAME, cleanName)
         }
-        if (cleanRole.isNotBlank()) {
-            SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_ROLE, cleanRole)
-        }
+        SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_ROLE, cleanRole)
         if (cleanShift.isNotBlank()) {
             SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_SHIFT, cleanShift)
         }
@@ -243,6 +244,7 @@ class OfficerAuthManager(private val context: Context) {
 
     fun getOfficerName(): String {
         val rawName = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_NAME)?.trim().orEmpty()
+        if (rawName.isNotBlank()) return rawName
         val rawNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_SAVED_NIP)?.trim().orEmpty()
             .ifBlank { SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID)?.trim().orEmpty() }
         val matched = findOfficerInRoster(rawName = rawName, rawNip = rawNip)
@@ -252,19 +254,41 @@ class OfficerAuthManager(private val context: Context) {
     fun getOfficerBadgeId(): String {
         val rawNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID)?.trim().orEmpty()
             .ifBlank { SecureStorageHelper.getDecrypted(sharedPrefs, PREF_SAVED_NIP)?.trim().orEmpty() }
+        if (rawNip.isNotBlank()) return rawNip
         val rawName = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_NAME)?.trim().orEmpty()
         val matched = findOfficerInRoster(rawName = rawName, rawNip = rawNip)
         return matched?.nip ?: rawNip
     }
 
+    /**
+     * Reads the raw stored `role` string directly from SharedPreferences / SecureStorage
+     * without consulting any hardcoded local roster.
+     */
+    fun getRawStoredRoleFromPrefs(): String {
+        return SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_ROLE)?.trim().orEmpty()
+    }
+
+    /**
+     * Returns the stored officer role from SharedPreferences / SecureStorage.
+     * Defaults to 'Operator' if no role is stored. Never looks up hardcoded NIP/Name roles.
+     */
     fun getOfficerRole(): String {
-        val rawRole = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_ROLE)?.trim().orEmpty()
-        if (rawRole.isNotBlank()) return rawRole
-        val matched = findOfficerInRoster(
-            rawName = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_NAME).orEmpty(),
-            rawNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID).orEmpty()
-        )
-        return matched?.role ?: OfficerRoles.OPERATOR
+        val rawRole = getRawStoredRoleFromPrefs()
+        return rawRole.ifBlank { OfficerRoles.RBAC_OPERATOR }
+    }
+
+    /**
+     * Returns the canonical RBAC role ('SuperAdmin' or 'Operator') based dynamically on the stored role.
+     */
+    fun getRbacRole(): String {
+        return com.example.security.OfficerRbacManager.normalizeDynamicRole(getRawStoredRoleFromPrefs())
+    }
+
+    /**
+     * Returns true if the stored officer role is 'SuperAdmin'.
+     */
+    fun isSuperAdmin(): Boolean {
+        return com.example.security.OfficerRbacManager.isSuperAdminRole(getRawStoredRoleFromPrefs())
     }
 
     fun getOfficerShift(): String {
@@ -605,12 +629,12 @@ class OfficerAuthManager(private val context: Context) {
         name: String,
         badgeId: String,
         shift: String,
-        role: String = OfficerRoles.PETUGAS_JAGA
+        role: String = OfficerRoles.RBAC_OPERATOR
     ) {
         val cleanNip = badgeId.trim()
         if (cleanNip.isBlank()) return
         val resolvedName = name.ifBlank { "Petugas Pusdalops PB" }
-        val resolvedRole = role.ifBlank { OfficerRoles.PETUGAS_JAGA }
+        val resolvedRole = role.trim().ifBlank { OfficerRoles.RBAC_OPERATOR }
         val resolvedShift = shift.ifBlank { "Shift Siaga 24 Jam" }
         val editor = sharedPrefs.edit()
             .putBoolean(PREF_IS_OFFICER_LOGGED_IN, true)
