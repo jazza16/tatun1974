@@ -597,13 +597,19 @@ object ImageUtils {
         if (isDeviceLocalPhotoPath(trimmed)) {
             if (!FirebaseStoragePhotoUploader.isNetworkOnline(context)) {
                 return CloudPhotoResolution.DeferredOffline(
-                    "Tidak ada sinyal internet. Foto dan laporan disimpan di database lokal hingga sinyal kembali."
+                    com.example.data.local.FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
                 )
             }
             val bitmap = decodePhotoSourceToBitmap(trimmed, context)
                 ?: return CloudPhotoResolution.DeferredOffline("File foto lokal tidak ditemukan atau rusak")
 
-            when (val fbOutcome = firebaseUploader(bitmap)) {
+            val fbOutcome = try {
+                firebaseUploader(bitmap)
+            } catch (e: Throwable) {
+                FirebaseStoragePhotoUploader.classifyUploadException(reportId, e)
+            }
+
+            when (fbOutcome) {
                 is PhotoUploadOutcome.Success -> {
                     return CloudPhotoResolution.ReadyForCloud(fbOutcome.downloadUrl)
                 }

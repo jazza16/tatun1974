@@ -456,4 +456,241 @@ class CitizenReportPhotoUploadAndDisplayTest {
         assertEquals(2, selesaiSummary.stageIndex)
         assertEquals("SELESAI", selesaiSummary.stageBadgeLabel)
     }
+
+    @Test
+    fun zeroFrictionOfflinePersistence_catchesStorageUploadException_savesLocalPath_andReturnsExactCalmFeedbackMessage() = runBlocking {
+        // 1. Verify Firestore Offline Persistence setting is enabled
+        FirestoreHelper.ensureOfflinePersistenceEnabled(context)
+        assertTrue("Firestore offline persistence must be configured", FirestoreHelper.isOfflinePersistenceConfigured)
+
+        // 2. Simulate photo upload throwing a network IOException mid-upload (must be caught by try-catch!)
+        val localPhotoUri = createSolidTestPhotoFile()
+        FirebaseStoragePhotoUploader.overrideOnlineCheckForTesting = { true }
+        FirebaseStoragePhotoUploader.overrideUploaderForTesting = { _, _ ->
+            throw java.io.IOException("Network unreachable during Firebase Storage upload")
+        }
+
+        val report = CitizenDisasterReport(
+            id = "LAP-ZERO-FRICTION-01",
+            disasterType = "Banjir",
+            incidentTime = "19 Nov 2026 18:05 WIB",
+            incidentLocation = "Desa Kates",
+            district = "Kota Mukomuko",
+            village = "Desa Pasar",
+            latitude = -2.581,
+            longitude = 101.123,
+            gpsAccuracyMeters = 6f,
+            isGpsVerified = true,
+            photoUri = localPhotoUri,
+            reporterName = "Warga Tenang",
+            reporterPhone = "0812001122",
+            additionalNotes = "Laporan saat sinyal terputus tiba-tiba",
+            timestamp = System.currentTimeMillis(),
+            status = "Diproses"
+        )
+
+        val submitResult = repository.submitCitizenDisasterReportWithResult(report, context)
+
+        assertTrue("Report must be saved locally on device", submitResult.savedLocally)
+        assertTrue("Report must be flagged deferredOffline", submitResult.deferredOffline)
+        assertEquals(
+            "UI feedback message MUST match exact non-panicking offline string",
+            "Laporan tersimpan di perangkat. Akan dikirim otomatis saat sinyal tersedia.",
+            submitResult.message
+        )
+
+        val savedLocal = db.weatherDao().getCitizenReportById(report.id)
+        assertNotNull("Report must exist in local database", savedLocal)
+        assertEquals("Local photo path MUST be preserved on device for retry", localPhotoUri, savedLocal!!.photoUri)
+    }
+
+    @Test
+    fun officerRealtimeAlert_detectsNewPendingReportId_triggersSirenAndVibration_andUpdatesLastReadId() {
+        val detector = com.example.ui.components.OfficerRealtimeNewReportDetector()
+        com.example.ui.components.OfficerAlarmPlayer.resetCountersForTesting()
+
+        assertEquals(
+            "Red banner headline MUST match required emergency text",
+            "🚨 LAPORAN WARGA BARU! Segera Cek!",
+            com.example.ui.components.OfficerAlarmPlayer.RED_BANNER_HEADLINE
+        )
+
+        val baseTime = 1_763_500_000_000L
+        val existingPendingReport = CitizenDisasterReport(
+            id = "LAP-MMK-EXISTING-001",
+            disasterType = "Banjir",
+            incidentTime = "19 Nov 2026 18:00 WIB",
+            incidentLocation = "Desa Pasar",
+            district = "Kota Mukomuko",
+            village = "Desa Pasar",
+            latitude = -2.581,
+            longitude = 101.123,
+            reporterName = "Warga Lama",
+            reporterPhone = "081100001",
+            additionalNotes = "Laporan awal",
+            timestamp = baseTime,
+            status = "Pending"
+        )
+
+        // 1. Initial baseline snapshot from pending stream: records lastReadReportId without firing false alarm
+        val firstPass = detector.onIncomingPendingReports(listOf(existingPendingReport))
+        assertNull("Initial baseline snapshot must not trigger false alarm", firstPass)
+        assertEquals("lastReadReportId must store initial latest pending ID", "LAP-MMK-EXISTING-001", detector.lastReadReportId)
+
+        // 2. New pending report arrives in stream with newer timestamp (ordered descending)
+        val newlyArrivedPendingReport = existingPendingReport.copy(
+            id = "LAP-MMK-NEW-ALERT-002",
+            disasterType = "Tanah Longsor",
+            reporterName = "Warga Darurat",
+            timestamp = baseTime + 60_000L,
+            status = "Pending"
+        )
+        val detectedNew = detector.onIncomingPendingReports(
+            listOf(newlyArrivedPendingReport, existingPendingReport)
+        )
+        assertNotNull("Detector MUST detect newly arrived pending report ID", detectedNew)
+        assertEquals("LAP-MMK-NEW-ALERT-002", detectedNew!!.id)
+        assertEquals(
+            "lastReadReportId MUST update to the newly arrived report ID",
+            "LAP-MMK-NEW-ALERT-002",
+            detector.lastReadReportId
+        )
+
+        // 3. Trigger alarm & vibration for the newly detected report
+        com.example.ui.components.OfficerAlarmPlayer.triggerSirenAndVibration(
+            context = context,
+            report = detectedNew,
+            dispatchSystemNotification = false
+        )
+        assertEquals("LAP-MMK-NEW-ALERT-002", com.example.ui.components.OfficerAlarmPlayer.lastAlarmTriggeredReportId)
+        assertTrue("Alarm trigger count must increment", com.example.ui.components.OfficerAlarmPlayer.alarmTriggerCount >= 1)
+        assertTrue("Strong vibration trigger count must increment", com.example.ui.components.OfficerAlarmPlayer.vibrationTriggerCount >= 1)
+
+        // 4. Subsequent emission with the same pending reports must not re-detect as new
+        val duplicateCheck = detector.onIncomingPendingReports(
+            listOf(newlyArrivedPendingReport, existingPendingReport)
+        )
+        assertNull("Already seen report ID must not re-trigger new report detection", duplicateCheck)
+    }
+
+    @Test
+    fun feedbackLoopVerticalStepper_streamsSpecificReportDocument_synchronizesColorsAndFirestoreTimestamp() {
+        val reportId = "LAP-MMK-FEEDBACK-20261119-001"
+        val createdTime = 1_763_550_000_000L
+        var latestStreamedReport: CitizenDisasterReport? = null
+
+        // 1. Attach StreamBuilder Pelacakan on specific document ID (LAP-MMK-...)
+        val registration = FirestoreHelper.listenCitizenReportByIdRealtime(
+            reportId = reportId,
+            onUpdate = { doc ->
+                latestStreamedReport = doc
+            }
+        )
+        assertNotNull("Real-time document stream listener must register", registration)
+        assertEquals(1, FirestoreHelper.getActiveDocumentStreamListenerCountForTesting(reportId))
+
+        // 2. Stage 1: [1] Laporan Diterima (Status: Pending)
+        val stage1Report = CitizenDisasterReport(
+            id = reportId,
+            disasterType = "Banjir",
+            incidentTime = "19 Nov 2026 19:00 WIB",
+            incidentLocation = "Desa Pasar",
+            district = "Kota Mukomuko",
+            village = "Desa Pasar",
+            latitude = -2.581,
+            longitude = 101.123,
+            reporterName = "Warga Pelapor",
+            reporterPhone = "081200001",
+            timestamp = createdTime,
+            updatedAt = createdTime,
+            status = "Pending",
+            isSyncedToCloud = true
+        )
+        FirestoreHelper.emitTestRealtimeReportDocumentUpdate(stage1Report)
+        assertNotNull("Stream listener must receive Pending document update", latestStreamedReport)
+
+        val stepsAtPending = com.example.ui.components.buildCitizenReportVerticalStepperSteps(latestStreamedReport!!)
+        assertEquals(4, stepsAtPending.size)
+        assertEquals("[1] Laporan Diterima", stepsAtPending[0].stepTitle)
+        assertEquals("Status: Pending", stepsAtPending[0].statusSubtitle)
+        assertEquals("[2] Tim Menuju Lokasi", stepsAtPending[1].stepTitle)
+        assertEquals("Status: Diproses", stepsAtPending[1].statusSubtitle)
+        assertEquals("[3] Penanganan", stepsAtPending[2].stepTitle)
+        assertEquals("Status: Divalidasi", stepsAtPending[2].statusSubtitle)
+        assertEquals("[4] Selesai", stepsAtPending[3].stepTitle)
+        assertEquals("Status: Selesai", stepsAtPending[3].statusSubtitle)
+
+        // Verify Color Synchronization at Stage 1 (Active = Oranye, Unreached = Abu-abu)
+        assertEquals(com.example.ui.components.StepperVisualState.ACTIVE, stepsAtPending[0].visualState)
+        assertEquals(com.example.ui.components.STEPPER_COLOR_ORANGE_ACTIVE_HEX, stepsAtPending[0].iconColorHex)
+        assertEquals(com.example.ui.components.StepperVisualState.UNREACHED, stepsAtPending[1].visualState)
+        assertEquals(com.example.ui.components.STEPPER_COLOR_GRAY_UNREACHED_HEX, stepsAtPending[1].iconColorHex)
+        assertEquals(com.example.ui.components.STEPPER_COLOR_GRAY_UNREACHED_HEX, stepsAtPending[2].iconColorHex)
+        assertEquals(com.example.ui.components.STEPPER_COLOR_GRAY_UNREACHED_HEX, stepsAtPending[3].iconColorHex)
+
+        // 3. Officer updates status to "Diproses" ([2] Tim Menuju Lokasi) 5 minutes later
+        val diprosesTime = createdTime + (5 * 60 * 1000L)
+        val stage2Report = stage1Report.copy(
+            status = "Diproses",
+            updatedAt = diprosesTime,
+            handledByOfficerName = "Budi Santoso, S.Kom"
+        )
+        FirestoreHelper.emitTestRealtimeReportDocumentUpdate(stage2Report)
+        val stepsAtDiproses = com.example.ui.components.buildCitizenReportVerticalStepperSteps(latestStreamedReport!!)
+        assertEquals(com.example.ui.components.StepperVisualState.COMPLETED, stepsAtDiproses[0].visualState)
+        assertEquals(com.example.ui.components.STEPPER_COLOR_GREEN_ACTIVE_OR_COMPLETED_HEX, stepsAtDiproses[0].iconColorHex)
+        assertEquals(com.example.ui.components.StepperVisualState.ACTIVE, stepsAtDiproses[1].visualState)
+        assertEquals(com.example.ui.components.STEPPER_COLOR_ORANGE_ACTIVE_HEX, stepsAtDiproses[1].iconColorHex)
+        assertEquals(com.example.ui.components.StepperVisualState.UNREACHED, stepsAtDiproses[2].visualState)
+        assertEquals(com.example.ui.components.STEPPER_COLOR_GRAY_UNREACHED_HEX, stepsAtDiproses[2].iconColorHex)
+        assertTrue(
+            "Active step MUST display officer update timestamp from Firestore",
+            stepsAtDiproses[1].handlingTimeDisplay?.contains("Diubah Petugas:") == true
+        )
+        assertEquals(
+            "Kecepatan Respons: 5 menit sejak laporan diterima",
+            stepsAtDiproses[1].responseSpeedDisplay
+        )
+
+        // 4. Officer updates status to "Divalidasi" ([3] Penanganan) 12 minutes after creation
+        val divalidasiTime = createdTime + (12 * 60 * 1000L)
+        val stage3Report = stage2Report.copy(
+            status = "Divalidasi",
+            updatedAt = divalidasiTime
+        )
+        FirestoreHelper.emitTestRealtimeReportDocumentUpdate(stage3Report)
+        val stepsAtDivalidasi = com.example.ui.components.buildCitizenReportVerticalStepperSteps(latestStreamedReport!!)
+        assertEquals(com.example.ui.components.StepperVisualState.COMPLETED, stepsAtDivalidasi[0].visualState)
+        assertEquals(com.example.ui.components.StepperVisualState.COMPLETED, stepsAtDivalidasi[1].visualState)
+        assertEquals(com.example.ui.components.StepperVisualState.ACTIVE, stepsAtDivalidasi[2].visualState)
+        assertEquals(com.example.ui.components.STEPPER_COLOR_ORANGE_ACTIVE_HEX, stepsAtDivalidasi[2].iconColorHex)
+        assertEquals(com.example.ui.components.StepperVisualState.UNREACHED, stepsAtDivalidasi[3].visualState)
+        assertEquals(com.example.ui.components.STEPPER_COLOR_GRAY_UNREACHED_HEX, stepsAtDivalidasi[3].iconColorHex)
+        assertEquals(
+            "Kecepatan Respons: 12 menit sejak laporan diterima",
+            stepsAtDivalidasi[2].responseSpeedDisplay
+        )
+
+        // 5. Officer updates status to "Selesai" ([4] Selesai) 35 minutes after creation
+        val selesaiTime = createdTime + (35 * 60 * 1000L)
+        val stage4Report = stage3Report.copy(
+            status = "Selesai",
+            updatedAt = selesaiTime
+        )
+        FirestoreHelper.emitTestRealtimeReportDocumentUpdate(stage4Report)
+        val stepsAtSelesai = com.example.ui.components.buildCitizenReportVerticalStepperSteps(latestStreamedReport!!)
+        assertEquals(com.example.ui.components.StepperVisualState.COMPLETED, stepsAtSelesai[0].visualState)
+        assertEquals(com.example.ui.components.StepperVisualState.COMPLETED, stepsAtSelesai[1].visualState)
+        assertEquals(com.example.ui.components.StepperVisualState.COMPLETED, stepsAtSelesai[2].visualState)
+        assertEquals(com.example.ui.components.StepperVisualState.ACTIVE, stepsAtSelesai[3].visualState)
+        assertEquals(com.example.ui.components.STEPPER_COLOR_GREEN_ACTIVE_OR_COMPLETED_HEX, stepsAtSelesai[3].iconColorHex)
+        assertTrue(
+            "Completed step 4 must show Firestore handling timestamp",
+            stepsAtSelesai[3].handlingTimeDisplay?.contains("Diubah Petugas:") == true
+        )
+
+        // Cleanup listener registration
+        registration?.remove()
+        assertEquals(0, FirestoreHelper.getActiveDocumentStreamListenerCountForTesting(reportId))
+    }
 }

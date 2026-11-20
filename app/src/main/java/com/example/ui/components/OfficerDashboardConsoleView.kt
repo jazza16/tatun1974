@@ -203,7 +203,36 @@ fun OfficerDashboardConsoleView(
     var isDistrictDropdownExpanded by remember { mutableStateOf(false) }
     var onlyWithCasualties by remember { mutableStateOf(false) }
 
-    // Auto-Pin Location on Mini Map State (always synchronized when reports flow updates)
+    // Real-Time Alert (Notifikasi Tanpa Henti) State & Detector untuk Laporan Warga Baru (Pending)
+    val realtimeNewReportDetector = remember { OfficerRealtimeNewReportDetector() }
+    var activeRealtimeAlertReport by remember { mutableStateOf<CitizenDisasterReport?>(null) }
+    var unacknowledgedAlertQueue by remember { mutableStateOf<List<CitizenDisasterReport>>(emptyList()) }
+
+    val handleIncomingPendingReportsStream: (List<CitizenDisasterReport>) -> Unit = { incomingList ->
+        val newlyDetected = realtimeNewReportDetector.onIncomingPendingReports(incomingList)
+        if (newlyDetected != null) {
+            activeRealtimeAlertReport = newlyDetected
+            if (unacknowledgedAlertQueue.none { it.id == newlyDetected.id }) {
+                unacknowledgedAlertQueue = listOf(newlyDetected) + unacknowledgedAlertQueue
+            }
+        }
+    }
+
+    // StreamBuilder equivalent: Real-Time Firestore SnapshotListener on citizen_disaster_reports
+    // filtered by status Pending and ordered by timestamp descending
+    DisposableEffect(isOfficerLoggedIn) {
+        val pendingReportsListener = com.example.data.local.FirestoreHelper.listenPendingCitizenReportsRealtime(
+            onUpdate = { pendingReports ->
+                handleIncomingPendingReportsStream(pendingReports)
+            }
+        )
+        onDispose {
+            pendingReportsListener?.remove()
+            OfficerAlarmPlayer.stopActiveRingtone()
+        }
+    }
+
+    // Auto-Pin Location on Mini Map State & Sinkronisasi Detektor Laporan Baru dari Flow Repository
     var pinnedReportForMap by remember {
         mutableStateOf<CitizenDisasterReport?>(
             reports.firstOrNull { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
@@ -211,6 +240,7 @@ fun OfficerDashboardConsoleView(
         )
     }
     LaunchedEffect(reports) {
+        handleIncomingPendingReportsStream(reports)
         val currentPinnedId = pinnedReportForMap?.id
         pinnedReportForMap = if (currentPinnedId != null) {
             reports.find { it.id == currentPinnedId }
@@ -499,6 +529,39 @@ fun OfficerDashboardConsoleView(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // 0. REAL-TIME RED ALERT BANNER ("🚨 LAPORAN WARGA BARU! Segera Cek!")
+        activeRealtimeAlertReport?.let { alertReport ->
+            item(key = "realtime_red_alert_${alertReport.id}") {
+                OfficerRealtimeRedAlertBanner(
+                    alertReport = alertReport,
+                    unacknowledgedCount = unacknowledgedAlertQueue.size.coerceAtLeast(1),
+                    onInspectAndAcknowledge = { targetReport ->
+                        realtimeNewReportDetector.markReportAsRead(targetReport.id)
+                        pinnedReportForMap = targetReport
+                        dashboardSubTab = 0
+                        selectedStatusFilter = "Semua"
+                        selectedCategoryFilter = "Semua Kategori"
+                        selectedDistrictFilter = "Semua Kecamatan"
+                        onlyWithCasualties = false
+                        val remaining = unacknowledgedAlertQueue.filterNot { it.id == targetReport.id }
+                        unacknowledgedAlertQueue = remaining
+                        activeRealtimeAlertReport = remaining.firstOrNull()
+                        Toast.makeText(
+                            context,
+                            "Membuka & memfokuskan laporan baru ${targetReport.id} di Peta & Antrean Aktif.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    onDismissAlarm = { targetReport ->
+                        realtimeNewReportDetector.markReportAsRead(targetReport.id)
+                        val remaining = unacknowledgedAlertQueue.filterNot { it.id == targetReport.id }
+                        unacknowledgedAlertQueue = remaining
+                        activeRealtimeAlertReport = remaining.firstOrNull()
+                    }
+                )
+            }
+        }
+
         // 1. OFFICER COMMAND BAR WITH EXPORT PDF & CSV BUTTONS
         item {
             Card(

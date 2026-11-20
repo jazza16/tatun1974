@@ -354,9 +354,17 @@ fun CitizenReportScreen(
     var previewPhotoUri by remember { mutableStateOf<String?>(null) }
     var previewPhotoReport by remember { mutableStateOf<CitizenDisasterReport?>(null) }
 
-    // Cloud Online Sync State
+    // Cloud Online Sync & Zero-Friction Offline Persistence State
     var isSyncingOnline by remember { mutableStateOf(false) }
     var lastSyncStatusMessage by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val isDeviceOnline by com.example.data.sync.OfflineReportConnectivityMonitor.isOnlineFlow.collectAsStateWithLifecycle()
+
+    LaunchedEffect(context) {
+        FirestoreHelper.ensureOfflinePersistenceEnabled(context)
+        com.example.data.sync.OfflineReportConnectivityMonitor.ensureRegistered(context)
+        com.example.data.sync.OfflineReportConnectivityMonitor.refreshConnectivityState(context)
+    }
 
     // Trigger auto-sync on screen open and sub-tab / officer login state changes
     LaunchedEffect(selectedTab, isOfficerLoggedIn) {
@@ -1681,164 +1689,209 @@ fun CitizenReportScreen(
                                     if (isSubmittingReport) return@Button
                                     val nowMs = System.currentTimeMillis()
                                     val reportId = "LAP-MMK-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(nowMs)) + "-" + (100..999).random()
-                                    isSubmittingReport = true
-                                    submitStatusLabel = if (!photoUriString.isNullOrBlank() || rawCameraBitmap != null || cameraCapturedBitmap != null) {
-                                        "Mengunggah foto bukti GPS ke server (0-100%)..."
-                                    } else {
-                                        "Mengirim laporan resmi ke PUSDALOPS BPBD..."
-                                    }
+                                     val isOnlineNow = com.example.data.sync.OfflineReportConnectivityMonitor.refreshConnectivityState(context)
+                                     isSubmittingReport = true
+                                     submitStatusLabel = if (!isOnlineNow) {
+                                         FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
+                                     } else if (!photoUriString.isNullOrBlank() || rawCameraBitmap != null || cameraCapturedBitmap != null) {
+                                         "Mengunggah foto bukti GPS ke server (0-100%)..."
+                                     } else {
+                                         "Mengirim laporan resmi ke PUSDALOPS BPBD..."
+                                     }
 
-                                    coroutineScope.launch {
-                                        // Pastikan jika ada foto kamera, gambar yang di-upload adalah hasil render watermark GPS final
-                                        val finalWatermarkedPhotoUri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                            val sourceRaw = rawCameraBitmap
-                                            if (sourceRaw != null) {
-                                                val finalStamped = com.example.util.ImageUtils.renderGpsWatermarkOnBitmap(
-                                                    source = sourceRaw,
-                                                    latitude = latitude,
-                                                    longitude = longitude,
-                                                    incidentTime = incidentTime,
-                                                    locationLabel = "$selectedVillage, Kec. $selectedDistrict",
-                                                    accuracyMeters = gpsAccuracy
-                                                )
-                                                cameraCapturedBitmap = finalStamped
-                                                com.example.util.ImageUtils.saveBitmapToPersistentReportFile(context, finalStamped)
-                                                    ?: com.example.util.ImageUtils.encodeBitmapToCloudDataUri(finalStamped)
-                                            } else {
-                                                photoUriString?.trim()?.takeIf { it.isNotBlank() }
-                                                    ?: cameraCapturedBitmap?.let {
-                                                        com.example.util.ImageUtils.saveBitmapToPersistentReportFile(context, it)
-                                                            ?: com.example.util.ImageUtils.encodeBitmapToCloudDataUri(it)
-                                                    }
-                                            }
-                                        }
+                                     coroutineScope.launch {
+                                         // Pastikan jika ada foto kamera, gambar yang di-upload adalah hasil render watermark GPS final
+                                         val finalWatermarkedPhotoUri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                             val sourceRaw = rawCameraBitmap
+                                             if (sourceRaw != null) {
+                                                 val finalStamped = com.example.util.ImageUtils.renderGpsWatermarkOnBitmap(
+                                                     source = sourceRaw,
+                                                     latitude = latitude,
+                                                     longitude = longitude,
+                                                     incidentTime = incidentTime,
+                                                     locationLabel = "$selectedVillage, Kec. $selectedDistrict",
+                                                     accuracyMeters = gpsAccuracy
+                                                 )
+                                                 cameraCapturedBitmap = finalStamped
+                                                 com.example.util.ImageUtils.saveBitmapToPersistentReportFile(context, finalStamped)
+                                                     ?: com.example.util.ImageUtils.encodeBitmapToCloudDataUri(finalStamped)
+                                             } else {
+                                                 photoUriString?.trim()?.takeIf { it.isNotBlank() }
+                                                     ?: cameraCapturedBitmap?.let {
+                                                         com.example.util.ImageUtils.saveBitmapToPersistentReportFile(context, it)
+                                                             ?: com.example.util.ImageUtils.encodeBitmapToCloudDataUri(it)
+                                                     }
+                                             }
+                                         }
 
-                                        val report = CitizenDisasterReport(
-                                            id = reportId,
-                                            disasterType = selectedDisasterType,
-                                            incidentTime = incidentTime,
-                                            incidentLocation = incidentLocation,
-                                            district = selectedDistrict,
-                                            village = selectedVillage,
-                                            latitude = latitude,
-                                            longitude = longitude,
-                                            gpsAccuracyMeters = gpsAccuracy,
-                                            isGpsVerified = isGpsLocked,
-                                            casualtiesDead = deadCount,
-                                            casualtiesInjured = injuredCount,
-                                            casualtiesMissing = missingCount,
-                                            photoUri = finalWatermarkedPhotoUri,
-                                            reporterName = reporterName.ifBlank { "Warga $selectedDistrict" },
-                                            reporterPhone = reporterPhone,
-                                            additionalNotes = additionalNotes,
-                                            timestamp = nowMs,
-                                            status = com.example.model.CitizenReportStatusHelper.STATUS_DIPROSES,
-                                            updatedAt = nowMs,
-                                            isSyncedToCloud = false
-                                        )
+                                         val report = CitizenDisasterReport(
+                                             id = reportId,
+                                             disasterType = selectedDisasterType,
+                                             incidentTime = incidentTime,
+                                             incidentLocation = incidentLocation,
+                                             district = selectedDistrict,
+                                             village = selectedVillage,
+                                             latitude = latitude,
+                                             longitude = longitude,
+                                             gpsAccuracyMeters = gpsAccuracy,
+                                             isGpsVerified = isGpsLocked,
+                                             casualtiesDead = deadCount,
+                                             casualtiesInjured = injuredCount,
+                                             casualtiesMissing = missingCount,
+                                             photoUri = finalWatermarkedPhotoUri,
+                                             reporterName = reporterName.ifBlank { "Warga $selectedDistrict" },
+                                             reporterPhone = reporterPhone,
+                                             additionalNotes = additionalNotes,
+                                             timestamp = nowMs,
+                                             status = com.example.model.CitizenReportStatusHelper.STATUS_DIPROSES,
+                                             updatedAt = nowMs,
+                                             isSyncedToCloud = false
+                                         )
 
-                                            if (onSubmitReportWithResult != null) {
-                                                onSubmitReportWithResult(report) { result ->
-                                                    isSubmittingReport = false
-                                                    submitStatusLabel = ""
-                                                    lastSubmitResult = result
-                                                    submittedReportId = reportId
-                                                    trackingReportIdQuery = reportId
-                                                    showSuccessDialog = true
-                                                }
-                                            } else {
-                                                onSubmitReport(report)
-                                                isSubmittingReport = false
-                                                submitStatusLabel = ""
-                                                lastSubmitResult = null
-                                                submittedReportId = reportId
-                                                trackingReportIdQuery = reportId
-                                                showSuccessDialog = true
-                                            }
-                                        }
-                                    },
-                                    enabled = !isSubmittingReport,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFFDC2626),
-                                        contentColor = Color.White,
-                                        disabledContainerColor = Color(0xFFEA580C).copy(alpha = 0.75f),
-                                        disabledContentColor = Color.White
-                                    ),
-                                    border = androidx.compose.foundation.BorderStroke(2.5.dp, Color(0xFFFED7AA)),
-                                    elevation = ButtonDefaults.buttonElevation(
-                                        defaultElevation = 10.dp,
-                                        pressedElevation = 4.dp
-                                    ),
-                                    shape = RoundedCornerShape(18.dp),
-                                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 82.dp)
-                                        .testTag("btn_submit_citizen_report")
-                                ) {
-                                    if (isSubmittingReport) {
-                                        CircularProgressIndicator(
-                                            color = Color.White,
-                                            strokeWidth = 3.dp,
-                                            modifier = Modifier.size(26.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Column {
-                                            Text(
-                                                text = "MENGIRIM LAPORAN DARURAT...",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = Color.White
-                                            )
-                                            Text(
-                                                text = submitStatusLabel.ifBlank { "Mengunggah foto GPS & menyimpan..." },
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = Color(0xFFFFEDD5)
-                                            )
-                                        }
-                                    } else {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = Color(0xFFEA580C),
-                                            border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White),
-                                            modifier = Modifier.size(44.dp)
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Filled.Send,
-                                                    contentDescription = "Kirim Laporan Darurat",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(24.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.width(14.dp))
-                                        Column(
-                                            horizontalAlignment = Alignment.Start,
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text(
-                                                text = "🚨 KIRIM LAPORAN",
-                                                fontSize = 18.sp,
-                                                fontWeight = FontWeight.Black,
-                                                letterSpacing = 0.5.sp,
-                                                color = Color.White
-                                            )
-                                            Text(
-                                                text = "TOMBOL DARURAT • Kirim Lokasi GPS & Foto Bukti ke Pusdalops BPBD",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFFFFEDD5),
-                                                lineHeight = 14.sp
-                                            )
-                                        }
-                                    }
-                                }
-                        }
-                        }
-                    }
-                }
+                                         if (onSubmitReportWithResult != null) {
+                                             onSubmitReportWithResult(report) { result ->
+                                                 isSubmittingReport = false
+                                                 submitStatusLabel = ""
+                                                 lastSubmitResult = result
+                                                 submittedReportId = reportId
+                                                 trackingReportIdQuery = reportId
+                                                 if (result.deferredOffline || !result.syncedToCloud || !isOnlineNow) {
+                                                     Toast.makeText(
+                                                         context,
+                                                         FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE,
+                                                         Toast.LENGTH_LONG
+                                                     ).show()
+                                                     coroutineScope.launch {
+                                                         snackbarHostState.showSnackbar(
+                                                             message = FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
+                                                         )
+                                                     }
+                                                 }
+                                                 showSuccessDialog = true
+                                             }
+                                         } else {
+                                             onSubmitReport(report)
+                                             isSubmittingReport = false
+                                             submitStatusLabel = ""
+                                             lastSubmitResult = null
+                                             submittedReportId = reportId
+                                             trackingReportIdQuery = reportId
+                                             if (!isOnlineNow) {
+                                                 Toast.makeText(
+                                                     context,
+                                                     FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE,
+                                                     Toast.LENGTH_LONG
+                                                 ).show()
+                                                 coroutineScope.launch {
+                                                     snackbarHostState.showSnackbar(
+                                                         message = FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
+                                                     )
+                                                 }
+                                             }
+                                             showSuccessDialog = true
+                                         }
+                                     }
+                                 },
+                                 enabled = !isSubmittingReport,
+                                 colors = ButtonDefaults.buttonColors(
+                                     containerColor = Color(0xFFDC2626),
+                                     contentColor = Color.White,
+                                     disabledContainerColor = Color(0xFFEA580C).copy(alpha = 0.75f),
+                                     disabledContentColor = Color.White
+                                 ),
+                                 border = androidx.compose.foundation.BorderStroke(2.5.dp, Color(0xFFFED7AA)),
+                                 elevation = ButtonDefaults.buttonElevation(
+                                     defaultElevation = 10.dp,
+                                     pressedElevation = 4.dp
+                                 ),
+                                 shape = RoundedCornerShape(18.dp),
+                                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
+                                 modifier = Modifier
+                                     .fillMaxWidth()
+                                     .heightIn(min = 82.dp)
+                                     .testTag("btn_submit_citizen_report")
+                             ) {
+                                 if (isSubmittingReport) {
+                                     CircularProgressIndicator(
+                                         color = Color.White,
+                                         strokeWidth = 3.dp,
+                                         modifier = Modifier.size(26.dp)
+                                     )
+                                     Spacer(modifier = Modifier.width(12.dp))
+                                     Column {
+                                         Text(
+                                             text = if (!isDeviceOnline) {
+                                                 "MENYIMPAN LAPORAN DI PERANGKAT..."
+                                             } else {
+                                                 "MENGIRIM LAPORAN DARURAT..."
+                                             },
+                                             fontSize = 14.sp,
+                                             fontWeight = FontWeight.ExtraBold,
+                                             color = Color.White
+                                         )
+                                         Text(
+                                             text = submitStatusLabel.ifBlank {
+                                                 if (!isDeviceOnline) {
+                                                     FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
+                                                 } else {
+                                                     "Mengunggah foto GPS & menyimpan..."
+                                                 }
+                                             },
+                                             fontSize = 11.sp,
+                                             fontWeight = FontWeight.Medium,
+                                             color = Color(0xFFFFEDD5)
+                                         )
+                                     }
+                                 } else {
+                                     Surface(
+                                         shape = CircleShape,
+                                         color = Color(0xFFEA580C),
+                                         border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White),
+                                         modifier = Modifier.size(44.dp)
+                                     ) {
+                                         Box(contentAlignment = Alignment.Center) {
+                                             Icon(
+                                                 imageVector = Icons.AutoMirrored.Filled.Send,
+                                                 contentDescription = "Kirim Laporan Darurat",
+                                                 tint = Color.White,
+                                                 modifier = Modifier.size(24.dp)
+                                             )
+                                         }
+                                     }
+                                     Spacer(modifier = Modifier.width(14.dp))
+                                     Column(
+                                         horizontalAlignment = Alignment.Start,
+                                         modifier = Modifier.weight(1f)
+                                     ) {
+                                         Text(
+                                             text = if (isDeviceOnline) {
+                                                 "🚨 KIRIM LAPORAN"
+                                             } else {
+                                                 "🚨 KIRIM LAPORAN (SIMPAN OFFLINE)"
+                                             },
+                                             fontSize = 17.sp,
+                                             fontWeight = FontWeight.Black,
+                                             letterSpacing = 0.5.sp,
+                                             color = Color.White
+                                         )
+                                         Text(
+                                             text = if (isDeviceOnline) {
+                                                 "TOMBOL DARURAT • Kirim Lokasi GPS & Foto Bukti ke Pusdalops BPBD"
+                                             } else {
+                                                 FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
+                                             },
+                                             fontSize = 11.sp,
+                                             fontWeight = FontWeight.Bold,
+                                             color = Color(0xFFFFEDD5),
+                                             lineHeight = 14.sp
+                                         )
+                                     }
+                                 }
+                             }
+                         }
+                         }
+                     }
+                 }
 
                 1 -> {
                     // TAB 1: PETA SEBARAN LAPORAN (Google Maps / GIS Spatial Map)
@@ -2383,6 +2436,12 @@ fun CitizenReportScreen(
                     }
                 }
             }
+            androidx.compose.material3.SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(12.dp)
+            )
         }
     }
 }
@@ -2444,7 +2503,7 @@ fun CitizenReportScreen(
         )
     }
 
-    // Success Confirmation Dialog (shows accurate Cloud vs Offline-Queued photo+text status)
+    // Success Confirmation Dialog (Zero-Friction Offline Persistence & Cloud status)
     if (showSuccessDialog) {
         val isDeferredOffline = lastSubmitResult?.deferredOffline == true || lastSubmitResult?.syncedToCloud == false
         val hasUploadedPhoto = lastSubmitResult?.hasPhoto == true && lastSubmitResult?.syncedToCloud == true
@@ -2452,15 +2511,15 @@ fun CitizenReportScreen(
             onDismissRequest = { showSuccessDialog = false },
             icon = {
                 Icon(
-                    imageVector = if (isDeferredOffline) Icons.Default.CloudOff else Icons.Default.CheckCircle,
+                    imageVector = Icons.Default.CheckCircle,
                     contentDescription = null,
-                    tint = if (isDeferredOffline) Color(0xFFD97706) else Color(0xFF16A34A),
+                    tint = Color(0xFF16A34A),
                     modifier = Modifier.size(44.dp)
                 )
             },
             title = {
                 Text(
-                    text = if (isDeferredOffline) "Tersimpan Offline (Antre Kirim)" else "Laporan Bencana Terkirim!",
+                    text = if (isDeferredOffline) "Laporan Tersimpan di Perangkat" else "Laporan Bencana Terkirim!",
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
                     textAlign = TextAlign.Center
@@ -2469,8 +2528,12 @@ fun CitizenReportScreen(
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = lastSubmitResult?.message?.takeIf { it.isNotBlank() }
-                            ?: "Laporan Anda telah berhasil dicatat oleh sistem PUSDALOPS BPBD Kabupaten Mukomuko.",
+                        text = if (isDeferredOffline) {
+                            FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
+                        } else {
+                            lastSubmitResult?.message?.takeIf { it.isNotBlank() }
+                                ?: "Laporan Anda telah berhasil dicatat oleh sistem PUSDALOPS BPBD Kabupaten Mukomuko."
+                        },
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
                         color = Color(0xFF374151)
@@ -2487,12 +2550,12 @@ fun CitizenReportScreen(
                             Text(text = "Kecamatan: $selectedDistrict", fontSize = 11.sp)
                             Text(
                                 text = when {
-                                    isDeferredOffline -> "Status Kirim: 🟠 Antre Offline (Teks + Foto tersimpan lokal)"
+                                    isDeferredOffline -> "Status: 🟢 Tersimpan di Perangkat (Dikirim Otomatis Saat Sinyal Tersedia)"
                                     hasUploadedPhoto -> "Status Kirim: 🟢 Foto GPS & Laporan Tersinkron 100%"
                                     else -> "Status: 🟡 Diproses (Menunggu Verifikasi Lapangan)"
                                 },
                                 fontSize = 11.sp,
-                                color = if (isDeferredOffline) Color(0xFFB45309) else Color(0xFF15803D),
+                                color = Color(0xFF15803D),
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -4143,8 +4206,16 @@ private fun CitizenReportItemCard(
                 }
             }
 
+            // FEEDBACK LOOP (PELACAKAN STATUS REAL-TIME):
+            // StreamBuilder Pelacakan pada dokumen spesifik (LAP-MMK-...) + UI Stepper Vertikal 4 Tahapan
+            // + Sinkronisasi Warna Otomatis + Waktu Penanganan dari Timestamp Firestore
+            Spacer(modifier = Modifier.height(10.dp))
+            CitizenReportVerticalFeedbackStepper(
+                report = report
+            )
+
             // GOOGLE MAPS CONNECTION BUTTONS (Universal Route & Navigation)
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)

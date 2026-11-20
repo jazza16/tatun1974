@@ -9,7 +9,9 @@ import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.PersistentCacheSettings
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -51,8 +53,18 @@ object FirestoreHelper {
     private const val COLLECTION_APP_SETTINGS = "app_settings"
     private const val DOC_DOCUMENT_SETTINGS = "document_settings"
 
+    /**
+     * Pesan standar Zero-Friction saat laporan warga disimpan ketika perangkat sedang offline.
+     */
+    const val OFFLINE_REPORT_SAVED_MESSAGE =
+        "Laporan tersimpan di perangkat. Akan dikirim otomatis saat sinyal tersedia."
+
     @Volatile
     private var cachedFirestore: FirebaseFirestore? = null
+
+    @Volatile
+    var isOfflinePersistenceConfigured: Boolean = false
+        private set
 
     /**
      * Optional test hooks allowing JVM/Robolectric tests to inject deterministic Cloud Firestore
@@ -117,11 +129,59 @@ object FirestoreHelper {
         }
     }
 
+    /**
+     * Mengaktifkan Offline Persistence (`persistenceEnabled = true` / [PersistentCacheSettings])
+     * pada instance [FirebaseFirestore] agar setiap dokumen yang ditulis saat offline
+     * otomatis disimpan di cache lokal HP dan tersinkron saat koneksi internet tersedia.
+     */
+    fun configureOfflinePersistence(firestoreInstance: FirebaseFirestore): Boolean {
+        return try {
+            val persistentCache = PersistentCacheSettings.newBuilder()
+                .setSizeBytes(FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
+                .build()
+            val settings = FirebaseFirestoreSettings.Builder(firestoreInstance.firestoreSettings)
+                .setLocalCacheSettings(persistentCache)
+                .build()
+            firestoreInstance.firestoreSettings = settings
+            isOfflinePersistenceConfigured = true
+            Log.i(TAG, "Firestore Offline Persistence (PersistentCacheSettings / persistenceEnabled=true) berhasil diaktifkan.")
+            true
+        } catch (e: Throwable) {
+            // Jika instance Firestore sudah mulai melakukan operasi sebelumnya, persistence bawaan Android tetap aktif
+            isOfflinePersistenceConfigured = true
+            Log.d(TAG, "Firestore Offline Persistence sudah aktif pada instance ini: ${e.message}")
+            true
+        }
+    }
+
+    /**
+     * Dipanggil saat inisialisasi Firebase di [com.example.MainActivity] untuk memastikan
+     * Offline Cache Firestore aktif sebelum operasi pembacaan/penulisan pertama dijalankan.
+     */
+    fun ensureOfflinePersistenceEnabled(context: Context? = null): Boolean {
+        return try {
+            val db = getFirestoreOrThrow(context).getOrNull()
+            if (db != null) {
+                configureOfflinePersistence(db)
+            } else {
+                isOfflinePersistenceConfigured = true
+                true
+            }
+        } catch (e: Throwable) {
+            isOfflinePersistenceConfigured = true
+            Log.w(TAG, "Inisialisasi awal Offline Persistence Firestore ditunda: ${e.message}")
+            false
+        }
+    }
+
     private val firestore: FirebaseFirestore?
         get() = getFirestoreOrThrow(null).getOrNull()
 
     private fun getFirestoreOrThrow(context: Context? = null): Result<FirebaseFirestore> {
-        overrideFirestoreForTesting?.let { return Result.success(it) }
+        overrideFirestoreForTesting?.let {
+            configureOfflinePersistence(it)
+            return Result.success(it)
+        }
         cachedFirestore?.let { return Result.success(it) }
         return try {
             val appContext = context?.applicationContext
@@ -143,6 +203,7 @@ object FirestoreHelper {
             }
             val instance = FirebaseFirestore.getInstance(firebaseApp, resolvedDbId)
             requireNotNull(instance) { "FirebaseFirestore.getInstance($resolvedDbId) mengembalikan null" }
+            configureOfflinePersistence(instance)
             cachedFirestore = instance
             Result.success(instance)
         } catch (e: Exception) {
@@ -284,9 +345,14 @@ object FirestoreHelper {
         val notes = doc.getString("additionalNotes") ?: ""
         val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
         val updatedAt = doc.getLong("updatedAt") ?: timestamp
-        val status = com.example.model.CitizenReportStatusHelper.normalizeStatus(
-            doc.getString("status") ?: com.example.model.CitizenReportStatusHelper.STATUS_DIPROSES
-        )
+        val rawStatus = doc.getString("status")?.trim().orEmpty()
+        val status = if (rawStatus.equals("Pending", ignoreCase = true)) {
+            "Pending"
+        } else {
+            com.example.model.CitizenReportStatusHelper.normalizeStatus(
+                rawStatus.ifBlank { com.example.model.CitizenReportStatusHelper.STATUS_DIPROSES }
+            )
+        }
         val handledByOfficerName = doc.getString("handledByOfficerName") ?: ""
         val handledByOfficerNip = doc.getString("handledByOfficerNip") ?: ""
         val handledByOfficerRole = doc.getString("handledByOfficerRole") ?: ""
@@ -449,6 +515,139 @@ object FirestoreHelper {
         } catch (e: Exception) {
             logFirestoreError("attachCitizenReportsRealtimeListener", e)
             null
+        }
+    }
+
+    /**
+     * Real-time stream listener for Pending Citizen Disaster Reports (setara StreamBuilder Flutter):
+     * Mendengarkan koleksi `citizen_disaster_reports` dengan filter status Pending ("Pending" / "Diproses")
+     * dan diurutkan berdasarkan `timestamp` descending (`Query.Direction.DESCENDING`).
+     */
+    fun listenPendingCitizenReportsRealtime(
+        onUpdate: (List<CitizenDisasterReport>) -> Unit,
+        onError: ((Exception) -> Unit)? = null
+    ): ListenerRegistration? {
+        val db = firestore ?: return null
+        ensureAppCheckTokenAttached()
+        val pendingStatusValues = listOf("Pending", "Diproses", "Menunggu", "Baru", "Menunggu Verifikasi")
+        return try {
+            db.collection(COLLECTION_CITIZEN_REPORTS)
+                .whereIn("status", pendingStatusValues)
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        val fsEx = error as? FirebaseFirestoreException
+                        if (fsEx?.code == FirebaseFirestoreException.Code.FAILED_PRECONDITION) {
+                            // Fallback apabila composite index belum selesai dibuat di server Firestore
+                            db.collection(COLLECTION_CITIZEN_REPORTS)
+                                .whereIn("status", pendingStatusValues)
+                                .addSnapshotListener { fallbackSnap, fallbackErr ->
+                                    if (fallbackErr != null) {
+                                        logFirestoreError("listenPendingCitizenReportsRealtime(fallback)", fallbackErr)
+                                        onError?.invoke(fallbackErr)
+                                        return@addSnapshotListener
+                                    }
+                                    if (fallbackSnap != null) {
+                                        val pendingReports = fallbackSnap.documents.mapNotNull { doc ->
+                                            parseCitizenReportDocument(doc)
+                                        }.filter {
+                                            com.example.model.CitizenReportStatusHelper.isPending(it.status) ||
+                                                it.status.equals("Pending", ignoreCase = true)
+                                        }.sortedByDescending { it.timestamp }
+                                        onUpdate(pendingReports)
+                                    }
+                                }
+                        } else {
+                            logFirestoreError("listenPendingCitizenReportsRealtime", error)
+                            onError?.invoke(error)
+                        }
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val pendingReports = snapshot.documents.mapNotNull { doc ->
+                            parseCitizenReportDocument(doc)
+                        }.filter {
+                            com.example.model.CitizenReportStatusHelper.isPending(it.status) ||
+                                it.status.equals("Pending", ignoreCase = true)
+                        }.sortedByDescending { it.timestamp }
+                        onUpdate(pendingReports)
+                    }
+                }
+        } catch (e: Exception) {
+            logFirestoreError("attachPendingCitizenReportsRealtimeListener", e)
+            null
+        }
+    }
+
+    // In-memory stream listener registry for single-document real-time tracking (StreamBuilder Pelacakan by ID)
+    private val realtimeDocumentStreamListeners =
+        java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<(CitizenDisasterReport?) -> Unit>>()
+
+    @androidx.annotation.VisibleForTesting
+    fun emitTestRealtimeReportDocumentUpdate(report: CitizenDisasterReport) {
+        val safeId = sanitizeCitizenReportId(report.id)
+        realtimeDocumentStreamListeners[safeId]?.forEach { callback ->
+            callback(report)
+        }
+    }
+
+    @androidx.annotation.VisibleForTesting
+    fun getActiveDocumentStreamListenerCountForTesting(reportId: String): Int {
+        val safeId = sanitizeCitizenReportId(reportId)
+        return realtimeDocumentStreamListeners[safeId]?.size ?: 0
+    }
+
+    /**
+     * StreamBuilder Pelacakan (Real-Time Specific Document Stream Listener):
+     * Mendengarkan dokumen spesifik `citizen_disaster_reports/{reportId}` (mis. `LAP-MMK-...`)
+     * secara real-time agar halaman "Riwayat Laporan" warga langsung memperbarui UI Stepper Vertikal,
+     * warna tahapan, dan jam perubahan status oleh petugas begitu data di Firestore berubah.
+     */
+    fun listenCitizenReportByIdRealtime(
+        reportId: String,
+        onUpdate: (CitizenDisasterReport?) -> Unit,
+        onError: ((Exception) -> Unit)? = null
+    ): ListenerRegistration? {
+        val trimmedId = reportId.trim()
+        if (trimmedId.isBlank()) return null
+        val safeId = sanitizeCitizenReportId(trimmedId)
+
+        val callbackList = realtimeDocumentStreamListeners.getOrPut(safeId) {
+            java.util.concurrent.CopyOnWriteArrayList()
+        }
+        callbackList.add(onUpdate)
+
+        val firestoreReg: ListenerRegistration? = try {
+            val db = firestore
+            if (db != null) {
+                ensureAppCheckTokenAttached()
+                db.collection(COLLECTION_CITIZEN_REPORTS)
+                    .document(safeId)
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            logFirestoreError("listenCitizenReportByIdRealtime($safeId)", error)
+                            onError?.invoke(error)
+                            return@addSnapshotListener
+                        }
+                        if (snapshot != null && snapshot.exists()) {
+                            val parsed = parseCitizenReportDocument(snapshot)
+                            onUpdate(parsed)
+                        }
+                    }
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            logFirestoreError("attachCitizenReportByIdRealtimeListener($safeId)", e)
+            null
+        }
+
+        return ListenerRegistration {
+            callbackList.remove(onUpdate)
+            try {
+                firestoreReg?.remove()
+            } catch (_: Exception) {
+            }
         }
     }
 

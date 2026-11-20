@@ -76,12 +76,16 @@ object FirebaseStoragePhotoUploader {
         if (!isNetworkOnline(context)) {
             Log.w(TAG, "Device offline — deferring photo upload & report $reportId to local SQLite queue.")
             return@withContext PhotoUploadOutcome.NetworkOffline(
-                "Tidak ada sinyal internet. Laporan beserta foto disimpan lokal dan akan dikirim otomatis saat online."
+                com.example.data.local.FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
             )
         }
 
         overrideUploaderForTesting?.let { customUploader ->
-            return@withContext customUploader(bitmap, reportId)
+            return@withContext try {
+                customUploader(bitmap, reportId)
+            } catch (e: Throwable) {
+                classifyUploadException(reportId, e)
+            }
         }
 
         try {
@@ -125,7 +129,7 @@ object FirebaseStoragePhotoUploader {
             } else {
                 PhotoUploadOutcome.StorageUnavailable("Download URL Firebase Storage tidak valid")
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             classifyUploadException(reportId, e)
         }
     }
@@ -155,7 +159,7 @@ object FirebaseStoragePhotoUploader {
         return if (isNetworkError) {
             Log.w(TAG, "Network error uploading photo for $reportId: ${error.message}")
             PhotoUploadOutcome.NetworkOffline(
-                "Gangguan jaringan saat mengunggah foto: ${error.localizedMessage ?: "offline"}"
+                com.example.data.local.FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
             )
         } else {
             Log.w(TAG, "Firebase Storage unavailable for $reportId: ${error.message}")

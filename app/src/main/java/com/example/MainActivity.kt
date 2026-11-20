@@ -185,6 +185,8 @@ fun configureAppCheck(context: Context, intent: Intent?) {
         if (FirebaseApp.getApps(context).isEmpty()) {
             FirebaseApp.initializeApp(context)
         }
+        // Aktifkan Firestore Offline Cache (persistenceEnabled = true / PersistentCacheSettings) saat inisialisasi Firebase
+        com.example.data.local.FirestoreHelper.ensureOfflinePersistenceEnabled(context)
 
         if (BuildConfig.DEBUG) {
             val debugToken = intent?.getStringExtra(DEBUG_TOKEN_EXTRA)

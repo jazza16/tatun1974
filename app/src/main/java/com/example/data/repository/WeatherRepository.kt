@@ -402,6 +402,10 @@ class WeatherRepository(
         val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(report.status)
         val effectiveUpdatedAt = maxOf(report.timestamp, report.updatedAt)
 
+        // Pastikan Firestore Offline Persistence & Connectivity Monitor terdaftar
+        com.example.data.local.FirestoreHelper.ensureOfflinePersistenceEnabled(context)
+        com.example.data.sync.OfflineReportConnectivityMonitor.ensureRegistered(context)
+
         // 1. Simpan segera ke Room SQLite lokal (teks + path foto lokal) dengan isSyncedToCloud = false
         //    agar jika sinyal putus atau aplikasi ditutup di tengah jalan, data + foto warga TIDAK pernah hilang.
         val initialLocalReport = report.copy(
@@ -412,22 +416,28 @@ class WeatherRepository(
         )
         weatherDao.insertCitizenDisasterReport(mapCitizenModelToEntity(initialLocalReport, isSyncedOverride = false))
 
-        // 2. Validasi koneksi & tunggu upload foto ke Firebase Storage selesai 100% sebelum menulis Firestore.
+        // 2. Validasi koneksi & tunggu upload foto ke Firebase Storage selesai 100% (dalam blok try-catch aman) sebelum menulis Firestore.
         //    ATURAN KETAT OFFLINE: Jika perangkat offline atau upload foto gagal karena jaringan,
-        //    JANGAN PERNAH mengirim laporan teks saja tanpa foto ke Firestore!
-        val photoResolution = com.example.util.ImageUtils.resolveCloudPhotoForUpload(
-            rawPhotoUri = rawPhoto,
-            reportId = report.id,
-            context = context,
-            supabaseUploader = { bitmap -> uploadPhotoToSupabase(bitmap, report.id).getOrNull() }
-        )
+        //    simpan path lokalnya di Room SQLite dan kirim otomatis saat koneksi kembali.
+        val photoResolution = try {
+            com.example.util.ImageUtils.resolveCloudPhotoForUpload(
+                rawPhotoUri = rawPhoto,
+                reportId = report.id,
+                context = context,
+                supabaseUploader = { bitmap -> uploadPhotoToSupabase(bitmap, report.id).getOrNull() }
+            )
+        } catch (e: Throwable) {
+            com.example.util.ImageUtils.CloudPhotoResolution.DeferredOffline(
+                com.example.data.local.FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
+            )
+        }
 
         val resolvedCloudPhotoUrl: String? = when (photoResolution) {
             is com.example.util.ImageUtils.CloudPhotoResolution.NoPhoto -> {
                 if (!com.example.data.api.FirebaseStoragePhotoUploader.isNetworkOnline(context)) {
                     android.util.Log.w(
                         "WeatherRepository",
-                        "Perangkat offline — laporan ${report.id} ditahan di Room SQLite lokal sampai sinyal kembali."
+                        "Perangkat offline — laporan ${report.id} disimpan di perangkat sampai sinyal kembali."
                     )
                     com.example.data.sync.CitizenReportSyncWorker.enqueueWhenConnected(context)
                     return@withContext CitizenReportSubmitResult(
@@ -436,7 +446,7 @@ class WeatherRepository(
                         syncedToCloud = false,
                         hasPhoto = false,
                         deferredOffline = true,
-                        message = "Perangkat sedang offline. Laporan disimpan di database lokal dan WorkManager akan mengirim otomatis saat sinyal tersedia."
+                        message = com.example.data.local.FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
                     )
                 }
                 null
@@ -444,7 +454,7 @@ class WeatherRepository(
             is com.example.util.ImageUtils.CloudPhotoResolution.DeferredOffline -> {
                 android.util.Log.w(
                     "WeatherRepository",
-                    "Upload foto laporan ${report.id} tertunda (${photoResolution.reason}) — pengiriman teks ke Firestore DITAHAN agar foto dan teks terkirim bersamaan."
+                    "Upload foto laporan ${report.id} tertunda (${photoResolution.reason}) — path lokal disimpan di Room SQLite dan akan dikirim otomatis saat sinyal tersedia."
                 )
                 com.example.data.sync.CitizenReportSyncWorker.enqueueWhenConnected(context)
                 return@withContext CitizenReportSubmitResult(
@@ -454,7 +464,7 @@ class WeatherRepository(
                     hasPhoto = true,
                     cloudPhotoUrl = null,
                     deferredOffline = true,
-                    message = "Sinyal lemah/offline. Laporan beserta foto bukti disimpan di database lokal dan WorkManager akan mengirim bersamaan saat sinyal kembali."
+                    message = com.example.data.local.FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
                 )
             }
             is com.example.util.ImageUtils.CloudPhotoResolution.ReadyForCloud -> {
@@ -505,7 +515,7 @@ class WeatherRepository(
                 hasPhoto = hasPhoto,
                 cloudPhotoUrl = resolvedCloudPhotoUrl,
                 deferredOffline = true,
-                message = "Laporan & foto tersimpan aman di perangkat dan WorkManager akan menyinkronkan otomatis begitu koneksi stabil."
+                message = com.example.data.local.FirestoreHelper.OFFLINE_REPORT_SAVED_MESSAGE
             )
         }
     }
