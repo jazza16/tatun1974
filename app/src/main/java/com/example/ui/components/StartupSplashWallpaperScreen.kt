@@ -130,10 +130,12 @@ fun StartupSplashWallpaperScreen(
     var isSettingWallpaper by remember { mutableStateOf(false) }
 
     val officerAuthManager = remember { OfficerAuthManager(context) }
-    val savedNip = officerAuthManager.getOfficerBadgeId()
+    val savedNip = officerAuthManager.getSavedNip().ifBlank { officerAuthManager.getOfficerBadgeId() }
     val canAuthenticateBiometric = remember(context) {
-        BiometricManager.from(context)
-            .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
+        BiometricManager.from(context).canAuthenticate(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.BIOMETRIC_WEAK
+        ) == BiometricManager.BIOMETRIC_SUCCESS
     }
     val showBiometricButton = canAuthenticateBiometric && savedNip.isNotBlank()
 
@@ -141,16 +143,34 @@ fun StartupSplashWallpaperScreen(
         when (authResult) {
             is AuthenticationResult.Success -> {
                 coroutineScope.launch {
-                    val smartAuthRepo = SmartOfficerAuthRepository(context)
+                    val smartAuthRepo = SmartOfficerAuthRepository.getInstance(context)
+                    val securityManager = com.example.security.SecurityManager.getInstance(context)
                     val bioResult = smartAuthRepo.authenticateWithBiometric(savedNip)
                     if (bioResult.isSuccess) {
                         val cred = bioResult.getOrThrow()
-                        Toast.makeText(
-                            context,
-                            "Selamat bertugas, ${cred.fullName}! (Biometrik Terverifikasi)",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                        onBiometricLoginSuccess()
+                        val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
+                            officerNip = cred.nip,
+                            officerName = cred.fullName,
+                            officerRole = cred.role,
+                            loginMethod = "BIOMETRIK_SPLASH",
+                            loginAction = "LOGIN_SUCCESSFUL_BIOMETRIC_SPLASH"
+                        )
+                        val verifiedSession = sessionRes.getOrNull()
+                        if (sessionRes.isSuccess && verifiedSession?.accessGranted == true) {
+                            Toast.makeText(
+                                context,
+                                "Selamat bertugas, ${cred.fullName}! (Biometrik Terverifikasi)",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            onBiometricLoginSuccess()
+                        } else {
+                            officerAuthManager.logoutOfficer()
+                            Toast.makeText(
+                                context,
+                                "Integritas perangkat tidak memenuhi syarat keamanan untuk masuk ke Ruang Kerja.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
                     } else {
                         val errMsg = bioResult.exceptionOrNull()?.message ?: "Gagal memverifikasi kredensial petugas."
                         Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()

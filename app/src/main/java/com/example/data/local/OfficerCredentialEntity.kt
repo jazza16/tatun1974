@@ -133,21 +133,36 @@ data class OfficerCredentialEntity(
         }
 
         /**
-         * Verifies a candidate PIN against a stored PBKDF2 hash or legacy 64-char SHA-256 hex hash.
+         * Verifies a candidate PIN against a stored PBKDF2 hash, legacy salted SHA-256 hex hash,
+         * or legacy unsalted 64-char SHA-256 hex digest (when salt is blank).
          */
         fun verifyHash(pin: String, salt: String, storedHash: String): Boolean {
-            if (pin.isBlank() || salt.isBlank() || storedHash.isBlank()) return false
-            return if (storedHash.startsWith("$PBKDF2_PREFIX\$")) {
-                val parts = storedHash.split("$")
-                if (parts.size != 3) return false
-                val iterations = parts[1].toIntOrNull()?.coerceIn(1_000, 100_000) ?: PBKDF2_ITERATIONS
-                val expectedHex = parts[2]
-                val candidateFull = hashPbkdf2(pin, salt, iterations)
-                val candidateHex = candidateFull.substringAfterLast("$")
-                constantTimeEqualsHex(candidateHex, expectedHex)
-            } else {
-                val legacyCandidate = hashLegacySha256(pin, salt)
-                constantTimeEqualsHex(legacyCandidate, storedHash)
+            val cleanPin = pin.trim()
+            val cleanSalt = salt.trim()
+            val cleanStored = storedHash.trim()
+            if (cleanPin.isBlank() || cleanStored.isBlank()) return false
+            return when {
+                cleanStored.startsWith("$PBKDF2_PREFIX\$") -> {
+                    if (cleanSalt.isBlank()) return false
+                    val parts = cleanStored.split("$")
+                    if (parts.size != 3) return false
+                    val iterations = parts[1].toIntOrNull()?.coerceIn(1_000, 100_000) ?: PBKDF2_ITERATIONS
+                    val expectedHex = parts[2]
+                    val candidateFull = hashPbkdf2(cleanPin, cleanSalt, iterations)
+                    val candidateHex = candidateFull.substringAfterLast("$")
+                    constantTimeEqualsHex(candidateHex, expectedHex)
+                }
+                cleanSalt.isNotBlank() -> {
+                    val legacyCandidate = hashLegacySha256(cleanPin, cleanSalt)
+                    constantTimeEqualsHex(legacyCandidate, cleanStored)
+                }
+                cleanStored.length == 64 -> {
+                    val md = MessageDigest.getInstance("SHA-256")
+                    val digest = md.digest(cleanPin.toByteArray(Charsets.UTF_8))
+                    val hex = digest.fold("") { str, it -> str + "%02x".format(it) }
+                    constantTimeEqualsHex(hex, cleanStored)
+                }
+                else -> false
             }
         }
 

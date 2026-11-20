@@ -13,6 +13,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 /**
@@ -22,7 +23,8 @@ import kotlin.coroutines.resume
 sealed class CloudCredentialLookupResult {
     data class Found(
         val credential: OfficerCredentialEntity,
-        val serverPlainPin: String? = null
+        val serverPlainPin: String? = null,
+        val ownerUid: String = ""
     ) : CloudCredentialLookupResult()
 
     data object NotFound : CloudCredentialLookupResult()
@@ -65,10 +67,22 @@ object FirestoreHelper {
     @Volatile
     var overrideCloudCredentialWriterForTesting: (suspend (OfficerCredentialEntity) -> Result<Unit>)? = null
 
+    @Volatile
+    var overrideCitizenReportFetcherForTesting: (suspend () -> Result<List<CitizenDisasterReport>>)? = null
+
+    @Volatile
+    var overrideCitizenReportUploaderForTesting: (suspend (CitizenDisasterReport) -> Result<Unit>)? = null
+
+    @Volatile
+    var overrideCitizenReportStatusUpdaterForTesting: (suspend (String, String, String?, Long, String, String, String) -> Result<Unit>)? = null
+
     fun resetTestHooks() {
         overrideFirestoreForTesting = null
         overrideCloudCredentialFetcherForTesting = null
         overrideCloudCredentialWriterForTesting = null
+        overrideCitizenReportFetcherForTesting = null
+        overrideCitizenReportUploaderForTesting = null
+        overrideCitizenReportStatusUpdaterForTesting = null
     }
 
     private fun currentUid(): String? = try {
@@ -262,12 +276,20 @@ object FirestoreHelper {
         val dead = doc.getLong("casualtiesDead")?.toInt() ?: 0
         val injured = doc.getLong("casualtiesInjured")?.toInt() ?: 0
         val missing = doc.getLong("casualtiesMissing")?.toInt() ?: 0
-        val photoUri = doc.getString("photoUri")
+        val photoUri = doc.getString("fotoUrl")?.trim()?.takeIf { it.isNotBlank() }
+            ?: doc.getString("fotoLampiran")?.trim()?.takeIf { it.isNotBlank() }
+            ?: doc.getString("photoUri")?.trim()?.takeIf { it.isNotBlank() }
         val reporterName = doc.getString("reporterName") ?: "Warga"
         val reporterPhone = doc.getString("reporterPhone") ?: ""
         val notes = doc.getString("additionalNotes") ?: ""
         val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
-        val status = doc.getString("status") ?: "Menunggu Verifikasi"
+        val updatedAt = doc.getLong("updatedAt") ?: timestamp
+        val status = com.example.model.CitizenReportStatusHelper.normalizeStatus(
+            doc.getString("status") ?: com.example.model.CitizenReportStatusHelper.STATUS_DIPROSES
+        )
+        val handledByOfficerName = doc.getString("handledByOfficerName") ?: ""
+        val handledByOfficerNip = doc.getString("handledByOfficerNip") ?: ""
+        val handledByOfficerRole = doc.getString("handledByOfficerRole") ?: ""
 
         return CitizenDisasterReport(
             id = id,
@@ -288,8 +310,116 @@ object FirestoreHelper {
             reporterPhone = reporterPhone,
             additionalNotes = notes,
             timestamp = timestamp,
-            status = status
+            status = status,
+            updatedAt = maxOf(updatedAt, timestamp),
+            handledByOfficerName = handledByOfficerName,
+            handledByOfficerNip = handledByOfficerNip,
+            handledByOfficerRole = handledByOfficerRole,
+            isSyncedToCloud = true
         )
+    }
+
+    private fun sanitizeCitizenReportId(rawId: String): String {
+        val cleaned = rawId.trim().replace(Regex("[^a-zA-Z0-9_\\-]"), "_").take(128)
+        return cleaned.ifBlank { "LAP-MMK-${System.currentTimeMillis()}" }
+    }
+
+    internal fun sanitizeCloudPhotoUri(rawUri: String?): String? {
+        val trimmed = rawUri?.trim().orEmpty()
+        if (trimmed.isBlank()) return null
+
+        // 1. Remote HTTPS/HTTP URLs (upgrade HTTP -> HTTPS)
+        if (trimmed.startsWith("https://", ignoreCase = true)) {
+            return trimmed.takeIf { it.length <= com.example.util.ImageUtils.FIRESTORE_PHOTO_URI_MAX_CHARS }
+        }
+        if (trimmed.startsWith("http://", ignoreCase = true)) {
+            val upgraded = "https://" + trimmed.substring(7)
+            return upgraded.takeIf { it.length <= com.example.util.ImageUtils.FIRESTORE_PHOTO_URI_MAX_CHARS }
+        }
+
+        // 2. Bundled Android drawable resource URIs
+        if (trimmed.startsWith("android.resource://", ignoreCase = true)) {
+            return trimmed.takeIf { it.length <= 1024 }
+        }
+
+        // 3. Inline compressed Base64 Data URI (data:image/jpeg;base64,...)
+        if (trimmed.startsWith("data:image", ignoreCase = true) ||
+            trimmed.contains("base64,", ignoreCase = true)
+        ) {
+            val header = trimmed.substringBefore("base64,", "data:image/jpeg;")
+            val cleanBase64 = trimmed.substringAfter("base64,", "")
+                .replace("\n", "")
+                .replace("\r", "")
+                .replace(" ", "")
+                .trim()
+            if (cleanBase64.isBlank()) return null
+            val normalized = "${header}base64,$cleanBase64"
+            if (normalized.length <= com.example.util.ImageUtils.FIRESTORE_PHOTO_URI_MAX_CHARS) {
+                return normalized
+            }
+            // Recompress if slightly over cap so photo evidence is preserved
+            val bmp = com.example.util.ImageUtils.decodePhotoSourceToBitmap(normalized) ?: return null
+            return com.example.util.ImageUtils.encodeBitmapToCloudDataUri(bmp)
+        }
+
+        // 4. Safety net: never push a device-only file:// or /path string to Firestore;
+        // encode it directly into a portable compressed JPEG Data URI instead.
+        if (com.example.util.ImageUtils.isDeviceLocalPhotoPath(trimmed)) {
+            val bmp = com.example.util.ImageUtils.decodePhotoSourceToBitmap(trimmed) ?: return null
+            return com.example.util.ImageUtils.encodeBitmapToCloudDataUri(bmp)
+        }
+
+        return null
+    }
+
+    internal fun resolvePhotoUriFromDocumentFields(fields: Map<String, Any?>): String? {
+        val fotoUrl = (fields["fotoUrl"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+        if (fotoUrl != null) return fotoUrl
+        val fotoLampiran = (fields["fotoLampiran"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+        if (fotoLampiran != null) return fotoLampiran
+        return (fields["photoUri"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    internal fun buildMutableCitizenReportFields(report: CitizenDisasterReport): Map<String, Any> {
+        val effectiveUpdated = report.effectiveUpdatedAt()
+        val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(report.status)
+        val map = mutableMapOf<String, Any>(
+            "disasterType" to report.disasterType.trim().ifBlank { "Lainnya" }.take(120),
+            "incidentTime" to report.incidentTime.trim().take(80),
+            "incidentLocation" to report.incidentLocation.trim().take(300),
+            "district" to report.district.trim().ifBlank { "Kota Mukomuko" }.take(100),
+            "village" to report.village.trim().take(120),
+            "latitude" to report.latitude.coerceIn(-90.0, 90.0),
+            "longitude" to report.longitude.coerceIn(-180.0, 180.0),
+            "isGpsVerified" to report.isGpsVerified,
+            "casualtiesDead" to report.casualtiesDead.coerceIn(0, 100000),
+            "casualtiesInjured" to report.casualtiesInjured.coerceIn(0, 100000),
+            "casualtiesMissing" to report.casualtiesMissing.coerceIn(0, 100000),
+            "reporterName" to report.reporterName.trim().ifBlank { "Warga Mukomuko" }.take(120),
+            "reporterPhone" to report.reporterPhone.trim().take(40),
+            "additionalNotes" to report.additionalNotes.trim().take(2000),
+            "timestamp" to report.timestamp,
+            "updatedAt" to effectiveUpdated,
+            "status" to normalizedStatus,
+            "handledByOfficerName" to report.handledByOfficerName.trim().take(150),
+            "handledByOfficerNip" to report.handledByOfficerNip.trim().take(64),
+            "handledByOfficerRole" to report.handledByOfficerRole.trim().take(80)
+        )
+        report.gpsAccuracyMeters?.let { acc ->
+            if (!acc.isNaN() && !acc.isInfinite()) {
+                map["gpsAccuracyMeters"] = acc.coerceIn(0f, 100000f)
+            }
+        }
+        sanitizeCloudPhotoUri(report.photoUri)?.let { safePhoto ->
+            map["photoUri"] = safePhoto
+            map["fotoUrl"] = safePhoto
+            if (safePhoto.startsWith("https://", ignoreCase = true) ||
+                safePhoto.startsWith("http://", ignoreCase = true)
+            ) {
+                map["fotoLampiran"] = safePhoto
+            }
+        }
+        return map
     }
 
     /**
@@ -326,8 +456,9 @@ object FirestoreHelper {
      * Actively fetches the latest Citizen Disaster Reports directly from Firestore SERVER
      * (.get(Source.SERVER)) so Officer devices always display up-to-date citizen reports.
      */
-    suspend fun fetchCitizenReportsFromServerSuspend(): Result<List<CitizenDisasterReport>> =
-        suspendCancellableCoroutine { cont ->
+    suspend fun fetchCitizenReportsFromServerSuspend(): Result<List<CitizenDisasterReport>> {
+        overrideCitizenReportFetcherForTesting?.let { return it() }
+        return suspendCancellableCoroutine { cont ->
             val dbResult = getFirestoreOrThrow()
             val db = dbResult.getOrNull()
             if (db == null) {
@@ -361,76 +492,278 @@ object FirestoreHelper {
                 }
             }
         }
+    }
 
     /**
-     * Uploads or updates a citizen disaster report in Firestore.
+     * Mengambil satu dokumen laporan warga berdasarkan ID Laporan langsung dari Cloud Firestore SERVER
+     * untuk fitur Pelacakan Status Laporan (Tracking ID).
      */
-    fun syncReportToCloud(report: CitizenDisasterReport) {
-        val uid = currentUid() ?: "PUBLIC_CITIZEN_MUKOMUKO"
-        val db = firestore ?: return
-        ensureAppCheckTokenAttached()
-        try {
-            val data = mapOf(
-                "id" to report.id,
-                "authorUid" to uid,
-                "disasterType" to report.disasterType,
-                "incidentTime" to report.incidentTime,
-                "incidentLocation" to report.incidentLocation,
-                "district" to report.district,
-                "village" to report.village,
-                "latitude" to report.latitude,
-                "longitude" to report.longitude,
-                "gpsAccuracyMeters" to report.gpsAccuracyMeters,
-                "isGpsVerified" to report.isGpsVerified,
-                "casualtiesDead" to report.casualtiesDead,
-                "casualtiesInjured" to report.casualtiesInjured,
-                "casualtiesMissing" to report.casualtiesMissing,
-                "photoUri" to report.photoUri,
-                "reporterName" to report.reporterName,
-                "reporterPhone" to report.reporterPhone,
-                "additionalNotes" to report.additionalNotes,
-                "timestamp" to report.timestamp,
-                "status" to report.status
-            ).filterValues { it != null }
-            db.collection(COLLECTION_CITIZEN_REPORTS)
-                .document(report.id)
-                .set(data, SetOptions.merge())
-                .addOnSuccessListener {
-                    Log.d(TAG, "Report ${report.id} synced to Firestore")
+    suspend fun fetchCitizenReportByIdFromServerSuspend(reportId: String): Result<CitizenDisasterReport?> {
+        val trimmed = reportId.trim()
+        if (trimmed.isBlank()) return Result.success(null)
+        overrideCitizenReportFetcherForTesting?.let { fetcher ->
+            return fetcher().map { list ->
+                list.firstOrNull {
+                    it.id.equals(trimmed, ignoreCase = true) ||
+                        it.id.endsWith(trimmed, ignoreCase = true)
                 }
-                .addOnFailureListener { e ->
-                    logFirestoreError("syncReportToCloud(${report.id})", e)
-                }
-        } catch (e: Exception) {
-            logFirestoreError("syncReportToCloud(${report.id})", e)
+            }
+        }
+        return suspendCancellableCoroutine { cont ->
+            val dbResult = getFirestoreOrThrow()
+            val db = dbResult.getOrNull()
+            if (db == null) {
+                val err = dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia")
+                if (cont.isActive) cont.resume(Result.failure(err))
+                return@suspendCancellableCoroutine
+            }
+            ensureAppCheckTokenAttached()
+            val safeId = sanitizeCitizenReportId(trimmed)
+            try {
+                db.collection(COLLECTION_CITIZEN_REPORTS)
+                    .document(safeId)
+                    .get(Source.SERVER)
+                    .addOnSuccessListener { doc ->
+                        if (!cont.isActive) return@addOnSuccessListener
+                        val parsed = if (doc != null && doc.exists()) parseCitizenReportDocument(doc) else null
+                        cont.resume(Result.success(parsed))
+                    }
+                    .addOnFailureListener { e ->
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
         }
     }
 
     /**
-     * Updates only the report status and optional response notes in Firestore.
+     * AuthorUid-safe suspend upload/sync of a CitizenDisasterReport to Cloud Firestore.
+     * Attempts an in-place update without mutating `authorUid` first; if the document does not
+     * exist yet (NOT_FOUND), creates it cleanly with `id` and `authorUid`.
      */
-    fun updateReportStatusInCloud(reportId: String, newStatus: String, notes: String? = null) {
+    suspend fun syncReportToCloudSuspend(report: CitizenDisasterReport): Result<Unit> {
+        overrideCitizenReportUploaderForTesting?.let { return it(report) }
+        val dbResult = getFirestoreOrThrow()
+        val db = dbResult.getOrNull()
+            ?: return Result.failure(dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia"))
+        ensureAppCheckTokenAttached()
+        val safeId = sanitizeCitizenReportId(report.id)
+        val mutableFields = buildMutableCitizenReportFields(report)
+
+        val updateResult = suspendCancellableCoroutine<Result<Unit>> { cont ->
+            try {
+                db.collection(COLLECTION_CITIZEN_REPORTS)
+                    .document(safeId)
+                    .update(mutableFields)
+                    .addOnSuccessListener {
+                        if (cont.isActive) cont.resume(Result.success(Unit))
+                    }
+                    .addOnFailureListener { e ->
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
+        if (updateResult.isSuccess) {
+            Log.d(TAG, "Report $safeId updated in Firestore (authorUid preserved)")
+            return Result.success(Unit)
+        }
+
+        val updateErr = updateResult.exceptionOrNull()
+        val fsEx = updateErr as? FirebaseFirestoreException
+            ?: (updateErr?.cause as? FirebaseFirestoreException)
+        if (fsEx != null && fsEx.code != FirebaseFirestoreException.Code.NOT_FOUND) {
+            logFirestoreError("syncReportToCloudSuspend(update $safeId)", fsEx)
+            return Result.failure(fsEx)
+        }
+
+        // Document does not exist yet: create with immutable id + authorUid
+        val uid = currentUid() ?: "PUBLIC_CITIZEN_MUKOMUKO"
+        val fullCreateData = mutableMapOf<String, Any>(
+            "id" to safeId,
+            "authorUid" to uid
+        ).apply { putAll(mutableFields) }
+
+        return suspendCancellableCoroutine { cont ->
+            try {
+                db.collection(COLLECTION_CITIZEN_REPORTS)
+                    .document(safeId)
+                    .set(fullCreateData)
+                    .addOnSuccessListener {
+                        Log.d(TAG, "Report $safeId created in Firestore")
+                        if (cont.isActive) cont.resume(Result.success(Unit))
+                    }
+                    .addOnFailureListener { e ->
+                        logFirestoreError("syncReportToCloudSuspend(create $safeId)", e)
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                logFirestoreError("syncReportToCloudSuspend(create $safeId)", e)
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
+    }
+
+    /**
+     * Backward-compatible non-suspend wrapper for uploading or updating a citizen disaster report.
+     */
+    fun syncReportToCloud(report: CitizenDisasterReport) {
         val db = firestore ?: return
         ensureAppCheckTokenAttached()
+        val safeId = sanitizeCitizenReportId(report.id)
+        val mutableFields = buildMutableCitizenReportFields(report)
+        try {
+            db.collection(COLLECTION_CITIZEN_REPORTS)
+                .document(safeId)
+                .update(mutableFields)
+                .addOnSuccessListener {
+                    Log.d(TAG, "Report $safeId synced to Firestore")
+                }
+                .addOnFailureListener { e ->
+                    val fsEx = e as? FirebaseFirestoreException
+                    if (fsEx?.code == FirebaseFirestoreException.Code.NOT_FOUND) {
+                        val uid = currentUid() ?: "PUBLIC_CITIZEN_MUKOMUKO"
+                        val createData = mutableMapOf<String, Any>(
+                            "id" to safeId,
+                            "authorUid" to uid
+                        ).apply { putAll(mutableFields) }
+                        db.collection(COLLECTION_CITIZEN_REPORTS)
+                            .document(safeId)
+                            .set(createData)
+                            .addOnSuccessListener {
+                                Log.d(TAG, "Report $safeId created in Firestore")
+                            }
+                            .addOnFailureListener { createErr ->
+                                logFirestoreError("syncReportToCloud(create $safeId)", createErr)
+                            }
+                    } else {
+                        logFirestoreError("syncReportToCloud($safeId)", e)
+                    }
+                }
+        } catch (e: Exception) {
+            logFirestoreError("syncReportToCloud($safeId)", e)
+        }
+    }
+
+    /**
+     * Updates report status, optional follow-up notes, timestamp (`updatedAt`), and active officer attribution
+     * in Firestore. If the report document has not reached Firestore yet (`NOT_FOUND`) and `fallbackReport`
+     * is provided, creates the complete report document immediately so no officer follow-up is lost.
+     */
+    suspend fun updateReportStatusInCloudSuspend(
+        reportId: String,
+        newStatus: String,
+        notes: String? = null,
+        updatedAt: Long = System.currentTimeMillis(),
+        officerName: String = "",
+        officerNip: String = "",
+        officerRole: String = "",
+        fallbackReport: CitizenDisasterReport? = null
+    ): Result<Unit> {
+        val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(newStatus)
+        overrideCitizenReportStatusUpdaterForTesting?.let {
+            return it(reportId, normalizedStatus, notes, updatedAt, officerName, officerNip, officerRole)
+        }
+        val dbResult = getFirestoreOrThrow()
+        val db = dbResult.getOrNull()
+            ?: return Result.failure(dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia"))
+        ensureAppCheckTokenAttached()
+        val safeId = sanitizeCitizenReportId(reportId)
+
+        val updateMap = mutableMapOf<String, Any>(
+            "status" to normalizedStatus,
+            "updatedAt" to updatedAt
+        )
+        if (notes != null) {
+            updateMap["additionalNotes"] = notes.trim().take(2000)
+        }
+        if (officerName.isNotBlank()) {
+            updateMap["handledByOfficerName"] = officerName.trim().take(150)
+        }
+        if (officerNip.isNotBlank()) {
+            updateMap["handledByOfficerNip"] = officerNip.trim().take(64)
+        }
+        if (officerRole.isNotBlank()) {
+            updateMap["handledByOfficerRole"] = officerRole.trim().take(80)
+        }
+
+        val updateResult = suspendCancellableCoroutine<Result<Unit>> { cont ->
+            try {
+                db.collection(COLLECTION_CITIZEN_REPORTS)
+                    .document(safeId)
+                    .update(updateMap)
+                    .addOnSuccessListener {
+                        Log.d(TAG, "Report $safeId status updated to $normalizedStatus in Firestore")
+                        if (cont.isActive) cont.resume(Result.success(Unit))
+                    }
+                    .addOnFailureListener { e ->
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
+        if (updateResult.isSuccess) return Result.success(Unit)
+
+        val err = updateResult.exceptionOrNull()
+        val fsEx = err as? FirebaseFirestoreException ?: (err?.cause as? FirebaseFirestoreException)
+        if (fsEx?.code == FirebaseFirestoreException.Code.NOT_FOUND && fallbackReport != null) {
+            val patched = fallbackReport.copy(
+                id = safeId,
+                status = normalizedStatus,
+                additionalNotes = notes ?: fallbackReport.additionalNotes,
+                updatedAt = updatedAt,
+                handledByOfficerName = officerName.ifBlank { fallbackReport.handledByOfficerName },
+                handledByOfficerNip = officerNip.ifBlank { fallbackReport.handledByOfficerNip },
+                handledByOfficerRole = officerRole.ifBlank { fallbackReport.handledByOfficerRole }
+            )
+            return syncReportToCloudSuspend(patched)
+        }
+
+        if (err != null) logFirestoreError("updateReportStatusInCloudSuspend($safeId)", err)
+        return updateResult
+    }
+
+    /**
+     * Backward-compatible wrapper for updating report status and optional notes in Firestore.
+     */
+    fun updateReportStatusInCloud(
+        reportId: String,
+        newStatus: String,
+        notes: String? = null,
+        officerName: String = "",
+        officerNip: String = "",
+        officerRole: String = ""
+    ) {
+        val db = firestore ?: return
+        ensureAppCheckTokenAttached()
+        val safeId = sanitizeCitizenReportId(reportId)
+        val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(newStatus)
         try {
             val updateMap = mutableMapOf<String, Any>(
-                "status" to newStatus,
+                "status" to normalizedStatus,
                 "updatedAt" to System.currentTimeMillis()
             )
             if (notes != null) {
-                updateMap["additionalNotes"] = notes
+                updateMap["additionalNotes"] = notes.trim().take(2000)
             }
+            if (officerName.isNotBlank()) updateMap["handledByOfficerName"] = officerName.trim().take(150)
+            if (officerNip.isNotBlank()) updateMap["handledByOfficerNip"] = officerNip.trim().take(64)
+            if (officerRole.isNotBlank()) updateMap["handledByOfficerRole"] = officerRole.trim().take(80)
+
             db.collection(COLLECTION_CITIZEN_REPORTS)
-                .document(reportId)
+                .document(safeId)
                 .update(updateMap)
                 .addOnSuccessListener {
-                    Log.d(TAG, "Report status updated to $newStatus in Firestore")
+                    Log.d(TAG, "Report status updated to $normalizedStatus in Firestore")
                 }
                 .addOnFailureListener { e ->
-                    logFirestoreError("updateReportStatusInCloud($reportId)", e)
+                    logFirestoreError("updateReportStatusInCloud($safeId)", e)
                 }
         } catch (e: Exception) {
-            logFirestoreError("updateReportStatusInCloud($reportId)", e)
+            logFirestoreError("updateReportStatusInCloud($safeId)", e)
         }
     }
 
@@ -587,21 +920,45 @@ object FirestoreHelper {
         }
     }
 
+    private fun safeReadStringField(
+        doc: com.google.firebase.firestore.DocumentSnapshot,
+        vararg keys: String
+    ): String {
+        for (key in keys) {
+            val raw = try {
+                doc.get(key)
+            } catch (_: Exception) {
+                null
+            }
+            val text = when (raw) {
+                is String -> raw.trim()
+                is Number -> raw.toString().trim()
+                else -> raw?.toString()?.trim().orEmpty()
+            }
+            if (text.isNotBlank()) return text
+        }
+        return ""
+    }
+
     private fun parseCredentialDocument(doc: com.google.firebase.firestore.DocumentSnapshot): OfficerCredentialEntity? {
         if (!doc.exists()) return null
-        val docNip = doc.getString("nip") ?: doc.id
-        val fullName = doc.getString("fullName") ?: ""
+        val docNip = safeReadStringField(doc, "nip", "badgeId").ifBlank { doc.id.trim() }
+        val officialFallback = OfficialAsnBpbdPersonnel.findByNipOrName(docNip)
+        val fullName = safeReadStringField(doc, "fullName", "name", "nama")
+            .ifBlank { officialFallback?.name.orEmpty() }
+            .ifBlank { if (docNip.isNotBlank()) "Petugas $docNip" else "" }
         if (fullName.isBlank() && docNip.isBlank()) return null
-        val role = doc.getString("role") ?: OfficerRoles.OPERATOR
-        val unit = doc.getString("unit") ?: "Pusdalops BPBD Kab. Mukomuko"
-        val shift = doc.getString("shift") ?: "Shift Siaga 24 Jam"
-        val phone = doc.getString("phone") ?: ""
-        val pinHash = doc.getString("pinHash") ?: ""
-        val salt = doc.getString("salt") ?: ""
+        val role = safeReadStringField(doc, "role", "jabatan")
+            .ifBlank { officialFallback?.role ?: OfficerRoles.OPERATOR }
+        val unit = safeReadStringField(doc, "unit").ifBlank { "Pusdalops BPBD Kab. Mukomuko" }
+        val shift = safeReadStringField(doc, "shift").ifBlank { "Shift Siaga 24 Jam" }
+        val phone = safeReadStringField(doc, "phone", "telepon")
+        val pinHash = safeReadStringField(doc, "pinHash")
+        val salt = safeReadStringField(doc, "salt")
         val isCustom = (doc.getBoolean("isPinChanged") == true) ||
                 (doc.getBoolean("isCustomPinSet") == true)
         val lastLoginAt = doc.getLong("lastLoginAt") ?: 0L
-        val lastLoginDevice = doc.getString("lastLoginDevice") ?: ""
+        val lastLoginDevice = safeReadStringField(doc, "lastLoginDevice")
         val updatedAt = doc.getLong("updatedAt") ?: System.currentTimeMillis()
 
         return OfficerCredentialEntity(
@@ -629,6 +986,8 @@ object FirestoreHelper {
     fun syncCredentialToCloud(
         credential: OfficerCredentialEntity,
         context: Context? = null,
+        preserveOwnerUid: String? = null,
+        overwriteFullDocument: Boolean = false,
         onSuccess: (() -> Unit)? = null,
         onFailure: ((Exception) -> Unit)? = null
     ) {
@@ -637,7 +996,9 @@ object FirestoreHelper {
             onFailure?.invoke(IllegalArgumentException("NIP tidak boleh kosong saat sinkronisasi kredensial."))
             return
         }
-        val effectiveOwnerUid = currentUid() ?: "officer_nip_$trimmedNip"
+        val effectiveOwnerUid = preserveOwnerUid?.trim()?.takeIf { it.isNotBlank() }
+            ?: currentUid()
+            ?: "officer_nip_$trimmedNip"
         val dbResult = getFirestoreOrThrow(context)
         val db = dbResult.getOrNull()
         if (db == null) {
@@ -669,11 +1030,15 @@ object FirestoreHelper {
                 "lastLoginDevice" to credential.lastLoginDevice,
                 "updatedAt" to credential.updatedAt
             )
-            db.collection(COLLECTION_OFFICER_CREDENTIALS)
-                .document(trimmedNip)
-                .set(data, SetOptions.merge())
+            val docRef = db.collection(COLLECTION_OFFICER_CREDENTIALS).document(trimmedNip)
+            val writeTask = if (overwriteFullDocument) {
+                docRef.set(data)
+            } else {
+                docRef.set(data, SetOptions.merge())
+            }
+            writeTask
                 .addOnSuccessListener {
-                    Log.d(TAG, "Credential synced to Firestore (officer_credentials/$trimmedNip)")
+                    Log.d(TAG, "Credential synced to Firestore (officer_credentials/$trimmedNip, overwrite=$overwriteFullDocument)")
                     onSuccess?.invoke()
                 }
                 .addOnFailureListener { e ->
@@ -688,34 +1053,198 @@ object FirestoreHelper {
 
     suspend fun syncCredentialToCloudSuspend(
         credential: OfficerCredentialEntity,
-        context: Context? = null
+        context: Context? = null,
+        preserveOwnerUid: String? = null,
+        overwriteFullDocument: Boolean = false
     ): Result<Unit> {
         overrideCloudCredentialWriterForTesting?.let { writer ->
             return writer(credential)
         }
-        return suspendCancellableCoroutine { cont ->
-            syncCredentialToCloud(
-                credential = credential,
-                context = context,
-                onSuccess = {
-                    if (cont.isActive) cont.resume(Result.success(Unit))
-                },
-                onFailure = { e ->
-                    if (cont.isActive) {
-                        val fsEx = e as? FirebaseFirestoreException
-                        val msg = when (fsEx?.code) {
-                            FirebaseFirestoreException.Code.UNAVAILABLE,
-                            FirebaseFirestoreException.Code.DEADLINE_EXCEEDED ->
-                                "Koneksi internet bermasalah. Gagal menyimpan PIN baru ke server Firebase."
-                            FirebaseFirestoreException.Code.PERMISSION_DENIED ->
-                                "Izin tulis ke koleksi officer_credentials ditolak oleh Firestore Rules."
-                            else -> "Gagal menyimpan kredensial ke Firebase: ${e.localizedMessage ?: "Kesalahan tidak diketahui"}"
+        return withTimeoutOrNull(12_000L) {
+            suspendCancellableCoroutine { cont ->
+                syncCredentialToCloud(
+                    credential = credential,
+                    context = context,
+                    preserveOwnerUid = preserveOwnerUid,
+                    overwriteFullDocument = overwriteFullDocument,
+                    onSuccess = {
+                        if (cont.isActive) cont.resume(Result.success(Unit))
+                    },
+                    onFailure = { e ->
+                        if (cont.isActive) {
+                            val fsEx = e as? FirebaseFirestoreException
+                            val msg = when (fsEx?.code) {
+                                FirebaseFirestoreException.Code.UNAVAILABLE,
+                                FirebaseFirestoreException.Code.DEADLINE_EXCEEDED ->
+                                    "Koneksi internet bermasalah. Gagal menyimpan PIN baru ke server Firebase."
+                                FirebaseFirestoreException.Code.PERMISSION_DENIED ->
+                                    "Izin tulis ke koleksi officer_credentials ditolak oleh Firestore Rules."
+                                else -> "Gagal menyimpan kredensial ke Firebase: ${e.localizedMessage ?: "Kesalahan tidak diketahui"}"
+                            }
+                            cont.resume(Result.failure(IllegalStateException(msg, e)))
                         }
-                        cont.resume(Result.failure(IllegalStateException(msg, e)))
+                    }
+                )
+            }
+        } ?: Result.failure(
+            IllegalStateException("Waktu penyimpanan kredensial ke server Firebase habis (DEADLINE_EXCEEDED). Periksa koneksi internet lalu coba lagi.")
+        )
+    }
+
+    /**
+     * Purges any simulation login session and admin audit trace documents in Cloud Firestore for the target NIP.
+     */
+    suspend fun purgeOfficerCloudLoginTracesSuspend(
+        nip: String,
+        context: Context? = null
+    ) {
+        val trimmedNip = nip.trim()
+        if (trimmedNip.isBlank()) return
+        if (overrideCloudCredentialWriterForTesting != null || overrideCloudCredentialFetcherForTesting != null) {
+            return
+        }
+        val db = getFirestoreOrThrow(context).getOrNull() ?: return
+        ensureAppCheckTokenAttached()
+        withTimeoutOrNull(8_000L) {
+            try {
+                suspendCancellableCoroutine<Unit> { cont ->
+                    db.collection("device_security_sessions")
+                        .document(trimmedNip)
+                        .delete()
+                        .addOnCompleteListener {
+                            if (cont.isActive) cont.resume(Unit)
+                        }
+                }
+            } catch (_: Exception) {
+            }
+            val uid = currentUid()
+            if (!uid.isNullOrBlank()) {
+                try {
+                    suspendCancellableCoroutine<Unit> { cont ->
+                        db.collection("admin_access_audit_logs")
+                            .whereEqualTo("officerNip", trimmedNip)
+                            .get(Source.SERVER)
+                            .addOnSuccessListener { snap ->
+                                snap?.documents?.forEach { doc ->
+                                    doc.reference.delete()
+                                }
+                                if (cont.isActive) cont.resume(Unit)
+                            }
+                            .addOnFailureListener {
+                                if (cont.isActive) cont.resume(Unit)
+                            }
+                    }
+                } catch (_: Exception) {
+                }
+                try {
+                    suspendCancellableCoroutine<Unit> { cont ->
+                        db.collection("device_login_activities")
+                            .whereEqualTo("officerNip", trimmedNip)
+                            .whereEqualTo("ownerUid", uid)
+                            .get(Source.SERVER)
+                            .addOnSuccessListener { snap ->
+                                snap?.documents?.forEach { doc ->
+                                    doc.reference.delete()
+                                }
+                                if (cont.isActive) cont.resume(Unit)
+                            }
+                            .addOnFailureListener {
+                                if (cont.isActive) cont.resume(Unit)
+                            }
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
+    private suspend fun fetchSingleCredentialDocFromServer(
+        db: FirebaseFirestore,
+        documentId: String
+    ): CloudCredentialLookupResult {
+        return withTimeoutOrNull(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                try {
+                    db.collection(COLLECTION_OFFICER_CREDENTIALS)
+                        .document(documentId)
+                        .get(Source.SERVER)
+                        .addOnSuccessListener { doc ->
+                            if (!cont.isActive) return@addOnSuccessListener
+                            if (doc == null || !doc.exists()) {
+                                cont.resume(CloudCredentialLookupResult.NotFound)
+                                return@addOnSuccessListener
+                            }
+                            val parsed = parseCredentialDocument(doc)
+                            if (parsed == null) {
+                                cont.resume(CloudCredentialLookupResult.NotFound)
+                                return@addOnSuccessListener
+                            }
+                            val existingOwnerUid = safeReadStringField(doc, "ownerUid")
+                            // Support optional server-side PIN field (String or numeric) if configured by Admin in Firestore Console
+                            val plainPinField = safeReadStringField(
+                                doc,
+                                "pin",
+                                "personalPin",
+                                "pinCode",
+                                "customPin",
+                                "kodePin",
+                                "pinPetugas",
+                                "pin_petugas",
+                                "pinLogin"
+                            ).takeIf { it.isNotBlank() }
+                            cont.resume(
+                                CloudCredentialLookupResult.Found(
+                                    credential = parsed,
+                                    serverPlainPin = plainPinField,
+                                    ownerUid = existingOwnerUid
+                                )
+                            )
+                        }
+                        .addOnFailureListener { e ->
+                            logFirestoreError("fetchOfficerCredentialStrictFromServer(officer_credentials/$documentId)", e)
+                            if (!cont.isActive) return@addOnFailureListener
+                            val fsEx = e as? FirebaseFirestoreException
+                            val errorResult = when (fsEx?.code) {
+                                FirebaseFirestoreException.Code.UNAVAILABLE -> CloudCredentialLookupResult.Error(
+                                    userMessage = "Koneksi internet bermasalah atau server Firebase tidak terjangkau (UNAVAILABLE). Verifikasi PIN wajib online.",
+                                    errorCode = "UNAVAILABLE",
+                                    cause = e
+                                )
+                                FirebaseFirestoreException.Code.DEADLINE_EXCEEDED -> CloudCredentialLookupResult.Error(
+                                    userMessage = "Waktu verifikasi ke server Firebase habis (DEADLINE_EXCEEDED). Periksa sinyal lalu coba lagi.",
+                                    errorCode = "DEADLINE_EXCEEDED",
+                                    cause = e
+                                )
+                                FirebaseFirestoreException.Code.PERMISSION_DENIED -> CloudCredentialLookupResult.Error(
+                                    userMessage = "Akses verifikasi ke koleksi officer_credentials ditolak server (PERMISSION_DENIED).",
+                                    errorCode = "PERMISSION_DENIED",
+                                    cause = e
+                                )
+                                else -> CloudCredentialLookupResult.Error(
+                                    userMessage = "Gagal terhubung ke server Firebase untuk verifikasi PIN: ${e.localizedMessage ?: "Periksa koneksi internet."}",
+                                    errorCode = fsEx?.code?.name ?: "NETWORK_ERROR",
+                                    cause = e
+                                )
+                            }
+                            cont.resume(errorResult)
+                        }
+                } catch (e: Exception) {
+                    logFirestoreError("fetchOfficerCredentialStrictFromServer(exception)", e)
+                    if (cont.isActive) {
+                        cont.resume(
+                            CloudCredentialLookupResult.Error(
+                                userMessage = "Terjadi kesalahan saat memverifikasi PIN ke Firebase: ${e.localizedMessage ?: "Coba lagi."}",
+                                errorCode = "EXCEPTION",
+                                cause = e
+                            )
+                        )
                     }
                 }
-            )
-        }
+            }
+        } ?: CloudCredentialLookupResult.Error(
+            userMessage = "Waktu verifikasi ke server Firebase habis (DEADLINE_EXCEEDED). Periksa koneksi internet lalu coba lagi.",
+            errorCode = "DEADLINE_EXCEEDED"
+        )
     }
 
     /**
@@ -747,78 +1276,40 @@ object FirestoreHelper {
         }
 
         ensureAppCheckTokenAttached()
-        return suspendCancellableCoroutine { cont ->
-            try {
-                try {
-                    db.enableNetwork()
-                } catch (_: Exception) {
-                }
+        try {
+            db.enableNetwork()
+        } catch (_: Exception) {
+        }
 
-                db.collection(COLLECTION_OFFICER_CREDENTIALS)
-                    .document(trimmedNip)
-                    .get(Source.SERVER)
-                    .addOnSuccessListener { doc ->
-                        if (!cont.isActive) return@addOnSuccessListener
-                        if (doc == null || !doc.exists()) {
-                            cont.resume(CloudCredentialLookupResult.NotFound)
-                            return@addOnSuccessListener
-                        }
-                        val parsed = parseCredentialDocument(doc)
-                        if (parsed == null) {
-                            cont.resume(CloudCredentialLookupResult.NotFound)
-                            return@addOnSuccessListener
-                        }
-                        // Support optional server-side PIN field if configured directly by Admin in Firestore Console
-                        val plainPinField = doc.getString("pin")?.trim()?.takeIf { it.isNotBlank() }
-                            ?: doc.getString("personalPin")?.trim()?.takeIf { it.isNotBlank() }
-                        cont.resume(
-                            CloudCredentialLookupResult.Found(
-                                credential = parsed,
-                                serverPlainPin = plainPinField
-                            )
-                        )
-                    }
-                    .addOnFailureListener { e ->
-                        logFirestoreError("fetchOfficerCredentialStrictFromServer(officer_credentials/$trimmedNip)", e)
-                        if (!cont.isActive) return@addOnFailureListener
-                        val fsEx = e as? FirebaseFirestoreException
-                        val errorResult = when (fsEx?.code) {
-                            FirebaseFirestoreException.Code.UNAVAILABLE -> CloudCredentialLookupResult.Error(
-                                userMessage = "Koneksi internet bermasalah atau server Firebase tidak terjangkau (UNAVAILABLE). Verifikasi PIN wajib online.",
-                                errorCode = "UNAVAILABLE",
-                                cause = e
-                            )
-                            FirebaseFirestoreException.Code.DEADLINE_EXCEEDED -> CloudCredentialLookupResult.Error(
-                                userMessage = "Waktu verifikasi ke server Firebase habis (DEADLINE_EXCEEDED). Periksa sinyal lalu coba lagi.",
-                                errorCode = "DEADLINE_EXCEEDED",
-                                cause = e
-                            )
-                            FirebaseFirestoreException.Code.PERMISSION_DENIED -> CloudCredentialLookupResult.Error(
-                                userMessage = "Akses verifikasi ke koleksi officer_credentials ditolak server (PERMISSION_DENIED).",
-                                errorCode = "PERMISSION_DENIED",
-                                cause = e
-                            )
-                            else -> CloudCredentialLookupResult.Error(
-                                userMessage = "Gagal terhubung ke server Firebase untuk verifikasi PIN: ${e.localizedMessage ?: "Periksa koneksi internet."}",
-                                errorCode = fsEx?.code?.name ?: "NETWORK_ERROR",
-                                cause = e
-                            )
-                        }
-                        cont.resume(errorResult)
-                    }
-            } catch (e: Exception) {
-                logFirestoreError("fetchOfficerCredentialStrictFromServer(exception)", e)
-                if (cont.isActive) {
-                    cont.resume(
-                        CloudCredentialLookupResult.Error(
-                            userMessage = "Terjadi kesalahan saat memverifikasi PIN ke Firebase: ${e.localizedMessage ?: "Coba lagi."}",
-                            errorCode = "EXCEPTION",
-                            cause = e
-                        )
-                    )
-                }
+        val primaryResult = fetchSingleCredentialDocFromServer(db, trimmedNip)
+        if (primaryResult !is CloudCredentialLookupResult.NotFound) {
+            return primaryResult
+        }
+
+        // Fallback alternate valid document IDs if Admin stored underscored NIP or sanitized official name in Firestore
+        val fallbackIds = buildList {
+            if (trimmedNip.length == 18 && trimmedNip.all { it.isDigit() }) {
+                add("${trimmedNip.substring(0, 8)}_${trimmedNip.substring(8, 14)}_${trimmedNip.substring(14, 15)}_${trimmedNip.substring(15, 18)}")
+            }
+            val officialName = OfficialAsnBpbdPersonnel.findByNipOrName(trimmedNip)?.name.orEmpty()
+            if (officialName.isNotBlank()) {
+                val sanitizedUpper = officialName.trim().replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
+                val sanitizedLower = sanitizedUpper.lowercase()
+                if (sanitizedUpper.isNotBlank()) add(sanitizedUpper)
+                if (sanitizedLower.isNotBlank() && sanitizedLower != sanitizedUpper) add(sanitizedLower)
+            }
+        }.distinct().filter { it != trimmedNip && it.matches(Regex("^[a-zA-Z0-9_\\-]{1,128}$")) }
+
+        for (candidateId in fallbackIds) {
+            val candidateResult = fetchSingleCredentialDocFromServer(db, candidateId)
+            if (candidateResult is CloudCredentialLookupResult.Found) {
+                return candidateResult.copy(
+                    credential = candidateResult.credential.copy(nip = trimmedNip)
+                )
             }
         }
+
+        return CloudCredentialLookupResult.NotFound
     }
 
     suspend fun fetchCredentialByNipFromCloud(

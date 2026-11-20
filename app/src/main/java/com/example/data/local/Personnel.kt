@@ -344,25 +344,24 @@ object OfficialAsnBpbdPersonnel {
 }
 
 /**
- * Seeding 34 data ASN BPBD Kabupaten Mukomuko ke dalam tabel `personnel` dan `officer_credentials`.
- * - Mengecek keberadaan NIP terlebih dahulu di database Room.
- * - Menyimpan entitas sesuai jabatan resminya di `OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL`
- *   dan PIN default 6 digit terakhir NIP.
- * - Jika NIP sudah terdaftar, menyinkronkan nama lengkap resmi tanpa menimpa PIN yang sudah diubah.
+ * Seeding 34 data direktori ASN BPBD Kabupaten Mukomuko ke dalam tabel lokal `personnel` (non-rahasia).
+ * - Hanya mengisi nama, NIP, jabatan, unit, shift, dan telepon ke tabel `personnel` jika NIP belum ada.
+ * - TIDAK PERNAH mengisi PIN default ('117' atau lainnya) ke lokal maupun ke Firebase.
+ * - TIDAK PERNAH menimpa atau mereset `officer_credentials` di Cloud maupun `saved_nip` di SharedPreferences
+ *   saat aplikasi di-update atau di-install ulang.
  */
 fun seedDataAsnMukomuko2026(context: Context) {
     val appContext = context.applicationContext
     CoroutineScope(Dispatchers.IO).launch {
         val db = AppDatabase.getInstance(appContext)
         val personnelDao = db.personnelDao()
-        val credentialDao = db.credentialDao()
 
         for (official in OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL) {
             val name = official.name.trim()
             val nip = official.nip.trim()
             if (name.isEmpty() || nip.isEmpty()) continue
 
-            // 1. Cek dan masukkan ke tabel personnel jika NIP belum terdaftar
+            // Hanya masukkan data direktori non-rahasia ke tabel `personnel` jika NIP belum terdaftar
             val existingPersonnel = personnelDao.getPersonnelByNip(nip)
             if (existingPersonnel == null) {
                 personnelDao.insertPersonnel(
@@ -376,10 +375,6 @@ fun seedDataAsnMukomuko2026(context: Context) {
                     )
                 )
             }
-
-            // KEAMANAN: Jangan pernah melakukan auto-seed PIN default ke tabel lokal `officer_credentials`!
-            // Seluruh kredensial & PIN petugas ASN dikelola dan diverifikasi wajib di Cloud Firestore
-            // (`officer_credentials/{nip}`) agar tidak pernah kembali ke PIN default saat update / install ulang.
         }
     }
 }

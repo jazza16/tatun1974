@@ -162,6 +162,14 @@ class SyncController(
 
     init {
         createNotificationChannel()
+        OfficerPushNotificationHelper.syncOfficerTopicSubscription(context)
+        scope.launch {
+            runCatching {
+                if (weatherDao.getUnsyncedCitizenReports().isNotEmpty()) {
+                    CitizenReportSyncWorker.enqueueWhenConnected(context)
+                }
+            }
+        }
         setupNetworkCallback()
         attachRealtimeReportsListener()
         startHeartbeatAndLatencyMonitoring()
@@ -169,6 +177,7 @@ class SyncController(
         try {
             val firebaseAuth = com.google.firebase.auth.FirebaseAuth.getInstance()
             val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { auth ->
+                OfficerPushNotificationHelper.syncOfficerTopicSubscription(context)
                 startHeartbeatAndLatencyMonitoring()
                 attachRealtimeReportsListener()
                 attachRealtimeHeartbeatsListener()
@@ -223,6 +232,7 @@ class SyncController(
             override fun onLost(network: Network) {
                 _isOnline.value = false
                 _syncState.value = SyncState.OFFLINE
+                CitizenReportSyncWorker.enqueueWhenConnected(context)
             }
         }
         networkCallback = callback
@@ -382,6 +392,8 @@ class SyncController(
                     val incomingReports = mutableListOf<CitizenDisasterReport>()
                     for (doc in snapshot.documents) {
                         val id = doc.getString("id") ?: doc.id
+                        val ts = doc.getLong("timestamp") ?: System.currentTimeMillis()
+                        val updatedAt = doc.getLong("updatedAt") ?: ts
                         val r = CitizenDisasterReport(
                             id = id,
                             disasterType = doc.getString("disasterType") ?: "Kejadian Darurat",
@@ -396,12 +408,21 @@ class SyncController(
                             casualtiesDead = doc.getLong("casualtiesDead")?.toInt() ?: 0,
                             casualtiesInjured = doc.getLong("casualtiesInjured")?.toInt() ?: 0,
                             casualtiesMissing = doc.getLong("casualtiesMissing")?.toInt() ?: 0,
-                            photoUri = doc.getString("photoUri"),
+                            photoUri = doc.getString("fotoUrl")?.trim()?.takeIf { it.isNotBlank() }
+                                ?: doc.getString("fotoLampiran")?.trim()?.takeIf { it.isNotBlank() }
+                                ?: doc.getString("photoUri")?.trim()?.takeIf { it.isNotBlank() },
                             reporterName = doc.getString("reporterName") ?: "Warga",
                             reporterPhone = doc.getString("reporterPhone") ?: "",
                             additionalNotes = doc.getString("additionalNotes") ?: "",
-                            timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
-                            status = doc.getString("status") ?: "Menunggu Verifikasi"
+                            timestamp = ts,
+                            status = com.example.model.CitizenReportStatusHelper.normalizeStatus(
+                                doc.getString("status") ?: com.example.model.CitizenReportStatusHelper.STATUS_DIPROSES
+                            ),
+                            updatedAt = maxOf(updatedAt, ts),
+                            handledByOfficerName = doc.getString("handledByOfficerName") ?: "",
+                            handledByOfficerNip = doc.getString("handledByOfficerNip") ?: "",
+                            handledByOfficerRole = doc.getString("handledByOfficerRole") ?: "",
+                            isSyncedToCloud = true
                         )
                         incomingReports.add(r)
                     }
@@ -432,15 +453,23 @@ class SyncController(
                                 reporterPhone = resolved.reporterPhone,
                                 additionalNotes = resolved.additionalNotes,
                                 timestamp = resolved.timestamp,
-                                status = resolved.status
+                                status = resolved.status,
+                                updatedAt = resolved.effectiveUpdatedAt(),
+                                handledByOfficerName = resolved.handledByOfficerName,
+                                handledByOfficerNip = resolved.handledByOfficerNip,
+                                handledByOfficerRole = resolved.handledByOfficerRole,
+                                isSyncedToCloud = resolved.isSyncedToCloud
                             )
                         )
 
-                        // Trigger simultaneous notification on all 5 devices for new reports!
-                        if (!isFirstSnapshot && !knownReportIds.contains(remoteReport.id)) {
+                        // Trigger push notification to devices logged in as Officer/Pusdalops for brand-new reports
+                        if (!isFirstSnapshot && !knownReportIds.contains(remoteReport.id) && localEntity == null) {
                             triggerSimultaneousDisasterAlert(resolved)
                         }
                         knownReportIds.add(remoteReport.id)
+                    }
+                    if (isFirstSnapshot) {
+                        OfficerPushNotificationHelper.registerInitialBaselineReports(context, knownReportIds)
                     }
                     isFirstSnapshot = false
                 }
@@ -448,12 +477,19 @@ class SyncController(
     }
 
     /**
-     * Dispatches high-priority notification with loud alert sound and screen wake-up so all 5 devices ring simultaneously.
+     * Dispatches high-priority push notification with alert sound and screen wake-up to devices logged in as Officer/Pusdalops.
      * Compatible across Android 7.0 (Nougat, API 24) to Android 16 (API 36).
      */
     private fun triggerSimultaneousDisasterAlert(report: CitizenDisasterReport) {
         try {
-            // Wake device screen momentarily so field officers/citizens immediately notice incoming alert
+            if (!OfficerPushNotificationHelper.isDeviceLoggedInAsOfficer(context)) {
+                Log.d(TAG, "Skipping officer push alert on citizen-only device for report ${report.id}")
+                return
+            }
+            val dispatched = OfficerPushNotificationHelper.notifyOfficerForNewReport(context, report)
+            if (!dispatched) return
+
+            // Wake device screen momentarily so field officers/Pusdalops immediately notice incoming alert
             try {
                 val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                 @Suppress("DEPRECATION")
@@ -465,46 +501,6 @@ class SyncController(
             } catch (e: Exception) {
                 Log.d(TAG, "WakeLock acquisition non-critical note: ${e.message}")
             }
-
-            // Notification permission verification on Android 13+ (API 33+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    Log.w(TAG, "POST_NOTIFICATIONS not granted, skipping notification display")
-                    return
-                }
-            }
-
-            val intent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val pendingIntent = PendingIntent.getActivity(
-                context,
-                report.id.hashCode(),
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-
-            val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                .setContentTitle("🚨 LAPORAN BENCANA MASUK: ${report.disasterType.uppercase()}")
-                .setContentText("Kec. ${report.district} (${report.incidentLocation}). Status: ${report.status}")
-                .setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .bigText("Lokasi: ${report.incidentLocation}, Kec. ${report.district}\nPelapor: ${report.reporterName} (${report.reporterPhone})\nStatus: ${report.status}\nCatatan: ${report.additionalNotes}")
-                )
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setSound(soundUri)
-                .setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
-                .setContentIntent(pendingIntent)
-                .setAutoCancel(true)
-                .build()
-
-            NotificationManagerCompat.from(context).notify(report.id.hashCode(), notification)
-            Log.i(TAG, "Simultaneous disaster alert dispatched for ${report.id}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to dispatch disaster notification: ${e.message}")
         }
@@ -514,7 +510,7 @@ class SyncController(
      * Executes retry loop with exponential backoff and updates retryProgress for the UI status bar.
      */
     suspend fun processPendingSyncWithRetry() = withContext(Dispatchers.IO) {
-        if (!_isOnline.value || currentUid() == null) return@withContext
+        if (!_isOnline.value) return@withContext
         _isRetrying.value = true
         _syncState.value = SyncState.SYNCING
 
@@ -526,9 +522,27 @@ class SyncController(
             attempt++
             _retryProgress.value = attempt / maxRetries.toFloat()
             try {
-                // Sync all local reports to cloud
-                val allReports = weatherDao.getAllCitizenDisasterReportsSync()
-                for (r in allReports) {
+                // Only push unsynced local reports (avoid blind overwrites of already-synced server docs)
+                val pendingReports = weatherDao.getUnsyncedCitizenReports()
+                var allSucceeded = true
+                for (r in pendingReports) {
+                    val photoResolution = com.example.util.ImageUtils.resolveCloudPhotoForUpload(
+                        rawPhotoUri = r.photoUri,
+                        reportId = r.id,
+                        context = context,
+                        supabaseUploader = { bmp ->
+                            com.example.data.api.SupabaseClient.uploadPhotoToSupabase(bmp, r.id).getOrNull()
+                        }
+                    )
+                    val portablePhotoUri = when (photoResolution) {
+                        is com.example.util.ImageUtils.CloudPhotoResolution.NoPhoto -> null
+                        is com.example.util.ImageUtils.CloudPhotoResolution.ReadyForCloud -> photoResolution.cloudPhotoUrl
+                        is com.example.util.ImageUtils.CloudPhotoResolution.DeferredOffline -> {
+                            Log.w(TAG, "Pending report ${r.id} held in offline queue (photo upload incomplete): ${photoResolution.reason}")
+                            allSucceeded = false
+                            continue
+                        }
+                    }
                     val reportModel = CitizenDisasterReport(
                         id = r.id,
                         disasterType = r.disasterType,
@@ -543,16 +557,35 @@ class SyncController(
                         casualtiesDead = r.casualtiesDead,
                         casualtiesInjured = r.casualtiesInjured,
                         casualtiesMissing = r.casualtiesMissing,
-                        photoUri = r.photoUri,
+                        photoUri = portablePhotoUri,
                         reporterName = r.reporterName,
                         reporterPhone = r.reporterPhone,
                         additionalNotes = r.additionalNotes,
                         timestamp = r.timestamp,
-                        status = r.status
+                        status = com.example.model.CitizenReportStatusHelper.normalizeStatus(r.status),
+                        updatedAt = r.effectiveUpdatedAt(),
+                        handledByOfficerName = r.handledByOfficerName,
+                        handledByOfficerNip = r.handledByOfficerNip,
+                        handledByOfficerRole = r.handledByOfficerRole,
+                        isSyncedToCloud = r.isSyncedToCloud
                     )
-                    com.example.data.local.FirestoreHelper.syncReportToCloud(reportModel)
+                    val res = com.example.data.local.FirestoreHelper.syncReportToCloudSuspend(reportModel)
+                    if (res.isSuccess) {
+                        if (portablePhotoUri != null && portablePhotoUri != r.photoUri) {
+                            weatherDao.insertCitizenDisasterReport(
+                                r.copy(photoUri = portablePhotoUri, isSyncedToCloud = true)
+                            )
+                        } else {
+                            weatherDao.updateCitizenReportSyncState(r.id, true)
+                        }
+                    } else {
+                        allSucceeded = false
+                    }
                 }
-                success = true
+                success = allSucceeded
+                if (!success) {
+                    delay(1000L * (1 shl (attempt - 1)))
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Retry attempt $attempt failed: ${e.message}")
                 delay(1000L * (1 shl (attempt - 1))) // Exponential backoff: 1s, 2s, 4s...

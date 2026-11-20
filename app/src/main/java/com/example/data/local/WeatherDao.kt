@@ -64,11 +64,48 @@ interface WeatherDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllCitizenDisasterReports(reports: List<CitizenDisasterReportEntity>)
 
-    @Query("UPDATE citizen_disaster_reports SET status = :newStatus WHERE id = :reportId")
-    suspend fun updateCitizenReportStatus(reportId: String, newStatus: String)
+    @Query(
+        "UPDATE citizen_disaster_reports SET status = :newStatus, updatedAt = :updatedAt, " +
+            "handledByOfficerName = CASE WHEN :officerName != '' THEN :officerName ELSE handledByOfficerName END, " +
+            "handledByOfficerNip = CASE WHEN :officerNip != '' THEN :officerNip ELSE handledByOfficerNip END, " +
+            "handledByOfficerRole = CASE WHEN :officerRole != '' THEN :officerRole ELSE handledByOfficerRole END, " +
+            "isSyncedToCloud = :isSynced " +
+            "WHERE id = :reportId"
+    )
+    suspend fun updateCitizenReportStatus(
+        reportId: String,
+        newStatus: String,
+        updatedAt: Long = System.currentTimeMillis(),
+        officerName: String = "",
+        officerNip: String = "",
+        officerRole: String = "",
+        isSynced: Boolean = false
+    )
 
-    @Query("UPDATE citizen_disaster_reports SET status = :newStatus, additionalNotes = :newNotes WHERE id = :reportId")
-    suspend fun updateCitizenReportStatusAndNotes(reportId: String, newStatus: String, newNotes: String)
+    @Query(
+        "UPDATE citizen_disaster_reports SET status = :newStatus, additionalNotes = :newNotes, updatedAt = :updatedAt, " +
+            "handledByOfficerName = CASE WHEN :officerName != '' THEN :officerName ELSE handledByOfficerName END, " +
+            "handledByOfficerNip = CASE WHEN :officerNip != '' THEN :officerNip ELSE handledByOfficerNip END, " +
+            "handledByOfficerRole = CASE WHEN :officerRole != '' THEN :officerRole ELSE handledByOfficerRole END, " +
+            "isSyncedToCloud = :isSynced " +
+            "WHERE id = :reportId"
+    )
+    suspend fun updateCitizenReportStatusAndNotes(
+        reportId: String,
+        newStatus: String,
+        newNotes: String,
+        updatedAt: Long = System.currentTimeMillis(),
+        officerName: String = "",
+        officerNip: String = "",
+        officerRole: String = "",
+        isSynced: Boolean = false
+    )
+
+    @Query("UPDATE citizen_disaster_reports SET isSyncedToCloud = :synced WHERE id = :reportId")
+    suspend fun updateCitizenReportSyncState(reportId: String, synced: Boolean)
+
+    @Query("SELECT * FROM citizen_disaster_reports WHERE isSyncedToCloud = 0 ORDER BY updatedAt DESC")
+    suspend fun getUnsyncedCitizenReports(): List<CitizenDisasterReportEntity>
 
     @Query("SELECT * FROM citizen_disaster_reports WHERE status = :status ORDER BY timestamp DESC")
     fun getCitizenReportsByStatus(status: String): Flow<List<CitizenDisasterReportEntity>>

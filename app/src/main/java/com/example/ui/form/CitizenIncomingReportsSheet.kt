@@ -5,6 +5,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -157,8 +158,76 @@ object CitizenIncomingReportsProvider {
         current.add(report.id)
         prefs.edit().putStringSet(KEY_PROCESSED_REPORT_IDS, current).apply()
 
+        val officerAuth = com.example.data.local.OfficerAuthManager(context)
+        val authMgr = runCatching { com.example.data.auth.AuthManager.getInstance(context) }.getOrNull()
+        val activeOfficerName = officerAuth.getOfficerName().ifBlank { authMgr?.getDisplayName().orEmpty() }
+        val activeOfficerNip = officerAuth.getOfficerBadgeId().ifBlank { authMgr?.getBadgeOrUid().orEmpty() }
+        val activeOfficerRole = officerAuth.getOfficerRole()
+        val now = System.currentTimeMillis()
+
         try {
-            database.weatherDao().updateCitizenReportStatus(report.id, "Diproses")
+            val existingEntity = database.weatherDao().getCitizenReportById(report.id)
+            if (existingEntity != null) {
+                // Jangan pernah menurunkan status laporan yang sudah Divalidasi atau Selesai kembali menjadi Diproses!
+                val currentNormalized = com.example.model.CitizenReportStatusHelper.normalizeStatus(existingEntity.status)
+                val targetStatus = if (com.example.model.CitizenReportStatusHelper.statusRank(currentNormalized) >=
+                    com.example.model.CitizenReportStatusHelper.statusRank(com.example.model.CitizenReportStatusHelper.STATUS_DIVALIDASI)
+                ) {
+                    currentNormalized
+                } else {
+                    com.example.model.CitizenReportStatusHelper.STATUS_DIPROSES
+                }
+
+                database.weatherDao().updateCitizenReportStatus(
+                    reportId = report.id,
+                    newStatus = targetStatus,
+                    updatedAt = now,
+                    officerName = activeOfficerName,
+                    officerNip = activeOfficerNip,
+                    officerRole = activeOfficerRole,
+                    isSynced = false
+                )
+
+                val fallbackModel = com.example.model.CitizenDisasterReport(
+                    id = existingEntity.id,
+                    disasterType = existingEntity.disasterType,
+                    incidentTime = existingEntity.incidentTime,
+                    incidentLocation = existingEntity.incidentLocation,
+                    district = existingEntity.district,
+                    village = existingEntity.village,
+                    latitude = existingEntity.latitude,
+                    longitude = existingEntity.longitude,
+                    gpsAccuracyMeters = existingEntity.gpsAccuracyMeters,
+                    isGpsVerified = existingEntity.isGpsVerified,
+                    casualtiesDead = existingEntity.casualtiesDead,
+                    casualtiesInjured = existingEntity.casualtiesInjured,
+                    casualtiesMissing = existingEntity.casualtiesMissing,
+                    photoUri = existingEntity.photoUri,
+                    reporterName = existingEntity.reporterName,
+                    reporterPhone = existingEntity.reporterPhone,
+                    additionalNotes = existingEntity.additionalNotes,
+                    timestamp = existingEntity.timestamp,
+                    status = targetStatus,
+                    updatedAt = now,
+                    handledByOfficerName = activeOfficerName,
+                    handledByOfficerNip = activeOfficerNip,
+                    handledByOfficerRole = activeOfficerRole,
+                    isSyncedToCloud = false
+                )
+                val cloudRes = com.example.data.local.FirestoreHelper.updateReportStatusInCloudSuspend(
+                    reportId = report.id,
+                    newStatus = targetStatus,
+                    notes = null,
+                    updatedAt = now,
+                    officerName = activeOfficerName,
+                    officerNip = activeOfficerNip,
+                    officerRole = activeOfficerRole,
+                    fallbackReport = fallbackModel
+                )
+                if (cloudRes.isSuccess) {
+                    database.weatherDao().updateCitizenReportSyncState(report.id, true)
+                }
+            }
         } catch (_: Exception) {
         }
         if (report.id.startsWith("LW-")) {
@@ -183,19 +252,64 @@ object CitizenIncomingReportsProvider {
         val pkg = context.packageName
         val todayStr = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
 
-        val defaultPhotos = listOf(
-            "https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=900&q=80",
-            "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=900&q=80",
-            "android.resource://$pkg/${R.drawable.img_mukomuko_disaster_wallpaper}",
-            "android.resource://$pkg/${R.drawable.mukomuko_hero}"
-        )
-
         val fallbackDrawables = listOf(
             R.drawable.img_mukomuko_disaster_wallpaper,
             R.drawable.mukomuko_hero,
             R.drawable.img_mukomuko_wallpaper,
             R.drawable.wallpaper_startup_bpbd
         )
+
+        // 0. Sinkronkan lebih dulu data laporan warga terbaru dari Cloud Firestore agar "DARI WARGA" selalu sinkron dengan laporan warga nyata
+        try {
+            val fetchRes = com.example.data.local.FirestoreHelper.fetchCitizenReportsFromServerSuspend()
+            val remoteReports = fetchRes.getOrNull().orEmpty()
+            if (remoteReports.isNotEmpty()) {
+                val localMap = database.weatherDao().getAllCitizenDisasterReportsSync().associateBy { it.id }
+                for (remote in remoteReports) {
+                    val existing = localMap[remote.id]
+                    val localUpdatedAt = existing?.effectiveUpdatedAt() ?: 0L
+                    val remoteUpdatedAt = remote.effectiveUpdatedAt()
+                    val remoteBringsPhoto = com.example.util.ImageUtils.isCloudPortablePhotoUri(remote.photoUri) &&
+                        !com.example.util.ImageUtils.isCloudPortablePhotoUri(existing?.photoUri)
+                    val shouldUpsert = existing == null ||
+                        !existing.isSyncedToCloud ||
+                        remoteUpdatedAt >= localUpdatedAt ||
+                        remoteBringsPhoto
+                    if (shouldUpsert) {
+                        database.weatherDao().insertCitizenDisasterReport(
+                            CitizenDisasterReportEntity(
+                                id = remote.id,
+                                disasterType = remote.disasterType,
+                                incidentTime = remote.incidentTime,
+                                incidentLocation = remote.incidentLocation,
+                                district = remote.district,
+                                village = remote.village,
+                                latitude = remote.latitude,
+                                longitude = remote.longitude,
+                                gpsAccuracyMeters = remote.gpsAccuracyMeters,
+                                isGpsVerified = remote.isGpsVerified,
+                                casualtiesDead = remote.casualtiesDead,
+                                casualtiesInjured = remote.casualtiesInjured,
+                                casualtiesMissing = remote.casualtiesMissing,
+                                photoUri = com.example.util.ImageUtils.selectBestPhotoUri(remote.photoUri, existing?.photoUri),
+                                reporterName = remote.reporterName,
+                                reporterPhone = remote.reporterPhone,
+                                additionalNotes = remote.additionalNotes,
+                                timestamp = remote.timestamp,
+                                status = com.example.model.CitizenReportStatusHelper.normalizeStatus(remote.status),
+                                updatedAt = remoteUpdatedAt,
+                                handledByOfficerName = remote.handledByOfficerName.ifBlank { existing?.handledByOfficerName.orEmpty() },
+                                handledByOfficerNip = remote.handledByOfficerNip.ifBlank { existing?.handledByOfficerNip.orEmpty() },
+                                handledByOfficerRole = remote.handledByOfficerRole.ifBlank { existing?.handledByOfficerRole.orEmpty() },
+                                isSyncedToCloud = true
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // Tetap tampilkan data Room lokal apabila perangkat sedang offline
+        }
 
         val combined = LinkedHashMap<String, IncomingCitizenReportItem>()
 
@@ -208,16 +322,17 @@ object CitizenIncomingReportsProvider {
 
         citizenEntities.forEachIndexed { index, entity ->
             val parsedDateAndTime = splitIncidentTime(entity.incidentTime, todayStr)
-            val resolvedPhoto = entity.photoUri?.takeIf { it.isNotBlank() }
-                ?: defaultPhotos[index % defaultPhotos.size]
             val fallbackRes = fallbackDrawables[index % fallbackDrawables.size]
+            val resolvedPhoto = entity.photoUri?.takeIf { it.isNotBlank() }
+                ?: "android.resource://$pkg/$fallbackRes"
+            val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(entity.status)
             val isAlreadyProcessed = entity.id in processedIds ||
-                entity.status.equals("Selesai", ignoreCase = true)
+                com.example.model.CitizenReportStatusHelper.isResolved(normalizedStatus)
 
             combined[entity.id] = IncomingCitizenReportItem(
                 id = entity.id,
                 reporterName = entity.reporterName.ifBlank { "Warga Kab. Mukomuko" },
-                reporterPhone = entity.reporterPhone.ifBlank { "0812-7890-1122" },
+                reporterPhone = entity.reporterPhone.ifBlank { "-" },
                 dateText = parsedDateAndTime.first,
                 timeText = parsedDateAndTime.second,
                 disasterType = entity.disasterType.ifBlank { "Banjir" },
@@ -232,10 +347,10 @@ object CitizenIncomingReportsProvider {
                 fallbackDrawableRes = fallbackRes,
                 casualtiesDead = entity.casualtiesDead,
                 casualtiesInjured = entity.casualtiesInjured,
-                status = if (isAlreadyProcessed) "Sudah Dipakai" else entity.status.ifBlank { "Baru Masuk" },
+                status = if (entity.id in processedIds) "Sudah Dipakai ($normalizedStatus)" else normalizedStatus,
                 isGpsVerified = entity.isGpsVerified,
                 isUnreadOrUnprocessed = !isAlreadyProcessed,
-                timestampMillis = entity.timestamp
+                timestampMillis = entity.effectiveUpdatedAt()
             )
         }
 
@@ -248,9 +363,9 @@ object CitizenIncomingReportsProvider {
 
         localWargaEntities.forEachIndexed { idx, lw ->
             val key = "LW-${lw.id}"
-            val resolvedPhoto = lw.fotoUri?.takeIf { it.isNotBlank() }
-                ?: defaultPhotos[(idx + 1) % defaultPhotos.size]
             val fallbackRes = fallbackDrawables[(idx + 1) % fallbackDrawables.size]
+            val resolvedPhoto = lw.fotoUri?.takeIf { it.isNotBlank() }
+                ?: "android.resource://$pkg/$fallbackRes"
             val isAlreadyProcessed = key in processedIds ||
                 lw.status.contains("Diproses", ignoreCase = true) ||
                 lw.status.contains("Selesai", ignoreCase = true)
@@ -264,121 +379,27 @@ object CitizenIncomingReportsProvider {
 
             combined[key] = IncomingCitizenReportItem(
                 id = key,
-                reporterName = lw.namaPelapor.ifBlank { "Budi Santoso" },
-                reporterPhone = lw.nomorKontak.ifBlank { "0812-7391-0022" },
+                reporterName = lw.namaPelapor.ifBlank { "Warga Kab. Mukomuko" },
+                reporterPhone = lw.nomorKontak.ifBlank { "-" },
                 dateText = lw.tanggal.ifBlank { todayStr },
                 timeText = lw.waktu.ifBlank { "08:30 WIB" },
                 disasterType = lw.jenisBencana.ifBlank { "Banjir" },
-                district = lw.kecamatan.ifBlank { "Teramang Jaya" },
-                village = lw.desa.ifBlank { "Pasar Bantal" },
-                locationDetail = lw.lokasi.ifBlank { "RT 03 Pasar Bantal" },
+                district = lw.kecamatan.ifBlank { "Kota Mukomuko" },
+                village = lw.desa.ifBlank { "Pasar Mukomuko" },
+                locationDetail = lw.lokasi.ifBlank { "Kec. ${lw.kecamatan}" },
                 coordinates = coords,
                 description = lw.deskripsi.ifBlank {
-                    "Air pasang laut dan luapan muara naik ke badan jalan desa setinggi 20-30 cm."
+                    "Laporan kejadian ${lw.jenisBencana} dari masyarakat di ${lw.lokasi}."
                 },
                 photoUrl = resolvedPhoto,
                 fallbackDrawableRes = fallbackRes,
                 casualtiesDead = 0,
                 casualtiesInjured = 0,
-                status = if (isAlreadyProcessed) "Sudah Dipakai" else lw.status.ifBlank { "Menunggu Verifikasi" },
+                status = if (isAlreadyProcessed) "Sudah Dipakai" else lw.status.ifBlank { "Diproses" },
                 isGpsVerified = true,
                 isUnreadOrUnprocessed = !isAlreadyProcessed,
                 timestampMillis = lw.timestamp
             )
-        }
-
-        // 3. Pastikan selalu ada minimal 4 daftar laporan warga masuk lengkap dengan foto dokumentasi
-        val curatedSamples = listOf(
-            IncomingCitizenReportItem(
-                id = "WARGA-MMK-001",
-                reporterName = "Budi Santoso (Ketua RT 03)",
-                reporterPhone = "0812-7391-0022",
-                dateText = todayStr,
-                timeText = "08:30 WIB",
-                disasterType = "Banjir Luapan Sungai",
-                district = "Teramang Jaya",
-                village = "Pasar Bantal",
-                locationDetail = "Jl. Lintas Pesisir RT 03 dekat Jembatan Pasar Bantal",
-                coordinates = "-2.7123, 101.2345",
-                description = "Hujan deras sejak dini hari menyebabkan luapan Sungai Teramang menggenangi 14 rumah warga setinggi 35 cm. Warga membutuhkan bantuan pompa air dan evakuasi lansia.",
-                photoUrl = "https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=900&q=80",
-                fallbackDrawableRes = R.drawable.img_mukomuko_disaster_wallpaper,
-                casualtiesDead = 0,
-                casualtiesInjured = 0,
-                status = if ("WARGA-MMK-001" in processedIds) "Sudah Dipakai" else "Baru Masuk",
-                isGpsVerified = true,
-                isUnreadOrUnprocessed = "WARGA-MMK-001" !in processedIds,
-                timestampMillis = System.currentTimeMillis() - 25 * 60 * 1000L
-            ),
-            IncomingCitizenReportItem(
-                id = "WARGA-MMK-002",
-                reporterName = "Siti Rahmawati",
-                reporterPhone = "0852-6811-4409",
-                dateText = todayStr,
-                timeText = "09:15 WIB",
-                disasterType = "Gelombang Pasang / Rob",
-                district = "Kota Mukomuko",
-                village = "Pasar Mukomuko",
-                locationDetail = "Pesisir Pantai Abrasi Kelurahan Pasar Mukomuko",
-                coordinates = "-2.5830, 101.1240",
-                description = "Gelombang pasang tinggi disertai angin kencang menghantam tanggul penahan ombak hingga air laut melimpas ke pemukiman nelayan.",
-                photoUrl = "android.resource://$pkg/${R.drawable.img_mukomuko_disaster_wallpaper}",
-                fallbackDrawableRes = R.drawable.img_mukomuko_disaster_wallpaper,
-                casualtiesDead = 0,
-                casualtiesInjured = 1,
-                status = if ("WARGA-MMK-002" in processedIds) "Sudah Dipakai" else "Baru Masuk",
-                isGpsVerified = true,
-                isUnreadOrUnprocessed = "WARGA-MMK-002" !in processedIds,
-                timestampMillis = System.currentTimeMillis() - 45 * 60 * 1000L
-            ),
-            IncomingCitizenReportItem(
-                id = "WARGA-MMK-003",
-                reporterName = "Hendra Wijaya (Kelompok Nelayan)",
-                reporterPhone = "0813-7740-9912",
-                dateText = todayStr,
-                timeText = "07:50 WIB",
-                disasterType = "Cuaca Ekstrem / Badai",
-                district = "Ipuh",
-                village = "Pasar Ipuh",
-                locationDetail = "Jl. Lintas Barat Sumatera Km 12 Depan TPI Pasar Ipuh",
-                coordinates = "-3.0083, 101.4912",
-                description = "Pohon tumbang akibat angin puting beliung menutup separuh badan jalan lintas dan menimpa 1 warung warga.",
-                photoUrl = "android.resource://$pkg/${R.drawable.mukomuko_hero}",
-                fallbackDrawableRes = R.drawable.mukomuko_hero,
-                casualtiesDead = 0,
-                casualtiesInjured = 0,
-                status = if ("WARGA-MMK-003" in processedIds) "Sudah Dipakai" else "Menunggu Verifikasi",
-                isGpsVerified = true,
-                isUnreadOrUnprocessed = "WARGA-MMK-003" !in processedIds,
-                timestampMillis = System.currentTimeMillis() - 95 * 60 * 1000L
-            ),
-            IncomingCitizenReportItem(
-                id = "WARGA-MMK-004",
-                reporterName = "Ahmad Fauzi (Perangkat Desa)",
-                reporterPhone = "0821-8019-3341",
-                dateText = todayStr,
-                timeText = "06:40 WIB",
-                disasterType = "Tanah Longsor",
-                district = "Lubuk Pinang",
-                village = "Aie Manjunto",
-                locationDetail = "Tebing Saluran Irigasi Primer Desa Aie Manjunto",
-                coordinates = "-2.4833, 101.1833",
-                description = "Longsoran tebing sepanjang 8 meter menutup saluran irigasi dan jalan usaha tani pasca hujan ekstrem semalaman.",
-                photoUrl = "https://invalid-photo-host.mukomuko.example/simulasi_fallback_foto.jpg",
-                fallbackDrawableRes = R.drawable.img_mukomuko_wallpaper,
-                casualtiesDead = 0,
-                casualtiesInjured = 0,
-                status = if ("WARGA-MMK-004" in processedIds) "Sudah Dipakai" else "Baru Masuk",
-                isGpsVerified = true,
-                isUnreadOrUnprocessed = "WARGA-MMK-004" !in processedIds,
-                timestampMillis = System.currentTimeMillis() - 150 * 60 * 1000L
-            )
-        )
-
-        for (sample in curatedSamples) {
-            if (!combined.containsKey(sample.id)) {
-                combined[sample.id] = sample
-            }
         }
 
         combined.values.sortedWith(
@@ -441,7 +462,7 @@ fun DariWargaHeaderCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = officerName.ifBlank { "HITATUN ARAZAK" },
+                        text = officerName.ifBlank { "Petugas Pusdalops Aktif" },
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1976D2)
@@ -1288,9 +1309,23 @@ fun CitizenReportPhotoThumbnail(
         return
     }
 
+    val resolvedModel = remember(photoUrl) {
+        com.example.ui.components.decodeCitizenPhotoModel(photoUrl)
+    }
+
+    if (resolvedModel is android.graphics.Bitmap) {
+        Image(
+            bitmap = resolvedModel.asImageBitmap(),
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+        )
+        return
+    }
+
     SubcomposeAsyncImage(
         model = ImageRequest.Builder(context)
-            .data(photoUrl)
+            .data(resolvedModel ?: photoUrl)
             .crossfade(true)
             .build(),
         contentDescription = contentDescription,

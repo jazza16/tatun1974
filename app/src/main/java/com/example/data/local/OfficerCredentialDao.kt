@@ -37,9 +37,6 @@ interface OfficerCredentialDao {
     @Query("UPDATE officer_credentials SET lastLoginAt = :timestamp, lastLoginDevice = :device, updatedAt = :timestamp WHERE LOWER(nip) = LOWER(:nip)")
     suspend fun updateLoginSession(nip: String, timestamp: Long, device: String)
 
-    @Query("UPDATE officer_credentials SET pinHash = :newHash, salt = :newSalt, isCustomPinSet = 1, initialSecurePin = '', isSyncedWithCloud = 0, updatedAt = :timestamp WHERE LOWER(nip) = LOWER(:nip)")
-    suspend fun updatePersonalPin(nip: String, newHash: String, newSalt: String, timestamp: Long)
-
     @Query("UPDATE officer_credentials SET isSyncedWithCloud = :synced, updatedAt = :timestamp WHERE LOWER(nip) = LOWER(:nip)")
     suspend fun markSyncedWithCloud(nip: String, synced: Boolean, timestamp: Long)
 

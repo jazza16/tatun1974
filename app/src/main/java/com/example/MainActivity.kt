@@ -21,7 +21,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import com.king.app.updater.AppUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -228,7 +228,7 @@ fun configureAppCheck(context: Context, intent: Intent?) {
     }
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val notificationIntentFlow = kotlinx.coroutines.flow.MutableStateFlow<Intent?>(null)
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
@@ -511,6 +511,7 @@ fun WeatherAppScreen(
     var isSipagarKitaDismissed by remember { mutableStateOf(false) }
     var isPanduanEvakuasiOpen by remember { mutableStateOf(false) }
     var pendingOfficerLoginPrompt by remember { mutableStateOf(false) }
+    var pendingOpenRuangKerja by remember { mutableStateOf(false) }
 
     val currentDistrict = uiState.selectedDistrict
     val isFavorite = favorites.contains(currentDistrict.id)
@@ -950,20 +951,42 @@ fun WeatherAppScreen(
                                 reports = citizenDisasterReports,
                                 currentDistrict = currentDistrict,
                                 onSubmitReport = { report ->
-                                    viewModel.submitCitizenDisasterReport(report)
+                                    viewModel.submitCitizenDisasterReport(report, context)
+                                },
+                                onSubmitReportWithResult = { report, onComplete ->
+                                    viewModel.submitCitizenDisasterReport(report, context, onComplete)
                                 },
                                 onUpdateReportStatus = { id, status ->
-                                    viewModel.updateCitizenReportStatus(id, status)
+                                    val officerAuth = com.example.data.local.OfficerAuthManager(context)
+                                    val authMgr = runCatching { com.example.data.auth.AuthManager.getInstance(context) }.getOrNull()
+                                    viewModel.updateCitizenReportStatus(
+                                        reportId = id,
+                                        newStatus = status,
+                                        officerName = officerAuth.getOfficerName().ifBlank { authMgr?.getDisplayName().orEmpty() },
+                                        officerNip = officerAuth.getOfficerBadgeId().ifBlank { authMgr?.getBadgeOrUid().orEmpty() },
+                                        officerRole = officerAuth.getOfficerRole()
+                                    )
                                 },
                                 onUpdateReportStatusAndNotes = { id, status, notes ->
-                                    viewModel.updateCitizenReportStatusAndNotes(id, status, notes)
+                                    val officerAuth = com.example.data.local.OfficerAuthManager(context)
+                                    val authMgr = runCatching { com.example.data.auth.AuthManager.getInstance(context) }.getOrNull()
+                                    viewModel.updateCitizenReportStatusAndNotes(
+                                        reportId = id,
+                                        newStatus = status,
+                                        notes = notes,
+                                        officerName = officerAuth.getOfficerName().ifBlank { authMgr?.getDisplayName().orEmpty() },
+                                        officerNip = officerAuth.getOfficerBadgeId().ifBlank { authMgr?.getBadgeOrUid().orEmpty() },
+                                        officerRole = officerAuth.getOfficerRole()
+                                    )
                                 },
                                 onSyncReports = { onComplete ->
                                     viewModel.syncCitizenDisasterReportsOnline(onComplete)
                                 },
                                 initialShowOfficerLogin = pendingOfficerLoginPrompt,
+                                initialOpenRuangKerja = pendingOpenRuangKerja,
                                 onOfficerLoginDismissed = {
                                     pendingOfficerLoginPrompt = false
+                                    pendingOpenRuangKerja = false
                                 },
                                 onBackClick = {
                                     viewModel.selectTab(0)
@@ -1512,6 +1535,12 @@ fun WeatherAppScreen(
             viewModel.dismissStartupWallpaper()
             pendingOfficerLoginPrompt = true
             viewModel.selectTab(1) // Jump directly to Laporan Warga & Portal Konsol Petugas Pusdalops
+        },
+        onBiometricLoginSuccess = {
+            viewModel.dismissStartupWallpaper()
+            pendingOfficerLoginPrompt = false
+            pendingOpenRuangKerja = true
+            viewModel.selectTab(1)
         }
     )
 }

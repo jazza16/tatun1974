@@ -81,12 +81,14 @@ class OfficerAuthManager(private val context: Context) {
         private const val PREF_SAVED_NIP = "saved_nip"
         private const val PREF_HAS_CLOUD_CUSTOM_PIN = "has_cloud_custom_pin"
         private const val PREF_STORAGE_SCHEMA_VERSION = "officer_storage_schema_version"
-        private const val CURRENT_STORAGE_SCHEMA_VERSION = 2
+        private const val CURRENT_STORAGE_SCHEMA_VERSION = 3
 
-        // Legacy local PIN keys: NEVER written anymore; purged non-destructively on upgrade
+        // Legacy local PIN & obsolete startup-reset keys: NEVER written anymore; purged non-destructively on upgrade
         private const val PREF_OFFICER_PIN = "officer_pin"
         private const val PREF_OFFICER_PIN_HASH = "officer_pin_hash"
         private const val PREF_OFFICER_PIN_SALT = "officer_pin_salt"
+        private const val PREF_LEGACY_SIM_CLEAN_LOCAL = "hitatun_arazak_normalized_v1_clean"
+        private const val PREF_LEGACY_SIM_CLEAN_CLOUD = "hitatun_arazak_normalized_v1_cloud"
         private const val PREF_OFFICER_ROSTER_JSON = "officer_roster_json"
 
         private const val PREF_IS_ADMIN_LOGGED_IN = "is_admin_logged_in"
@@ -118,15 +120,17 @@ class OfficerAuthManager(private val context: Context) {
      * Update-safe non-destructive migration for SharedPreferences (`bpbd_officer_auth_prefs`):
      * - NEVER calls `clear()` and NEVER overwrites/erases `saved_nip`, `is_officer_logged_in`,
      *   or officer profile metadata during an app update.
-     * - Backfills `saved_nip` from `officer_badge_id` if upgrading from an older version.
+     * - Backfills `saved_nip` from `officer_badge_id` or `PusdalopsSession` if upgrading from an older version.
      * - Purges ONLY legacy local PIN storage keys (`officer_pin`, `officer_pin_hash`, `officer_pin_salt`)
-     *   so raw/hashed PINs are NEVER stored on the device.
+     *   and obsolete simulation flags so raw/hashed PINs are NEVER stored on the device.
      */
     private fun ensureUpdateSafeStorageMigration() {
         val currentVersion = sharedPrefs.getInt(PREF_STORAGE_SCHEMA_VERSION, 0)
         val hasLegacyPinKeys = sharedPrefs.contains(PREF_OFFICER_PIN) ||
             sharedPrefs.contains(PREF_OFFICER_PIN_HASH) ||
-            sharedPrefs.contains(PREF_OFFICER_PIN_SALT)
+            sharedPrefs.contains(PREF_OFFICER_PIN_SALT) ||
+            sharedPrefs.contains(PREF_LEGACY_SIM_CLEAN_LOCAL) ||
+            sharedPrefs.contains(PREF_LEGACY_SIM_CLEAN_CLOUD)
 
         if (currentVersion >= CURRENT_STORAGE_SCHEMA_VERSION && !hasLegacyPinKeys) {
             return
@@ -137,17 +141,27 @@ class OfficerAuthManager(private val context: Context) {
         if (sharedPrefs.contains(PREF_OFFICER_PIN_HASH) && !sharedPrefs.contains(PREF_HAS_CLOUD_CUSTOM_PIN)) {
             editor.putBoolean(PREF_HAS_CLOUD_CUSTOM_PIN, true)
         }
-        // Purge ONLY legacy PIN secrets — strictly preserve saved_nip and officer session!
+        // Purge ONLY legacy PIN secrets & obsolete flags — strictly preserve saved_nip and officer session!
         editor.remove(PREF_OFFICER_PIN)
             .remove(PREF_OFFICER_PIN_HASH)
             .remove(PREF_OFFICER_PIN_SALT)
+            .remove(PREF_LEGACY_SIM_CLEAN_LOCAL)
+            .remove(PREF_LEGACY_SIM_CLEAN_CLOUD)
 
         // Backfill saved_nip non-destructively if upgrading from older version that only saved officer_badge_id
+        // or PusdalopsSession NIP
         val existingSavedNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_SAVED_NIP)?.trim().orEmpty()
         if (existingSavedNip.isBlank()) {
             val legacyBadgeNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID)?.trim().orEmpty()
-            if (legacyBadgeNip.isNotBlank() && !legacyBadgeNip.equals("PUSDALOPS-117", ignoreCase = true)) {
-                SecureStorageHelper.putEncrypted(editor, PREF_SAVED_NIP, legacyBadgeNip)
+            val candidateNip = if (legacyBadgeNip.isNotBlank() && !legacyBadgeNip.equals("PUSDALOPS-117", ignoreCase = true)) {
+                legacyBadgeNip
+            } else {
+                val sessionPrefs = context.getSharedPreferences("PusdalopsSession", Context.MODE_PRIVATE)
+                val sessionNip = SecureStorageHelper.getDecrypted(sessionPrefs, "nip_petugas")?.trim().orEmpty()
+                if (sessionNip.isNotBlank() && !sessionNip.equals("PUSDALOPS-117", ignoreCase = true)) sessionNip else ""
+            }
+            if (candidateNip.isNotBlank()) {
+                SecureStorageHelper.putEncrypted(editor, PREF_SAVED_NIP, candidateNip)
             }
         }
 
@@ -610,6 +624,10 @@ class OfficerAuthManager(private val context: Context) {
         SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_SHIFT, resolvedShift)
         editor.apply()
         com.example.util.SessionManager(context).setPetugasLogin(resolvedName, cleanNip, resolvedRole)
+        com.example.data.sync.OfficerPushNotificationHelper.syncOfficerTopicSubscription(
+            context = context,
+            forceOfficerActive = true
+        )
     }
 
     /**
@@ -699,6 +717,10 @@ class OfficerAuthManager(private val context: Context) {
             .apply()
         com.example.util.SessionManager(context).clearSession()
         SecurityManager.getInstance(context).clearLocalSession()
+        com.example.data.sync.OfficerPushNotificationHelper.syncOfficerTopicSubscription(
+            context = context,
+            forceOfficerActive = false
+        )
     }
 
     fun logoutOfficer() {
@@ -708,6 +730,10 @@ class OfficerAuthManager(private val context: Context) {
         com.example.util.SessionManager(context).clearSession()
         SecurityManager.getInstance(context).clearLocalSession()
         com.example.security.AdminAccessSecurityManager.revokeToken()
+        com.example.data.sync.OfficerPushNotificationHelper.syncOfficerTopicSubscription(
+            context = context,
+            forceOfficerActive = false
+        )
     }
 
     /**
@@ -761,12 +787,24 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Authenticates Application Admin using configured PBKDF2 credentials (no hardcoded default password).
+     * Authenticates Application Admin using server-side verification via
+     * [com.example.security.AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken].
      */
-    fun loginAdmin(username: String, password: String): Boolean {
+    suspend fun loginAdminServerSide(username: String, password: String): Boolean {
         val trimmedUser = username.trim()
         val trimmedPass = password.trim()
-        if (trimmedUser.equals(DEFAULT_ADMIN_USERNAME, ignoreCase = true) && verifyAdminPassword(trimmedPass)) {
+        if (!trimmedUser.equals(DEFAULT_ADMIN_USERNAME, ignoreCase = true) || trimmedPass.isEmpty()) {
+            return false
+        }
+        val result = com.example.security.AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken(
+            context = context,
+            masterPassword = trimmedPass,
+            officerNip = getSavedNip().ifBlank { DEFAULT_ADMIN_USERNAME },
+            officerName = getOfficerName().ifBlank { "Administrator SIPAGAR KITA" },
+            officerRole = getOfficerRole().ifBlank { "Admin" },
+            actionTitle = "Login Administrator Aplikasi"
+        )
+        if (result is com.example.security.AdminVerificationResult.Authorized) {
             sharedPrefs.edit().putBoolean(PREF_IS_ADMIN_LOGGED_IN, true).apply()
             return true
         }
@@ -774,11 +812,30 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Verifikasi sandi master admin lokal DINONAKTIFKAN demi keamanan anti reverse-engineering.
-     * Seluruh verifikasi master admin wajib melalui endpoint server-side `POST /api/verify-admin-pass`
-     * pada [com.example.security.AdminAccessSecurityManager].
+     * Synchronous local admin login is disabled; use [loginAdminServerSide] or
+     * [com.example.security.AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken].
      */
-    @Deprecated("Gunakan AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken() (server-side)")
+    @Deprecated(
+        message = "Gunakan AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken() atau loginAdminServerSide() (server-side)"
+    )
+    fun loginAdmin(username: String, password: String): Boolean {
+        return kotlinx.coroutines.runBlocking {
+            loginAdminServerSide(username, password)
+        }
+    }
+
+    /**
+     * Verifikasi sandi master admin lokal DINONAKTIFKAN demi keamanan anti reverse-engineering.
+     * Seluruh verifikasi master admin wajib melalui endpoint server-side
+     * [com.example.security.AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken].
+     */
+    @Deprecated(
+        message = "Gunakan AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken() (server-side)",
+        replaceWith = ReplaceWith(
+            "AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken(context, password, officerNip, officerName, officerRole, actionTitle)",
+            "com.example.security.AdminAccessSecurityManager"
+        )
+    )
     fun verifyAdminPassword(password: String): Boolean {
         return false
     }
@@ -792,15 +849,24 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Allows Admin to change the master admin password after successful verification.
+     * Allows Admin to change the master admin password after successful server-side verification via
+     * [com.example.security.AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken].
      */
-    fun changeAdminPassword(oldPass: String, newPass: String): Result<String> {
+    suspend fun changeAdminPasswordServerSide(oldPass: String, newPass: String): Result<String> {
         if (getAdminLockoutRemainingSeconds() > 0L) {
             return Result.failure(SecurityException("Akses admin dikunci sementara (${getAdminLockoutRemainingSeconds()} detik) karena terlalu banyak percobaan gagal."))
         }
         val trimmedOld = oldPass.trim()
         val trimmedNew = newPass.trim()
-        if (!verifyAdminPassword(trimmedOld)) {
+        val verifyResult = com.example.security.AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken(
+            context = context,
+            masterPassword = trimmedOld,
+            officerNip = getSavedNip().ifBlank { DEFAULT_ADMIN_USERNAME },
+            officerName = getOfficerName().ifBlank { "Administrator SIPAGAR KITA" },
+            officerRole = getOfficerRole().ifBlank { "Admin" },
+            actionTitle = "Ubah Sandi Master Admin"
+        )
+        if (verifyResult !is com.example.security.AdminVerificationResult.Authorized) {
             return Result.failure(IllegalArgumentException("Sandi admin lama tidak sesuai."))
         }
         if (trimmedNew.length < 8) {
@@ -820,6 +886,16 @@ class OfficerAuthManager(private val context: Context) {
         SecureStorageHelper.putEncrypted(editor, PREF_ADMIN_PASSWORD_HASH, hash)
         editor.apply()
         return Result.success("Sandi Admin SIPAGAR KITA berhasil diperbarui secara permanen!")
+    }
+
+    /**
+     * Synchronous wrapper for changing admin password using server-side verification via
+     * [com.example.security.AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken].
+     */
+    fun changeAdminPassword(oldPass: String, newPass: String): Result<String> {
+        return kotlinx.coroutines.runBlocking {
+            changeAdminPasswordServerSide(oldPass, newPass)
+        }
     }
 
     private fun migrateLegacySecretsIfNeeded() {

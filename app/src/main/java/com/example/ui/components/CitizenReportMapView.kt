@@ -8,6 +8,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,8 +40,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
@@ -768,39 +771,108 @@ private fun ReportInspectionCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Photo Preview if available
+            // Photo Preview or explicit placeholder
             if (!report.photoUri.isNullOrBlank()) {
                 val resolvedMapPhotoModel = remember(report.photoUri) {
                     decodeCitizenPhotoModel(report.photoUri)
                 }
+                var isMapPhotoError by remember(report.photoUri) {
+                    mutableStateOf(resolvedMapPhotoModel == null)
+                }
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF1E293B),
+                    color = if (isMapPhotoError) Color(0xFFE5E7EB) else Color(0xFF1E293B),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(130.dp)
                         .padding(bottom = 8.dp)
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        AsyncImage(
-                            model = resolvedMapPhotoModel,
-                            contentDescription = "Foto Laporan Bencana",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Surface(
-                            color = Color.Black.copy(alpha = 0.75f),
-                            shape = RoundedCornerShape(topStart = 6.dp),
-                            modifier = Modifier.align(Alignment.BottomEnd)
-                        ) {
-                            Text(
-                                text = "🛡️ FOTO KAMERA GPS SATELIT",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF86EFAC),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                            )
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        if (isMapPhotoError || resolvedMapPhotoModel == null) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color(0xFFE5E7EB))
+                            ) {
+                                Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Default.BrokenImage,
+                                    contentDescription = "Foto tidak dapat dimuat",
+                                    tint = Color(0xFF6B7280),
+                                    modifier = Modifier.size(30.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Foto tidak dapat dimuat",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF374151)
+                                )
+                            }
+                        } else {
+                            if (resolvedMapPhotoModel is android.graphics.Bitmap) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = resolvedMapPhotoModel.asImageBitmap(),
+                                    contentDescription = "Foto Laporan Bencana",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                AsyncImage(
+                                    model = resolvedMapPhotoModel,
+                                    contentDescription = "Foto Laporan Bencana",
+                                    onSuccess = { isMapPhotoError = false },
+                                    onError = { isMapPhotoError = true },
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                            Surface(
+                                color = Color.Black.copy(alpha = 0.75f),
+                                shape = RoundedCornerShape(topStart = 6.dp),
+                                modifier = Modifier.align(Alignment.BottomEnd)
+                            ) {
+                                Text(
+                                    text = "🛡️ FOTO KAMERA GPS SATELIT",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF86EFAC),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
                         }
+                    }
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFF8FAFC),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.ImageNotSupported,
+                            contentDescription = "Warga tidak melampirkan foto",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Warga tidak melampirkan foto",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569)
+                        )
                     }
                 }
             }

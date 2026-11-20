@@ -40,5 +40,13 @@ data class CitizenDisasterReportEntity(
     val reporterPhone: String,
     val additionalNotes: String,
     val timestamp: Long = System.currentTimeMillis(),
-    val status: String
-)
+    val status: String,
+    val updatedAt: Long = timestamp,
+    val handledByOfficerName: String = "",
+    val handledByOfficerNip: String = "",
+    val handledByOfficerRole: String = "",
+    val isSyncedToCloud: Boolean = true
+) {
+    fun effectiveUpdatedAt(): Long = maxOf(updatedAt, timestamp)
+}
+

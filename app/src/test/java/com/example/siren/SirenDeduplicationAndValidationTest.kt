@@ -679,6 +679,248 @@ class SirenDeduplicationAndValidationTest {
         assertEquals(SirenRuntimeConfig.DEFAULT_EXTREME_WMO_CODES, clampedConfig.extremeWeatherWmoCodes)
     }
 
+    @Test
+    fun `11a - wind 41 then 42 kmh does not sound siren twice while newly exceeded threshold does`() {
+        val manager = SirenDeduplicationManager(
+            sharedPreferences = null,
+            defaultCooldownMillis = 180_000L,
+            simulationCooldownMillis = 5_000L,
+            maxAlertAgeMillis = 1_800_000L
+        )
+        val baseTime = 1_700_000_000_000L
+
+        val wind41Alert = SirenAlertPayload(
+            alertId = "WEATHER-WIND-41",
+            alertType = SirenAlertType.EXTREME_WEATHER,
+            title = "Peringatan Angin Kencang",
+            spokenMessageId = "Waspada angin kencang di Kota Mukomuko.",
+            affectedDistrict = "Kota Mukomuko",
+            claimedSource = SirenSourceType.BMKG_WRS_NTWC,
+            verificationStatus = SirenVerificationStatus.VERIFIED_WEATHER_TELEMETRY,
+            eventTimestampMillis = baseTime,
+            expiresAtMillis = baseTime + 1_800_000L,
+            coordinates = "-2.58, 101.11",
+            weatherCode = 3,
+            windSpeedKmh = 41.0,
+            precipitationMm = 2.0
+        )
+
+        val firstDecision = manager.evaluateAndRecordAfterValidation(wind41Alert, nowMillis = baseTime + 1_000L)
+        assertTrue("Angin 41 km/jam pertama wajib membunyikan sirene", firstDecision is DeduplicationDecision.Allowed)
+
+        // Kenaikan kecil angin dari 41 km/jam menjadi 42 km/jam (sama-sama hanya melampaui ambang angin >= 40 km/jam)
+        // TIDAK boleh membunyikan sirene dua kali selama masa cooldown (baik dengan ID baru maupun ID sama).
+        val wind42DifferentId = wind41Alert.copy(
+            alertId = "WEATHER-WIND-42",
+            windSpeedKmh = 42.0
+        )
+        val secondDecision = manager.evaluateAndRecordAfterValidation(wind42DifferentId, nowMillis = baseTime + 20_000L)
+        assertTrue(
+            "Angin 41 lalu 42 km/jam tidak boleh membunyikan sirene dua kali dalam cooldown",
+            secondDecision is DeduplicationDecision.RejectedCooldownActive
+        )
+
+        val wind42SameId = wind41Alert.copy(
+            alertId = "WEATHER-WIND-41",
+            windSpeedKmh = 42.0
+        )
+        val sameIdDecision = manager.evaluateAndRecordAfterValidation(wind42SameId, nowMillis = baseTime + 25_000L)
+        assertTrue(
+            "ID sama dengan kenaikan kecil 41 -> 42 km/jam harus ditolak sebagai duplikat",
+            sameIdDecision is DeduplicationDecision.RejectedDuplicateId
+        )
+
+        // Namun jika ambang cuaca ekstrem BARU terlampaui (misal curah hujan naik melampaui 15 mm menjadi 20 mm),
+        // maka dianggap naik tingkat bermakna dan diizinkan lewat.
+        val newlyExceededRainThreshold = wind42DifferentId.copy(
+            alertId = "WEATHER-WIND-42-PLUS-EXTREME-RAIN",
+            precipitationMm = 20.0
+        )
+        val newThresholdDecision = manager.evaluateAndRecordAfterValidation(newlyExceededRainThreshold, nowMillis = baseTime + 30_000L)
+        assertTrue(
+            "Ambang hujan ekstrem yang baru terlampaui wajib diizinkan membunyikan sirene",
+            newThresholdDecision is DeduplicationDecision.Allowed
+        )
+    }
+
+    @Test
+    fun `11b - small BMKG coordinate revision and spacing differences normalize to same incidentKey and do not sound siren twice`() {
+        val manager = SirenDeduplicationManager(
+            sharedPreferences = null,
+            defaultCooldownMillis = 180_000L,
+            simulationCooldownMillis = 5_000L,
+            maxAlertAgeMillis = 1_800_000L
+        )
+        val baseTime = 1_700_000_000_000L
+
+        // Koordinat awal "-2.58,101.11" -> dibulatkan 1 desimal menjadi "-2.6,101.1"
+        val initialBmkgAlert = sampleTsunamiPayload(
+            alertId = "2026-11-18T06:45:12+07:00_-2.58,101.11",
+            eventTimeMillis = baseTime,
+            magnitude = 7.1,
+            coordinates = "-2.58,101.11"
+        )
+        // Revisi kecil koordinat BMKG dengan tambahan spasi " -2.62 , 101.14 " -> dibulatkan 1 desimal tetap "-2.6,101.1"
+        // dan kenaikan magnitudo kecil 7.1 -> 7.3 (< 0.5)
+        val minorCoordAndMagRevision = sampleTsunamiPayload(
+            alertId = "2026-11-18T06:46:00+07:00_-2.62,101.14",
+            eventTimeMillis = baseTime + 20_000L,
+            magnitude = 7.3,
+            coordinates = "  -2.62 ,  101.14  "
+        )
+
+        assertEquals("REAL_TSUNAMI_-2.6,101.1", initialBmkgAlert.incidentKey())
+        assertEquals(initialBmkgAlert.incidentKey(), minorCoordAndMagRevision.incidentKey())
+
+        val firstDecision = manager.evaluateAndRecordAfterValidation(initialBmkgAlert, nowMillis = baseTime + 1_000L)
+        assertTrue(firstDecision is DeduplicationDecision.Allowed)
+
+        val secondDecision = manager.evaluateAndRecordAfterValidation(minorCoordAndMagRevision, nowMillis = baseTime + 25_000L)
+        assertTrue(
+            "Revisi koordinat kecil BMKG (-2.58,101.11 -> -2.62,101.14) dan magnitudo +0.2 tidak boleh membunyikan sirene dua kali",
+            secondDecision is DeduplicationDecision.RejectedCooldownActive
+        )
+    }
+
+    @Test
+    fun `11c - upgrade from PENDING_OFFICER_CONFIRMATION or UNVERIFIED to CONFIRMED_BY_OFFICER passes deduplication and cooldown`() {
+        assertTrue(
+            "CONFIRMED_BY_OFFICER wajib memiliki verificationRank lebih tinggi dari PENDING_OFFICER_CONFIRMATION",
+            SirenVerificationStatus.CONFIRMED_BY_OFFICER.verificationRank >
+                SirenVerificationStatus.PENDING_OFFICER_CONFIRMATION.verificationRank
+        )
+        assertTrue(
+            "CONFIRMED_BY_OFFICER wajib memiliki verificationRank lebih tinggi dari UNVERIFIED_TIMEOUT",
+            SirenVerificationStatus.CONFIRMED_BY_OFFICER.verificationRank >
+                SirenVerificationStatus.UNVERIFIED_TIMEOUT.verificationRank
+        )
+        assertTrue(
+            "CONFIRMED_BY_OFFICER wajib memiliki verificationRank lebih tinggi dari UNVERIFIED_NETWORK_ERROR",
+            SirenVerificationStatus.CONFIRMED_BY_OFFICER.verificationRank >
+                SirenVerificationStatus.UNVERIFIED_NETWORK_ERROR.verificationRank
+        )
+        assertTrue(
+            "CONFIRMED_BY_OFFICER wajib memiliki verificationRank lebih tinggi dari UNVERIFIED_NOT_IN_BMKG_FEED",
+            SirenVerificationStatus.CONFIRMED_BY_OFFICER.verificationRank >
+                SirenVerificationStatus.UNVERIFIED_NOT_IN_BMKG_FEED.verificationRank
+        )
+
+        val manager = SirenDeduplicationManager(
+            sharedPreferences = null,
+            defaultCooldownMillis = 180_000L,
+            simulationCooldownMillis = 5_000L,
+            maxAlertAgeMillis = 1_800_000L
+        )
+        val baseTime = 1_700_000_000_000L
+
+        val pendingAlert = sampleTsunamiPayload(
+            alertId = "FIELD-REPORT-001",
+            source = SirenSourceType.LAPORAN_LAPANGAN,
+            confirmed = false,
+            eventTimeMillis = baseTime,
+            magnitude = 7.0,
+            coordinates = "-2.58,101.11"
+        ).copy(
+            verificationStatus = SirenVerificationStatus.PENDING_OFFICER_CONFIRMATION
+        )
+
+        val firstDecision = manager.evaluateAndRecordAfterValidation(pendingAlert, nowMillis = baseTime + 1_000L)
+        assertTrue(firstDecision is DeduplicationDecision.Allowed)
+
+        // Skenario 1 (alertId sama): Saat petugas mengonfirmasi peringatan yang sama (alertId sama dan masih dalam masa cooldown),
+        // status naik dari PENDING_OFFICER_CONFIRMATION -> CONFIRMED_BY_OFFICER sehingga WAJIB lolos!
+        val confirmedSameIdAlert = pendingAlert.copy(
+            verificationStatus = SirenVerificationStatus.CONFIRMED_BY_OFFICER,
+            confirmedByOfficer = true,
+            confirmedByOfficerName = "RURI IRWANDI, ST, MT"
+        )
+        val confirmedSameIdDecision = manager.evaluateAndRecordAfterValidation(confirmedSameIdAlert, nowMillis = baseTime + 10_000L)
+        assertTrue(
+            "Kenaikan status dari PENDING_OFFICER_CONFIRMATION ke CONFIRMED_BY_OFFICER wajib lolos meskipun alertId sama & dalam masa cooldown",
+            confirmedSameIdDecision is DeduplicationDecision.Allowed
+        )
+
+        // Skenario 2 (alertId berbeda pada insiden/lokasi yang sama):
+        // Peringatan pertama masuk dengan status PENDING_OFFICER_CONFIRMATION (alertId = "FIELD-REPORT-IPUH-PENDING"),
+        // lalu 15 detik kemudian (masih dalam masa cooldown 180 detik) masuk pembaruan dengan alertId BERBEDA
+        // ("FIELD-REPORT-IPUH-CONFIRMED-02") yang berstatus CONFIRMED_BY_OFFICER pada lokasi & magnitudo yang sama.
+        val pendingIpuhAlert = sampleTsunamiPayload(
+            alertId = "FIELD-REPORT-IPUH-PENDING",
+            source = SirenSourceType.LAPORAN_LAPANGAN,
+            confirmed = false,
+            eventTimeMillis = baseTime + 20_000L,
+            magnitude = 6.9,
+            coordinates = "-3.15,101.55",
+            district = "Ipuh"
+        ).copy(
+            verificationStatus = SirenVerificationStatus.PENDING_OFFICER_CONFIRMATION
+        )
+        val pendingIpuhDecision = manager.evaluateAndRecordAfterValidation(pendingIpuhAlert, nowMillis = baseTime + 21_000L)
+        assertTrue(pendingIpuhDecision is DeduplicationDecision.Allowed)
+
+        val confirmedDifferentIdAlert = pendingIpuhAlert.copy(
+            alertId = "FIELD-REPORT-IPUH-CONFIRMED-02",
+            verificationStatus = SirenVerificationStatus.CONFIRMED_BY_OFFICER,
+            confirmedByOfficer = true,
+            confirmedByOfficerName = "RURI IRWANDI, ST, MT"
+        )
+        val confirmedDifferentIdDecision = manager.evaluateAndRecordAfterValidation(
+            confirmedDifferentIdAlert,
+            nowMillis = baseTime + 35_000L
+        )
+        assertTrue(
+            "Kenaikan status dari PENDING_OFFICER_CONFIRMATION ke CONFIRMED_BY_OFFICER dengan alertId berbeda wajib menembus cooldown insiden",
+            confirmedDifferentIdDecision is DeduplicationDecision.Allowed
+        )
+    }
+
+    @Test
+    fun `11d - SIMULASI alarm never blocks subsequent REAL alarm at the same location`() {
+        val manager = SirenDeduplicationManager(
+            sharedPreferences = null,
+            defaultCooldownMillis = 180_000L,
+            simulationCooldownMillis = 60_000L,
+            maxAlertAgeMillis = 1_800_000L
+        )
+        val baseTime = 1_700_000_000_000L
+
+        val simulationAlert = sampleTsunamiPayload(
+            alertId = "SIM-TSUNAMI-001",
+            source = SirenSourceType.SIMULASI_LOKAL,
+            simulation = true,
+            eventTimeMillis = baseTime,
+            magnitude = 7.5,
+            coordinates = "-2.58,101.11",
+            district = "Kota Mukomuko"
+        ).copy(
+            verificationStatus = SirenVerificationStatus.LOCAL_SIMULATION
+        )
+
+        val realAlert = sampleTsunamiPayload(
+            alertId = "REAL-TSUNAMI-001",
+            source = SirenSourceType.BMKG_WRS_NTWC,
+            simulation = false,
+            eventTimeMillis = baseTime + 2_000L,
+            magnitude = 7.0,
+            coordinates = "-2.58,101.11",
+            district = "Kota Mukomuko"
+        ).copy(
+            verificationStatus = SirenVerificationStatus.VERIFIED_BMKG_PRIMARY
+        )
+
+        val simDecision = manager.evaluateAndRecordAfterValidation(simulationAlert, nowMillis = baseTime + 1_000L)
+        assertTrue("Alarm SIMULASI pertama harus diizinkan", simDecision is DeduplicationDecision.Allowed)
+
+        // Hanya 2 detik setelah SIMULASI (masih di dalam simulationCooldownMillis = 60 detik maupun defaultCooldownMillis = 180 detik),
+        // alarm REAL masuk di koordinat yang persis sama (bahkan dengan magnitudo lebih kecil 7.0 vs 7.5).
+        // Alarm REAL TIDAK BOLEH terhalang oleh alarm SIMULASI!
+        val realDecision = manager.evaluateAndRecordAfterValidation(realAlert, nowMillis = baseTime + 3_000L)
+        assertTrue(
+            "Alarm SIMULASI tidak boleh menghalangi alarm REAL pada lokasi dan waktu yang berdekatan",
+            realDecision is DeduplicationDecision.Allowed
+        )
+    }
+
     /**
      * Implementasi SharedPreferences in-memory ringan untuk menguji persistensi & clamping secara deterministik di JVM.
      */

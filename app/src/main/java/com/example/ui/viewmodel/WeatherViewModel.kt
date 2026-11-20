@@ -168,9 +168,10 @@ class WeatherViewModel(
 
         viewModelScope.launch {
             repository.seedInitialCommunityReportsIfEmpty()
-            repository.seedInitialCitizenDisasterReportsIfEmpty()
             repository.ensureHazardZonesSeeded()
+            // Tarik laporan nyata dari Cloud Firestore lebih dulu sebelum mengisi fallback kosong
             repository.syncCitizenDisasterReportsOnline()
+            repository.seedInitialCitizenDisasterReportsIfEmpty()
 
             citizenReportsRealtimeListener?.remove()
             citizenReportsRealtimeListener = com.example.data.local.FirestoreHelper.listenCitizenReportsRealtime(
@@ -467,21 +468,52 @@ class WeatherViewModel(
         }
     }
 
-    fun submitCitizenDisasterReport(report: CitizenDisasterReport) {
+    fun submitCitizenDisasterReport(
+        report: CitizenDisasterReport,
+        context: android.content.Context? = null,
+        onComplete: ((WeatherRepository.CitizenReportSubmitResult) -> Unit)? = null
+    ) {
         viewModelScope.launch {
-            repository.submitCitizenDisasterReport(report)
+            val result = repository.submitCitizenDisasterReportWithResult(report, context)
+            onComplete?.invoke(result)
         }
     }
 
-    fun updateCitizenReportStatus(reportId: String, newStatus: String) {
+    fun updateCitizenReportStatus(
+        reportId: String,
+        newStatus: String,
+        officerName: String = "",
+        officerNip: String = "",
+        officerRole: String = ""
+    ) {
         viewModelScope.launch {
-            repository.updateCitizenReportStatus(reportId, newStatus)
+            repository.updateCitizenReportStatus(
+                reportId = reportId,
+                newStatus = newStatus,
+                officerName = officerName,
+                officerNip = officerNip,
+                officerRole = officerRole
+            )
         }
     }
 
-    fun updateCitizenReportStatusAndNotes(reportId: String, newStatus: String, notes: String) {
+    fun updateCitizenReportStatusAndNotes(
+        reportId: String,
+        newStatus: String,
+        notes: String,
+        officerName: String = "",
+        officerNip: String = "",
+        officerRole: String = ""
+    ) {
         viewModelScope.launch {
-            repository.updateCitizenReportStatusAndNotes(reportId, newStatus, notes)
+            repository.updateCitizenReportStatusAndNotes(
+                reportId = reportId,
+                newStatus = newStatus,
+                notes = notes,
+                officerName = officerName,
+                officerNip = officerNip,
+                officerRole = officerRole
+            )
         }
     }
 

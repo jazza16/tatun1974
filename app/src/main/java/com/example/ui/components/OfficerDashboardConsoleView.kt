@@ -44,6 +44,7 @@ import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import coil.compose.AsyncImage
 import androidx.compose.material.icons.filled.Badge
@@ -57,6 +58,7 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
@@ -138,13 +140,15 @@ import com.example.data.local.OfficerAuthManager
 import com.example.data.local.OfficerCredentialEntity
 import com.example.data.local.OfficerProfile
 import com.example.data.local.OfficerRoles
+import com.example.data.local.OfficialAsnBpbdPersonnel
 import com.example.data.repository.PersonnelRepository
 import com.example.data.repository.SmartOfficerAuthRepository
 import com.example.model.CitizenDisasterReport
 import com.example.model.District
+import com.example.security.DeviceSecuritySession
+import com.example.security.OfficerLoginActivity
 import com.example.security.PlayIntegritySecurityManager
 import com.example.security.SecurityManager
-import com.example.security.DeviceSecuritySession
 import com.example.util.GoogleMapsHelper
 import com.example.util.ReportExporter
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -199,9 +203,23 @@ fun OfficerDashboardConsoleView(
     var isDistrictDropdownExpanded by remember { mutableStateOf(false) }
     var onlyWithCasualties by remember { mutableStateOf(false) }
 
-    // Auto-Pin Location on Mini Map State
+    // Auto-Pin Location on Mini Map State (always synchronized when reports flow updates)
     var pinnedReportForMap by remember {
-        mutableStateOf<CitizenDisasterReport?>(reports.firstOrNull { it.status != "Selesai" } ?: reports.firstOrNull())
+        mutableStateOf<CitizenDisasterReport?>(
+            reports.firstOrNull { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
+                ?: reports.firstOrNull()
+        )
+    }
+    LaunchedEffect(reports) {
+        val currentPinnedId = pinnedReportForMap?.id
+        pinnedReportForMap = if (currentPinnedId != null) {
+            reports.find { it.id == currentPinnedId }
+                ?: reports.firstOrNull { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
+                ?: reports.firstOrNull()
+        } else {
+            reports.firstOrNull { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
+                ?: reports.firstOrNull()
+        }
     }
 
     // Sync State
@@ -269,15 +287,52 @@ fun OfficerDashboardConsoleView(
     var isCheckingIntegrity by remember { mutableStateOf(false) }
     var editingPersonnel by remember { mutableStateOf<com.example.data.local.Personnel?>(null) }
 
-    // Enterprise Play Integrity SecurityManager & Backend Firestore Sessions
+    // Enterprise Play Integrity SecurityManager & Backend Firestore Sessions + Login Activities
     val securityManager = remember { SecurityManager.getInstance(context) }
     var securitySessionsList by remember { mutableStateOf<List<DeviceSecuritySession>>(emptyList()) }
+    var loginActivitiesList by remember { mutableStateOf<List<OfficerLoginActivity>>(emptyList()) }
+    var isSyncingSecurityActivities by remember { mutableStateOf(false) }
     var showSecuritySessionsDialog by remember { mutableStateOf(false) }
     var revokedNipsInSession by remember { mutableStateOf<Set<String>>(emptySet()) }
     var currentFirebaseUid by remember {
         mutableStateOf(
             try { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid } catch (_: Exception) { null }
         )
+    }
+
+    val knownOfficialNips = remember {
+        OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.map { it.nip.trim() }.filter { it.isNotBlank() }
+    }
+
+    suspend fun runFullSecurityActivitySync() {
+        isSyncingSecurityActivities = true
+        try {
+            if (isOfficerLoggedIn && officerBadgeId.isNotBlank()) {
+                val normalizedNip = officerBadgeId.trim().lowercase()
+                if (!revokedNipsInSession.contains(normalizedNip)) {
+                    securityManager.syncPendingSessionToFirestore(
+                        officerNip = officerBadgeId,
+                        officerName = officerName,
+                        officerRole = officerRole
+                    )
+                }
+            }
+            val auditLogs = try {
+                database.auditLogDao().getAllAuditLogsList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val (sessions, activities) = securityManager.syncAllOfficerLoginActivities(
+                auditLogs = auditLogs,
+                knownOfficialNips = knownOfficialNips
+            )
+            securitySessionsList = sessions.filterNot {
+                revokedNipsInSession.contains(it.officerNip.trim().lowercase())
+            }
+            loginActivitiesList = activities
+        } finally {
+            isSyncingSecurityActivities = false
+        }
     }
 
     DisposableEffect(Unit) {
@@ -292,13 +347,17 @@ fun OfficerDashboardConsoleView(
     }
 
     DisposableEffect(currentFirebaseUid, isOfficerLoggedIn, officerBadgeId) {
-        val listener = securityManager.listenSecuritySessionsRealtime { list ->
+        val sessionListener = securityManager.listenSecuritySessionsRealtime { list ->
             securitySessionsList = list.filterNot {
                 revokedNipsInSession.contains(it.officerNip.trim().lowercase())
             }
         }
+        val activityListener = securityManager.listenLoginActivitiesRealtime { activities ->
+            loginActivitiesList = activities
+        }
         onDispose {
-            listener?.remove()
+            sessionListener?.remove()
+            activityListener?.remove()
         }
     }
 
@@ -306,18 +365,8 @@ fun OfficerDashboardConsoleView(
         onSyncReports?.invoke { _ -> }
         if (isOfficerLoggedIn && officerBadgeId.isNotBlank()) {
             syncController.sendHeartbeatNow()
-            val normalizedNip = officerBadgeId.trim().lowercase()
-            if (!revokedNipsInSession.contains(normalizedNip)) {
-                securityManager.syncPendingSessionToFirestore(
-                    officerNip = officerBadgeId,
-                    officerName = officerName,
-                    officerRole = officerRole
-                )
-            }
         }
-        securitySessionsList = securityManager.fetchSecuritySessions().filterNot {
-            revokedNipsInSession.contains(it.officerNip.trim().lowercase())
-        }
+        runFullSecurityActivitySync()
     }
 
     LaunchedEffect(Unit) {
@@ -373,11 +422,11 @@ fun OfficerDashboardConsoleView(
         rosterList = officerAuthManager.getOfficerRoster()
     }
 
-    // Quick Stats Calculation
+    // Quick Stats Calculation (Canonical Normalized Status)
     val totalCount = reports.size
-    val pendingCount = reports.count { it.status.equals("Diproses", ignoreCase = true) || it.status.equals("Terverifikasi GPS", ignoreCase = true) }
-    val validatedCount = reports.count { it.status.equals("Divalidasi", ignoreCase = true) || it.status.contains("TRC", ignoreCase = true) }
-    val resolvedCount = reports.count { it.status.equals("Selesai", ignoreCase = true) }
+    val pendingCount = reports.count { com.example.model.CitizenReportStatusHelper.isPending(it.status) }
+    val validatedCount = reports.count { com.example.model.CitizenReportStatusHelper.isValidated(it.status) }
+    val resolvedCount = reports.count { com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
     val totalDead = reports.sumOf { it.casualtiesDead }
     val totalInjured = reports.sumOf { it.casualtiesInjured }
     val totalMissing = reports.sumOf { it.casualtiesMissing }
@@ -402,18 +451,12 @@ fun OfficerDashboardConsoleView(
 
     // Filtered Reports
     val baseReports = when (dashboardSubTab) {
-        1 -> reports.filter { it.status.equals("Selesai", ignoreCase = true) } // Modul Arsip
-        else -> reports.filter { !it.status.equals("Selesai", ignoreCase = true) } // Antrean Aktif
+        1 -> reports.filter { com.example.model.CitizenReportStatusHelper.isResolved(it.status) } // Modul Arsip
+        else -> reports.filter { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) } // Antrean Aktif
     }
 
     val filteredReports = baseReports.filter { rep ->
-        val matchesStatus = when (selectedStatusFilter) {
-            "Semua" -> true
-            "Diproses" -> rep.status.equals("Diproses", ignoreCase = true) || rep.status.equals("Terverifikasi GPS", ignoreCase = true)
-            "Divalidasi" -> rep.status.equals("Divalidasi", ignoreCase = true) || rep.status.contains("TRC", ignoreCase = true)
-            "Selesai" -> rep.status.equals("Selesai", ignoreCase = true)
-            else -> true
-        }
+        val matchesStatus = com.example.model.CitizenReportStatusHelper.matchesFilter(rep.status, selectedStatusFilter)
 
         val matchesCategory = if (selectedCategoryFilter == "Semua Kategori") true else {
             rep.disasterType.contains(selectedCategoryFilter, ignoreCase = true) ||
@@ -1046,6 +1089,71 @@ fun OfficerDashboardConsoleView(
                     integrityResult = integrityCheckResult,
                     isCheckingIntegrity = isCheckingIntegrity,
                     securitySessions = securitySessionsList,
+                    loginActivities = loginActivitiesList,
+                    isCloudLinked = !currentFirebaseUid.isNullOrBlank(),
+                    isSyncingSecurity = isSyncingSecurityActivities,
+                    onSyncSecurityNow = {
+                        coroutineScope.launch {
+                            runFullSecurityActivitySync()
+                            Toast.makeText(
+                                context,
+                                "Sinkronisasi ${securitySessionsList.size} sesi perangkat & ${loginActivitiesList.size} aktivitas login selesai.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    onLinkGoogleCloud = {
+                        coroutineScope.launch {
+                            val authRes = com.example.data.auth.AuthManager.getInstance(context).signInWithGoogle(context)
+                            if (authRes.isSuccess) {
+                                currentFirebaseUid = authRes.getOrNull()?.uid
+                                runFullSecurityActivitySync()
+                                Toast.makeText(
+                                    context,
+                                    "Google Cloud terhubung. Stream real-time seluruh aktivitas login petugas aktif.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    authRes.exceptionOrNull()?.message ?: "Gagal menghubungkan Google Cloud.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    },
+                    onVerifySecuritySession = { session, approved, note ->
+                        val actionLabel = if (approved) {
+                            "Verifikasi Hardware & Izinkan (${session.officerName})"
+                        } else {
+                            "Blokir Akses Perangkat (${session.officerName})"
+                        }
+                        requestAdminProtectedAction(actionLabel) {
+                            coroutineScope.launch {
+                                val res = securityManager.verifyDeviceSessionByAdmin(
+                                    session = session,
+                                    adminName = officerName.ifBlank { "Admin Pusdalops" },
+                                    approved = approved,
+                                    note = note
+                                )
+                                res.getOrNull()?.let { updated ->
+                                    securitySessionsList = securitySessionsList.map {
+                                        if (it.officerNip.equals(updated.officerNip, ignoreCase = true)) updated else it
+                                    }
+                                    loginActivitiesList = securityManager.fetchLoginActivities()
+                                    Toast.makeText(
+                                        context,
+                                        if (approved) {
+                                            "Hardware & token ${updated.officerName} diverifikasi SAH oleh Admin."
+                                        } else {
+                                            "Akses perangkat ${updated.officerName} berhasil diblokir oleh Admin."
+                                        },
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    },
                     onRevokeSecuritySession = { session ->
                         requestAdminProtectedAction("Cabut Akses Perangkat (${session.officerName})") {
                             val normalizedNip = session.officerNip.trim().lowercase()
@@ -1054,11 +1162,16 @@ fun OfficerDashboardConsoleView(
                                 it.officerNip.trim().equals(session.officerNip.trim(), ignoreCase = true)
                             }
                             coroutineScope.launch {
-                                val ok = securityManager.deleteSecuritySession(session.officerNip)
+                                val ok = securityManager.deleteSecuritySession(
+                                    officerNip = session.officerNip,
+                                    purgeActivities = false,
+                                    revokedByAdmin = officerName.ifBlank { "Admin Pusdalops" }
+                                )
+                                loginActivitiesList = securityManager.fetchLoginActivities()
                                 if (ok) {
                                     Toast.makeText(
                                         context,
-                                        "Akses perangkat ${session.officerName} (NIP ${session.officerNip}) berhasil dicabut & dihapus.",
+                                        "Akses perangkat ${session.officerName} (NIP ${session.officerNip}) berhasil dicabut.",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 } else {
@@ -2872,7 +2985,9 @@ fun OfficerDashboardConsoleView(
             confirmButton = {
                 Button(
                     onClick = {
-                        val finalStatus = followUpStatusTarget.ifBlank { activeRep.status }
+                        val finalStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(
+                            followUpStatusTarget.ifBlank { activeRep.status }
+                        )
                         val finalNote = followUpNoteText.trim()
                         if (onUpdateReportStatusAndNotes != null) {
                             onUpdateReportStatusAndNotes(activeRep.id, finalStatus, finalNote)
@@ -3152,15 +3267,16 @@ private fun OfficerIncidentReportCard(
 ) {
     val context = LocalContext.current
 
-    val statusColor = when {
-        report.status.equals("Divalidasi", ignoreCase = true) || report.status.contains("TRC", ignoreCase = true) -> Color(0xFF16A34A)
-        report.status.equals("Selesai", ignoreCase = true) -> Color(0xFF2563EB)
+    val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(report.status)
+    val statusColor = when (normalizedStatus) {
+        com.example.model.CitizenReportStatusHelper.STATUS_DIVALIDASI -> Color(0xFF16A34A)
+        com.example.model.CitizenReportStatusHelper.STATUS_SELESAI -> Color(0xFF2563EB)
         else -> Color(0xFFD97706) // "Diproses"
     }
 
-    val statusBg = when {
-        report.status.equals("Divalidasi", ignoreCase = true) || report.status.contains("TRC", ignoreCase = true) -> Color(0xFFF0FDF4)
-        report.status.equals("Selesai", ignoreCase = true) -> Color(0xFFEFF6FF)
+    val statusBg = when (normalizedStatus) {
+        com.example.model.CitizenReportStatusHelper.STATUS_DIVALIDASI -> Color(0xFFF0FDF4)
+        com.example.model.CitizenReportStatusHelper.STATUS_SELESAI -> Color(0xFFEFF6FF)
         else -> Color(0xFFFFFBEB)
     }
 
@@ -3229,7 +3345,7 @@ private fun OfficerIncidentReportCard(
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                             Text(
-                                text = report.status.uppercase(),
+                                text = normalizedStatus.uppercase(),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = statusColor,
@@ -3240,11 +3356,11 @@ private fun OfficerIncidentReportCard(
                         }
                     }
 
-                    // Sync Status Indicator: Green check = Synced, Yellow clock = Pending
-                    val isPending = report.additionalNotes.contains("Tertunda", ignoreCase = true) || !report.isGpsVerified
-                    val syncIcon = if (isPending) Icons.Default.Schedule else Icons.Default.CheckCircle
-                    val syncColor = if (isPending) Color(0xFFD97706) else Color(0xFF16A34A)
-                    val syncText = if (isPending) "Pending" else "Synced"
+                    // Status Sinkronisasi: "Synced" (Hijau) apabila laporan sudah ada di server Firestore
+                    val isSyncedServer = isReportSyncedWithServer(report)
+                    val syncIcon = if (isSyncedServer) Icons.Default.CheckCircle else Icons.Default.Schedule
+                    val syncColor = if (isSyncedServer) Color(0xFF16A34A) else Color(0xFFD97706)
+                    val syncText = if (isSyncedServer) "Synced" else "Menunggu Sync"
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -3253,6 +3369,7 @@ private fun OfficerIncidentReportCard(
                         modifier = Modifier
                             .heightIn(min = 24.dp)
                             .wrapContentWidth()
+                            .testTag("officer_sync_status_badge")
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -3364,81 +3481,166 @@ private fun OfficerIncidentReportCard(
                 }
             }
 
-            // Photo thumbnail & Inspect map pin button
+            // Dedicated Photo Evidence Area (Wajib tampil jelas di Mode Petugas)
+            Spacer(modifier = Modifier.height(8.dp))
+            if (!report.photoUri.isNullOrBlank()) {
+                val thumbContext = LocalContext.current
+                val resolvedPhotoModel = remember(report.photoUri) {
+                    decodeCitizenPhotoModel(report.photoUri)
+                }
+                var isThumbError by remember(report.photoUri) {
+                    mutableStateOf(resolvedPhotoModel == null)
+                }
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isThumbError) Color(0xFFE5E7EB) else Color(0xFF0F172A),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .testTag("officer_report_photo_thumbnail")
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(enabled = !isThumbError) { onViewPhoto(report.photoUri) }
+                    ) {
+                        if (isThumbError || resolvedPhotoModel == null) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color(0xFFE5E7EB))
+                                    .testTag("officer_report_photo_error")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BrokenImage,
+                                    contentDescription = "Foto tidak dapat dimuat",
+                                    tint = Color(0xFF6B7280),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Foto tidak dapat dimuat",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF374151)
+                                )
+                            }
+                        } else {
+                            if (resolvedPhotoModel is android.graphics.Bitmap) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = resolvedPhotoModel.asImageBitmap(),
+                                    contentDescription = "Foto Bukti Kejadian dari Warga",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                AsyncImage(
+                                    model = coil.request.ImageRequest.Builder(thumbContext)
+                                        .data(resolvedPhotoModel)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = "Foto Bukti Kejadian dari Warga",
+                                    onSuccess = { isThumbError = false },
+                                    onError = { isThumbError = true },
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+
+                            Surface(
+                                color = Color.Black.copy(alpha = 0.72f),
+                                shape = RoundedCornerShape(topStart = 8.dp),
+                                modifier = Modifier.align(Alignment.BottomEnd)
+                            ) {
+                                Text(
+                                    text = "🔍 Ketuk untuk layar penuh",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF86EFAC),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+
+                            IconButton(
+                                onClick = { onViewPhoto(report.photoUri) },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(48.dp)
+                                    .testTag("officer_btn_zoom_report_photo")
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .background(Color.Black.copy(alpha = 0.68f), CircleShape)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ZoomIn,
+                                        contentDescription = "Perbesar Foto Layar Penuh",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFFF8FAFC),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("officer_placeholder_no_photo")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.ImageNotSupported,
+                            contentDescription = "Warga tidak melampirkan foto",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Warga tidak melampirkan foto",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569)
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                if (!report.photoUri.isNullOrBlank()) {
-                    val thumbContext = LocalContext.current
-                    val resolvedPhotoModel = remember(report.photoUri) {
-                        decodeCitizenPhotoModel(report.photoUri)
-                    }
-                    val brokenImagePainter = rememberVectorPainter(Icons.Default.BrokenImage)
-                    var isThumbError by remember(report.photoUri) {
-                        mutableStateOf(resolvedPhotoModel == null)
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { onViewPhoto(report.photoUri) }
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFFE2E8F0),
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clickable { onViewPhoto(report.photoUri) }
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                AsyncImage(
-                                    model = coil.request.ImageRequest.Builder(thumbContext)
-                                        .data(resolvedPhotoModel)
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = "Foto Kejadian",
-                                    placeholder = brokenImagePainter,
-                                    error = brokenImagePainter,
-                                    onSuccess = { isThumbError = false },
-                                    onError = { isThumbError = true },
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                if (isThumbError) {
-                                    Icon(
-                                        imageVector = Icons.Default.BrokenImage,
-                                        contentDescription = "Foto tidak tersedia",
-                                        tint = Color(0xFF64748B),
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(text = "Foto Bukti Warga", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                text = if (isThumbError) "Foto tidak tersedia" else "Sentuh untuk zoom",
-                                fontSize = 11.sp,
-                                color = if (isThumbError) Color(0xFFDC2626) else Color(0xFF15803D)
-                            )
-                        }
-                    }
-                } else {
-                    Text(
-                        text = "Laporan tanpa lampiran foto",
-                        fontSize = 11.sp,
-                        color = Color(0xFF64748B)
-                    )
-                }
+                Text(
+                    text = if (!report.photoUri.isNullOrBlank()) "📷 Lampiran foto bukti tersedia" else "Tanpa lampiran foto",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (!report.photoUri.isNullOrBlank()) Color(0xFF15803D) else Color(0xFF64748B)
+                )
 
                 // Tap to pin on map
                 OutlinedButton(
                     onClick = onInspectMapPin,
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.heightIn(min = 30.dp)
+                    modifier = Modifier.heightIn(min = 36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.MyLocation,
@@ -3480,6 +3682,48 @@ private fun OfficerIncidentReportCard(
                             text = report.additionalNotes,
                             fontSize = 11.sp,
                             color = Color(0xFF14532D)
+                        )
+                    }
+                }
+            }
+
+            // Active officer handling attribution banner
+            if (report.handledByOfficerName.isNotBlank() || report.handledByOfficerNip.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFEFF6FF),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Badge,
+                            contentDescription = "Petugas Penangan",
+                            tint = Color(0xFF1D4ED8),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        val handlerText = buildString {
+                            append("Petugas Penangan: ")
+                            append(report.handledByOfficerName.ifBlank { "Petugas Pusdalops" })
+                            if (report.handledByOfficerRole.isNotBlank()) {
+                                append(" (${report.handledByOfficerRole})")
+                            }
+                            if (report.handledByOfficerNip.isNotBlank()) {
+                                append(" • NIP ${maskNipLast6(report.handledByOfficerNip)}")
+                            }
+                        }
+                        Text(
+                            text = handlerText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF1E40AF),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -3597,6 +3841,12 @@ private fun SyncDiagnosticsSection(
     integrityResult: com.example.data.sync.IntegrityCheckResult?,
     isCheckingIntegrity: Boolean,
     securitySessions: List<DeviceSecuritySession> = emptyList(),
+    loginActivities: List<OfficerLoginActivity> = emptyList(),
+    isCloudLinked: Boolean = false,
+    isSyncingSecurity: Boolean = false,
+    onSyncSecurityNow: () -> Unit = {},
+    onLinkGoogleCloud: () -> Unit = {},
+    onVerifySecuritySession: (DeviceSecuritySession, Boolean, String) -> Unit = { _, _, _ -> },
     onRevokeSecuritySession: (DeviceSecuritySession) -> Unit = {},
     onRunIntegrityCheck: () -> Unit,
     onTestPing: () -> Unit,
@@ -3604,305 +3854,26 @@ private fun SyncDiagnosticsSection(
     onOpenDatabaseExplorer: () -> Unit,
     onOpenFormLaporanHarian: () -> Unit = {}
 ) {
-    val context = LocalContext.current
-    var sessionPendingRevoke by remember { mutableStateOf<DeviceSecuritySession?>(null) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // 0. PLAY INTEGRITY CLASSIC BACKEND SECURITY SESSIONS CARD
-        Card(
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-            modifier = Modifier.fillMaxWidth().testTag("card_play_integrity_sessions")
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f).padding(end = 8.dp)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFF15803D).copy(alpha = 0.15f),
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Shield,
-                                    contentDescription = null,
-                                    tint = Color(0xFF15803D),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Keamanan Perangkat & Sesi (Play Integrity Classic)",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Otorisasi Firestore backend untuk modul Ruang Kerja",
-                                fontSize = 11.sp,
-                                color = Color(0xFF64748B)
-                            )
-                        }
-                    }
+        // 0. PLAY INTEGRITY CLASSIC BACKEND SECURITY SESSIONS & ALL OFFICER LOGIN ACTIVITIES CARD
+        PlayIntegritySecuritySessionsCard(
+            securitySessions = securitySessions,
+            loginActivities = loginActivities,
+            isCloudLinked = isCloudLinked,
+            isSyncing = isSyncingSecurity,
+            onSyncNow = onSyncSecurityNow,
+            onLinkGoogleCloud = onLinkGoogleCloud,
+            onVerifySecuritySession = onVerifySecuritySession,
+            onRevokeSecuritySession = onRevokeSecuritySession
+        )
 
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFFDCFCE7),
-                        modifier = Modifier
-                            .heightIn(min = 24.dp)
-                            .wrapContentWidth()
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
-                            Text(
-                                text = "${securitySessions.size} Sesi Aktif",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF15803D),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Admin Pusdalops dapat memverifikasi keaslian hardware perangkat dan token integritas kriptografis sebelum memberikan akses modul Ruang Kerja.",
-                    fontSize = 11.sp,
-                    color = Color(0xFF475569),
-                    lineHeight = 14.sp
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                if (securitySessions.isEmpty()) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFFF8FAFC),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 18.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LockOpen,
-                                contentDescription = null,
-                                tint = Color(0xFF94A3B8),
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Belum ada sesi Play Integrity tersimpan di backend Firestore.\nPetugas akan divalidasi dan dicatat otomatis saat login.",
-                                fontSize = 11.sp,
-                                color = Color(0xFF64748B),
-                                textAlign = TextAlign.Center,
-                                lineHeight = 16.sp
-                            )
-                        }
-                    }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        securitySessions.forEach { session ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (session.accessGranted) Color(0xFFF8FAFC) else Color(0xFFFEF2F2),
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    if (session.accessGranted) Color(0xFFE2E8F0) else Color(0xFFFECACA)
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "${session.officerName} (${session.officerRole})",
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 12.sp,
-                                                color = Color(0xFF0F172A)
-                                            )
-                                            Text(
-                                                text = "NIP: ${session.officerNip} • ${session.deviceModel}",
-                                                fontSize = 11.sp,
-                                                color = Color(0xFF64748B)
-                                            )
-                                        }
-
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = if (session.accessGranted) Color(0xFFDCFCE7) else Color(0xFFFEE2E2)
-                                        ) {
-                                            Text(
-                                                text = if (session.accessGranted) "AKSES DIIZINKAN" else "AKSES DICABUT",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (session.accessGranted) Color(0xFF15803D) else Color(0xFFDC2626),
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = Color(0xFFEFF6FF),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        FlowRow(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Text(
-                                                text = "Verdict: ${session.verdict}",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = Color(0xFF1D4ED8),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                softWrap = false,
-                                                modifier = Modifier.padding(end = 8.dp)
-                                            )
-                                            Text(
-                                                text = "Nonce: ${session.classicNonce.take(12)}...",
-                                                fontSize = 11.sp,
-                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                                color = Color(0xFF475569),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                softWrap = false
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "OS: ${session.osVersion} • Token: ${session.tokenHash.take(16)}...",
-                                            fontSize = 11.sp,
-                                            color = Color(0xFF64748B),
-                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                            modifier = Modifier.weight(1f)
-                                        )
-
-                                        Button(
-                                            onClick = {
-                                                sessionPendingRevoke = session
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = Color(0xFFDC2626)
-                                            ),
-                                            shape = RoundedCornerShape(6.dp),
-                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                            modifier = Modifier
-                                                .heightIn(min = 28.dp)
-                                                .testTag("btn_revoke_security_session_${session.officerNip}")
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Delete,
-                                                contentDescription = "Cabut Akses Perangkat",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "Cabut Akses",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color.White
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        sessionPendingRevoke?.let { targetSession ->
-            AlertDialog(
-                onDismissRequest = { sessionPendingRevoke = null },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = Color(0xFFDC2626)
-                    )
-                },
-                title = {
-                    Text(
-                        text = "Cabut Akses Perangkat?",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                },
-                text = {
-                    Text(
-                        text = "Yakin ingin mencabut akses perangkat ini?\n\n" +
-                            "Petugas: ${targetSession.officerName} (NIP: ${targetSession.officerNip})\n" +
-                            "Perangkat: ${targetSession.deviceModel}\n\n" +
-                            "Sesi perangkat akan dihapus dari Firestore dan akses petugas ke Ruang Kerja dicabut.",
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            sessionPendingRevoke = null
-                            onRevokeSecuritySession(targetSession)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                        modifier = Modifier.testTag("btn_confirm_revoke_security_session")
-                    ) {
-                        Text("Cabut Akses", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = { sessionPendingRevoke = null },
-                        modifier = Modifier.testTag("btn_cancel_revoke_security_session")
-                    ) {
-                        Text("Batal")
-                    }
-                }
-            )
-        }
+        // 0B. SUPABASE STORAGE IMAGE UPLOAD PATH & BUCKET POLICY DIAGNOSTIC CARD
+        SupabaseStorageDiagnosticCard()
 
         // 1. LATENCY METRIC CARD
         Card(
@@ -4286,7 +4257,8 @@ private fun SyncDiagnosticsSection(
                 }
 
                 // Card Buat Laporan Harian (Navigasi ke FormLaporanActivity)
-                val officerAuth = remember { OfficerAuthManager(context) }
+                val localContext = LocalContext.current
+                val officerAuth = remember(localContext) { OfficerAuthManager(localContext) }
                 val isOfficerLoggedIn = officerAuth.isOfficerLoggedIn()
                 val officerRole = officerAuth.getOfficerRole()
                 val hasSpecialAssignment = officerRole.contains("Penugasan Khusus", ignoreCase = true)
@@ -4300,8 +4272,8 @@ private fun SyncDiagnosticsSection(
                 ) {
                     Card(
                         onClick = {
-                            val intent = Intent(context, com.example.FormLaporanActivity::class.java)
-                            context.startActivity(intent)
+                            val intent = Intent(localContext, com.example.FormLaporanActivity::class.java)
+                            localContext.startActivity(intent)
                         },
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF1976D2)),
                         shape = RoundedCornerShape(8.dp),

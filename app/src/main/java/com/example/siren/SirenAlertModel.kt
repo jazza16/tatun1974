@@ -445,11 +445,15 @@ data class SirenAlertPayload(
     }
 
     /**
-     * Kunci insiden untuk membedakan antara kejadian yang sama vs kejadian berbeda.
+     * Kunci insiden untuk membedakan antara kejadian yang sama vs kejadian berbeda:
+     * - Merapikan spasi berlebih pada koordinat maupun nama wilayah/kecamatan.
+     * - Membulatkan koordinat lintang & bujur ke 1 angka di belakang koma (menggunakan Locale.US)
+     *   agar revisi kecil koordinat dari BMKG (misal "-2.58, 101.11" menjadi "-2.61, 101.13" -> "-2.6,101.1")
+     *   tidak dianggap sebagai insiden baru yang membunyikan sirene dua kali.
+     * - Memisahkan prefix "SIM_" dan "REAL_" agar alarm SIMULASI tidak pernah menghalangi alarm REAL.
      */
     fun incidentKey(): String {
-        val locationPart = coordinates?.trim()?.takeIf { it.isNotEmpty() }
-            ?: affectedDistrict.trim().lowercase(Locale.ROOT)
+        val locationPart = normalizeIncidentLocation(coordinates, affectedDistrict)
         return if (simulationMode) {
             "SIM_${alertType.name}_$locationPart"
         } else {
@@ -458,15 +462,84 @@ data class SirenAlertPayload(
     }
 
     /**
-     * Skor tingkat keparahan untuk memastikan pembaruan yang lebih berat
-     * TIDAK pernah diblokir oleh cooldown.
+     * Mengecek apakah telah melampaui masing-masing dimensi ambang cuaca ekstrem berdasarkan konfigurasi runtime.
      */
-    fun severityScore(): Int {
-        val typeScore = alertType.baseSeverityRank * 100
-        val magScore = ((magnitude ?: 0.0) * 10.0).toInt()
-        val weatherScore = ((precipitationMm ?: 0.0).toInt() * 2) + ((windSpeedKmh ?: 0.0).toInt())
-        val verifScore = verificationStatus.verificationRank
-        return typeScore + magScore + weatherScore + verifScore
+    fun exceedsExtremeWmoThreshold(config: SirenRuntimeConfig = SirenRuntimeConfig()): Boolean {
+        val code = weatherCode ?: return false
+        return code in config.clamped().extremeWeatherWmoCodes
+    }
+
+    fun exceedsExtremePrecipitationThreshold(config: SirenRuntimeConfig = SirenRuntimeConfig()): Boolean {
+        val precip = precipitationMm ?: return false
+        return precip >= config.clamped().extremePrecipitationMmThreshold
+    }
+
+    fun exceedsExtremeWindThreshold(config: SirenRuntimeConfig = SirenRuntimeConfig()): Boolean {
+        val wind = windSpeedKmh ?: return false
+        return wind >= config.clamped().extremeWindKmhThreshold
+    }
+
+    fun extremeWeatherThresholdBitmask(config: SirenRuntimeConfig = SirenRuntimeConfig()): Int {
+        var mask = 0
+        if (exceedsExtremeWmoThreshold(config)) mask = mask or 1
+        if (exceedsExtremePrecipitationThreshold(config)) mask = mask or 2
+        if (exceedsExtremeWindThreshold(config)) mask = mask or 4
+        return mask
+    }
+
+    /**
+     * Menentukan apakah pembaruan peringatan ini naik tingkat secara bermakna dibandingkan
+     * rekaman peringatan sebelumnya:
+     * 1. Status verifikasi naik (`verificationStatus.verificationRank > prevVerificationRank`),
+     *    misalnya dari `PENDING_OFFICER_CONFIRMATION` (1) atau `UNVERIFIED_*` (1..5) menjadi `CONFIRMED_BY_OFFICER` (20) atau `VERIFIED_BMKG_*` (25..30).
+     * 2. Tipe bahaya naik (`alertType.baseSeverityRank > prevTypeRank`), misalnya dari `EXTREME_WEATHER` (100) menjadi `TSUNAMI` (200).
+     * 3. Magnitudo gempa naik minimal `0.5` (`incomingMag - prevMaxMag >= 0.5 - 1e-9`).
+     * 4. Ambang cuaca ekstrem baru terlampaui (bitmask dimensi WMO / curah hujan / angin yang melampaui ambang memiliki bit baru yang sebelumnya belum terlampaui).
+     *
+     * Kenaikan angka kecil (misal angin 41 km/jam menjadi 42 km/jam yang sama-sama sudah melampaui ambang 40 km/jam,
+     * atau kenaikan magnitudo < 0.5) TIDAK dianggap sebagai pembaruan yang lebih berat.
+     */
+    fun isMeaningfullyMoreSevereThan(
+        prevTypeRank: Int,
+        prevVerificationRank: Int,
+        prevMaxMagnitude: Double?,
+        prevWeatherThresholdMask: Int,
+        config: SirenRuntimeConfig = SirenRuntimeConfig()
+    ): Boolean {
+        if (alertType.baseSeverityRank > prevTypeRank) return true
+        if (verificationStatus.verificationRank > prevVerificationRank) return true
+
+        val currentMag = magnitude
+        if (currentMag != null) {
+            if (prevMaxMagnitude == null || (currentMag - prevMaxMagnitude) >= (MIN_MEANINGFUL_MAGNITUDE_INCREASE - 1e-9)) {
+                return true
+            }
+        }
+
+        val currentMask = extremeWeatherThresholdBitmask(config)
+        val newlyExceededBits = currentMask and prevWeatherThresholdMask.inv()
+        if (newlyExceededBits != 0) return true
+
+        return false
+    }
+
+    /**
+     * Skor tingkat keparahan terkuantisasi (berdasarkan tangga kenaikan bermakna, bukan setiap kenaikan angka kecil):
+     * - Tipe bahaya (`baseSeverityRank`)
+     * - Status verifikasi (`verificationRank`)
+     * - Pita magnitudo per kelipatan 0.5 (`floor(magnitude / 0.5)`)
+     * - Bitmask ambang cuaca ekstrem yang terlampaui (WMO, hujan ekstrem, angin ekstrem)
+     */
+    fun severityScore(config: SirenRuntimeConfig = SirenRuntimeConfig()): Int {
+        val typeScore = alertType.baseSeverityRank * 1000
+        val verifScore = verificationStatus.verificationRank * 10
+        val magBandScore = if (magnitude != null) {
+            kotlin.math.floor((magnitude + 1e-9) / MIN_MEANINGFUL_MAGNITUDE_INCREASE).toInt() * 50
+        } else {
+            0
+        }
+        val weatherThresholdScore = extremeWeatherThresholdBitmask(config)
+        return typeScore + magBandScore + verifScore + weatherThresholdScore
     }
 
     /**
@@ -479,6 +552,36 @@ data class SirenAlertPayload(
             else -> ""
         }
         return "$prefix$spokenMessageId".trim()
+    }
+
+    companion object {
+        const val MIN_MEANINGFUL_MAGNITUDE_INCREASE = 0.5
+
+        /**
+         * Merapikan spasi dan membulatkan koordinat lintang,bujur ke 1 angka desimal (misal "-2.58, 101.11" -> "-2.6,101.1").
+         * Jika koordinat kosong atau tidak valid, merapikan spasi berlebih pada nama kecamatan/wilayah.
+         */
+        fun normalizeIncidentLocation(rawCoordinates: String?, rawDistrict: String): String {
+            val cleanedCoords = rawCoordinates?.trim().orEmpty()
+            if (cleanedCoords.isNotEmpty()) {
+                val parts = cleanedCoords.split(",")
+                if (parts.size == 2) {
+                    val lat = parts[0].trim().toDoubleOrNull()
+                    val lon = parts[1].trim().toDoubleOrNull()
+                    if (lat != null && lon != null && lat.isFinite() && lon.isFinite()) {
+                        val roundedLat = kotlin.math.round(lat * 10.0) / 10.0
+                        val roundedLon = kotlin.math.round(lon * 10.0) / 10.0
+                        val normLat = if (roundedLat == 0.0) 0.0 else roundedLat
+                        val normLon = if (roundedLon == 0.0) 0.0 else roundedLon
+                        return String.format(Locale.US, "%.1f,%.1f", normLat, normLon)
+                    }
+                }
+                return cleanedCoords.replace(Regex("\\s+"), "").lowercase(Locale.ROOT)
+            }
+            return rawDistrict.trim()
+                .replace(Regex("\\s+"), " ")
+                .lowercase(Locale.ROOT)
+        }
     }
 }
 

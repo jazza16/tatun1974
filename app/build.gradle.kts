@@ -125,7 +125,8 @@ dependencies {
   implementation(libs.firebase.ai)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
-  // implementation("com.google.firebase:firebase-storage")
+  implementation("com.google.firebase:firebase-storage")
+  implementation("com.google.firebase:firebase-messaging")
   // Supabase Storage & Postgrest
   implementation(platform("io.github.jan-tennert.supabase:bom:3.1.4"))
   implementation("io.github.jan-tennert.supabase:storage-kt")

@@ -71,12 +71,17 @@ service cloud.firestore {
           && (!('casualtiesDead' in data) || (data.casualtiesDead is int && data.casualtiesDead >= 0 && data.casualtiesDead <= 100000))
           && (!('casualtiesInjured' in data) || (data.casualtiesInjured is int && data.casualtiesInjured >= 0 && data.casualtiesInjured <= 100000))
           && (!('casualtiesMissing' in data) || (data.casualtiesMissing is int && data.casualtiesMissing >= 0 && data.casualtiesMissing <= 100000))
-          && (!('photoUri' in data) || data.photoUri == null || (data.photoUri is string && data.photoUri.size() <= 1024))
+          && (!('photoUri' in data) || data.photoUri == null || (data.photoUri is string && data.photoUri.size() <= 400000))
+          && (!('fotoUrl' in data) || data.fotoUrl == null || (data.fotoUrl is string && data.fotoUrl.size() <= 400000))
+          && (!('fotoLampiran' in data) || data.fotoLampiran == null || (data.fotoLampiran is string && data.fotoLampiran.size() <= 400000))
           && (!('reporterName' in data) || (data.reporterName is string && data.reporterName.size() <= 120))
           && (!('reporterPhone' in data) || (data.reporterPhone is string && data.reporterPhone.size() <= 40))
           && (!('additionalNotes' in data) || (data.additionalNotes is string && data.additionalNotes.size() <= 2000))
           && (!('timestamp' in data) || data.timestamp is int)
-          && (!('updatedAt' in data) || data.updatedAt is int);
+          && (!('updatedAt' in data) || data.updatedAt is int)
+          && (!('handledByOfficerName' in data) || (data.handledByOfficerName is string && data.handledByOfficerName.size() <= 150))
+          && (!('handledByOfficerNip' in data) || (data.handledByOfficerNip is string && data.handledByOfficerNip.size() <= 64))
+          && (!('handledByOfficerRole' in data) || (data.handledByOfficerRole is string && data.handledByOfficerRole.size() <= 80));
     }
 
     function isValidOfficerProfile(data) {
@@ -146,15 +151,62 @@ service cloud.firestore {
           && (!('officerRole' in data) || (data.officerRole is string && data.officerRole.size() <= 80))
           && (!('integrityToken' in data) || (data.integrityToken is string && data.integrityToken.size() <= 4096))
           && (!('tokenHash' in data) || (data.tokenHash is string && data.tokenHash.size() <= 128))
+          && (!('tokenLength' in data) || (data.tokenLength is int && data.tokenLength >= 0 && data.tokenLength <= 8192))
+          && (!('tokenSource' in data) || (data.tokenSource is string && data.tokenSource.size() <= 80))
           && (!('classicNonce' in data) || (data.classicNonce is string && data.classicNonce.size() <= 256))
           && (!('verdict' in data) || (data.verdict is string && data.verdict.size() <= 80))
           && (!('deviceVerdict' in data) || (data.deviceVerdict is string && data.deviceVerdict.size() <= 120))
           && (!('deviceId' in data) || (data.deviceId is string && data.deviceId.size() <= 128))
           && (!('deviceModel' in data) || (data.deviceModel is string && data.deviceModel.size() <= 120))
+          && (!('deviceBrand' in data) || (data.deviceBrand is string && data.deviceBrand.size() <= 80))
+          && (!('deviceManufacturer' in data) || (data.deviceManufacturer is string && data.deviceManufacturer.size() <= 80))
+          && (!('deviceHardware' in data) || (data.deviceHardware is string && data.deviceHardware.size() <= 80))
+          && (!('deviceFingerprintHash' in data) || (data.deviceFingerprintHash is string && data.deviceFingerprintHash.size() <= 128))
+          && (!('isEmulator' in data) || data.isEmulator is bool)
           && (!('osVersion' in data) || (data.osVersion is string && data.osVersion.size() <= 80))
           && (!('sdkInt' in data) || (data.sdkInt is int && data.sdkInt >= 0 && data.sdkInt <= 100))
+          && (!('appVersion' in data) || (data.appVersion is string && data.appVersion.size() <= 64))
+          && (!('loginMethod' in data) || (data.loginMethod is string && data.loginMethod.size() <= 64))
+          && (!('loginStatus' in data) || (data.loginStatus is string && data.loginStatus.size() <= 64))
+          && (!('loginAction' in data) || (data.loginAction is string && data.loginAction.size() <= 120))
+          && (!('loginCount' in data) || (data.loginCount is int && data.loginCount >= 0 && data.loginCount <= 1000000))
+          && (!('lastActivityDetail' in data) || (data.lastActivityDetail is string && data.lastActivityDetail.size() <= 500))
           && (!('isVerified' in data) || data.isVerified is bool)
+          && (!('adminVerified' in data) || data.adminVerified is bool)
+          && (!('adminVerifiedBy' in data) || (data.adminVerifiedBy is string && data.adminVerifiedBy.size() <= 150))
+          && (!('adminVerifiedAt' in data) || (data.adminVerifiedAt is int && data.adminVerifiedAt >= 0))
+          && (!('adminVerificationNote' in data) || (data.adminVerificationNote is string && data.adminVerificationNote.size() <= 500))
           && (!('targetModule' in data) || (data.targetModule is string && data.targetModule.size() <= 64));
+    }
+
+    function isValidDeviceLoginActivity(data) {
+      return data.activityId is string && data.activityId.size() >= 1 && data.activityId.size() <= 128
+          && data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128
+          && data.officerNip is string && data.officerNip.size() >= 1 && data.officerNip.size() <= 64
+          && data.loginMethod is string && data.loginMethod.size() >= 1 && data.loginMethod.size() <= 64
+          && data.loginStatus is string && data.loginStatus.size() >= 1 && data.loginStatus.size() <= 64
+          && data.action is string && data.action.size() >= 1 && data.action.size() <= 120
+          && data.timestamp is int
+          && (!('sessionId' in data) || (data.sessionId is string && data.sessionId.size() <= 128))
+          && (!('officerName' in data) || (data.officerName is string && data.officerName.size() <= 150))
+          && (!('officerRole' in data) || (data.officerRole is string && data.officerRole.size() <= 80))
+          && (!('verdict' in data) || (data.verdict is string && data.verdict.size() <= 80))
+          && (!('deviceVerdict' in data) || (data.deviceVerdict is string && data.deviceVerdict.size() <= 120))
+          && (!('tokenSource' in data) || (data.tokenSource is string && data.tokenSource.size() <= 80))
+          && (!('tokenHash' in data) || (data.tokenHash is string && data.tokenHash.size() <= 128))
+          && (!('tokenLength' in data) || (data.tokenLength is int && data.tokenLength >= 0 && data.tokenLength <= 8192))
+          && (!('classicNonce' in data) || (data.classicNonce is string && data.classicNonce.size() <= 256))
+          && (!('deviceId' in data) || (data.deviceId is string && data.deviceId.size() <= 128))
+          && (!('deviceModel' in data) || (data.deviceModel is string && data.deviceModel.size() <= 120))
+          && (!('deviceBrand' in data) || (data.deviceBrand is string && data.deviceBrand.size() <= 80))
+          && (!('deviceHardware' in data) || (data.deviceHardware is string && data.deviceHardware.size() <= 80))
+          && (!('deviceFingerprintHash' in data) || (data.deviceFingerprintHash is string && data.deviceFingerprintHash.size() <= 128))
+          && (!('osVersion' in data) || (data.osVersion is string && data.osVersion.size() <= 80))
+          && (!('sdkInt' in data) || (data.sdkInt is int && data.sdkInt >= 0 && data.sdkInt <= 100))
+          && (!('isEmulator' in data) || data.isEmulator is bool)
+          && (!('appVersion' in data) || (data.appVersion is string && data.appVersion.size() <= 64))
+          && (!('accessGranted' in data) || data.accessGranted is bool)
+          && (!('detail' in data) || (data.detail is string && data.detail.size() <= 500));
     }
 
     function isValidDeviceSecurityFailure(data) {
@@ -225,26 +277,30 @@ service cloud.firestore {
                          'id', 'authorUid', 'disasterType', 'incidentTime', 'incidentLocation',
                          'district', 'village', 'latitude', 'longitude', 'gpsAccuracyMeters',
                          'isGpsVerified', 'casualtiesDead', 'casualtiesInjured', 'casualtiesMissing',
-                         'photoUri', 'reporterName', 'reporterPhone', 'additionalNotes',
-                         'timestamp', 'updatedAt', 'status'
+                          'photoUri', 'fotoUrl', 'fotoLampiran', 'reporterName', 'reporterPhone', 'additionalNotes',
+                         'timestamp', 'updatedAt', 'status',
+                         'handledByOfficerName', 'handledByOfficerNip', 'handledByOfficerRole'
                        ])
                     && isValidCitizenDisasterReport(incoming());
       allow update: if isValidId(reportId)
                     && incoming().id == existing().id
+                    && incoming().authorUid == existing().authorUid
+                    && isValidCitizenDisasterReport(incoming())
                     && (
-                      // Action: Officer status / follow-up update
-                      incoming().diff(existing()).affectedKeys().hasOnly(['status', 'additionalNotes', 'updatedAt'])
-                      // Action: Owner full edit
-                      || (
-                        isValidCitizenDisasterReport(incoming())
-                        && incoming().diff(existing()).affectedKeys().hasOnly([
-                             'disasterType', 'incidentTime', 'incidentLocation', 'district', 'village',
-                             'latitude', 'longitude', 'gpsAccuracyMeters', 'isGpsVerified',
-                             'casualtiesDead', 'casualtiesInjured', 'casualtiesMissing',
-                             'photoUri', 'reporterName', 'reporterPhone', 'additionalNotes',
-                             'timestamp', 'updatedAt', 'status'
-                           ])
-                      )
+                      // Action: Officer status / follow-up update with active officer attribution
+                      incoming().diff(existing()).affectedKeys().hasOnly([
+                        'status', 'additionalNotes', 'updatedAt',
+                        'handledByOfficerName', 'handledByOfficerNip', 'handledByOfficerRole'
+                      ])
+                      // Action: Full report sync update (preserving id & authorUid)
+                      || incoming().diff(existing()).affectedKeys().hasOnly([
+                           'disasterType', 'incidentTime', 'incidentLocation', 'district', 'village',
+                           'latitude', 'longitude', 'gpsAccuracyMeters', 'isGpsVerified',
+                           'casualtiesDead', 'casualtiesInjured', 'casualtiesMissing',
+                           'photoUri', 'fotoUrl', 'fotoLampiran', 'reporterName', 'reporterPhone', 'additionalNotes',
+                           'timestamp', 'updatedAt', 'status',
+                           'handledByOfficerName', 'handledByOfficerNip', 'handledByOfficerRole'
+                         ])
                     );
       allow delete: if isSignedIn() && isValidId(reportId) && existing().authorUid == request.auth.uid;
     }
@@ -289,16 +345,54 @@ service cloud.firestore {
                        );
       allow update: if isValidId(nip)
                     && isValidOfficerCredential(incoming())
-                    && incoming().ownerUid == existing().ownerUid
-                    && incoming().nip == existing().nip
+                    && incoming().nip == nip
                     && incoming().diff(existing()).affectedKeys().hasOnly([
-                         'fullName', 'role', 'unit', 'shift', 'phone',
+                         'ownerUid', 'fullName', 'role', 'unit', 'shift', 'phone',
                          'pinHash', 'salt', 'isCustomPinSet', 'isPinChanged',
                          'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
                        ])
                     && (
-                         (isSignedIn() && existing().ownerUid == request.auth.uid)
-                         || (existing().ownerUid == ('officer_nip_' + nip))
+                         (isSignedIn() && existing().ownerUid == request.auth.uid && incoming().ownerUid == existing().ownerUid)
+                         || (existing().ownerUid == ('officer_nip_' + nip) && incoming().ownerUid == existing().ownerUid)
+                         || (!('ownerUid' in existing()) && incoming().ownerUid == ('officer_nip_' + nip))
+                         || (
+                              incoming().ownerUid == existing().ownerUid
+                              && (!('pinHash' in existing()) || existing().pinHash == '' || !('salt' in existing()) || existing().salt == '')
+                            )
+                         || (
+                              // Allow officer to upgrade an initial (non-custom) admin-seeded credential to a personal custom PIN
+                              // while preserving ownerUid. Never allows downgrading an existing custom PIN back to default!
+                              incoming().ownerUid == existing().ownerUid
+                              && (!('isCustomPinSet' in existing()) || existing().isCustomPinSet == false)
+                              && (!('isPinChanged' in existing()) || existing().isPinChanged == false)
+                              && incoming().isCustomPinSet == true
+                              && incoming().isPinChanged == true
+                              && incoming().pinHash != ''
+                              && incoming().salt != ''
+                            )
+                         || (
+                              // Allow resetting an uncustomized (non-custom) initial record only;
+                              // strictly BLOCKS unauthenticated downgrade once isCustomPinSet/isPinChanged is true!
+                              incoming().ownerUid == existing().ownerUid
+                              && (!('isCustomPinSet' in existing()) || existing().isCustomPinSet == false)
+                              && (!('isPinChanged' in existing()) || existing().isPinChanged == false)
+                              && incoming().isCustomPinSet == false
+                              && incoming().isPinChanged == false
+                              && incoming().lastLoginAt == 0
+                              && incoming().lastLoginDevice == ''
+                              && incoming().initialSecurePin == ''
+                            )
+                         || (
+                              incoming().ownerUid == existing().ownerUid
+                              && incoming().pinHash == existing().pinHash
+                              && incoming().salt == existing().salt
+                              && incoming().isCustomPinSet == existing().isCustomPinSet
+                              && incoming().isPinChanged == existing().isPinChanged
+                              && incoming().diff(existing()).affectedKeys().hasOnly([
+                                   'fullName', 'role', 'unit', 'shift', 'phone',
+                                   'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
+                                 ])
+                            )
                        );
       allow delete: if false;
     }
@@ -344,17 +438,26 @@ service cloud.firestore {
 
     // 9. Play Integrity Classic Device Security Sessions (Ruang Kerja Access Gating)
     match /device_security_sessions/{officerNip} {
-      allow read: if true;
+      allow get: if isValidId(officerNip);
+      allow list: if isSignedIn();
       allow create, update: if isValidId(officerNip)
                     && incoming().keys().hasAll(['sessionId', 'ownerUid', 'officerNip', 'accessGranted', 'timestamp'])
                     && incoming().keys().hasOnly([
                          'sessionId', 'ownerUid', 'nip', 'officerNip', 'officerName', 'officerRole',
-                         'integrityToken', 'tokenHash', 'classicNonce', 'verdict', 'deviceVerdict',
-                         'deviceId', 'deviceModel', 'osVersion', 'sdkInt',
-                         'isVerified', 'accessGranted', 'targetModule', 'timestamp'
+                         'integrityToken', 'tokenHash', 'tokenLength', 'tokenSource', 'classicNonce',
+                         'verdict', 'deviceVerdict', 'deviceId', 'deviceModel', 'deviceBrand',
+                         'deviceManufacturer', 'deviceHardware', 'deviceFingerprintHash', 'isEmulator',
+                         'osVersion', 'sdkInt', 'appVersion', 'loginMethod', 'loginStatus',
+                         'loginAction', 'loginCount', 'lastActivityDetail',
+                         'isVerified', 'accessGranted', 'adminVerified', 'adminVerifiedBy',
+                         'adminVerifiedAt', 'adminVerificationNote', 'targetModule', 'timestamp'
                        ])
                     && isValidDeviceSecuritySession(incoming());
-      allow delete: if isValidId(officerNip);
+      allow delete: if isValidId(officerNip)
+                    && (
+                         (isSignedIn() && existing().ownerUid == request.auth.uid)
+                         || (!isSignedIn() && (existing().ownerUid == officerNip || existing().ownerUid == ('officer_nip_' + officerNip)))
+                       );
     }
 
     // 10. Play Integrity Security Audit & Validation Failures Logging (Append-Only)
@@ -379,6 +482,39 @@ service cloud.firestore {
     match /app_settings/{docId} {
       allow get: if isValidId(docId);
       allow list, write: if false;
+    }
+
+    // 12. Admin Access Audit Logs (Purgeable for test simulation records)
+    match /admin_access_audit_logs/{logId} {
+      allow read, create, delete: if isSignedIn() && isValidId(logId);
+      allow update: if false;
+    }
+
+    // 13. Officer Login Activity & Play Integrity Classic Audit Stream (Append-Only)
+    match /device_login_activities/{activityId} {
+      allow get: if isSignedIn() && isValidId(activityId);
+      allow list: if isSignedIn();
+      allow create: if isValidId(activityId)
+                    && incoming().keys().hasAll([
+                         'activityId', 'ownerUid', 'officerNip', 'loginMethod',
+                         'loginStatus', 'action', 'timestamp'
+                       ])
+                    && incoming().keys().hasOnly([
+                         'activityId', 'ownerUid', 'sessionId', 'officerNip', 'officerName', 'officerRole',
+                         'loginMethod', 'loginStatus', 'action', 'verdict', 'deviceVerdict',
+                         'tokenSource', 'tokenHash', 'tokenLength', 'classicNonce',
+                         'deviceId', 'deviceModel', 'deviceBrand', 'deviceHardware', 'deviceFingerprintHash',
+                         'osVersion', 'sdkInt', 'isEmulator', 'appVersion',
+                         'accessGranted', 'detail', 'timestamp'
+                       ])
+                    && isValidDeviceLoginActivity(incoming())
+                    && incoming().activityId == activityId
+                    && (
+                         (isSignedIn() && incoming().ownerUid == request.auth.uid)
+                         || (!isSignedIn() && incoming().ownerUid == ('officer_nip_' + incoming().officerNip))
+                       );
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(activityId) && existing().ownerUid == request.auth.uid;
     }
   }
 }

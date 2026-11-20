@@ -33,6 +33,12 @@ interface PersonnelAuditLogDao {
     @Query("SELECT * FROM personnel_audit_logs WHERE nip = :nip AND action = 'LOGIN' ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLastLogin(nip: String): PersonnelAuditLogEntity?
 
+    @Query("DELETE FROM personnel_audit_logs WHERE LOWER(TRIM(nip)) = LOWER(TRIM(:nip)) OR LOWER(name) LIKE '%' || LOWER(TRIM(:nameKeyword)) || '%'")
+    suspend fun deleteAuditLogsByNipOrName(nip: String, nameKeyword: String)
+
+    @Query("DELETE FROM personnel_audit_logs WHERE LOWER(TRIM(nip)) = LOWER(TRIM(:nip))")
+    suspend fun deleteAuditLogsByNip(nip: String)
+
     @Query("DELETE FROM personnel_audit_logs")
     suspend fun clearAuditLogs()
 }

@@ -46,46 +46,61 @@ class SyncConflictHandler(
         remote: CitizenDisasterReport,
         currentOfficerBadge: String = "Pusdalops"
     ): CitizenDisasterReport = withContext(Dispatchers.IO) {
+        val normalizedRemoteStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(remote.status)
+        val normalizedRemote = remote.copy(
+            status = normalizedRemoteStatus,
+            updatedAt = remote.effectiveUpdatedAt(),
+            isSyncedToCloud = true
+        )
+
         if (local == null) {
-            // No local conflict, accept incoming remote
-            return@withContext remote
+            return@withContext normalizedRemote
         }
 
-        val localTime = local.timestamp
-        val remoteTime = remote.timestamp
+        val normalizedLocalStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(local.status)
+        val localEffectiveTime = local.effectiveUpdatedAt()
+        val remoteEffectiveTime = normalizedRemote.effectiveUpdatedAt()
 
-        // Case 1: Identical status and same or older local, accept remote cleanly
-        if (local.status == remote.status && localTime <= remoteTime) {
-            return@withContext remote
+        // Case 1: Identical state (status, notes, officer) -> report is already confirmed in Firestore; always mark Synced!
+        if (normalizedLocalStatus == normalizedRemoteStatus &&
+            local.additionalNotes.trim() == normalizedRemote.additionalNotes.trim() &&
+            local.handledByOfficerNip == normalizedRemote.handledByOfficerNip
+        ) {
+            return@withContext normalizedRemote.copy(
+                photoUri = com.example.util.ImageUtils.selectBestPhotoUri(normalizedRemote.photoUri, local.photoUri),
+                updatedAt = maxOf(localEffectiveTime, remoteEffectiveTime),
+                isSyncedToCloud = true
+            )
         }
 
-        // Case 2: Status conflict or timestamp discrepancy
-        val conflictType = if (local.status != remote.status) {
-            CONFLICT_CONCURRENT_STATUS
-        } else {
-            CONFLICT_TIMESTAMP_DRIFT
-        }
-
-        val resolvedReport: CitizenDisasterReport
-        val resolution: String
-        val details: String
-
-        if (remoteTime > localTime) {
-            // Remote is newer. If local has officer triage notes that remote lacks, merge them!
-            val mergedNotes = when {
-                local.additionalNotes.isNotBlank() && !remote.additionalNotes.contains(local.additionalNotes) -> {
-                    if (remote.additionalNotes.isBlank()) local.additionalNotes
-                    else "${remote.additionalNotes} | [Catatan Petugas Lokal: ${local.additionalNotes}]"
-                }
-                else -> remote.additionalNotes
+        // Case 2: Remote update is strictly newer (e.g., active officer validated/completed/added follow-up notes)
+        if (remoteEffectiveTime > localEffectiveTime) {
+            val resolvedReport = normalizedRemote.copy(
+                photoUri = com.example.util.ImageUtils.selectBestPhotoUri(normalizedRemote.photoUri, local.photoUri),
+                handledByOfficerName = normalizedRemote.handledByOfficerName.ifBlank { local.handledByOfficerName },
+                handledByOfficerNip = normalizedRemote.handledByOfficerNip.ifBlank { local.handledByOfficerNip },
+                handledByOfficerRole = normalizedRemote.handledByOfficerRole.ifBlank { local.handledByOfficerRole },
+                isSyncedToCloud = true
+            )
+            if (normalizedLocalStatus != normalizedRemoteStatus && !local.isSyncedToCloud) {
+                logConflict(
+                    reportId = normalizedRemote.id,
+                    conflictType = CONFLICT_CONCURRENT_STATUS,
+                    resolution = RESOLUTION_REMOTE_ACCEPTED,
+                    localTime = localEffectiveTime,
+                    remoteTime = remoteEffectiveTime,
+                    localStatus = normalizedLocalStatus,
+                    remoteStatus = normalizedRemoteStatus,
+                    details = "Pembaruan server lebih baru (Local: $normalizedLocalStatus @ $localEffectiveTime, Remote: $normalizedRemoteStatus @ $remoteEffectiveTime). Menerima status petugas terbaru.",
+                    officerBadge = currentOfficerBadge
+                )
             }
+            return@withContext resolvedReport
+        }
 
-            resolvedReport = remote.copy(additionalNotes = mergedNotes)
-            resolution = if (mergedNotes != remote.additionalNotes) RESOLUTION_MERGED_NOTES else RESOLUTION_REMOTE_ACCEPTED
-            details = "Server lebih baru (Local: ${local.status} @ $localTime, Remote: ${remote.status} @ $remoteTime). Catatan digabungkan."
-        } else if (localTime > remoteTime) {
-            // Local is newer (e.g. officer locally updated report status during momentary network disconnect)
-            resolvedReport = CitizenDisasterReport(
+        // Case 3: Local update is strictly newer AND unsynced (e.g. officer updated status locally while offline)
+        if (localEffectiveTime > remoteEffectiveTime) {
+            val resolvedReport = CitizenDisasterReport(
                 id = local.id,
                 disasterType = local.disasterType,
                 incidentTime = local.incidentTime,
@@ -99,59 +114,101 @@ class SyncConflictHandler(
                 casualtiesDead = local.casualtiesDead,
                 casualtiesInjured = local.casualtiesInjured,
                 casualtiesMissing = local.casualtiesMissing,
-                photoUri = local.photoUri,
+                photoUri = com.example.util.ImageUtils.selectBestPhotoUri(local.photoUri, normalizedRemote.photoUri),
                 reporterName = local.reporterName,
                 reporterPhone = local.reporterPhone,
                 additionalNotes = local.additionalNotes,
                 timestamp = local.timestamp,
-                status = local.status
+                status = normalizedLocalStatus,
+                updatedAt = localEffectiveTime,
+                handledByOfficerName = local.handledByOfficerName.ifBlank { normalizedRemote.handledByOfficerName },
+                handledByOfficerNip = local.handledByOfficerNip.ifBlank { normalizedRemote.handledByOfficerNip },
+                handledByOfficerRole = local.handledByOfficerRole.ifBlank { normalizedRemote.handledByOfficerRole },
+                isSyncedToCloud = local.isSyncedToCloud
             )
-            resolution = RESOLUTION_LOCAL_PRESERVED
-            details = "Data lokal lebih baru (Local: ${local.status} @ $localTime, Remote: ${remote.status} @ $remoteTime). Mempertahankan lokal dan sinkron ulang ke cloud."
-        } else {
-            // Same timestamp but conflicting status - prioritize progressed triage status
-            val resolvedStatus = prioritizeStatus(local.status, remote.status)
-            resolvedReport = remote.copy(status = resolvedStatus)
-            resolution = "STATUS_PRIORITY_MERGED"
-            details = "Waktu sama namun status berbeda. Dipilih status progres tertinggi: $resolvedStatus."
+            logConflict(
+                reportId = normalizedRemote.id,
+                conflictType = if (normalizedLocalStatus != normalizedRemoteStatus) CONFLICT_CONCURRENT_STATUS else CONFLICT_TIMESTAMP_DRIFT,
+                resolution = RESOLUTION_LOCAL_PRESERVED,
+                localTime = localEffectiveTime,
+                remoteTime = remoteEffectiveTime,
+                localStatus = normalizedLocalStatus,
+                remoteStatus = normalizedRemoteStatus,
+                details = "Pembaruan lokal lebih baru (Local: $normalizedLocalStatus @ $localEffectiveTime, Remote: $normalizedRemoteStatus @ $remoteEffectiveTime). Mempertahankan lokal untuk disinkronkan ke cloud.",
+                officerBadge = currentOfficerBadge
+            )
+            return@withContext resolvedReport
         }
 
-        // Log conflict resolution event into Room database
+        // Case 4: Exact same effective timestamp -> prefer higher canonical triage status; on tie prefer remote server truth
+        val resolvedStatus = prioritizeStatus(normalizedLocalStatus, normalizedRemoteStatus)
+        val useRemoteNotes = normalizedRemote.additionalNotes.isNotBlank() &&
+            (resolvedStatus == normalizedRemoteStatus || local.additionalNotes.isBlank())
+        val resolvedReport = normalizedRemote.copy(
+            status = resolvedStatus,
+            photoUri = com.example.util.ImageUtils.selectBestPhotoUri(normalizedRemote.photoUri, local.photoUri),
+            additionalNotes = if (useRemoteNotes) normalizedRemote.additionalNotes else local.additionalNotes,
+            handledByOfficerName = normalizedRemote.handledByOfficerName.ifBlank { local.handledByOfficerName },
+            handledByOfficerNip = normalizedRemote.handledByOfficerNip.ifBlank { local.handledByOfficerNip },
+            handledByOfficerRole = normalizedRemote.handledByOfficerRole.ifBlank { local.handledByOfficerRole },
+            updatedAt = maxOf(localEffectiveTime, remoteEffectiveTime),
+            isSyncedToCloud = true
+        )
+        if (normalizedLocalStatus != normalizedRemoteStatus) {
+            logConflict(
+                reportId = normalizedRemote.id,
+                conflictType = CONFLICT_CONCURRENT_STATUS,
+                resolution = "STATUS_PRIORITY_MERGED",
+                localTime = localEffectiveTime,
+                remoteTime = remoteEffectiveTime,
+                localStatus = normalizedLocalStatus,
+                remoteStatus = normalizedRemoteStatus,
+                details = "Waktu pembaruan sama namun status berbeda (Local: $normalizedLocalStatus vs Remote: $normalizedRemoteStatus). Dipilih status progres tertinggi: $resolvedStatus.",
+                officerBadge = currentOfficerBadge
+            )
+        }
+        return@withContext resolvedReport
+    }
+
+    private suspend fun logConflict(
+        reportId: String,
+        conflictType: String,
+        resolution: String,
+        localTime: Long,
+        remoteTime: Long,
+        localStatus: String,
+        remoteStatus: String,
+        details: String,
+        officerBadge: String
+    ) {
         try {
             conflictLogDao.insertConflictLog(
                 SyncConflictLogEntity(
-                    reportId = remote.id,
+                    reportId = reportId,
                     conflictType = conflictType,
                     resolution = resolution,
                     localTimestamp = localTime,
                     remoteTimestamp = remoteTime,
-                    localStatus = local.status,
-                    remoteStatus = remote.status,
+                    localStatus = localStatus,
+                    remoteStatus = remoteStatus,
                     details = details,
-                    officerBadge = currentOfficerBadge,
+                    officerBadge = officerBadge,
                     timestamp = System.currentTimeMillis()
                 )
             )
-            Log.i(TAG, "Sync Conflict recorded for ${remote.id}: $resolution ($details)")
+            Log.i(TAG, "Sync Conflict recorded for $reportId: $resolution ($details)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to persist conflict log: ${e.message}")
         }
-
-        return@withContext resolvedReport
     }
 
-    private fun prioritizeStatus(localStatus: String, remoteStatus: String): String {
-        val hierarchy = listOf(
-            "Menunggu Verifikasi",
-            "Terverifikasi GPS",
-            "Diterima PUSDALOPS",
-            "Tim TRC Meluncur",
-            "Dalam Penanganan",
-            "Selesai Ditangani"
-        )
-        val localIdx = hierarchy.indexOf(localStatus)
-        val remoteIdx = hierarchy.indexOf(remoteStatus)
-        return if (localIdx >= remoteIdx) localStatus else remoteStatus
+    internal fun prioritizeStatus(localStatus: String, remoteStatus: String): String {
+        val localCanonical = com.example.model.CitizenReportStatusHelper.normalizeStatus(localStatus)
+        val remoteCanonical = com.example.model.CitizenReportStatusHelper.normalizeStatus(remoteStatus)
+        val localRank = com.example.model.CitizenReportStatusHelper.statusRank(localCanonical)
+        val remoteRank = com.example.model.CitizenReportStatusHelper.statusRank(remoteCanonical)
+        // Prefer higher triage progress; on equal rank prefer remote server truth
+        return if (remoteRank >= localRank) remoteCanonical else localCanonical
     }
 
     /**

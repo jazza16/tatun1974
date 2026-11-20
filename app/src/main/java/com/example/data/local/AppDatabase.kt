@@ -24,7 +24,7 @@ import androidx.room.RoomDatabase
         DistribusiLogistikEntity::class,
         KarhutlaHotspotEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,13 +42,25 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        private val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE citizen_disaster_reports ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE citizen_disaster_reports ADD COLUMN handledByOfficerName TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE citizen_disaster_reports ADD COLUMN handledByOfficerNip TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE citizen_disaster_reports ADD COLUMN handledByOfficerRole TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE citizen_disaster_reports ADD COLUMN isSyncedToCloud INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("UPDATE citizen_disaster_reports SET updatedAt = timestamp WHERE updatedAt = 0")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "sipagar_database"
-                ).fallbackToDestructiveMigration(true)
+                ).addMigrations(MIGRATION_5_6)
+                .fallbackToDestructiveMigration(true)
                 .fallbackToDestructiveMigrationOnDowngrade(true)
                 .allowMainThreadQueries()
                 .addCallback(object : RoomDatabase.Callback() {

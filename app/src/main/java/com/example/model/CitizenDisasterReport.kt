@@ -26,5 +26,57 @@ data class CitizenDisasterReport(
     val reporterPhone: String = "",
     val additionalNotes: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val status: String = "Terverifikasi GPS" // "Terverifikasi GPS", "Diterima PUSDALOPS", "Tim TRC Meluncur"
-)
+    val status: String = "Diproses", // Kanonik: "Diproses", "Divalidasi", "Selesai"
+    val updatedAt: Long = timestamp,
+    val handledByOfficerName: String = "",
+    val handledByOfficerNip: String = "",
+    val handledByOfficerRole: String = "",
+    val isSyncedToCloud: Boolean = true
+) {
+    fun effectiveUpdatedAt(): Long = maxOf(updatedAt, timestamp)
+}
+
+/**
+ * Single source of truth for canonical citizen disaster report status normalization,
+ * progression ranking, and UI filtering across Citizen View, Officer Console,
+ * Form Laporan Harian ("DARI WARGA"), and SyncConflictHandler.
+ */
+object CitizenReportStatusHelper {
+    const val STATUS_DIPROSES = "Diproses"
+    const val STATUS_DIVALIDASI = "Divalidasi"
+    const val STATUS_SELESAI = "Selesai"
+
+    fun normalizeStatus(rawStatus: String?): String {
+        val trimmed = rawStatus?.trim().orEmpty()
+        return when {
+            trimmed.equals(STATUS_SELESAI, ignoreCase = true) ||
+                trimmed.contains("Selesai", ignoreCase = true) -> STATUS_SELESAI
+            trimmed.equals(STATUS_DIVALIDASI, ignoreCase = true) ||
+                trimmed.contains("Valid", ignoreCase = true) ||
+                trimmed.contains("TRC", ignoreCase = true) ||
+                trimmed.contains("Dalam Penanganan", ignoreCase = true) -> STATUS_DIVALIDASI
+            else -> STATUS_DIPROSES
+        }
+    }
+
+    fun statusRank(rawStatus: String?): Int = when (normalizeStatus(rawStatus)) {
+        STATUS_SELESAI -> 3
+        STATUS_DIVALIDASI -> 2
+        else -> 1
+    }
+
+    fun isPending(rawStatus: String?): Boolean = normalizeStatus(rawStatus) == STATUS_DIPROSES
+    fun isValidated(rawStatus: String?): Boolean = normalizeStatus(rawStatus) == STATUS_DIVALIDASI
+    fun isResolved(rawStatus: String?): Boolean = normalizeStatus(rawStatus) == STATUS_SELESAI
+
+    fun matchesFilter(rawStatus: String?, selectedFilter: String): Boolean {
+        return when (selectedFilter.trim()) {
+            "", "Semua" -> true
+            STATUS_DIPROSES -> isPending(rawStatus)
+            STATUS_DIVALIDASI -> isValidated(rawStatus)
+            STATUS_SELESAI -> isResolved(rawStatus)
+            else -> normalizeStatus(rawStatus).equals(normalizeStatus(selectedFilter), ignoreCase = true)
+        }
+    }
+}
+

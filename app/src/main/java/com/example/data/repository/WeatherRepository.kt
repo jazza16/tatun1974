@@ -156,60 +156,121 @@ class WeatherRepository(
         weatherDao.upvoteReport(reportId)
     }
 
+    private fun mapCitizenEntityToModel(entity: CitizenDisasterReportEntity): CitizenDisasterReport {
+        return CitizenDisasterReport(
+            id = entity.id,
+            disasterType = entity.disasterType,
+            incidentTime = entity.incidentTime,
+            incidentLocation = entity.incidentLocation,
+            district = entity.district,
+            village = entity.village,
+            latitude = entity.latitude,
+            longitude = entity.longitude,
+            gpsAccuracyMeters = entity.gpsAccuracyMeters,
+            isGpsVerified = entity.isGpsVerified,
+            casualtiesDead = entity.casualtiesDead,
+            casualtiesInjured = entity.casualtiesInjured,
+            casualtiesMissing = entity.casualtiesMissing,
+            photoUri = entity.photoUri,
+            reporterName = entity.reporterName,
+            reporterPhone = entity.reporterPhone,
+            additionalNotes = entity.additionalNotes,
+            timestamp = entity.timestamp,
+            status = com.example.model.CitizenReportStatusHelper.normalizeStatus(entity.status),
+            updatedAt = entity.effectiveUpdatedAt(),
+            handledByOfficerName = entity.handledByOfficerName,
+            handledByOfficerNip = entity.handledByOfficerNip,
+            handledByOfficerRole = entity.handledByOfficerRole,
+            isSyncedToCloud = entity.isSyncedToCloud
+        )
+    }
+
+    private fun mapCitizenModelToEntity(
+        report: CitizenDisasterReport,
+        isSyncedOverride: Boolean = report.isSyncedToCloud
+    ): CitizenDisasterReportEntity {
+        return CitizenDisasterReportEntity(
+            id = report.id,
+            disasterType = report.disasterType,
+            incidentTime = report.incidentTime,
+            incidentLocation = report.incidentLocation,
+            district = report.district,
+            village = report.village,
+            latitude = report.latitude,
+            longitude = report.longitude,
+            gpsAccuracyMeters = report.gpsAccuracyMeters,
+            isGpsVerified = report.isGpsVerified,
+            casualtiesDead = report.casualtiesDead,
+            casualtiesInjured = report.casualtiesInjured,
+            casualtiesMissing = report.casualtiesMissing,
+            photoUri = report.photoUri,
+            reporterName = report.reporterName,
+            reporterPhone = report.reporterPhone,
+            additionalNotes = report.additionalNotes,
+            timestamp = report.timestamp,
+            status = com.example.model.CitizenReportStatusHelper.normalizeStatus(report.status),
+            updatedAt = report.effectiveUpdatedAt(),
+            handledByOfficerName = report.handledByOfficerName,
+            handledByOfficerNip = report.handledByOfficerNip,
+            handledByOfficerRole = report.handledByOfficerRole,
+            isSyncedToCloud = isSyncedOverride
+        )
+    }
+
+    private fun shouldAcceptRemoteCitizenReport(
+        existing: CitizenDisasterReportEntity?,
+        remote: CitizenDisasterReport
+    ): Boolean {
+        if (existing == null) return true
+        val localUpdatedAt = existing.effectiveUpdatedAt()
+        val remoteUpdatedAt = remote.effectiveUpdatedAt()
+        val localNorm = com.example.model.CitizenReportStatusHelper.normalizeStatus(existing.status)
+        val remoteNorm = com.example.model.CitizenReportStatusHelper.normalizeStatus(remote.status)
+        val localRank = com.example.model.CitizenReportStatusHelper.statusRank(localNorm)
+        val remoteRank = com.example.model.CitizenReportStatusHelper.statusRank(remoteNorm)
+
+        val hasGenuineUnpushedLocalMutation = !existing.isSyncedToCloud &&
+            localUpdatedAt > remoteUpdatedAt &&
+            (localNorm != remoteNorm || existing.additionalNotes.trim() != remote.additionalNotes.trim())
+
+        // Jangan pernah menimpa perubahan lokal yang benar-benar baru (status/catatan berbeda) dan belum tersinkron ke Cloud
+        if (hasGenuineUnpushedLocalMutation) {
+            return false
+        }
+        // Terima remote bila waktunya lebih baru atau statusnya lebih maju
+        if (remoteUpdatedAt > localUpdatedAt) return true
+        if (remoteRank > localRank) return true
+        // Jika laporan sudah ada di server Firestore sedangkan lokal masih bertanda belum sync tanpa mutasi lokal berbeda,
+        // tandai langsung sebagai Synced dari server!
+        if (!existing.isSyncedToCloud) return true
+        // Jika remote memiliki foto bukti portabel sedangkan lokal belum punya foto portabel, terima pembaruan foto
+        val remoteBringsPortablePhoto = com.example.util.ImageUtils.isCloudPortablePhotoUri(remote.photoUri) &&
+            !com.example.util.ImageUtils.isCloudPortablePhotoUri(existing.photoUri)
+        if (remoteBringsPortablePhoto && remoteRank >= localRank) return true
+
+        // Jika waktu sama (tie), utamakan kebenaran server apabila ada perubahan data/petugas/status
+        if (remoteUpdatedAt == localUpdatedAt) {
+            val differs = localNorm != remoteNorm ||
+                existing.additionalNotes != remote.additionalNotes ||
+                existing.handledByOfficerName != remote.handledByOfficerName ||
+                existing.handledByOfficerNip != remote.handledByOfficerNip ||
+                existing.handledByOfficerRole != remote.handledByOfficerRole ||
+                (remote.photoUri != null && existing.photoUri.isNullOrBlank())
+            if (differs && remoteRank >= localRank) return true
+        }
+        return false
+    }
+
     // Citizen Disaster Reports (Anti-Hoax GPS Verified)
     fun getCitizenDisasterReports(): Flow<List<CitizenDisasterReport>> {
         return weatherDao.getAllCitizenDisasterReports().map { entities ->
-            entities.map { entity ->
-                CitizenDisasterReport(
-                    id = entity.id,
-                    disasterType = entity.disasterType,
-                    incidentTime = entity.incidentTime,
-                    incidentLocation = entity.incidentLocation,
-                    district = entity.district,
-                    village = entity.village,
-                    latitude = entity.latitude,
-                    longitude = entity.longitude,
-                    gpsAccuracyMeters = entity.gpsAccuracyMeters,
-                    isGpsVerified = entity.isGpsVerified,
-                    casualtiesDead = entity.casualtiesDead,
-                    casualtiesInjured = entity.casualtiesInjured,
-                    casualtiesMissing = entity.casualtiesMissing,
-                    photoUri = entity.photoUri,
-                    reporterName = entity.reporterName,
-                    reporterPhone = entity.reporterPhone,
-                    additionalNotes = entity.additionalNotes,
-                    timestamp = entity.timestamp,
-                    status = entity.status
-                )
-            }
+            entities.map { mapCitizenEntityToModel(it) }
         }
     }
 
     fun getCitizenReportsByStatus(status: String): Flow<List<CitizenDisasterReport>> {
         return weatherDao.getCitizenReportsByStatus(status).map { entities ->
-            entities.map { entity ->
-                CitizenDisasterReport(
-                    id = entity.id,
-                    disasterType = entity.disasterType,
-                    incidentTime = entity.incidentTime,
-                    incidentLocation = entity.incidentLocation,
-                    district = entity.district,
-                    village = entity.village,
-                    latitude = entity.latitude,
-                    longitude = entity.longitude,
-                    gpsAccuracyMeters = entity.gpsAccuracyMeters,
-                    isGpsVerified = entity.isGpsVerified,
-                    casualtiesDead = entity.casualtiesDead,
-                    casualtiesInjured = entity.casualtiesInjured,
-                    casualtiesMissing = entity.casualtiesMissing,
-                    photoUri = entity.photoUri,
-                    reporterName = entity.reporterName,
-                    reporterPhone = entity.reporterPhone,
-                    additionalNotes = entity.additionalNotes,
-                    timestamp = entity.timestamp,
-                    status = entity.status
-                )
-            }
+            entities.map { mapCitizenEntityToModel(it) }
         }
     }
 
@@ -246,29 +307,7 @@ class WeatherRepository(
      * merging with existing records using OnConflictStrategy.REPLACE.
      */
     suspend fun restoreReportsToRoom(reports: List<CitizenDisasterReport>) = withContext(databaseWriteDispatcher) {
-        val entities = reports.map { report ->
-            CitizenDisasterReportEntity(
-                id = report.id,
-                disasterType = report.disasterType,
-                incidentTime = report.incidentTime,
-                incidentLocation = report.incidentLocation,
-                district = report.district,
-                village = report.village,
-                latitude = report.latitude,
-                longitude = report.longitude,
-                gpsAccuracyMeters = report.gpsAccuracyMeters,
-                isGpsVerified = report.isGpsVerified,
-                casualtiesDead = report.casualtiesDead,
-                casualtiesInjured = report.casualtiesInjured,
-                casualtiesMissing = report.casualtiesMissing,
-                photoUri = report.photoUri,
-                reporterName = report.reporterName,
-                reporterPhone = report.reporterPhone,
-                additionalNotes = report.additionalNotes,
-                timestamp = report.timestamp,
-                status = report.status
-            )
-        }
+        val entities = reports.map { mapCitizenModelToEntity(it) }
         weatherDao.insertAllCitizenDisasterReports(entities)
     }
 
@@ -278,6 +317,36 @@ class WeatherRepository(
      */
     suspend fun uploadPhotoToSupabase(bitmap: Bitmap, reportId: String): Result<String> =
         com.example.data.api.SupabaseClient.uploadPhotoToSupabase(bitmap, reportId)
+
+    /**
+     * Menjalankan diagnostik jalur unggah foto Supabase (bucket `reports`), memverifikasi
+     * integritas byte JPEG (ukuran + header + SHA-256), serta memeriksa policy akses
+     * public vs authenticated dan menulis log diagnostik ke Logcat (`SupabaseStorageDiag`).
+     */
+    suspend fun diagnoseSupabaseImageUploadPath(
+        sampleBitmap: Bitmap? = null,
+        reportId: String = "diag_probe",
+        authBearerToken: String? = null,
+        cleanupProbeObject: Boolean = true
+    ): com.example.data.api.SupabaseUploadDiagnosticReport =
+        com.example.data.api.SupabaseClient.diagnoseImageUploadPath(
+            sampleBitmap = sampleBitmap,
+            reportId = reportId,
+            authBearerToken = authBearerToken,
+            cleanupProbeObject = cleanupProbeObject
+        )
+
+    /**
+     * Memeriksa aksesibilitas (public vs authenticated) untuk URL/path foto laporan yang sudah tersimpan.
+     */
+    suspend fun diagnoseSupabaseReportImageUrl(
+        imageUrlOrPath: String,
+        authBearerToken: String? = null
+    ): com.example.data.api.SupabaseUploadDiagnosticReport =
+        com.example.data.api.SupabaseClient.diagnoseExistingReportImageUrl(
+            imageUrlOrPath = imageUrlOrPath,
+            authBearerToken = authBearerToken
+        )
 
     /**
      * Mendekode sumber foto lokal (file://, path absolut, atau Base64) menjadi Bitmap
@@ -314,88 +383,246 @@ class WeatherRepository(
         }
     }
 
-    suspend fun submitCitizenDisasterReport(report: CitizenDisasterReport) = withContext(databaseWriteDispatcher) {
-        // 1. Jika ada foto lokal, unggah terlebih dahulu ke Supabase Storage untuk mendapatkan URL publik https://
-        var uploadedPublicUrl: String? = null
-        val existingOrLocalPhotoUri: String? = if (!report.photoUri.isNullOrBlank()) {
-            val trimmedUri = report.photoUri.trim()
-            if (trimmedUri.startsWith("https://", ignoreCase = true) ||
-                trimmedUri.startsWith("http://", ignoreCase = true)
-            ) {
-                val safeHttpsUri = if (trimmedUri.startsWith("http://", ignoreCase = true)) {
-                    "https://" + trimmedUri.substring(7)
-                } else {
-                    trimmedUri
+    data class CitizenReportSubmitResult(
+        val reportId: String,
+        val savedLocally: Boolean,
+        val syncedToCloud: Boolean,
+        val hasPhoto: Boolean,
+        val cloudPhotoUrl: String? = null,
+        val deferredOffline: Boolean = false,
+        val message: String = ""
+    )
+
+    suspend fun submitCitizenDisasterReportWithResult(
+        report: CitizenDisasterReport,
+        context: android.content.Context? = null
+    ): CitizenReportSubmitResult = withContext(databaseWriteDispatcher) {
+        val rawPhoto = report.photoUri?.trim()?.takeIf { it.isNotBlank() }
+        val hasPhoto = rawPhoto != null
+        val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(report.status)
+        val effectiveUpdatedAt = maxOf(report.timestamp, report.updatedAt)
+
+        // 1. Simpan segera ke Room SQLite lokal (teks + path foto lokal) dengan isSyncedToCloud = false
+        //    agar jika sinyal putus atau aplikasi ditutup di tengah jalan, data + foto warga TIDAK pernah hilang.
+        val initialLocalReport = report.copy(
+            photoUri = rawPhoto,
+            status = normalizedStatus,
+            updatedAt = effectiveUpdatedAt,
+            isSyncedToCloud = false
+        )
+        weatherDao.insertCitizenDisasterReport(mapCitizenModelToEntity(initialLocalReport, isSyncedOverride = false))
+
+        // 2. Validasi koneksi & tunggu upload foto ke Firebase Storage selesai 100% sebelum menulis Firestore.
+        //    ATURAN KETAT OFFLINE: Jika perangkat offline atau upload foto gagal karena jaringan,
+        //    JANGAN PERNAH mengirim laporan teks saja tanpa foto ke Firestore!
+        val photoResolution = com.example.util.ImageUtils.resolveCloudPhotoForUpload(
+            rawPhotoUri = rawPhoto,
+            reportId = report.id,
+            context = context,
+            supabaseUploader = { bitmap -> uploadPhotoToSupabase(bitmap, report.id).getOrNull() }
+        )
+
+        val resolvedCloudPhotoUrl: String? = when (photoResolution) {
+            is com.example.util.ImageUtils.CloudPhotoResolution.NoPhoto -> {
+                if (!com.example.data.api.FirebaseStoragePhotoUploader.isNetworkOnline(context)) {
+                    android.util.Log.w(
+                        "WeatherRepository",
+                        "Perangkat offline — laporan ${report.id} ditahan di Room SQLite lokal sampai sinyal kembali."
+                    )
+                    com.example.data.sync.CitizenReportSyncWorker.enqueueWhenConnected(context)
+                    return@withContext CitizenReportSubmitResult(
+                        reportId = report.id,
+                        savedLocally = true,
+                        syncedToCloud = false,
+                        hasPhoto = false,
+                        deferredOffline = true,
+                        message = "Perangkat sedang offline. Laporan disimpan di database lokal dan WorkManager akan mengirim otomatis saat sinyal tersedia."
+                    )
                 }
-                uploadedPublicUrl = safeHttpsUri
-                safeHttpsUri
-            } else {
-                val bitmap = decodeLocalPhotoBitmap(trimmedUri)
-                if (bitmap != null) {
-                    val supabaseUrl = uploadPhotoToSupabase(bitmap, report.id).getOrNull()
-                    uploadedPublicUrl = supabaseUrl
-                    supabaseUrl ?: report.photoUri
-                } else {
-                    report.photoUri
-                }
+                null
             }
-        } else {
-            null
+            is com.example.util.ImageUtils.CloudPhotoResolution.DeferredOffline -> {
+                android.util.Log.w(
+                    "WeatherRepository",
+                    "Upload foto laporan ${report.id} tertunda (${photoResolution.reason}) — pengiriman teks ke Firestore DITAHAN agar foto dan teks terkirim bersamaan."
+                )
+                com.example.data.sync.CitizenReportSyncWorker.enqueueWhenConnected(context)
+                return@withContext CitizenReportSubmitResult(
+                    reportId = report.id,
+                    savedLocally = true,
+                    syncedToCloud = false,
+                    hasPhoto = true,
+                    cloudPhotoUrl = null,
+                    deferredOffline = true,
+                    message = "Sinyal lemah/offline. Laporan beserta foto bukti disimpan di database lokal dan WorkManager akan mengirim bersamaan saat sinyal kembali."
+                )
+            }
+            is com.example.util.ImageUtils.CloudPhotoResolution.ReadyForCloud -> {
+                photoResolution.cloudPhotoUrl
+            }
         }
 
-        val finalLocalReport = report.copy(photoUri = existingOrLocalPhotoUri)
-        val finalCloudReport = report.copy(photoUri = uploadedPublicUrl)
-
-        val entity = CitizenDisasterReportEntity(
-            id = finalLocalReport.id,
-            disasterType = finalLocalReport.disasterType,
-            incidentTime = finalLocalReport.incidentTime,
-            incidentLocation = finalLocalReport.incidentLocation,
-            district = finalLocalReport.district,
-            village = finalLocalReport.village,
-            latitude = finalLocalReport.latitude,
-            longitude = finalLocalReport.longitude,
-            gpsAccuracyMeters = finalLocalReport.gpsAccuracyMeters,
-            isGpsVerified = finalLocalReport.isGpsVerified,
-            casualtiesDead = finalLocalReport.casualtiesDead,
-            casualtiesInjured = finalLocalReport.casualtiesInjured,
-            casualtiesMissing = finalLocalReport.casualtiesMissing,
-            photoUri = finalLocalReport.photoUri,
-            reporterName = finalLocalReport.reporterName,
-            reporterPhone = finalLocalReport.reporterPhone,
-            additionalNotes = finalLocalReport.additionalNotes,
-            timestamp = finalLocalReport.timestamp,
-            status = finalLocalReport.status
+        // 3. Setelah upload foto 100% selesai & download URL didapat, simpan ke Room & Firestore (fotoUrl + fotoLampiran + photoUri)
+        val finalCloudReport = initialLocalReport.copy(
+            photoUri = resolvedCloudPhotoUrl,
+            isSyncedToCloud = false
         )
-        weatherDao.insertCitizenDisasterReport(entity)
+        if (resolvedCloudPhotoUrl != null && resolvedCloudPhotoUrl != rawPhoto) {
+            weatherDao.insertCitizenDisasterReport(mapCitizenModelToEntity(finalCloudReport, isSyncedOverride = false))
+        }
 
-        // Push to authenticated Cloud Firestore so authorized devices see the new report
-        try {
-            com.example.data.local.FirestoreHelper.syncReportToCloud(finalCloudReport)
-        } catch (_: Exception) {}
+        val cloudResult = try {
+            com.example.data.local.FirestoreHelper.syncReportToCloudSuspend(finalCloudReport)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+
+        if (cloudResult.isSuccess) {
+            weatherDao.updateCitizenReportSyncState(report.id, true)
+            CitizenReportSubmitResult(
+                reportId = report.id,
+                savedLocally = true,
+                syncedToCloud = true,
+                hasPhoto = hasPhoto,
+                cloudPhotoUrl = resolvedCloudPhotoUrl,
+                deferredOffline = false,
+                message = if (hasPhoto) {
+                    "Laporan dan foto bukti GPS berhasil diunggah 100% ke server PUSDALOPS BPBD."
+                } else {
+                    "Laporan berhasil dikirim ke server PUSDALOPS BPBD."
+                }
+            )
+        } else {
+            android.util.Log.w(
+                "WeatherRepository",
+                "Laporan ${report.id} tersimpan lokal (menunggu sync Cloud): ${cloudResult.exceptionOrNull()?.message}"
+            )
+            com.example.data.sync.CitizenReportSyncWorker.enqueueWhenConnected(context)
+            CitizenReportSubmitResult(
+                reportId = report.id,
+                savedLocally = true,
+                syncedToCloud = false,
+                hasPhoto = hasPhoto,
+                cloudPhotoUrl = resolvedCloudPhotoUrl,
+                deferredOffline = true,
+                message = "Laporan & foto tersimpan aman di perangkat dan WorkManager akan menyinkronkan otomatis begitu koneksi stabil."
+            )
+        }
     }
 
-    suspend fun updateCitizenReportStatus(reportId: String, newStatus: String) = withContext(databaseWriteDispatcher) {
-        weatherDao.updateCitizenReportStatus(reportId, newStatus)
-        // Push status change to authenticated Cloud Firestore
-        try {
-            com.example.data.local.FirestoreHelper.updateReportStatusInCloud(reportId, newStatus)
-        } catch (_: Exception) {}
+    suspend fun submitCitizenDisasterReport(
+        report: CitizenDisasterReport,
+        context: android.content.Context? = null
+    ): Boolean = submitCitizenDisasterReportWithResult(report, context).syncedToCloud
+
+    suspend fun updateCitizenReportStatus(
+        reportId: String,
+        newStatus: String,
+        officerName: String = "",
+        officerNip: String = "",
+        officerRole: String = ""
+    ): Boolean = withContext(databaseWriteDispatcher) {
+        val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(newStatus)
+        val now = System.currentTimeMillis()
+        weatherDao.updateCitizenReportStatus(
+            reportId = reportId,
+            newStatus = normalizedStatus,
+            updatedAt = now,
+            officerName = officerName.trim(),
+            officerNip = officerNip.trim(),
+            officerRole = officerRole.trim(),
+            isSynced = false
+        )
+
+        val localEntity = weatherDao.getCitizenReportById(reportId)
+        val fallbackReport = localEntity?.let { mapCitizenEntityToModel(it) }
+
+        val cloudResult = try {
+            com.example.data.local.FirestoreHelper.updateReportStatusInCloudSuspend(
+                reportId = reportId,
+                newStatus = normalizedStatus,
+                notes = null,
+                updatedAt = now,
+                officerName = officerName.trim(),
+                officerNip = officerNip.trim(),
+                officerRole = officerRole.trim(),
+                fallbackReport = fallbackReport
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+        if (cloudResult.isSuccess) {
+            weatherDao.updateCitizenReportSyncState(reportId, true)
+            true
+        } else {
+            android.util.Log.w(
+                "WeatherRepository",
+                "Pembaruan status $reportId tersimpan lokal (menunggu sync Cloud): ${cloudResult.exceptionOrNull()?.message}"
+            )
+            false
+        }
     }
 
-    suspend fun updateCitizenReportStatusAndNotes(reportId: String, newStatus: String, notes: String) = withContext(databaseWriteDispatcher) {
-        weatherDao.updateCitizenReportStatusAndNotes(reportId, newStatus, notes)
-        // Push status & follow-up notes change to authenticated Cloud Firestore
-        try {
-            com.example.data.local.FirestoreHelper.updateReportStatusInCloud(reportId, newStatus, notes)
-        } catch (_: Exception) {}
+    suspend fun updateCitizenReportStatusAndNotes(
+        reportId: String,
+        newStatus: String,
+        notes: String,
+        officerName: String = "",
+        officerNip: String = "",
+        officerRole: String = ""
+    ): Boolean = withContext(databaseWriteDispatcher) {
+        val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(newStatus)
+        val now = System.currentTimeMillis()
+        weatherDao.updateCitizenReportStatusAndNotes(
+            reportId = reportId,
+            newStatus = normalizedStatus,
+            newNotes = notes,
+            updatedAt = now,
+            officerName = officerName.trim(),
+            officerNip = officerNip.trim(),
+            officerRole = officerRole.trim(),
+            isSynced = false
+        )
+
+        val localEntity = weatherDao.getCitizenReportById(reportId)
+        val fallbackReport = localEntity?.let { mapCitizenEntityToModel(it) }
+
+        val cloudResult = try {
+            com.example.data.local.FirestoreHelper.updateReportStatusInCloudSuspend(
+                reportId = reportId,
+                newStatus = normalizedStatus,
+                notes = notes,
+                updatedAt = now,
+                officerName = officerName.trim(),
+                officerNip = officerNip.trim(),
+                officerRole = officerRole.trim(),
+                fallbackReport = fallbackReport
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+        if (cloudResult.isSuccess) {
+            weatherDao.updateCitizenReportSyncState(reportId, true)
+            true
+        } else {
+            android.util.Log.w(
+                "WeatherRepository",
+                "Pembaruan status & catatan $reportId tersimpan lokal (menunggu sync Cloud): ${cloudResult.exceptionOrNull()?.message}"
+            )
+            false
+        }
     }
 
     /**
-     * Fetches the latest citizen disaster reports directly from Cloud Firestore (Source.SERVER)
-     * and reconciles them into local Room database so Officer devices immediately see new citizen reports.
+     * Sinkronisasi dua arah (Pull + Push) antara Room lokal dan Cloud Firestore (Source.SERVER):
+     * 1. Menarik seluruh laporan terbaru dari Firestore dan menerapkan pembaruan petugas aktif
+     *    tanpa menimpa perubahan lokal yang belum terunggah dan lebih baru.
+     * 2. Mendorong seluruh laporan/perubahan lokal yang belum tersinkron atau belum ada di Cloud
+     *    sehingga perangkat petugas dan warga selalu 100% sinkron.
      */
-    suspend fun syncCitizenDisasterReportsOnline(): Int = withContext(Dispatchers.IO) {
+    suspend fun syncCitizenDisasterReportsOnline(): Int = withContext(databaseWriteDispatcher) {
+        var syncedOrUpdatedCount = 0
+
         val fetchResult = com.example.data.local.FirestoreHelper.fetchCitizenReportsFromServerSuspend()
         val remoteReports = fetchResult.getOrElse { error ->
             android.util.Log.e(
@@ -403,45 +630,112 @@ class WeatherRepository(
                 "Gagal menarik citizen_disaster_reports dari server Firestore: ${error.localizedMessage}",
                 error
             )
-            return@withContext 0
+            // Meskipun tarik gagal, tetap coba dorong laporan lokal yang tertunda bila foto siap (jangan pernah kirim teks tanpa foto!)
+            val pendingLocals = weatherDao.getUnsyncedCitizenReports()
+            for (pending in pendingLocals) {
+                val photoResolution = com.example.util.ImageUtils.resolveCloudPhotoForUpload(
+                    rawPhotoUri = pending.photoUri,
+                    reportId = pending.id,
+                    supabaseUploader = { bmp -> uploadPhotoToSupabase(bmp, pending.id).getOrNull() }
+                )
+                val portablePhoto = when (photoResolution) {
+                    is com.example.util.ImageUtils.CloudPhotoResolution.NoPhoto -> null
+                    is com.example.util.ImageUtils.CloudPhotoResolution.ReadyForCloud -> photoResolution.cloudPhotoUrl
+                    is com.example.util.ImageUtils.CloudPhotoResolution.DeferredOffline -> {
+                        android.util.Log.w("WeatherRepository", "Tunda push pending ${pending.id}: ${photoResolution.reason}")
+                        continue
+                    }
+                }
+                val modelToPush = mapCitizenEntityToModel(pending).copy(
+                    photoUri = portablePhoto
+                )
+                val pushRes = com.example.data.local.FirestoreHelper.syncReportToCloudSuspend(modelToPush)
+                if (pushRes.isSuccess) {
+                    if (portablePhoto != null && portablePhoto != pending.photoUri) {
+                        weatherDao.insertCitizenDisasterReport(mapCitizenModelToEntity(modelToPush, isSyncedOverride = true))
+                    } else {
+                        weatherDao.updateCitizenReportSyncState(pending.id, true)
+                    }
+                    syncedOrUpdatedCount++
+                }
+            }
+            return@withContext syncedOrUpdatedCount
         }
 
         val localReportsMap = weatherDao.getAllCitizenDisasterReportsSync().associateBy { it.id }
-        var syncedOrUpdatedCount = 0
+        val remoteReportsMap = remoteReports.associateBy { it.id }
 
+        // 1. PULL: Terapkan data terbaru dari Cloud Firestore -> Room lokal
         for (remote in remoteReports) {
             val existing = localReportsMap[remote.id]
-            val shouldUpsert = existing == null ||
-                existing.status != remote.status ||
-                existing.additionalNotes != remote.additionalNotes ||
-                existing.timestamp != remote.timestamp
-            if (shouldUpsert) {
-                weatherDao.insertCitizenDisasterReport(
-                    CitizenDisasterReportEntity(
-                        id = remote.id,
-                        disasterType = remote.disasterType,
-                        incidentTime = remote.incidentTime,
-                        incidentLocation = remote.incidentLocation,
-                        district = remote.district,
-                        village = remote.village,
-                        latitude = remote.latitude,
-                        longitude = remote.longitude,
-                        gpsAccuracyMeters = remote.gpsAccuracyMeters,
-                        isGpsVerified = remote.isGpsVerified,
-                        casualtiesDead = remote.casualtiesDead,
-                        casualtiesInjured = remote.casualtiesInjured,
-                        casualtiesMissing = remote.casualtiesMissing,
-                        photoUri = remote.photoUri ?: existing?.photoUri,
-                        reporterName = remote.reporterName,
-                        reporterPhone = remote.reporterPhone,
-                        additionalNotes = remote.additionalNotes,
-                        timestamp = remote.timestamp,
-                        status = remote.status
-                    )
+            if (shouldAcceptRemoteCitizenReport(existing, remote)) {
+                val mergedReport = remote.copy(
+                    photoUri = com.example.util.ImageUtils.selectBestPhotoUri(remote.photoUri, existing?.photoUri),
+                    handledByOfficerName = remote.handledByOfficerName.ifBlank { existing?.handledByOfficerName.orEmpty() },
+                    handledByOfficerNip = remote.handledByOfficerNip.ifBlank { existing?.handledByOfficerNip.orEmpty() },
+                    handledByOfficerRole = remote.handledByOfficerRole.ifBlank { existing?.handledByOfficerRole.orEmpty() },
+                    isSyncedToCloud = true
                 )
+                weatherDao.insertCitizenDisasterReport(mapCitizenModelToEntity(mergedReport, isSyncedOverride = true))
                 syncedOrUpdatedCount++
             }
         }
+
+        // 2. PUSH: Dorong laporan lokal yang belum ada di Cloud, memiliki perubahan lokal lebih baru,
+        //    ATAU memiliki foto bukti lokal yang belum terunggah ke Cloud Firestore (perbaikan otomatis).
+        //    ATURAN KETAT: Jangan pernah mendorong teks tanpa foto jika laporan memiliki lampiran foto lokal!
+        val refreshedLocals = weatherDao.getAllCitizenDisasterReportsSync()
+        for (local in refreshedLocals) {
+            val remote = remoteReportsMap[local.id]
+            val localHasPhotoButCloudMissing = remote != null &&
+                !com.example.util.ImageUtils.isCloudPortablePhotoUri(remote.photoUri) &&
+                !local.photoUri.isNullOrBlank()
+            val needsPush = when {
+                remote == null -> !local.isSyncedToCloud || !local.id.startsWith("LAP-MMK-2026102")
+                !local.isSyncedToCloud && local.effectiveUpdatedAt() >= remote.effectiveUpdatedAt() -> true
+                localHasPhotoButCloudMissing -> true
+                else -> false
+            }
+            if (needsPush) {
+                val photoResolution = com.example.util.ImageUtils.resolveCloudPhotoForUpload(
+                    rawPhotoUri = local.photoUri,
+                    reportId = local.id,
+                    supabaseUploader = { bmp -> uploadPhotoToSupabase(bmp, local.id).getOrNull() }
+                )
+                val portablePhoto = when (photoResolution) {
+                    is com.example.util.ImageUtils.CloudPhotoResolution.NoPhoto -> null
+                    is com.example.util.ImageUtils.CloudPhotoResolution.ReadyForCloud -> photoResolution.cloudPhotoUrl
+                    is com.example.util.ImageUtils.CloudPhotoResolution.DeferredOffline -> {
+                        android.util.Log.w("WeatherRepository", "Tunda sync ${local.id} (foto belum terunggah): ${photoResolution.reason}")
+                        continue
+                    }
+                }
+                // Jika hanya memperbaiki foto yang hilang di Cloud, jangan pernah menurunkan status petugas terbaru dari server
+                val baseModel = if (localHasPhotoButCloudMissing && remote != null && remote.effectiveUpdatedAt() > local.effectiveUpdatedAt()) {
+                    remote.copy(
+                        photoUri = portablePhoto,
+                        updatedAt = maxOf(remote.effectiveUpdatedAt(), System.currentTimeMillis())
+                    )
+                } else {
+                    mapCitizenEntityToModel(local).copy(
+                        photoUri = portablePhoto
+                    )
+                }
+                if (localHasPhotoButCloudMissing && portablePhoto == null) {
+                    continue
+                }
+                val pushResult = com.example.data.local.FirestoreHelper.syncReportToCloudSuspend(baseModel)
+                if (pushResult.isSuccess) {
+                    if (portablePhoto != null && portablePhoto != local.photoUri) {
+                        weatherDao.insertCitizenDisasterReport(mapCitizenModelToEntity(baseModel, isSyncedOverride = true))
+                    } else {
+                        weatherDao.updateCitizenReportSyncState(local.id, true)
+                    }
+                    syncedOrUpdatedCount++
+                }
+            }
+        }
+
         syncedOrUpdatedCount
     }
 
@@ -449,35 +743,31 @@ class WeatherRepository(
         val localReportsMap = weatherDao.getAllCitizenDisasterReportsSync().associateBy { it.id }
         for (remote in remoteReports) {
             val existing = localReportsMap[remote.id]
-            if (existing == null || existing.status != remote.status || existing.additionalNotes != remote.additionalNotes) {
-                weatherDao.insertCitizenDisasterReport(
-                    CitizenDisasterReportEntity(
-                        id = remote.id,
-                        disasterType = remote.disasterType,
-                        incidentTime = remote.incidentTime,
-                        incidentLocation = remote.incidentLocation,
-                        district = remote.district,
-                        village = remote.village,
-                        latitude = remote.latitude,
-                        longitude = remote.longitude,
-                        gpsAccuracyMeters = remote.gpsAccuracyMeters,
-                        isGpsVerified = remote.isGpsVerified,
-                        casualtiesDead = remote.casualtiesDead,
-                        casualtiesInjured = remote.casualtiesInjured,
-                        casualtiesMissing = remote.casualtiesMissing,
-                        photoUri = remote.photoUri ?: existing?.photoUri,
-                        reporterName = remote.reporterName,
-                        reporterPhone = remote.reporterPhone,
-                        additionalNotes = remote.additionalNotes,
-                        timestamp = remote.timestamp,
-                        status = remote.status
-                    )
+            if (shouldAcceptRemoteCitizenReport(existing, remote)) {
+                val mergedReport = remote.copy(
+                    photoUri = com.example.util.ImageUtils.selectBestPhotoUri(remote.photoUri, existing?.photoUri),
+                    handledByOfficerName = remote.handledByOfficerName.ifBlank { existing?.handledByOfficerName.orEmpty() },
+                    handledByOfficerNip = remote.handledByOfficerNip.ifBlank { existing?.handledByOfficerNip.orEmpty() },
+                    handledByOfficerRole = remote.handledByOfficerRole.ifBlank { existing?.handledByOfficerRole.orEmpty() },
+                    isSyncedToCloud = true
                 )
+                weatherDao.insertCitizenDisasterReport(mapCitizenModelToEntity(mergedReport, isSyncedOverride = true))
+            } else if (existing != null && !existing.isSyncedToCloud) {
+                val localNorm = com.example.model.CitizenReportStatusHelper.normalizeStatus(existing.status)
+                val remoteNorm = com.example.model.CitizenReportStatusHelper.normalizeStatus(remote.status)
+                if (localNorm == remoteNorm && existing.additionalNotes.trim() == remote.additionalNotes.trim()) {
+                    weatherDao.updateCitizenReportSyncState(remote.id, true)
+                }
             }
         }
     }
 
-    suspend fun seedInitialCitizenDisasterReportsIfEmpty() = withContext(Dispatchers.IO) {
+    suspend fun seedInitialCitizenDisasterReportsIfEmpty() = withContext(databaseWriteDispatcher) {
+        // PENTING: Hanya isi data contoh apabila tabel lokal benar-benar kosong setelah sinkronisasi Cloud.
+        // Jangan pernah menimpa laporan atau pembaruan status petugas aktif yang sudah ada!
+        if (weatherDao.getCitizenReportCount() > 0) return@withContext
+
+        val fixedSeedBaseTs = 1761355800000L // 25 Okt 2025 (timestamp historis tetap agar tidak menimpa data nyata)
         val initialList = listOf(
             CitizenDisasterReportEntity(
                 id = "LAP-MMK-20261025-001",
@@ -497,8 +787,10 @@ class WeatherRepository(
                 reporterName = "Nelayan Siaga Ipuh (Bpk. Hendra)",
                 reporterPhone = "0812-7890-4412",
                 additionalNotes = "Ombak pasang mencapai bibir tanggul pengaman, perahu nelayan dievakuasi ke dataran lebih tinggi.",
-                timestamp = System.currentTimeMillis() - 25 * 60 * 1000,
-                status = "Divalidasi"
+                timestamp = fixedSeedBaseTs,
+                status = "Divalidasi",
+                updatedAt = fixedSeedBaseTs,
+                isSyncedToCloud = true
             ),
             CitizenDisasterReportEntity(
                 id = "LAP-MMK-20261025-002",
@@ -518,8 +810,10 @@ class WeatherRepository(
                 reporterName = "Warga RT 03 Koto Jaya (Ibu Rina)",
                 reporterPhone = "0852-6712-8891",
                 additionalNotes = "Dahan pohon trembesi patah melintang di badan jalan lintas, arus lalu lintas sempat terhambat. Tim BPBD sudah tiba memotong kayu.",
-                timestamp = System.currentTimeMillis() - 95 * 60 * 1000,
-                status = "Divalidasi"
+                timestamp = fixedSeedBaseTs - 70 * 60 * 1000L,
+                status = "Divalidasi",
+                updatedAt = fixedSeedBaseTs - 70 * 60 * 1000L,
+                isSyncedToCloud = true
             ),
             CitizenDisasterReportEntity(
                 id = "LAP-MMK-20261024-003",
@@ -539,8 +833,10 @@ class WeatherRepository(
                 reporterName = "Kelompok Petani Manjunto (Bpk. Darmawan)",
                 reporterPhone = "0813-9021-3304",
                 additionalNotes = "Air saluran primer meluap sekitar 20 cm ke pekarangan jalan tani akibat hujan lebat perbukitan.",
-                timestamp = System.currentTimeMillis() - 180 * 60 * 1000,
-                status = "Diproses"
+                timestamp = fixedSeedBaseTs - 155 * 60 * 1000L,
+                status = "Diproses",
+                updatedAt = fixedSeedBaseTs - 155 * 60 * 1000L,
+                isSyncedToCloud = true
             )
         )
         weatherDao.insertAllCitizenDisasterReports(initialList)

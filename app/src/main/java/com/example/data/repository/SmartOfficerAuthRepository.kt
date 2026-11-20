@@ -96,9 +96,25 @@ class SmartOfficerAuthRepository(private val context: Context) {
         )
     }
 
+    private suspend fun safeInsertAuditLog(entry: PersonnelAuditLogEntity) {
+        try {
+            auditDao.insertAuditLog(entry)
+        } catch (e: Exception) {
+            Log.w(TAG, "Non-fatal audit log write skipped: ${e.message}")
+        }
+    }
+
+    private suspend fun safeCacheMetadata(sanitizedMetadata: OfficerCredentialEntity) {
+        try {
+            credentialDao.insertCredential(sanitizedMetadata)
+        } catch (e: Exception) {
+            Log.w(TAG, "Non-fatal local metadata cache write skipped: ${e.message}")
+        }
+    }
+
     /**
      * Verifies a candidate PIN strictly against the Cloud Firestore record (`pinHash` + `salt`,
-     * or optional server-side `pin` field if configured by Admin in Firebase Console).
+     * and/or server-side `pin` field if configured by Admin in Firebase Console).
      * Never accepts forbidden default PINs ('117', etc.) or unverified local defaults.
      */
     private fun verifyAgainstCloudRecord(
@@ -112,62 +128,218 @@ class SmartOfficerAuthRepository(private val context: Context) {
         }
 
         val cred = cloudRecord.credential
-        // 1. Primary path: salted cryptographic hash stored in Cloud Firestore
-        if (cred.pinHash.isNotBlank() && cred.salt.isNotBlank()) {
-            return cred.verifyPin(trimmedPin)
+        // 1. Primary path: cryptographic hash stored in Cloud Firestore (PBKDF2+salt or legacy SHA-256)
+        if (cred.pinHash.isNotBlank() && cred.verifyPin(trimmedPin)) {
+            return true
         }
 
-        // 2. Secondary path: server-managed plaintext `pin` field in Firestore Console (never mutated)
+        // 2. Secondary path: server-managed plaintext `pin` field in Firestore Console (never mutated),
+        //    also honored if an Admin updated `pin` directly in Console on a record that still had an older hash.
         val serverPlainPin = cloudRecord.serverPlainPin?.trim().orEmpty()
         if (serverPlainPin.isNotBlank()) {
             if (FORBIDDEN_DEFAULT_PINS.any { it.equals(serverPlainPin, ignoreCase = true) }) {
                 return false
             }
-            return OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, serverPlainPin)
+            if (OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, serverPlainPin)) {
+                return true
+            }
         }
 
         return false
     }
 
+    private fun normalizeNameForMatch(value: String): String {
+        return value
+            .lowercase()
+            .replace(Regex("[.,\\-_/()\\s]+"), " ")
+            .trim()
+    }
+
+    private fun levenshteinDistance(a: String, b: String): Int {
+        if (a == b) return 0
+        if (a.isEmpty()) return b.length
+        if (b.isEmpty()) return a.length
+        var prev = IntArray(b.length + 1) { it }
+        var curr = IntArray(b.length + 1)
+        for (i in 1..a.length) {
+            curr[0] = i
+            for (j in 1..b.length) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                curr[j] = minOf(
+                    curr[j - 1] + 1,
+                    prev[j] + 1,
+                    prev[j - 1] + cost
+                )
+            }
+            val tmp = prev
+            prev = curr
+            curr = tmp
+        }
+        return prev[b.length]
+    }
+
     /**
-     * Resolves an officer's NIP from non-secret directory sources (direct NIP input, Official ASN list,
-     * OfficerAuthManager roster, or Room Personnel directory). NEVER creates or seeds PINs.
+     * Extracts an embedded NIP/registration token from combined input like:
+     * - "Ruri Irwandi, 197906072006041011"
+     * - "Yudha Sofrianto (199807202025061002)"
+     * - "19790607 200604 1 011"
+     * - "TRC-01" / "BPBD-001"
      */
-    private suspend fun resolveNipFromDirectoryOrInput(nipOrName: String): String? = withContext(Dispatchers.IO) {
+    private fun extractEmbeddedNipToken(rawQuery: String): String? {
+        val compact = rawQuery.replace(Regex("[\\s\\-]+"), "")
+        // 1. Standard Indonesian ASN NIP (18 digits) or long numeric registration ID (8..22 digits)
+        val longDigits = Regex("\\d{8,22}").find(compact)?.value
+        if (!longDigits.isNullOrBlank()) return longDigits
+
+        // 2. Spaced ASN NIP inside mixed text e.g. "Nama, 19790607 200604 1 011"
+        val spacedDigitsMatch = Regex("(?:\\d[\\s\\-]*){8,22}").find(rawQuery)?.value
+        if (!spacedDigitsMatch.isNullOrBlank()) {
+            val cleaned = spacedDigitsMatch.replace(Regex("[^0-9]"), "")
+            if (cleaned.length >= 8) return cleaned
+        }
+
+        // 3. TRC / Pusdalops alphanumeric badge code (e.g. TRC-001, BPBD-12)
+        val badgeMatch = Regex("\\b(?:TRC|BPBD|PUSDALOPS)[-_]?\\d{2,10}\\b", RegexOption.IGNORE_CASE)
+            .find(rawQuery)?.value
+        if (!badgeMatch.isNullOrBlank()) return badgeMatch.uppercase()
+
+        return null
+    }
+
+    /**
+     * Resolves an officer's NIP from non-secret directory sources (direct NIP input, combined "Nama, NIP",
+     * Official ASN list, OfficerAuthManager roster, or Room Personnel directory). NEVER creates or seeds PINs.
+     */
+    suspend fun resolveNipFromDirectoryOrInput(nipOrName: String): String? = withContext(Dispatchers.IO) {
         val rawQuery = nipOrName.trim()
         if (rawQuery.isBlank()) return@withContext null
-        val normalizedQuery = rawQuery.replace(" ", "")
+
+        val embeddedNip = extractEmbeddedNipToken(rawQuery)
+        val compactQuery = rawQuery.replace(Regex("[\\s\\-]+"), "")
+        val normalizedQueryName = normalizeNameForMatch(rawQuery)
+        val querySegments = rawQuery
+            .split(",", "|", "/", ";", "\n", "(", ")")
+            .map { normalizeNameForMatch(it) }
+            .filter { it.length >= 3 }
+
+        fun matchesOfficer(candidateNip: String, candidateName: String): Boolean {
+            val cleanNip = candidateNip.trim().replace(Regex("[\\s\\-]+"), "")
+            val cleanName = normalizeNameForMatch(candidateName)
+            if (embeddedNip != null && cleanNip.equals(embeddedNip, ignoreCase = true)) return true
+            if (cleanNip.equals(compactQuery, ignoreCase = true)) return true
+            if (embeddedNip != null && embeddedNip.length >= 6 && cleanNip.contains(embeddedNip, ignoreCase = true)) return true
+            if (compactQuery.length >= 6 && compactQuery.all { it.isDigit() } && cleanNip.contains(compactQuery, ignoreCase = true)) return true
+            if (cleanName == normalizedQueryName) return true
+            if (normalizedQueryName.length >= 3 && (cleanName.contains(normalizedQueryName) || normalizedQueryName.contains(cleanName))) return true
+            if (querySegments.any { seg ->
+                    cleanName == seg || cleanName.contains(seg) ||
+                        (cleanNip.length >= 6 && cleanNip.equals(seg.replace(" ", ""), ignoreCase = true))
+                }
+            ) return true
+            return false
+        }
 
         // 1. Check Official ASN BPBD directory
         OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.firstOrNull { asn ->
-            asn.nip.replace(" ", "").equals(normalizedQuery, ignoreCase = true) ||
-                asn.name.equals(rawQuery, ignoreCase = true) ||
-                asn.name.contains(rawQuery, ignoreCase = true) ||
-                (normalizedQuery.length >= 4 && asn.nip.replace(" ", "").contains(normalizedQuery, ignoreCase = true))
-        }?.let { return@withContext it.nip.trim() }
+            matchesOfficer(asn.nip, asn.name)
+        }?.let { return@withContext it.nip.trim().replace(" ", "") }
 
         // 2. Check OfficerAuthManager roster (non-secret profile directory)
         officerAuthManager.getOfficerRoster().firstOrNull { r ->
-            r.nip.replace(" ", "").equals(normalizedQuery, ignoreCase = true) ||
-                r.fullName.equals(rawQuery, ignoreCase = true) ||
-                r.fullName.contains(rawQuery, ignoreCase = true) ||
-                (normalizedQuery.length >= 4 && r.nip.replace(" ", "").contains(normalizedQuery, ignoreCase = true))
-        }?.let { return@withContext it.nip.trim() }
+            matchesOfficer(r.nip, r.fullName)
+        }?.let { return@withContext it.nip.trim().replace(" ", "") }
 
         // 3. Check local Room Personnel directory (non-secret)
-        personnelDao.getAllPersonnelList().firstOrNull { p ->
-            p.nip.replace(" ", "").equals(normalizedQuery, ignoreCase = true) ||
-                p.name.equals(rawQuery, ignoreCase = true) ||
-                p.name.contains(rawQuery, ignoreCase = true) ||
-                (normalizedQuery.length >= 4 && p.nip.replace(" ", "").contains(normalizedQuery, ignoreCase = true))
-        }?.let { return@withContext it.nip.trim() }
+        val roomPersonnel = try {
+            personnelDao.getAllPersonnelList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+        roomPersonnel.firstOrNull { p ->
+            matchesOfficer(p.nip, p.name)
+        }?.let { return@withContext it.nip.trim().replace(" ", "") }
 
-        // 4. Direct NIP/Registration ID input (allows Cloud-only officers added in Firebase Console to log in)
-        val looksLikeNipOrBadge = normalizedQuery.length >= 4 &&
-            normalizedQuery.matches(Regex("^[a-zA-Z0-9_\\-]+$")) &&
-            normalizedQuery.any { it.isDigit() }
+        // 4. Embedded NIP token from combined "Nama, NIP" input (allows Cloud-only officers to log in seamlessly)
+        if (!embeddedNip.isNullOrBlank()) {
+            return@withContext embeddedNip
+        }
+
+        // 5. Unambiguous minor-typo fuzzy match on full/base name (e.g., "Hitatur Arazak" -> "HITATUN ARAZAK")
+        val primaryQueryName = querySegments.firstOrNull { seg -> seg.any { it.isLetter() } } ?: normalizedQueryName
+        if (primaryQueryName.length >= 6 && primaryQueryName.any { it.isLetter() }) {
+            val allCandidates = (
+                OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.map { it.nip to it.name } +
+                    officerAuthManager.getOfficerRoster().map { it.nip to it.fullName } +
+                    roomPersonnel.map { it.nip to it.name }
+                ).distinctBy { it.first.trim().replace(Regex("[\\s\\-]+"), "") }
+
+            val scored = allCandidates.mapNotNull { (candNip, candName) ->
+                val cleanCandFull = normalizeNameForMatch(candName)
+                val cleanCandBase = normalizeNameForMatch(candName.substringBefore(","))
+                val distFull = levenshteinDistance(primaryQueryName, cleanCandFull)
+                val distBase = levenshteinDistance(primaryQueryName, cleanCandBase)
+                val bestDist = minOf(distFull, distBase)
+                if (bestDist in 1..2) candNip.trim().replace(Regex("[\\s\\-]+"), "") to bestDist else null
+            }.sortedBy { it.second }
+
+            if (scored.isNotEmpty()) {
+                val minDist = scored.first().second
+                val bestMatches = scored.filter { it.second == minDist }
+                if (bestMatches.size == 1) {
+                    return@withContext bestMatches.first().first
+                }
+            }
+        }
+
+        // 6. Direct NIP/Registration ID input (allows Cloud-only officers added in Firebase Console to log in)
+        val looksLikeNipOrBadge = compactQuery.length >= 4 &&
+            compactQuery.matches(Regex("^[a-zA-Z0-9_\\-]+$")) &&
+            compactQuery.any { it.isDigit() }
         if (looksLikeNipOrBadge) {
-            return@withContext normalizedQuery
+            return@withContext compactQuery
+        }
+
+        return@withContext null
+    }
+
+    /**
+     * Resolves an official registered officer profile from local non-secret directories (for first-time
+     * Cloud activation or biometric display label). NEVER returns or generates a hardcoded default PIN.
+     */
+    private suspend fun findRegisteredOfficerMetadata(nip: String): OfficerProfile? = withContext(Dispatchers.IO) {
+        val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
+        if (cleanNip.isBlank()) return@withContext null
+
+        OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.firstOrNull {
+            it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true)
+        }?.let { asn ->
+            return@withContext OfficerProfile(
+                id = "asn-${asn.nip.trim()}",
+                fullName = asn.name,
+                nip = asn.nip.trim(),
+                role = asn.role,
+                unit = "BPBD Kab. Mukomuko",
+                shift = "Shift Siaga 24 Jam",
+                phone = ""
+            )
+        }
+
+        officerAuthManager.getOfficerRoster().firstOrNull {
+            it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true)
+        }?.let { return@withContext it }
+
+        personnelDao.getAllPersonnelList().firstOrNull {
+            it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true)
+        }?.let { p ->
+            return@withContext OfficerProfile(
+                id = "room-${p.nip.trim()}",
+                fullName = p.name,
+                nip = p.nip.trim(),
+                role = p.role,
+                unit = "Pusdalops BPBD Kab. Mukomuko",
+                shift = "Shift Siaga 24 Jam",
+                phone = p.phone
+            )
         }
 
         return@withContext null
@@ -313,7 +485,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
 
         // 1. STRICT ZERO-HARDCODE CHECK: Reject generic default PINs unconditionally
         if (FORBIDDEN_DEFAULT_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) {
-            auditDao.insertAuditLog(
+            safeInsertAuditLog(
                 PersonnelAuditLogEntity(
                     nip = trimmedNip,
                     name = "Percobaan Akses PIN Default",
@@ -323,6 +495,18 @@ class SmartOfficerAuthRepository(private val context: Context) {
                     deviceInfo = "PIN default '$trimmedPin' ditolak pada perangkat $deviceModel"
                 )
             )
+            try {
+                com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
+                    officerNip = trimmedNip,
+                    officerName = "Percobaan Akses PIN Default",
+                    officerRole = "Tidak Sah",
+                    loginMethod = "PIN_CLOUD",
+                    loginStatus = "BLOCKED",
+                    action = "AUTH_BLOCKED_DEFAULT_PIN_REJECTED",
+                    detail = "PIN default '$trimmedPin' ditolak pada perangkat $deviceModel",
+                    accessGranted = false
+                )
+            } catch (_: Exception) {}
             return@withContext Result.failure(
                 SecurityException(
                     "PIN default '$trimmedPin' dinonaktifkan oleh sistem keamanan. " +
@@ -332,30 +516,162 @@ class SmartOfficerAuthRepository(private val context: Context) {
         }
 
         // 2. MANDATORY CLOUD VERIFICATION (Source.SERVER on `officer_credentials/{nip}`)
-        val cloudLookup = FirestoreHelper.fetchOfficerCredentialStrictFromServer(trimmedNip, context)
+        val cleanLookupNip = trimmedNip.replace(Regex("[\\s\\-]+"), "")
+        val cloudLookup = FirestoreHelper.fetchOfficerCredentialStrictFromServer(cleanLookupNip, context)
         val foundCloudRecord = when (cloudLookup) {
-            is CloudCredentialLookupResult.Found -> cloudLookup
+            is CloudCredentialLookupResult.Found -> {
+                val existingCred = cloudLookup.credential
+                val needsHashActivation = existingCred.pinHash.isBlank() ||
+                    (existingCred.salt.isBlank() && existingCred.pinHash.trim().length != 64)
+                val hasServerPlainPin = !cloudLookup.serverPlainPin.isNullOrBlank()
+                if (needsHashActivation && !hasServerPlainPin && !existingCred.isCustomPinSet && !existingCred.isPinChanged) {
+                    // Existing Firestore doc without cryptographic hash (e.g. seeded via createDefault() or partial Console doc):
+                    // Activate securely if NIP is an official registered officer and PIN matches unique 6-digit NIP key.
+                    val registeredOfficer = findRegisteredOfficerMetadata(cleanLookupNip)
+                    val uniqueActivationKey = OfficerCredentialEntity.generateInitialPinForNip(cleanLookupNip)
+                    val rawLastSix = cleanLookupNip.takeLast(6)
+                    val matchesUniqueNipKey = uniqueActivationKey.isNotBlank() && (
+                        OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, uniqueActivationKey) ||
+                            (rawLastSix.length == 6 && OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, rawLastSix))
+                        )
+                    if (registeredOfficer != null && matchesUniqueNipKey) {
+                        val activationSalt = OfficerCredentialEntity.generateCryptographicSalt()
+                        val activationHash = OfficerCredentialEntity.hashWithSalt(trimmedPin, activationSalt)
+                        val nowActivation = System.currentTimeMillis()
+                        val activatedCloudCredential = existingCred.copy(
+                            nip = registeredOfficer.nip.trim().replace(Regex("[\\s\\-]+"), ""),
+                            fullName = existingCred.fullName.ifBlank { registeredOfficer.fullName },
+                            role = existingCred.role.ifBlank { registeredOfficer.role },
+                            unit = existingCred.unit.ifBlank { registeredOfficer.unit },
+                            shift = existingCred.shift.ifBlank { registeredOfficer.shift },
+                            phone = existingCred.phone.ifBlank { registeredOfficer.phone },
+                            pinHash = activationHash,
+                            salt = activationSalt,
+                            isCustomPinSet = false,
+                            initialSecurePin = "",
+                            lastLoginAt = nowActivation,
+                            lastLoginDevice = "$deviceModel (Android ${Build.VERSION.RELEASE})",
+                            isSyncedWithCloud = true,
+                            updatedAt = nowActivation
+                        )
+                        val cloudWriteRes = FirestoreHelper.syncCredentialToCloudSuspend(
+                            credential = activatedCloudCredential,
+                            context = context,
+                            preserveOwnerUid = cloudLookup.ownerUid
+                        )
+                        if (cloudWriteRes.isSuccess) {
+                            Log.i(TAG, "Uninitialized Cloud credential activated on Firestore for official NIP ${maskNip(cleanLookupNip)}")
+                            cloudLookup.copy(credential = activatedCloudCredential)
+                        } else {
+                            val writeErr = cloudWriteRes.exceptionOrNull()?.message
+                                ?: "Gagal mengaktifkan kredensial di server Firebase."
+                            safeInsertAuditLog(
+                                PersonnelAuditLogEntity(
+                                    nip = cleanLookupNip,
+                                    name = existingCred.fullName,
+                                    role = existingCred.role,
+                                    shift = existingCred.shift,
+                                    action = "AUTH_REJECTED_CLOUD_ACTIVATION_FAILED",
+                                    deviceInfo = "$writeErr ($deviceModel)"
+                                )
+                            )
+                            return@withContext Result.failure(IllegalStateException(writeErr, cloudWriteRes.exceptionOrNull()))
+                        }
+                    } else {
+                        cloudLookup
+                    }
+                } else {
+                    cloudLookup
+                }
+            }
             is CloudCredentialLookupResult.NotFound -> {
-                auditDao.insertAuditLog(
-                    PersonnelAuditLogEntity(
-                        nip = trimmedNip,
-                        name = "Petugas Tidak Terdaftar",
-                        role = "-",
-                        shift = "-",
-                        action = "AUTH_REJECTED_NOT_FOUND_IN_CLOUD",
-                        deviceInfo = "NIP ${maskNip(trimmedNip)} tidak ditemukan di koleksi officer_credentials Firebase ($deviceModel)"
+                // First-time Cloud Activation for official registered ASN/Pusdalops officers who do not yet
+                // have a document in Cloud Firestore:
+                // - ONLY when Cloud explicitly responded NotFound (online, no existing Cloud PIN)
+                // - NEVER accepts forbidden default PINs ('117', 'BPBD117', etc.)
+                // - Accepts the officer's unique 6-digit NIP activation key ONLY if Cloud Firestore write succeeds!
+                val registeredOfficer = findRegisteredOfficerMetadata(cleanLookupNip)
+                val uniqueActivationKey = OfficerCredentialEntity.generateInitialPinForNip(cleanLookupNip)
+                val rawLastSix = cleanLookupNip.takeLast(6)
+                val matchesUniqueNipKey = uniqueActivationKey.isNotBlank() && (
+                    OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, uniqueActivationKey) ||
+                        (rawLastSix.length == 6 && OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, rawLastSix))
                     )
-                )
-                return@withContext Result.failure(
-                    IllegalArgumentException(
+
+                if (registeredOfficer != null && matchesUniqueNipKey) {
+                    val activationSalt = OfficerCredentialEntity.generateCryptographicSalt()
+                    val activationHash = OfficerCredentialEntity.hashWithSalt(trimmedPin, activationSalt)
+                    val nowActivation = System.currentTimeMillis()
+                    val activatedCloudCredential = OfficerCredentialEntity(
+                        nip = registeredOfficer.nip.trim().replace(Regex("[\\s\\-]+"), ""),
+                        fullName = registeredOfficer.fullName,
+                        role = registeredOfficer.role,
+                        unit = registeredOfficer.unit,
+                        shift = registeredOfficer.shift,
+                        phone = registeredOfficer.phone,
+                        pinHash = activationHash,
+                        salt = activationSalt,
+                        isCustomPinSet = false,
+                        initialSecurePin = "",
+                        lastLoginAt = nowActivation,
+                        lastLoginDevice = "$deviceModel (Android ${Build.VERSION.RELEASE})",
+                        isSyncedWithCloud = true,
+                        updatedAt = nowActivation
+                    )
+                    val cloudWriteRes = FirestoreHelper.syncCredentialToCloudSuspend(activatedCloudCredential, context = context)
+                    if (cloudWriteRes.isSuccess) {
+                        Log.i(TAG, "First-time Cloud credential activated on Firestore for official NIP ${maskNip(cleanLookupNip)}")
+                        CloudCredentialLookupResult.Found(credential = activatedCloudCredential)
+                    } else {
+                        val writeErr = cloudWriteRes.exceptionOrNull()?.message
+                            ?: "Gagal mengaktifkan kredensial di server Firebase."
+                        safeInsertAuditLog(
+                            PersonnelAuditLogEntity(
+                                nip = cleanLookupNip,
+                                name = registeredOfficer.fullName,
+                                role = registeredOfficer.role,
+                                shift = registeredOfficer.shift,
+                                action = "AUTH_REJECTED_CLOUD_ACTIVATION_FAILED",
+                                deviceInfo = "$writeErr ($deviceModel)"
+                            )
+                        )
+                        return@withContext Result.failure(IllegalStateException(writeErr, cloudWriteRes.exceptionOrNull()))
+                    }
+                } else {
+                    safeInsertAuditLog(
+                        PersonnelAuditLogEntity(
+                            nip = cleanLookupNip,
+                            name = registeredOfficer?.fullName ?: "Petugas Tidak Terdaftar",
+                            role = registeredOfficer?.role ?: "-",
+                            shift = "-",
+                            action = "AUTH_REJECTED_NOT_FOUND_IN_CLOUD",
+                            deviceInfo = "NIP ${maskNip(cleanLookupNip)} belum teraktivasi di koleksi officer_credentials Firebase ($deviceModel)"
+                        )
+                    )
+                    try {
+                        com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
+                            officerNip = cleanLookupNip,
+                            officerName = registeredOfficer?.fullName ?: "Petugas Tidak Terdaftar",
+                            officerRole = registeredOfficer?.role ?: "-",
+                            loginMethod = "PIN_CLOUD",
+                            loginStatus = "FAILED",
+                            action = "AUTH_REJECTED_NOT_FOUND_IN_CLOUD",
+                            detail = "NIP ${maskNip(cleanLookupNip)} belum teraktivasi di koleksi officer_credentials Firebase ($deviceModel)",
+                            accessGranted = false
+                        )
+                    } catch (_: Exception) {}
+                    val notFoundMsg = if (registeredOfficer != null) {
+                        "Akun ${registeredOfficer.fullName} belum teraktivasi di server Firebase. Masukkan 6 digit terakhir NIP sebagai PIN aktivasi perdana (bukan 117), lalu ganti ke PIN pribadi Anda."
+                    } else {
                         "NIP tidak ditemukan pada server Firebase (officer_credentials). Hubungi Admin Pusdalops untuk aktivasi akun."
-                    )
-                )
+                    }
+                    return@withContext Result.failure(IllegalArgumentException(notFoundMsg))
+                }
             }
             is CloudCredentialLookupResult.Error -> {
-                auditDao.insertAuditLog(
+                safeInsertAuditLog(
                     PersonnelAuditLogEntity(
-                        nip = trimmedNip,
+                        nip = cleanLookupNip,
                         name = "Petugas",
                         role = "-",
                         shift = "-",
@@ -372,12 +688,17 @@ class SmartOfficerAuthRepository(private val context: Context) {
         val credential = foundCloudRecord.credential
 
         // Block old 6-digit NIP initial PIN if officer already changed PIN in Cloud
+        // (unless Admin explicitly configured matching serverPlainPin in Firebase Console)
         val sixDigitNip = OfficerCredentialEntity.generateInitialPinForNip(credential.nip)
         val rawLastSixNip = credential.nip.trim().takeLast(6)
         val isInputSixDigitNip = trimmedPin.equals(sixDigitNip, ignoreCase = true) ||
             (rawLastSixNip.length == 6 && trimmedPin.equals(rawLastSixNip, ignoreCase = true))
-        if ((credential.isPinChanged || credential.isCustomPinSet) && isInputSixDigitNip) {
-            auditDao.insertAuditLog(
+        val adminConfiguredSamePlainPin = foundCloudRecord.serverPlainPin?.trim()?.let { pinVal ->
+            !FORBIDDEN_DEFAULT_PINS.any { it.equals(pinVal, ignoreCase = true) } &&
+                OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, pinVal)
+        } == true
+        if ((credential.isPinChanged || credential.isCustomPinSet) && isInputSixDigitNip && !adminConfiguredSamePlainPin) {
+            safeInsertAuditLog(
                 PersonnelAuditLogEntity(
                     nip = trimmedNip,
                     name = credential.fullName,
@@ -387,6 +708,18 @@ class SmartOfficerAuthRepository(private val context: Context) {
                     deviceInfo = "Percobaan login memakai 6 digit NIP setelah PIN diubah pada $deviceModel"
                 )
             )
+            try {
+                com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
+                    officerNip = trimmedNip,
+                    officerName = credential.fullName,
+                    officerRole = credential.role,
+                    loginMethod = "PIN_CLOUD",
+                    loginStatus = "BLOCKED",
+                    action = "AUTH_BLOCKED_INITIAL_NIP_AFTER_PIN_CHANGED",
+                    detail = "Percobaan login memakai 6 digit NIP setelah PIN diubah pada $deviceModel",
+                    accessGranted = false
+                )
+            } catch (_: Exception) {}
             return@withContext Result.failure(
                 SecurityException("PIN awal (6 digit terakhir NIP) sudah tidak berlaku karena Anda telah mengganti PIN di Firebase. Gunakan PIN pribadi terbaru Anda.")
             )
@@ -401,16 +734,30 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 count = if (currentFailures >= MAX_FAILED_ATTEMPTS) 0 else currentFailures,
                 lockedUntilMs = lockUntil
             )
-            auditDao.insertAuditLog(
+            val failAction = if (lockUntil > 0L) "AUTH_LOCKED_OUT_BRUTE_FORCE" else "AUTH_INVALID_PIN"
+            val failDetail = "Percobaan PIN salah ($currentFailures/$MAX_FAILED_ATTEMPTS) pada $deviceModel"
+            safeInsertAuditLog(
                 PersonnelAuditLogEntity(
                     nip = trimmedNip,
                     name = credential.fullName,
                     role = credential.role,
                     shift = credential.shift,
-                    action = if (lockUntil > 0L) "AUTH_LOCKED_OUT_BRUTE_FORCE" else "AUTH_INVALID_PIN",
-                    deviceInfo = "Percobaan PIN salah ($currentFailures/$MAX_FAILED_ATTEMPTS) pada $deviceModel"
+                    action = failAction,
+                    deviceInfo = failDetail
                 )
             )
+            try {
+                com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
+                    officerNip = trimmedNip,
+                    officerName = credential.fullName,
+                    officerRole = credential.role,
+                    loginMethod = "PIN_CLOUD",
+                    loginStatus = if (lockUntil > 0L) "BLOCKED" else "FAILED",
+                    action = failAction,
+                    detail = failDetail,
+                    accessGranted = false
+                )
+            } catch (_: Exception) {}
             val hintMessage = if (lockUntil > 0L) {
                 "Terlalu banyak percobaan gagal. Akun dikunci sementara selama 5 menit demi keamanan."
             } else {
@@ -432,10 +779,10 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 updatedAt = now
             )
         )
-        credentialDao.insertCredential(sanitizedMetadata)
+        safeCacheMetadata(sanitizedMetadata)
         activeCredential = sanitizedMetadata
 
-        // Sync non-secret login timestamp/device metadata back to Cloud (preserving server pinHash & salt)
+        // Sync non-secret login timestamp/device metadata back to Cloud (preserving server pinHash, salt & ownerUid)
         if (credential.pinHash.isNotBlank() && credential.salt.isNotBlank()) {
             val cloudMetadataUpdate = credential.copy(
                 lastLoginAt = now,
@@ -444,7 +791,11 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 isSyncedWithCloud = true,
                 updatedAt = now
             )
-            FirestoreHelper.syncCredentialToCloud(cloudMetadataUpdate, context = context)
+            FirestoreHelper.syncCredentialToCloud(
+                credential = cloudMetadataUpdate,
+                context = context,
+                preserveOwnerUid = foundCloudRecord.ownerUid
+            )
         }
 
         // Record ONLY non-secret custom PIN status flag (NEVER writes PIN or PIN hash to SharedPreferences)
@@ -464,7 +815,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
             role = credential.role
         )
 
-        auditDao.insertAuditLog(
+        safeInsertAuditLog(
             PersonnelAuditLogEntity(
                 nip = trimmedNip,
                 name = credential.fullName,
@@ -474,6 +825,20 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 deviceInfo = "Berhasil masuk di $deviceDesc (PIN Terverifikasi Server Firebase, NIP disimpan lokal)"
             )
         )
+
+        // Sinkronkan aktivitas login PIN Cloud ke daftar Keamanan Perangkat & Sesi (Play Integrity Classic)
+        try {
+            com.example.security.SecurityManager.getInstance(context).verifyDeviceAuthenticityDuringLogin(
+                officerNip = credential.nip,
+                officerName = credential.fullName,
+                officerRole = credential.role,
+                loginMethod = "PIN_CLOUD",
+                loginAction = "LOGIN_SUCCESSFUL_CLOUD_VERIFIED",
+                detail = "Login PIN Cloud terverifikasi di $deviceDesc"
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Non-fatal Play Integrity session sync warning after PIN login: ${e.message}")
+        }
 
         val profile = OfficerProfile(
             id = "cred-${credential.nip}",
@@ -490,23 +855,70 @@ class SmartOfficerAuthRepository(private val context: Context) {
 
     /**
      * Biometric Officer Authentication (Fingerprint / Face Unlock):
-     * Verifies the officer NIP exists in Cloud Firestore (`Source.SERVER`) and establishes session
-     * without ever storing or resetting PINs locally.
+     * Resolves officer identity (supports NIP, Name, or combined "Nama, NIP"), checks Cloud Firestore
+     * (`Source.SERVER`), and establishes the Ruang Kerja session without ever storing or resetting PINs locally.
+     * If this device already has a previously verified `saved_nip` matching the officer, hardware-verified
+     * biometrics still unlock gracefully when field internet signal is momentarily unavailable.
      */
-    suspend fun authenticateWithBiometric(nip: String): Result<OfficerCredentialEntity> = withContext(Dispatchers.IO) {
-        val trimmedNip = nip.trim()
-        if (trimmedNip.isBlank()) {
-            return@withContext Result.failure(IllegalArgumentException("Petugas tidak ditemukan"))
+    suspend fun authenticateWithBiometric(nipOrName: String): Result<OfficerCredentialEntity> = withContext(Dispatchers.IO) {
+        val rawInput = nipOrName.trim()
+        if (rawInput.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Identitas petugas tidak ditemukan. Masukkan Nama/NIP atau login dengan PIN terlebih dahulu."))
         }
 
-        val cloudLookup = FirestoreHelper.fetchOfficerCredentialStrictFromServer(trimmedNip, context)
+        val resolvedNip = resolveNipFromDirectoryOrInput(rawInput) ?: rawInput.replace(Regex("[\\s\\-]+"), "")
+        val savedNipOnDevice = officerAuthManager.getSavedNip().trim().replace(Regex("[\\s\\-]+"), "")
+        val isPreviouslyVerifiedOnThisDevice = savedNipOnDevice.isNotBlank() &&
+            savedNipOnDevice.equals(resolvedNip, ignoreCase = true)
+
+        val cloudLookup = FirestoreHelper.fetchOfficerCredentialStrictFromServer(resolvedNip, context)
+        val foundOwnerUid = (cloudLookup as? CloudCredentialLookupResult.Found)?.ownerUid
         val activeCred = when (cloudLookup) {
             is CloudCredentialLookupResult.Found -> cloudLookup.credential
             is CloudCredentialLookupResult.NotFound -> {
-                return@withContext Result.failure(IllegalArgumentException("Petugas tidak ditemukan di server Firebase."))
+                val registered = findRegisteredOfficerMetadata(resolvedNip)
+                if (registered != null) {
+                    OfficerCredentialEntity(
+                        nip = registered.nip,
+                        fullName = registered.fullName,
+                        role = registered.role,
+                        unit = registered.unit,
+                        shift = registered.shift,
+                        phone = registered.phone,
+                        pinHash = "",
+                        salt = "",
+                        isCustomPinSet = officerAuthManager.hasCustomPin(),
+                        initialSecurePin = "",
+                        isSyncedWithCloud = false
+                    )
+                } else {
+                    return@withContext Result.failure(
+                        IllegalArgumentException("Petugas dengan NIP '$resolvedNip' tidak ditemukan di server Firebase.")
+                    )
+                }
             }
             is CloudCredentialLookupResult.Error -> {
-                return@withContext Result.failure(IllegalStateException(cloudLookup.userMessage, cloudLookup.cause))
+                if (isPreviouslyVerifiedOnThisDevice) {
+                    val registered = findRegisteredOfficerMetadata(resolvedNip)
+                    val fallbackName = officerAuthManager.getOfficerName().ifBlank { registered?.fullName ?: "Petugas Pusdalops" }
+                    val fallbackRole = officerAuthManager.getOfficerRole().ifBlank { registered?.role ?: "Operator Pusdalops" }
+                    val fallbackShift = officerAuthManager.getOfficerShift().ifBlank { registered?.shift ?: "Shift Siaga 24 Jam" }
+                    OfficerCredentialEntity(
+                        nip = resolvedNip,
+                        fullName = fallbackName,
+                        role = fallbackRole,
+                        unit = registered?.unit ?: "Pusdalops BPBD Kab. Mukomuko",
+                        shift = fallbackShift,
+                        phone = registered?.phone ?: "",
+                        pinHash = "",
+                        salt = "",
+                        isCustomPinSet = officerAuthManager.hasCustomPin(),
+                        initialSecurePin = "",
+                        isSyncedWithCloud = false
+                    )
+                } else {
+                    return@withContext Result.failure(IllegalStateException(cloudLookup.userMessage, cloudLookup.cause))
+                }
             }
         }
 
@@ -521,19 +933,20 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 updatedAt = now
             )
         )
-        credentialDao.insertCredential(sanitizedMetadata)
+        safeCacheMetadata(sanitizedMetadata)
         activeCredential = sanitizedMetadata
 
         if (activeCred.pinHash.isNotBlank() && activeCred.salt.isNotBlank()) {
             FirestoreHelper.syncCredentialToCloud(
-                activeCred.copy(
+                credential = activeCred.copy(
                     lastLoginAt = now,
                     lastLoginDevice = deviceDesc,
                     initialSecurePin = "",
                     isSyncedWithCloud = true,
                     updatedAt = now
                 ),
-                context = context
+                context = context,
+                preserveOwnerUid = foundOwnerUid
             )
         }
 
@@ -551,16 +964,30 @@ class SmartOfficerAuthRepository(private val context: Context) {
             role = activeCred.role
         )
 
-        auditDao.insertAuditLog(
+        safeInsertAuditLog(
             PersonnelAuditLogEntity(
-                nip = trimmedNip,
+                nip = activeCred.nip,
                 name = activeCred.fullName,
                 role = activeCred.role,
                 shift = activeCred.shift,
                 action = "LOGIN_SUCCESSFUL_BIOMETRIC_AUTH",
-                deviceInfo = "Login Biometrik berhasil di $deviceDesc (Terverifikasi Server Firebase)"
+                deviceInfo = "Login Biometrik berhasil di $deviceDesc"
             )
         )
+
+        // Sinkronkan aktivitas login Biometrik ke daftar Keamanan Perangkat & Sesi (Play Integrity Classic)
+        try {
+            com.example.security.SecurityManager.getInstance(context).verifyDeviceAuthenticityDuringLogin(
+                officerNip = activeCred.nip,
+                officerName = activeCred.fullName,
+                officerRole = activeCred.role,
+                loginMethod = "BIOMETRIK",
+                loginAction = "LOGIN_SUCCESSFUL_BIOMETRIC_AUTH",
+                detail = "Login Biometrik berhasil di $deviceDesc"
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Non-fatal Play Integrity session sync warning after biometric login: ${e.message}")
+        }
 
         return@withContext Result.success(sanitizedMetadata)
     }
@@ -645,8 +1072,14 @@ class SmartOfficerAuthRepository(private val context: Context) {
             updatedAt = now
         )
 
-        // REQUIRE Cloud Firestore persistence to succeed so PIN never reverts after update/reinstall!
-        val cloudSyncResult = FirestoreHelper.syncCredentialToCloudSuspend(cloudPayload, context = context)
+        // REQUIRE Cloud Firestore persistence to succeed (full document write removes any legacy plaintext `pin` field)
+        // so the custom PIN is permanent across app updates and reinstalls!
+        val cloudSyncResult = FirestoreHelper.syncCredentialToCloudSuspend(
+            credential = cloudPayload,
+            context = context,
+            preserveOwnerUid = foundCloudRecord.ownerUid,
+            overwriteFullDocument = true
+        )
         if (cloudSyncResult.isFailure) {
             return@withContext Result.failure(
                 IllegalStateException(
@@ -659,11 +1092,11 @@ class SmartOfficerAuthRepository(private val context: Context) {
 
         // Update ONLY non-secret metadata locally (NEVER store PIN or PIN hash on device!)
         val sanitizedLocal = sanitizeForLocalMetadataCache(cloudPayload)
-        credentialDao.insertCredential(sanitizedLocal)
+        safeCacheMetadata(sanitizedLocal)
         activeCredential = sanitizedLocal
         officerAuthManager.markCloudCustomPinStatus(true)
 
-        auditDao.insertAuditLog(
+        safeInsertAuditLog(
             PersonnelAuditLogEntity(
                 nip = trimmedNip,
                 name = activeCred.fullName,
@@ -680,68 +1113,139 @@ class SmartOfficerAuthRepository(private val context: Context) {
     }
 
     /**
-     * Admin-only PIN reset via Cloud Firestore.
-     * Strictly requires Cloud Firestore persistence and NEVER stores plaintext PIN locally or in Cloud.
+     * Normalizes an official officer account ("HITATUN ARAZAK" / NIP 197401282006041006 or any official ASN)
+     * back to a brand-new, never-logged-in state:
+     * 1. Purges all login & failed-attempt audit logs in local Room (`personnel_audit_logs`) and clears in-memory lockout state.
+     * 2. Purges local cached credential row (`officer_credentials`), Play Integrity device binding, and `device_security_sessions` in Room/SharedPreferences & Cloud Firestore.
+     * 3. Clears `saved_nip` and active session if currently set to this NIP so the officer is treated as never having logged in.
+     * 4. Resets the PIN in Cloud Firestore (`officer_credentials/{nip}`) to the salted PBKDF2 hash of the official initial 6-digit NIP code (e.g. `041006` for HITATUN ARAZAK) with `isCustomPinSet = false`, `isPinChanged = false`, `lastLoginAt = 0L`, `lastLoginDevice = ""` (overwriting any stale Console fields).
+     * 5. Does NOT insert any new audit log entry so the account remains completely clean.
      */
-    suspend fun resetToInitialNipSecret(nip: String): Result<String> = withContext(Dispatchers.IO) {
-        val trimmedNip = nip.trim()
-        val cloudLookup = FirestoreHelper.fetchOfficerCredentialStrictFromServer(trimmedNip, context)
-        val cred = when (cloudLookup) {
-            is CloudCredentialLookupResult.Found -> cloudLookup.credential
-            is CloudCredentialLookupResult.NotFound -> {
-                return@withContext Result.failure(
-                    IllegalArgumentException("Petugas dengan NIP '$trimmedNip' tidak ditemukan di server Firebase.")
-                )
-            }
-            is CloudCredentialLookupResult.Error -> {
-                return@withContext Result.failure(
-                    IllegalStateException(cloudLookup.userMessage, cloudLookup.cause)
-                )
-            }
+    suspend fun normalizeAccountToBrandNewInitialState(
+        nip: String = "197401282006041006",
+        syncToCloud: Boolean = true
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
+        if (cleanNip.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("NIP petugas tidak boleh kosong."))
         }
 
-        val initialPin = OfficerCredentialEntity.generateInitialPinForNip(cred.nip)
+        val officialProfile = findRegisteredOfficerMetadata(cleanNip)
+        val canonicalName = officialProfile?.fullName ?: if (cleanNip == "197401282006041006") "HITATUN ARAZAK" else "Petugas $cleanNip"
+        val canonicalRole = officialProfile?.role ?: if (cleanNip == "197401282006041006") com.example.data.local.OfficerRoles.MANAJER else com.example.data.local.OfficerRoles.OPERATOR
+        val canonicalUnit = officialProfile?.unit ?: "Pusdalops BPBD Kab. Mukomuko"
+        val canonicalShift = officialProfile?.shift ?: if (cleanNip == "197401282006041006") "Manajerial 24 Jam" else "Shift Siaga 24 Jam"
+        val canonicalPhone = officialProfile?.phone.orEmpty()
+
+        // 1. Clear in-memory failed login attempts / lockout state
+        failedAttemptMap.remove(cleanNip.lowercase())
+        if (activeCredential?.nip?.equals(cleanNip, ignoreCase = true) == true) {
+            activeCredential = null
+        }
+
+        // 2. Purge all local Room audit logs & cached credential metadata for this officer (treated as never logged in)
+        try {
+            val nameKeyword = canonicalName.substringBefore(",").trim().ifBlank { cleanNip }
+            auditDao.deleteAuditLogsByNipOrName(cleanNip, nameKeyword)
+        } catch (e: Exception) {
+            Log.w(TAG, "Non-fatal warning clearing local audit logs for $cleanNip: ${e.message}")
+        }
+        try {
+            credentialDao.deleteByNip(cleanNip)
+        } catch (e: Exception) {
+            Log.w(TAG, "Non-fatal warning deleting local cached credential for $cleanNip: ${e.message}")
+        }
+
+        // 3. Clear local Play Integrity device binding, SecurityManager session & login activities, and saved_nip if belonging to this officer
+        try {
+            com.example.security.PlayIntegritySecurityManager.getInstance(context)
+                .clearDeviceBindingForOfficer(cleanNip)
+            com.example.security.SecurityManager.getInstance(context)
+                .deleteSecuritySession(cleanNip, purgeActivities = true)
+        } catch (e: Exception) {
+            Log.w(TAG, "Non-fatal warning clearing security session for $cleanNip: ${e.message}")
+        }
+
+        val currentSavedNip = officerAuthManager.getSavedNip()
+        if (currentSavedNip.equals(cleanNip, ignoreCase = true)) {
+            officerAuthManager.clearSavedOfficerIdentity()
+            officerAuthManager.markCloudCustomPinStatus(false)
+        }
+
+        // 4. Reset Cloud Firestore credential to brand-new initial 6-digit NIP PIN hash with zero login history
+        val initialPin = OfficerCredentialEntity.generateInitialPinForNip(cleanNip)
         val salt = OfficerCredentialEntity.generateCryptographicSalt()
         val hash = OfficerCredentialEntity.hashWithSalt(initialPin, salt)
         val now = System.currentTimeMillis()
 
-        val syncCandidate = cred.copy(
-            pinHash = hash,
-            salt = salt,
-            isCustomPinSet = false,
-            initialSecurePin = "",
-            isSyncedWithCloud = true,
-            updatedAt = now
-        )
+        if (syncToCloud) {
+            val cloudLookup = FirestoreHelper.fetchOfficerCredentialStrictFromServer(cleanNip, context)
+            val existingCred = (cloudLookup as? CloudCredentialLookupResult.Found)?.credential
+            val existingOwnerUid = (cloudLookup as? CloudCredentialLookupResult.Found)?.ownerUid
 
-        val syncResult = FirestoreHelper.syncCredentialToCloudSuspend(syncCandidate, context = context)
-        if (syncResult.isFailure) {
-            return@withContext Result.failure(
-                IllegalStateException(
-                    syncResult.exceptionOrNull()?.message
-                        ?: "Gagal melakukan reset PIN di server Firebase. Periksa koneksi internet.",
-                    syncResult.exceptionOrNull()
+            if (cloudLookup is CloudCredentialLookupResult.Error) {
+                return@withContext Result.failure(
+                    IllegalStateException(cloudLookup.userMessage, cloudLookup.cause)
                 )
+            }
+
+            val freshCloudCredential = OfficerCredentialEntity(
+                nip = cleanNip,
+                fullName = existingCred?.fullName?.takeIf { it.isNotBlank() } ?: canonicalName,
+                role = existingCred?.role?.takeIf { it.isNotBlank() } ?: canonicalRole,
+                unit = existingCred?.unit?.takeIf { it.isNotBlank() } ?: canonicalUnit,
+                shift = existingCred?.shift?.takeIf { it.isNotBlank() } ?: canonicalShift,
+                phone = existingCred?.phone?.takeIf { it.isNotBlank() } ?: canonicalPhone,
+                pinHash = hash,
+                salt = salt,
+                isCustomPinSet = false,
+                initialSecurePin = "",
+                lastLoginAt = 0L,
+                lastLoginDevice = "",
+                isSyncedWithCloud = true,
+                createdAt = now,
+                updatedAt = now
             )
+
+            val syncResult = FirestoreHelper.syncCredentialToCloudSuspend(
+                credential = freshCloudCredential,
+                context = context,
+                preserveOwnerUid = existingOwnerUid,
+                overwriteFullDocument = true
+            )
+            if (syncResult.isFailure) {
+                return@withContext Result.failure(
+                    IllegalStateException(
+                        syncResult.exceptionOrNull()?.message
+                            ?: "Gagal menormalkan kredensial di server Firebase. Periksa koneksi internet.",
+                        syncResult.exceptionOrNull()
+                    )
+                )
+            }
+
+            // 5. Purge Cloud simulation traces (device_security_sessions & admin_access_audit_logs)
+            FirestoreHelper.purgeOfficerCloudLoginTracesSuspend(cleanNip, context)
         }
 
-        val sanitizedLocal = sanitizeForLocalMetadataCache(syncCandidate)
-        credentialDao.insertCredential(sanitizedLocal)
-        officerAuthManager.markCloudCustomPinStatus(false)
-
-        auditDao.insertAuditLog(
-            PersonnelAuditLogEntity(
-                nip = trimmedNip,
-                name = cred.fullName,
-                role = cred.role,
-                shift = cred.shift,
-                action = "PIN_RESET_TO_NIP_KEY_CLOUD",
-                deviceInfo = "PIN di-reset di Cloud Firestore oleh Admin (Bukan PIN default 117)"
-            )
-        )
-
         return@withContext Result.success(
-            "PIN akun ${cred.fullName} berhasil di-reset di server Firebase ke 6 digit terakhir NIP."
+            "Akun $canonicalName (NIP: $cleanNip) berhasil dinormalkan seperti baru (belum pernah login), seluruh riwayat upaya login dihapus, dan PIN di-reset ke PIN awal resmi ($initialPin)."
+        )
+    }
+
+    // Catatan Keamanan: Normalisasi / reset PIN otomatis saat startup atau fresh install
+    // DIHAPUS secara permanen agar aplikasi yang di-update atau di-install ulang TIDAK PERNAH
+    // mengembalikan PIN petugas di Cloud Firestore ke PIN default atau menghapus `saved_nip`.
+
+    /**
+     * Admin-only PIN reset & full account normalization via Cloud Firestore.
+     * Purges all login attempts/history in local & Cloud databases, resets the account to a brand-new
+     * never-logged-in state (`lastLoginAt = 0L`, `lastLoginDevice = ""`, `isCustomPinSet = false`),
+     * and sets the salted PBKDF2 hash of the officer's initial 6-digit NIP PIN in Cloud Firestore.
+     */
+    suspend fun resetToInitialNipSecret(nip: String): Result<String> = withContext(Dispatchers.IO) {
+        return@withContext normalizeAccountToBrandNewInitialState(
+            nip = nip.trim(),
+            syncToCloud = true
         )
     }
 

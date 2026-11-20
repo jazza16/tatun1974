@@ -5,9 +5,7 @@ import android.util.Log
 import com.example.data.local.AppDatabase
 import com.example.data.local.CitizenDisasterReportEntity
 import com.example.model.CitizenDisasterReport
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 
@@ -36,125 +34,100 @@ object IntegrityCheckWorker {
     ): IntegrityCheckResult = withContext(Dispatchers.IO) {
         val weatherDao = database.weatherDao()
         val conflictHandler = SyncConflictHandler(context, database)
-        val currentUid = try {
-            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-        } catch (_: Exception) { null }
-        val firestore = try {
-            val dbId = try {
-                context.getString(com.example.R.string.firestore_database_id)
-            } catch (_: Exception) {
-                "ai-studio-android-cuacamuk-a1e6cb6f-11e7-41ba-90f4-82c9adb67961"
-            }
-            FirebaseFirestore.getInstance(dbId)
-        } catch (_: Exception) { null }
 
         val localEntities = weatherDao.getAllCitizenDisasterReportsSync()
-        val localChecksum = computeChecksum(localEntities.map { "${it.id}:${it.status}:${it.timestamp}" })
+        val localChecksum = computeChecksum(
+            localEntities.map {
+                "${it.id}:${com.example.model.CitizenReportStatusHelper.normalizeStatus(it.status)}:${it.effectiveUpdatedAt()}"
+            }
+        )
 
-        if (currentUid == null || firestore == null) {
+        val remoteResult = com.example.data.local.FirestoreHelper.fetchCitizenReportsFromServerSuspend()
+        val remoteReports = remoteResult.getOrElse { error ->
+            Log.e(TAG, "Integrity check failed: ${error.message}")
             return@withContext IntegrityCheckResult(
                 localCount = localEntities.size,
                 remoteCount = 0,
                 localChecksum = localChecksum,
-                remoteChecksum = if (currentUid == null) "AUTH_REQUIRED_OFFLINE" else "OFFLINE_NO_FIRESTORE",
-                isConsistent = true,
-                discrepancies = listOf(
-                    if (currentUid == null) "Login Google diperlukan untuk memverifikasi integritas Cloud Firestore."
-                    else "Firestore offline / tidak dapat diakses untuk pembanding."
-                ),
-                resolvedDiscrepancyCount = 0
-            )
-        }
-
-        try {
-            val snapshot = firestore.collection("citizen_disaster_reports")
-                .get()
-                .await()
-            val remoteReports = mutableListOf<CitizenDisasterReport>()
-            for (doc in snapshot.documents) {
-                val id = doc.getString("id") ?: doc.id
-                remoteReports.add(
-                    CitizenDisasterReport(
-                        id = id,
-                        disasterType = doc.getString("disasterType") ?: "Kejadian",
-                        incidentTime = doc.getString("incidentTime") ?: "",
-                        incidentLocation = doc.getString("incidentLocation") ?: "",
-                        district = doc.getString("district") ?: "Mukomuko",
-                        village = doc.getString("village") ?: "",
-                        latitude = doc.getDouble("latitude") ?: -2.58,
-                        longitude = doc.getDouble("longitude") ?: 101.12,
-                        gpsAccuracyMeters = doc.getDouble("gpsAccuracyMeters")?.toFloat(),
-                        isGpsVerified = doc.getBoolean("isGpsVerified") ?: true,
-                        casualtiesDead = doc.getLong("casualtiesDead")?.toInt() ?: 0,
-                        casualtiesInjured = doc.getLong("casualtiesInjured")?.toInt() ?: 0,
-                        casualtiesMissing = doc.getLong("casualtiesMissing")?.toInt() ?: 0,
-                        photoUri = doc.getString("photoUri"),
-                        reporterName = doc.getString("reporterName") ?: "Warga",
-                        reporterPhone = doc.getString("reporterPhone") ?: "",
-                        additionalNotes = doc.getString("additionalNotes") ?: "",
-                        timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
-                        status = doc.getString("status") ?: "Menunggu Verifikasi"
-                    )
-                )
-            }
-
-            val remoteChecksum = computeChecksum(remoteReports.map { "${it.id}:${it.status}:${it.timestamp}" })
-            val discrepancies = mutableListOf<String>()
-            var resolvedCount = 0
-
-            val localMap = localEntities.associateBy { it.id }
-            val remoteMap = remoteReports.associateBy { it.id }
-
-            // Check for missing in local or status differences
-            for (remote in remoteReports) {
-                val local = localMap[remote.id]
-                if (local == null) {
-                    discrepancies.add("Laporan ${remote.id} ada di cloud namun hilang di lokal Room. Memulihkan ke lokal.")
-                    val resolved = conflictHandler.resolveReportConflict(null, remote, "IntegrityCheck")
-                    weatherDao.insertCitizenDisasterReport(toEntity(resolved))
-                    resolvedCount++
-                } else if (local.status != remote.status || local.timestamp != remote.timestamp) {
-                    discrepancies.add("Discrepancy pada ${remote.id}: Local(${local.status}, ${local.timestamp}) vs Remote(${remote.status}, ${remote.timestamp})")
-                    val resolved = conflictHandler.resolveReportConflict(local, remote, "IntegrityCheck")
-                    weatherDao.insertCitizenDisasterReport(toEntity(resolved))
-                    resolvedCount++
-                }
-            }
-
-            // Check for reports existing locally but missing in Firestore
-            for (local in localEntities) {
-                if (!remoteMap.containsKey(local.id)) {
-                    discrepancies.add("Laporan lokal ${local.id} belum terunggah ke cloud. Mendorong ke cloud.")
-                    val model = toModel(local)
-                    com.example.data.local.FirestoreHelper.syncReportToCloud(model)
-                    resolvedCount++
-                }
-            }
-
-            val isConsistent = localChecksum == remoteChecksum && discrepancies.isEmpty()
-            Log.i(TAG, "Integrity check finished. Consistent: $isConsistent, Discrepancies: ${discrepancies.size}, Resolved: $resolvedCount")
-
-            IntegrityCheckResult(
-                localCount = localEntities.size,
-                remoteCount = remoteReports.size,
-                localChecksum = localChecksum,
-                remoteChecksum = remoteChecksum,
-                isConsistent = isConsistent,
-                discrepancies = discrepancies,
-                resolvedDiscrepancyCount = resolvedCount
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Integrity check failed: ${e.message}")
-            IntegrityCheckResult(
-                localCount = localEntities.size,
-                remoteCount = 0,
-                localChecksum = localChecksum,
-                remoteChecksum = "ERROR: ${e.message}",
+                remoteChecksum = "OFFLINE_OR_ERROR",
                 isConsistent = false,
-                discrepancies = listOf("Gagal melakukan pengecekan integritas cloud: ${e.localizedMessage}"),
+                discrepancies = listOf("Gagal menghubungi Cloud Firestore: ${error.localizedMessage ?: "Periksa koneksi internet"}"),
                 resolvedDiscrepancyCount = 0
             )
         }
+
+        val remoteChecksum = computeChecksum(
+            remoteReports.map {
+                "${it.id}:${com.example.model.CitizenReportStatusHelper.normalizeStatus(it.status)}:${it.effectiveUpdatedAt()}"
+            }
+        )
+        val discrepancies = mutableListOf<String>()
+        var resolvedCount = 0
+
+        val localMap = localEntities.associateBy { it.id }
+        val remoteMap = remoteReports.associateBy { it.id }
+
+        // 1. Reconcile reports from Cloud Firestore -> Local Room
+        for (remote in remoteReports) {
+            val local = localMap[remote.id]
+            val localNorm = local?.let { com.example.model.CitizenReportStatusHelper.normalizeStatus(it.status) }
+            val remoteNorm = com.example.model.CitizenReportStatusHelper.normalizeStatus(remote.status)
+
+            if (local == null) {
+                discrepancies.add("Laporan ${remote.id} ada di Cloud namun belum masuk di perangkat ini. Disinkronkan ke lokal.")
+                val resolved = conflictHandler.resolveReportConflict(null, remote, "IntegrityCheck")
+                weatherDao.insertCitizenDisasterReport(toEntity(resolved))
+                resolvedCount++
+            } else if (
+                localNorm != remoteNorm ||
+                local.effectiveUpdatedAt() != remote.effectiveUpdatedAt() ||
+                local.additionalNotes != remote.additionalNotes ||
+                local.handledByOfficerNip != remote.handledByOfficerNip
+            ) {
+                discrepancies.add("Perbedaan pada ${remote.id}: Lokal($localNorm) vs Cloud($remoteNorm). Diselaraskan otomatis.")
+                val resolved = conflictHandler.resolveReportConflict(local, remote, "IntegrityCheck")
+                weatherDao.insertCitizenDisasterReport(toEntity(resolved))
+                if (resolved.effectiveUpdatedAt() > remote.effectiveUpdatedAt() || !resolved.isSyncedToCloud) {
+                    val pushRes = com.example.data.local.FirestoreHelper.syncReportToCloudSuspend(resolved)
+                    if (pushRes.isSuccess) {
+                        weatherDao.updateCitizenReportSyncState(resolved.id, true)
+                    }
+                }
+                resolvedCount++
+            }
+        }
+
+        // 2. Push local-only reports missing in Cloud Firestore
+        for (local in localEntities) {
+            if (!remoteMap.containsKey(local.id)) {
+                discrepancies.add("Laporan lokal ${local.id} belum terunggah ke Cloud. Mendorong ke Cloud Firestore.")
+                val model = toModel(local)
+                val pushRes = com.example.data.local.FirestoreHelper.syncReportToCloudSuspend(model)
+                if (pushRes.isSuccess) {
+                    weatherDao.updateCitizenReportSyncState(local.id, true)
+                }
+                resolvedCount++
+            }
+        }
+
+        val updatedLocal = weatherDao.getAllCitizenDisasterReportsSync()
+        val finalLocalChecksum = computeChecksum(
+            updatedLocal.map {
+                "${it.id}:${com.example.model.CitizenReportStatusHelper.normalizeStatus(it.status)}:${it.effectiveUpdatedAt()}"
+            }
+        )
+        val isConsistent = discrepancies.isEmpty() || finalLocalChecksum == remoteChecksum
+        Log.i(TAG, "Integrity check finished. Consistent: $isConsistent, Discrepancies: ${discrepancies.size}, Resolved: $resolvedCount")
+
+        IntegrityCheckResult(
+            localCount = updatedLocal.size,
+            remoteCount = remoteReports.size,
+            localChecksum = finalLocalChecksum,
+            remoteChecksum = remoteChecksum,
+            isConsistent = isConsistent,
+            discrepancies = discrepancies,
+            resolvedDiscrepancyCount = resolvedCount
+        )
     }
 
     private fun computeChecksum(items: List<String>): String {
@@ -183,7 +156,12 @@ object IntegrityCheckWorker {
         reporterPhone = r.reporterPhone,
         additionalNotes = r.additionalNotes,
         timestamp = r.timestamp,
-        status = r.status
+        status = com.example.model.CitizenReportStatusHelper.normalizeStatus(r.status),
+        updatedAt = r.effectiveUpdatedAt(),
+        handledByOfficerName = r.handledByOfficerName,
+        handledByOfficerNip = r.handledByOfficerNip,
+        handledByOfficerRole = r.handledByOfficerRole,
+        isSyncedToCloud = r.isSyncedToCloud
     )
 
     private fun toModel(e: CitizenDisasterReportEntity) = CitizenDisasterReport(
@@ -205,6 +183,12 @@ object IntegrityCheckWorker {
         reporterPhone = e.reporterPhone,
         additionalNotes = e.additionalNotes,
         timestamp = e.timestamp,
-        status = e.status
+        status = com.example.model.CitizenReportStatusHelper.normalizeStatus(e.status),
+        updatedAt = e.effectiveUpdatedAt(),
+        handledByOfficerName = e.handledByOfficerName,
+        handledByOfficerNip = e.handledByOfficerNip,
+        handledByOfficerRole = e.handledByOfficerRole,
+        isSyncedToCloud = e.isSyncedToCloud
     )
 }
+

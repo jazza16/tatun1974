@@ -154,6 +154,23 @@ class PlayIntegritySecurityManager(private val context: Context) {
         return boundNip.equals(officerNip, ignoreCase = true)
     }
 
+    /**
+     * Clears any local Play Integrity device binding recorded for the specified officer NIP.
+     */
+    fun clearDeviceBindingForOfficer(officerNip: String) {
+        val trimmed = officerNip.trim()
+        if (trimmed.isBlank()) return
+        val prefs = context.getSharedPreferences(PREFS_INTEGRITY, Context.MODE_PRIVATE)
+        val boundNip = SecureStorageHelper.getDecrypted(prefs, KEY_BOUND_OFFICER_NIP)
+        if (boundNip == null || boundNip.equals(trimmed, ignoreCase = true)) {
+            prefs.edit()
+                .remove(KEY_BOUND_OFFICER_NIP)
+                .remove(KEY_LAST_TOKEN_HASH)
+                .remove(KEY_BINDING_TIMESTAMP)
+                .apply()
+        }
+    }
+
     private fun recordDeviceBinding(officerNip: String, tokenOrHash: String) {
         val prefs = context.getSharedPreferences(PREFS_INTEGRITY, Context.MODE_PRIVATE)
         val editor = prefs.edit().putLong(KEY_BINDING_TIMESTAMP, System.currentTimeMillis())

@@ -99,10 +99,11 @@ class AuthManager(private val context: Context) {
 
         // Play Integrity API (Classic mode) token validation
         val playIntegrity = com.example.security.PlayIntegritySecurityManager.getInstance(context)
+        val securityManager = com.example.security.SecurityManager.getInstance(context)
         val integrityResult = playIntegrity.verifyCriticalAction(nip, "RUANG_KERJA_OFFICER_SESSION")
 
         if (!integrityResult.isSecure || integrityResult.token.isNullOrBlank()) {
-            // Log failed validation attempt to local security audit log
+            // Log failed validation attempt to local security audit log & Play Integrity activity stream
             try {
                 database.auditLogDao().insertAuditLog(
                     com.example.data.local.PersonnelAuditLogEntity(
@@ -114,6 +115,17 @@ class AuthManager(private val context: Context) {
                         deviceInfo = "Validasi token Classic gagal: ${integrityResult.verdict} / ${integrityResult.deviceVerdict}"
                     )
                 )
+                securityManager.recordLoginActivityEvent(
+                    officerNip = nip,
+                    officerName = name,
+                    officerRole = role,
+                    loginMethod = "PIN_CLOUD",
+                    loginStatus = "FAILED",
+                    action = "PLAY_INTEGRITY_TOKEN_FAILED",
+                    detail = "Validasi token Classic gagal: ${integrityResult.verdict} / ${integrityResult.deviceVerdict}",
+                    accessGranted = false,
+                    verdict = integrityResult.verdict
+                )
             } catch (_: Exception) {}
             officerAuthManager.logoutOfficer()
             _isAuthenticated.value = false
@@ -122,6 +134,14 @@ class AuthManager(private val context: Context) {
 
         _isAuthenticated.value = true
         try {
+            securityManager.verifyDeviceAuthenticityDuringLogin(
+                officerNip = nip,
+                officerName = name,
+                officerRole = role,
+                loginMethod = "PIN_CLOUD",
+                loginAction = "LOGIN_PLAY_INTEGRITY_VERIFIED",
+                detail = "Classic Token: ${integrityResult.verdict} (${integrityResult.deviceVerdict})"
+            )
             database.auditLogDao().insertAuditLog(
                 com.example.data.local.PersonnelAuditLogEntity(
                     nip = nip,
