@@ -2679,6 +2679,32 @@ fun CitizenReportScreen(
                             )
                         }
                     }
+                    if (isOfficerLoggedIn || authManager.isSessionActive()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                showSuccessDialog = false
+                                onSyncReports?.invoke { _ -> }
+                                selectedTab = 4
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_followup_in_officer_console")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Tindak Lanjuti di Ruang Kerja Petugas",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = "Untuk situasi darurat penyelamatan jiwa mendesak, segera hubungi Call Center 117.",

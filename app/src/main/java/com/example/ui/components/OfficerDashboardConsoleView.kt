@@ -226,12 +226,57 @@ fun OfficerDashboardConsoleView(
     var onlyWithCasualties by remember { mutableStateOf(false) }
 
     // Real-Time Alert (Notifikasi Tanpa Henti) State & Detector untuk Laporan Warga Baru (Pending)
-    val realtimeNewReportDetector = remember { OfficerRealtimeNewReportDetector() }
-    var activeRealtimeAlertReport by remember { mutableStateOf<CitizenDisasterReport?>(null) }
-    var unacknowledgedAlertQueue by remember { mutableStateOf<List<CitizenDisasterReport>>(emptyList()) }
+    val realtimeNewReportDetector = remember { OfficerRealtimeNewReportDetector.sharedSessionDetector }
+    var unacknowledgedAlertQueue by remember {
+        mutableStateOf(realtimeNewReportDetector.getUnacknowledgedAlerts())
+    }
+    var activeRealtimeAlertReport by remember {
+        mutableStateOf(unacknowledgedAlertQueue.firstOrNull())
+    }
+    var realtimeCloudReports by remember {
+        mutableStateOf<List<CitizenDisasterReport>>(emptyList())
+    }
+
+    val liveReports = remember(reports, realtimeCloudReports) {
+        if (realtimeCloudReports.isEmpty()) {
+            reports.sortedByDescending { it.timestamp }
+        } else {
+            val combinedMap = LinkedHashMap<String, CitizenDisasterReport>()
+            for (local in reports) {
+                combinedMap[local.id] = local
+            }
+            for (remote in realtimeCloudReports) {
+                val existing = combinedMap[remote.id]
+                if (existing == null) {
+                    combinedMap[remote.id] = remote
+                } else {
+                    val bestPhoto = com.example.util.ImageUtils.selectBestPhotoUri(remote.photoUri, existing.photoUri)
+                    val remoteRank = com.example.model.CitizenReportStatusHelper.statusRank(remote.status)
+                    val localRank = com.example.model.CitizenReportStatusHelper.statusRank(existing.status)
+                    val winner = if (remote.effectiveUpdatedAt() >= existing.effectiveUpdatedAt() || remoteRank > localRank) {
+                        remote
+                    } else {
+                        existing
+                    }
+                    combinedMap[remote.id] = winner.copy(
+                        photoUri = bestPhoto,
+                        isSyncedToCloud = true
+                    )
+                }
+            }
+            combinedMap.values.sortedByDescending { it.timestamp }
+        }
+    }
 
     val handleIncomingPendingReportsStream: (List<CitizenDisasterReport>) -> Unit = { incomingList ->
         val newlyDetected = realtimeNewReportDetector.onIncomingPendingReports(incomingList)
+        val currentQueue = realtimeNewReportDetector.getUnacknowledgedAlerts()
+        if (currentQueue.isNotEmpty()) {
+            unacknowledgedAlertQueue = currentQueue
+            if (activeRealtimeAlertReport == null) {
+                activeRealtimeAlertReport = currentQueue.firstOrNull()
+            }
+        }
         if (newlyDetected != null) {
             activeRealtimeAlertReport = newlyDetected
             if (unacknowledgedAlertQueue.none { it.id == newlyDetected.id }) {
@@ -241,36 +286,60 @@ fun OfficerDashboardConsoleView(
     }
 
     // StreamBuilder equivalent: Real-Time Firestore SnapshotListener on citizen_disaster_reports
-    // filtered by status Pending and ordered by timestamp descending
+    // filtered by status Pending and ordered by timestamp descending, plus full collection stream
     DisposableEffect(isOfficerLoggedIn) {
         val pendingReportsListener = com.example.data.local.FirestoreHelper.listenPendingCitizenReportsRealtime(
             onUpdate = { pendingReports ->
+                if (pendingReports.isNotEmpty()) {
+                    val existingById = realtimeCloudReports.associateBy { it.id }.toMutableMap()
+                    pendingReports.forEach { r -> existingById[r.id] = r }
+                    realtimeCloudReports = existingById.values.sortedByDescending { it.timestamp }
+                }
                 handleIncomingPendingReportsStream(pendingReports)
+                onSyncReports?.invoke { _ -> }
+            }
+        )
+        val allReportsListener = com.example.data.local.FirestoreHelper.listenCitizenReportsRealtime(
+            onUpdate = { allRemote ->
+                realtimeCloudReports = allRemote
+                handleIncomingPendingReportsStream(allRemote)
+                onSyncReports?.invoke { _ -> }
             }
         )
         onDispose {
             pendingReportsListener?.remove()
+            allReportsListener?.remove()
             OfficerAlarmPlayer.stopActiveRingtone()
+        }
+    }
+
+    // Active Officer Session Fast Heartbeat Sync (every 4 seconds while Ruang Kerja is open)
+    LaunchedEffect(isOfficerLoggedIn) {
+        if (isOfficerLoggedIn) {
+            while (isActive) {
+                onSyncReports?.invoke { _ -> }
+                delay(4_000L)
+            }
         }
     }
 
     // Auto-Pin Location on Mini Map State & Sinkronisasi Detektor Laporan Baru dari Flow Repository
     var pinnedReportForMap by remember {
         mutableStateOf<CitizenDisasterReport?>(
-            reports.firstOrNull { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
-                ?: reports.firstOrNull()
+            liveReports.firstOrNull { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
+                ?: liveReports.firstOrNull()
         )
     }
-    LaunchedEffect(reports) {
-        handleIncomingPendingReportsStream(reports)
+    LaunchedEffect(liveReports) {
+        handleIncomingPendingReportsStream(liveReports)
         val currentPinnedId = pinnedReportForMap?.id
         pinnedReportForMap = if (currentPinnedId != null) {
-            reports.find { it.id == currentPinnedId }
-                ?: reports.firstOrNull { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
-                ?: reports.firstOrNull()
+            liveReports.find { it.id == currentPinnedId }
+                ?: liveReports.firstOrNull { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
+                ?: liveReports.firstOrNull()
         } else {
-            reports.firstOrNull { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
-                ?: reports.firstOrNull()
+            liveReports.firstOrNull { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
+                ?: liveReports.firstOrNull()
         }
     }
 
@@ -377,7 +446,8 @@ fun OfficerDashboardConsoleView(
             val (sessions, activities) = securityManager.syncAllOfficerLoginActivities(
                 auditLogs = auditLogs,
                 knownOfficialNips = knownOfficialNips,
-                officerNipFilter = officerBadgeId
+                officerNipFilter = "",
+                activeDeviceHeartbeats = activeDevices
             )
             securitySessionsList = sessions.filterNot {
                 revokedNipsInSession.contains(it.officerNip.trim().lowercase())
@@ -401,7 +471,8 @@ fun OfficerDashboardConsoleView(
 
     DisposableEffect(currentFirebaseUid, isOfficerLoggedIn, officerBadgeId) {
         val sessionListener = securityManager.listenSecuritySessionsRealtime(
-            officerNipFilter = officerBadgeId,
+            officerNipFilter = "",
+            activeOfficerNipForRevocation = officerBadgeId,
             onActiveSessionRevoked = {
                 if (isOfficerLoggedIn) {
                     Toast.makeText(
@@ -416,7 +487,10 @@ fun OfficerDashboardConsoleView(
                 }
             }
         ) { list ->
-            securitySessionsList = list.filterNot {
+            securitySessionsList = securityManager.reconcileWithActiveHeartbeats(
+                sessions = list,
+                heartbeats = activeDevices
+            ).filterNot {
                 revokedNipsInSession.contains(it.officerNip.trim().lowercase())
             }
         }
@@ -426,6 +500,17 @@ fun OfficerDashboardConsoleView(
         onDispose {
             sessionListener?.remove()
             activityListener?.remove()
+        }
+    }
+
+    LaunchedEffect(activeDevices) {
+        if (activeDevices.isNotEmpty()) {
+            securitySessionsList = securityManager.reconcileWithActiveHeartbeats(
+                sessions = securitySessionsList,
+                heartbeats = activeDevices
+            ).filterNot {
+                revokedNipsInSession.contains(it.officerNip.trim().lowercase())
+            }
         }
     }
 
@@ -491,13 +576,13 @@ fun OfficerDashboardConsoleView(
     }
 
     // Quick Stats Calculation (Canonical Normalized Status)
-    val totalCount = reports.size
-    val pendingCount = reports.count { com.example.model.CitizenReportStatusHelper.isPending(it.status) }
-    val validatedCount = reports.count { com.example.model.CitizenReportStatusHelper.isValidated(it.status) }
-    val resolvedCount = reports.count { com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
-    val totalDead = reports.sumOf { it.casualtiesDead }
-    val totalInjured = reports.sumOf { it.casualtiesInjured }
-    val totalMissing = reports.sumOf { it.casualtiesMissing }
+    val totalCount = liveReports.size
+    val pendingCount = liveReports.count { com.example.model.CitizenReportStatusHelper.isPending(it.status) }
+    val validatedCount = liveReports.count { com.example.model.CitizenReportStatusHelper.isValidated(it.status) }
+    val resolvedCount = liveReports.count { com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
+    val totalDead = liveReports.sumOf { it.casualtiesDead }
+    val totalInjured = liveReports.sumOf { it.casualtiesInjured }
+    val totalMissing = liveReports.sumOf { it.casualtiesMissing }
 
     val categoryOptions = listOf(
         "Semua Kategori",
@@ -519,8 +604,8 @@ fun OfficerDashboardConsoleView(
 
     // Filtered Reports
     val baseReports = when (dashboardSubTab) {
-        1 -> reports.filter { com.example.model.CitizenReportStatusHelper.isResolved(it.status) } // Modul Arsip
-        else -> reports.filter { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) } // Antrean Aktif
+        1 -> liveReports.filter { com.example.model.CitizenReportStatusHelper.isResolved(it.status) } // Modul Arsip
+        else -> liveReports.filter { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) } // Antrean Aktif
     }
 
     val filteredReports = baseReports.filter { rep ->
@@ -1299,26 +1384,39 @@ fun OfficerDashboardConsoleView(
                         }
                     },
                     onRevokeSecuritySession = { session ->
-                        val normalizedNip = session.officerNip.trim().lowercase()
-                        revokedNipsInSession = revokedNipsInSession + normalizedNip
-                        securitySessionsList = securitySessionsList.filterNot {
-                            it.officerNip.trim().equals(session.officerNip.trim(), ignoreCase = true)
-                        }
-                        coroutineScope.launch {
-                            securityManager.deleteSecuritySession(
-                                officerNip = session.officerNip,
-                                purgeActivities = false,
-                                revokedByAdmin = officerName.ifBlank { "Petugas Pusdalops" }
-                            )
-                            securityManager.clearLocalSession()
-                            com.example.data.auth.AuthManager.getInstance(context).signOut()
-                            officerAuthManager.logoutOfficer()
-                            Toast.makeText(
-                                context,
-                                "Akses sesi ${session.officerName} (NIP ${session.officerNip}) berhasil dicabut. Logout paksa dijalankan.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            onLogoutClick()
+                        val actionLabel = "Cabut Akses Perangkat (${session.officerName.ifBlank { session.officerNip }})"
+                        requestAdminProtectedAction(actionLabel) {
+                            val normalizedNip = session.officerNip.trim().lowercase()
+                            val isSelfSession = officerBadgeId.trim().equals(session.officerNip.trim(), ignoreCase = true)
+                            revokedNipsInSession = revokedNipsInSession + normalizedNip
+                            securitySessionsList = securitySessionsList.filterNot {
+                                it.officerNip.trim().equals(session.officerNip.trim(), ignoreCase = true)
+                            }
+                            coroutineScope.launch {
+                                securityManager.deleteSecuritySession(
+                                    officerNip = session.officerNip,
+                                    purgeActivities = false,
+                                    revokedByAdmin = officerName.ifBlank { "Admin Pusdalops" }
+                                )
+                                loginActivitiesList = securityManager.fetchLoginActivities()
+                                if (isSelfSession) {
+                                    securityManager.clearLocalSession()
+                                    com.example.data.auth.AuthManager.getInstance(context).signOut()
+                                    officerAuthManager.logoutOfficer()
+                                    Toast.makeText(
+                                        context,
+                                        "Akses sesi Anda (${session.officerName}) dicabut. Logout dijalankan.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    onLogoutClick()
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Akses sesi ${session.officerName.ifBlank { "Petugas" }} (NIP ${session.officerNip}) berhasil dicabut dari server.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
                         }
                     },
                     onRunIntegrityCheck = {

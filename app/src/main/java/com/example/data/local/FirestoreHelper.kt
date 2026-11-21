@@ -506,6 +506,35 @@ object FirestoreHelper {
         return map
     }
 
+    private val localAllReportsListeners =
+        java.util.concurrent.CopyOnWriteArrayList<(List<CitizenDisasterReport>) -> Unit>()
+    private val localPendingReportsListeners =
+        java.util.concurrent.CopyOnWriteArrayList<(List<CitizenDisasterReport>) -> Unit>()
+    private val inMemoryLatestReportsById =
+        java.util.concurrent.ConcurrentHashMap<String, CitizenDisasterReport>()
+
+    private fun recordAndBroadcastInMemoryReport(report: CitizenDisasterReport) {
+        val safeId = sanitizeCitizenReportId(report.id)
+        val syncedCopy = report.copy(id = safeId, isSyncedToCloud = true)
+        inMemoryLatestReportsById[safeId] = syncedCopy
+        realtimeDocumentStreamListeners[safeId]?.forEach { cb ->
+            runCatching { cb(syncedCopy) }
+        }
+        val allSorted = inMemoryLatestReportsById.values.sortedByDescending { it.timestamp }
+        if (allSorted.isNotEmpty()) {
+            localAllReportsListeners.forEach { cb ->
+                runCatching { cb(allSorted) }
+            }
+            val pendingSorted = allSorted.filter {
+                com.example.model.CitizenReportStatusHelper.isPending(it.status) ||
+                    it.status.equals("Pending", ignoreCase = true)
+            }
+            localPendingReportsListeners.forEach { cb ->
+                runCatching { cb(pendingSorted) }
+            }
+        }
+    }
+
     /**
      * Real-time listener for all Citizen Disaster Reports across citizen & officer devices.
      */
@@ -513,9 +542,13 @@ object FirestoreHelper {
         onUpdate: (List<CitizenDisasterReport>) -> Unit,
         onError: ((Exception) -> Unit)? = null
     ): ListenerRegistration? {
-        val db = firestore ?: return null
+        localAllReportsListeners.add(onUpdate)
+        val db = firestore
+        if (db == null) {
+            return ListenerRegistration { localAllReportsListeners.remove(onUpdate) }
+        }
         ensureAppCheckTokenAttached()
-        return try {
+        val firestoreReg = try {
             db.collection(COLLECTION_CITIZEN_REPORTS)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
@@ -527,6 +560,7 @@ object FirestoreHelper {
                         val reports = snapshot.documents.mapNotNull { doc ->
                             parseCitizenReportDocument(doc)
                         }.sortedByDescending { it.timestamp }
+                        reports.forEach { r -> inMemoryLatestReportsById[sanitizeCitizenReportId(r.id)] = r }
                         onUpdate(reports)
                     }
                 }
@@ -534,57 +568,41 @@ object FirestoreHelper {
             logFirestoreError("attachCitizenReportsRealtimeListener", e)
             null
         }
+        return ListenerRegistration {
+            localAllReportsListeners.remove(onUpdate)
+            runCatching { firestoreReg?.remove() }
+        }
     }
 
     /**
      * Real-time stream listener for Pending Citizen Disaster Reports (setara StreamBuilder Flutter):
-     * Mendengarkan koleksi `citizen_disaster_reports` dengan filter status Pending ("Pending" / "Diproses")
-     * dan diurutkan berdasarkan `timestamp` descending (`Query.Direction.DESCENDING`).
+     * Mendengarkan koleksi `citizen_disaster_reports` secara real-time, memfilter status Pending/Diproses,
+     * dan mengurutkan berdasarkan `timestamp` descending tanpa bergantung pada composite index yang rawan gagal.
      */
     fun listenPendingCitizenReportsRealtime(
         onUpdate: (List<CitizenDisasterReport>) -> Unit,
         onError: ((Exception) -> Unit)? = null
     ): ListenerRegistration? {
-        val db = firestore ?: return null
+        localPendingReportsListeners.add(onUpdate)
+        val db = firestore
+        if (db == null) {
+            return ListenerRegistration { localPendingReportsListeners.remove(onUpdate) }
+        }
         ensureAppCheckTokenAttached()
-        val pendingStatusValues = listOf("Pending", "Diproses", "Menunggu", "Baru", "Menunggu Verifikasi")
-        return try {
+        val firestoreReg = try {
             db.collection(COLLECTION_CITIZEN_REPORTS)
-                .whereIn("status", pendingStatusValues)
-                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        val fsEx = error as? FirebaseFirestoreException
-                        if (fsEx?.code == FirebaseFirestoreException.Code.FAILED_PRECONDITION) {
-                            // Fallback apabila composite index belum selesai dibuat di server Firestore
-                            db.collection(COLLECTION_CITIZEN_REPORTS)
-                                .whereIn("status", pendingStatusValues)
-                                .addSnapshotListener { fallbackSnap, fallbackErr ->
-                                    if (fallbackErr != null) {
-                                        logFirestoreError("listenPendingCitizenReportsRealtime(fallback)", fallbackErr)
-                                        onError?.invoke(fallbackErr)
-                                        return@addSnapshotListener
-                                    }
-                                    if (fallbackSnap != null) {
-                                        val pendingReports = fallbackSnap.documents.mapNotNull { doc ->
-                                            parseCitizenReportDocument(doc)
-                                        }.filter {
-                                            com.example.model.CitizenReportStatusHelper.isPending(it.status) ||
-                                                it.status.equals("Pending", ignoreCase = true)
-                                        }.sortedByDescending { it.timestamp }
-                                        onUpdate(pendingReports)
-                                    }
-                                }
-                        } else {
-                            logFirestoreError("listenPendingCitizenReportsRealtime", error)
-                            onError?.invoke(error)
-                        }
+                        logFirestoreError("listenPendingCitizenReportsRealtime", error)
+                        onError?.invoke(error)
                         return@addSnapshotListener
                     }
                     if (snapshot != null) {
-                        val pendingReports = snapshot.documents.mapNotNull { doc ->
+                        val allReports = snapshot.documents.mapNotNull { doc ->
                             parseCitizenReportDocument(doc)
-                        }.filter {
+                        }
+                        allReports.forEach { r -> inMemoryLatestReportsById[sanitizeCitizenReportId(r.id)] = r }
+                        val pendingReports = allReports.filter {
                             com.example.model.CitizenReportStatusHelper.isPending(it.status) ||
                                 it.status.equals("Pending", ignoreCase = true)
                         }.sortedByDescending { it.timestamp }
@@ -594,6 +612,10 @@ object FirestoreHelper {
         } catch (e: Exception) {
             logFirestoreError("attachPendingCitizenReportsRealtimeListener", e)
             null
+        }
+        return ListenerRegistration {
+            localPendingReportsListeners.remove(onUpdate)
+            runCatching { firestoreReg?.remove() }
         }
     }
 
@@ -756,10 +778,13 @@ object FirestoreHelper {
 
     /**
      * AuthorUid-safe suspend upload/sync of a CitizenDisasterReport to Cloud Firestore.
-     * Attempts an in-place update without mutating `authorUid` first; if the document does not
-     * exist yet (NOT_FOUND), creates it cleanly with `id` and `authorUid`.
+     * Attempts `.set(fullCreateData)` first so brand-new citizen reports evaluate `allow create`
+     * in a single round-trip (avoiding `allow update` PERMISSION_DENIED when `resource == null`).
+     * If the document already exists with a different `authorUid`, falls back to `.update(mutableFields)`
+     * which preserves `id` and `authorUid`.
      */
     suspend fun syncReportToCloudSuspend(report: CitizenDisasterReport): Result<Unit> {
+        recordAndBroadcastInMemoryReport(report)
         overrideCitizenReportUploaderForTesting?.let { return it(report) }
         val dbResult = getFirestoreOrThrow()
         val db = dbResult.getOrNull()
@@ -767,13 +792,20 @@ object FirestoreHelper {
         ensureAppCheckTokenAttached()
         val safeId = sanitizeCitizenReportId(report.id)
         val mutableFields = buildMutableCitizenReportFields(report)
+        val uid = currentUid() ?: "PUBLIC_CITIZEN_MUKOMUKO"
+        val fullCreateData = mutableMapOf<String, Any>(
+            "id" to safeId,
+            "authorUid" to uid
+        ).apply { putAll(mutableFields) }
 
-        val updateResult = suspendCancellableCoroutine<Result<Unit>> { cont ->
+        // 1. Primary path: .set(fullCreateData) — triggers `allow create` for new reports (or `allow update` if authorUid matches)
+        val createOrSetResult = suspendCancellableCoroutine<Result<Unit>> { cont ->
             try {
                 db.collection(COLLECTION_CITIZEN_REPORTS)
                     .document(safeId)
-                    .update(mutableFields)
+                    .set(fullCreateData)
                     .addOnSuccessListener {
+                        Log.d(TAG, "Report $safeId written (create/set) in Firestore")
                         if (cont.isActive) cont.resume(Result.success(Unit))
                     }
                     .addOnFailureListener { e ->
@@ -783,41 +815,26 @@ object FirestoreHelper {
                 if (cont.isActive) cont.resume(Result.failure(e))
             }
         }
-        if (updateResult.isSuccess) {
-            Log.d(TAG, "Report $safeId updated in Firestore (authorUid preserved)")
+        if (createOrSetResult.isSuccess) {
             return Result.success(Unit)
         }
 
-        val updateErr = updateResult.exceptionOrNull()
-        val fsEx = updateErr as? FirebaseFirestoreException
-            ?: (updateErr?.cause as? FirebaseFirestoreException)
-        if (fsEx != null && fsEx.code != FirebaseFirestoreException.Code.NOT_FOUND) {
-            logFirestoreError("syncReportToCloudSuspend(update $safeId)", fsEx)
-            return Result.failure(fsEx)
-        }
-
-        // Document does not exist yet: create with immutable id + authorUid
-        val uid = currentUid() ?: "PUBLIC_CITIZEN_MUKOMUKO"
-        val fullCreateData = mutableMapOf<String, Any>(
-            "id" to safeId,
-            "authorUid" to uid
-        ).apply { putAll(mutableFields) }
-
+        // 2. Fallback path: document already exists in Firestore with a different authorUid -> in-place .update(mutableFields)
         return suspendCancellableCoroutine { cont ->
             try {
                 db.collection(COLLECTION_CITIZEN_REPORTS)
                     .document(safeId)
-                    .set(fullCreateData)
+                    .update(mutableFields)
                     .addOnSuccessListener {
-                        Log.d(TAG, "Report $safeId created in Firestore")
+                        Log.d(TAG, "Report $safeId updated in Firestore (authorUid preserved)")
                         if (cont.isActive) cont.resume(Result.success(Unit))
                     }
                     .addOnFailureListener { e ->
-                        logFirestoreError("syncReportToCloudSuspend(create $safeId)", e)
+                        logFirestoreError("syncReportToCloudSuspend(update $safeId)", e)
                         if (cont.isActive) cont.resume(Result.failure(e))
                     }
             } catch (e: Exception) {
-                logFirestoreError("syncReportToCloudSuspend(create $safeId)", e)
+                logFirestoreError("syncReportToCloudSuspend(update $safeId)", e)
                 if (cont.isActive) cont.resume(Result.failure(e))
             }
         }
@@ -827,37 +844,33 @@ object FirestoreHelper {
      * Backward-compatible non-suspend wrapper for uploading or updating a citizen disaster report.
      */
     fun syncReportToCloud(report: CitizenDisasterReport) {
+        recordAndBroadcastInMemoryReport(report)
         val db = firestore ?: return
         ensureAppCheckTokenAttached()
         val safeId = sanitizeCitizenReportId(report.id)
         val mutableFields = buildMutableCitizenReportFields(report)
+        val uid = currentUid() ?: "PUBLIC_CITIZEN_MUKOMUKO"
+        val createData = mutableMapOf<String, Any>(
+            "id" to safeId,
+            "authorUid" to uid
+        ).apply { putAll(mutableFields) }
         try {
             db.collection(COLLECTION_CITIZEN_REPORTS)
                 .document(safeId)
-                .update(mutableFields)
+                .set(createData)
                 .addOnSuccessListener {
-                    Log.d(TAG, "Report $safeId synced to Firestore")
+                    Log.d(TAG, "Report $safeId created/synced to Firestore")
                 }
-                .addOnFailureListener { e ->
-                    val fsEx = e as? FirebaseFirestoreException
-                    if (fsEx?.code == FirebaseFirestoreException.Code.NOT_FOUND) {
-                        val uid = currentUid() ?: "PUBLIC_CITIZEN_MUKOMUKO"
-                        val createData = mutableMapOf<String, Any>(
-                            "id" to safeId,
-                            "authorUid" to uid
-                        ).apply { putAll(mutableFields) }
-                        db.collection(COLLECTION_CITIZEN_REPORTS)
-                            .document(safeId)
-                            .set(createData)
-                            .addOnSuccessListener {
-                                Log.d(TAG, "Report $safeId created in Firestore")
-                            }
-                            .addOnFailureListener { createErr ->
-                                logFirestoreError("syncReportToCloud(create $safeId)", createErr)
-                            }
-                    } else {
-                        logFirestoreError("syncReportToCloud($safeId)", e)
-                    }
+                .addOnFailureListener { _ ->
+                    db.collection(COLLECTION_CITIZEN_REPORTS)
+                        .document(safeId)
+                        .update(mutableFields)
+                        .addOnSuccessListener {
+                            Log.d(TAG, "Report $safeId updated in Firestore")
+                        }
+                        .addOnFailureListener { updateErr ->
+                            logFirestoreError("syncReportToCloud($safeId)", updateErr)
+                        }
                 }
         } catch (e: Exception) {
             logFirestoreError("syncReportToCloud($safeId)", e)
@@ -866,8 +879,8 @@ object FirestoreHelper {
 
     /**
      * Updates report status, optional follow-up notes, timestamp (`updatedAt`), and active officer attribution
-     * in Firestore. If the report document has not reached Firestore yet (`NOT_FOUND`) and `fallbackReport`
-     * is provided, creates the complete report document immediately so no officer follow-up is lost.
+     * in Firestore. If the report document has not reached Firestore yet (`NOT_FOUND` or `PERMISSION_DENIED` on missing doc)
+     * and `fallbackReport` is provided, creates the complete report document immediately so no officer follow-up is lost.
      */
     suspend fun updateReportStatusInCloudSuspend(
         reportId: String,
@@ -880,6 +893,21 @@ object FirestoreHelper {
         fallbackReport: CitizenDisasterReport? = null
     ): Result<Unit> {
         val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(newStatus)
+        val safeId = sanitizeCitizenReportId(reportId)
+        val existingMem = inMemoryLatestReportsById[safeId] ?: fallbackReport
+        if (existingMem != null) {
+            recordAndBroadcastInMemoryReport(
+                existingMem.copy(
+                    id = safeId,
+                    status = normalizedStatus,
+                    additionalNotes = notes ?: existingMem.additionalNotes,
+                    updatedAt = updatedAt,
+                    handledByOfficerName = officerName.ifBlank { existingMem.handledByOfficerName },
+                    handledByOfficerNip = officerNip.ifBlank { existingMem.handledByOfficerNip },
+                    handledByOfficerRole = officerRole.ifBlank { existingMem.handledByOfficerRole }
+                )
+            )
+        }
         overrideCitizenReportStatusUpdaterForTesting?.let {
             return it(reportId, normalizedStatus, notes, updatedAt, officerName, officerNip, officerRole)
         }
@@ -887,7 +915,6 @@ object FirestoreHelper {
         val db = dbResult.getOrNull()
             ?: return Result.failure(dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia"))
         ensureAppCheckTokenAttached()
-        val safeId = sanitizeCitizenReportId(reportId)
 
         val updateMap = mutableMapOf<String, Any>(
             "status" to normalizedStatus,
@@ -926,7 +953,9 @@ object FirestoreHelper {
 
         val err = updateResult.exceptionOrNull()
         val fsEx = err as? FirebaseFirestoreException ?: (err?.cause as? FirebaseFirestoreException)
-        if (fsEx?.code == FirebaseFirestoreException.Code.NOT_FOUND && fallbackReport != null) {
+        if ((fsEx?.code == FirebaseFirestoreException.Code.NOT_FOUND ||
+                fsEx?.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) && fallbackReport != null
+        ) {
             val patched = fallbackReport.copy(
                 id = safeId,
                 status = normalizedStatus,

@@ -303,8 +303,21 @@ class SyncController(
         val officerAuth = OfficerAuthManager(context)
         val isOfficerActive = officerAuth.isOfficerLoggedIn()
         val officerName = if (isOfficerActive) officerAuth.getOfficerName().ifBlank { "Petugas Pusdalops" } else "Piket Siaga"
+        val officerNip = if (isOfficerActive) officerAuth.getOfficerBadgeId().ifBlank { officerAuth.getSavedNip() } else ""
+        val officerRole = if (isOfficerActive) officerAuth.getOfficerRole().ifBlank { "Operator Pusdalops" } else ""
         val now = System.currentTimeMillis()
         val currentStatus = if (_isSlowNetwork.value) "SLOW_NET" else "ONLINE"
+
+        if (isOfficerActive && officerNip.isNotBlank()) {
+            try {
+                com.example.security.SecurityManager.getInstance(context).syncPendingSessionToFirestore(
+                    officerNip = officerNip,
+                    officerName = officerName,
+                    officerRole = officerRole
+                )
+            } catch (_: Exception) {
+            }
+        }
 
         val localHeartbeat = DeviceHeartbeat(
             deviceId = deviceId,

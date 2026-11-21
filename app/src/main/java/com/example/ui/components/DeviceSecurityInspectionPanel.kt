@@ -518,10 +518,40 @@ fun PlayIntegritySecuritySessionsCard(
 
     // Dialog Detail Inspeksi untuk 1 Aktivitas Login
     activityPendingInspect?.let { targetActivity ->
-        val matchedSession = remember(targetActivity.officerNip, securitySessions) {
+        val matchedSession = remember(targetActivity.officerNip, targetActivity.activityId, securitySessions) {
             securitySessions.firstOrNull {
                 it.officerNip.equals(targetActivity.officerNip, ignoreCase = true)
-            }
+            } ?: DeviceSecuritySession(
+                sessionId = targetActivity.sessionId.ifBlank { "sess_${targetActivity.officerNip}" },
+                officerNip = targetActivity.officerNip,
+                officerName = targetActivity.officerName,
+                officerRole = targetActivity.officerRole,
+                integrityToken = targetActivity.tokenHash,
+                tokenHash = targetActivity.tokenHash,
+                classicNonce = targetActivity.classicNonce,
+                verdict = targetActivity.verdict,
+                deviceVerdict = targetActivity.deviceVerdict,
+                deviceId = targetActivity.deviceId,
+                deviceModel = targetActivity.deviceModel,
+                osVersion = targetActivity.osVersion,
+                sdkInt = targetActivity.sdkInt,
+                isVerified = targetActivity.accessGranted,
+                accessGranted = targetActivity.accessGranted,
+                timestamp = targetActivity.timestamp,
+                tokenLength = targetActivity.tokenLength,
+                tokenSource = targetActivity.tokenSource,
+                deviceBrand = targetActivity.deviceBrand,
+                deviceManufacturer = targetActivity.deviceBrand,
+                deviceHardware = targetActivity.deviceHardware,
+                deviceFingerprintHash = targetActivity.deviceFingerprintHash,
+                isEmulator = targetActivity.isEmulator,
+                appVersion = targetActivity.appVersion,
+                loginMethod = targetActivity.loginMethod,
+                loginStatus = targetActivity.loginStatus,
+                loginAction = targetActivity.action,
+                loginCount = 1,
+                lastActivityDetail = targetActivity.detail
+            )
         }
         LoginActivityDetailDialog(
             activity = targetActivity,

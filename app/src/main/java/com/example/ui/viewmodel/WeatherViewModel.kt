@@ -181,28 +181,39 @@ class WeatherViewModel(
                 android.util.Log.w("WeatherViewModel", "Initial reports seed warning: ${e.message}")
             }
 
+            fun ensureCitizenReportsRealtimeListenerAttached() {
+                if (citizenReportsRealtimeListener != null) return
+                try {
+                    citizenReportsRealtimeListener = com.example.data.local.FirestoreHelper.listenCitizenReportsRealtime(
+                        onUpdate = { remoteReports ->
+                            viewModelScope.launch {
+                                try {
+                                    repository.upsertRealtimeCitizenReportsFromCloud(remoteReports)
+                                } catch (_: Throwable) {}
+                            }
+                        },
+                        onError = { e ->
+                            android.util.Log.e("WeatherViewModel", "Realtime citizen_disaster_reports listener error: ${e.message}", e)
+                        }
+                    )
+                } catch (e: Throwable) {
+                    android.util.Log.w("WeatherViewModel", "Firestore listener init warning: ${e.message}")
+                }
+            }
+
             try {
                 citizenReportsRealtimeListener?.remove()
-                citizenReportsRealtimeListener = com.example.data.local.FirestoreHelper.listenCitizenReportsRealtime(
-                    onUpdate = { remoteReports ->
-                        viewModelScope.launch {
-                            try {
-                                repository.upsertRealtimeCitizenReportsFromCloud(remoteReports)
-                            } catch (_: Throwable) {}
-                        }
-                    },
-                    onError = { e ->
-                        android.util.Log.e("WeatherViewModel", "Realtime citizen_disaster_reports listener error: ${e.message}", e)
-                    }
-                )
+                citizenReportsRealtimeListener = null
+                ensureCitizenReportsRealtimeListenerAttached()
             } catch (e: Throwable) {
                 android.util.Log.w("WeatherViewModel", "Firestore listener init warning: ${e.message}")
             }
 
-            // Continuous real-time listener polling so officer updates appear instantly on citizen devices
+            // Continuous real-time listener polling so citizen reports & officer updates appear rapidly across devices
             while (true) {
-                kotlinx.coroutines.delay(10000)
+                kotlinx.coroutines.delay(5000)
                 try {
+                    ensureCitizenReportsRealtimeListenerAttached()
                     repository.syncCitizenDisasterReportsOnline()
                 } catch (_: Throwable) {}
             }

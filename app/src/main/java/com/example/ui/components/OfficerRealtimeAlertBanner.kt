@@ -78,8 +78,56 @@ class OfficerRealtimeNewReportDetector {
         private set
 
     private val seenReportIds = mutableSetOf<String>()
+    private val unacknowledgedQueue = java.util.concurrent.CopyOnWriteArrayList<CitizenDisasterReport>()
+
     var isBaselineInitialized: Boolean = false
         private set
+
+    companion object {
+        /**
+         * Detektor sesi global yang bertahan lintas pergantian tab (Mode Warga <-> Ruang Kerja Petugas)
+         * sehingga laporan warga yang baru dikirim saat sesi petugas aktif tidak pernah tertelan sebagai baseline lama.
+         */
+        val sharedSessionDetector = OfficerRealtimeNewReportDetector()
+    }
+
+    @Synchronized
+    fun initializeBaselineIfNeeded(existingReports: List<CitizenDisasterReport>) {
+        if (!isBaselineInitialized) {
+            val pendingSortedDesc = existingReports
+                .filter {
+                    CitizenReportStatusHelper.isPending(it.status) ||
+                        it.status.equals("Pending", ignoreCase = true)
+                }
+                .sortedByDescending { it.timestamp }
+            isBaselineInitialized = true
+            pendingSortedDesc.forEach { seenReportIds.add(it.id) }
+            lastReadReportId = pendingSortedDesc.firstOrNull()?.id
+        }
+    }
+
+    @Synchronized
+    fun recordNewCitizenReport(report: CitizenDisasterReport, context: Context? = null) {
+        if (!CitizenReportStatusHelper.isPending(report.status) &&
+            !report.status.equals("Pending", ignoreCase = true)
+        ) {
+            return
+        }
+        isBaselineInitialized = true
+        seenReportIds.add(report.id)
+        lastReadReportId = report.id
+        unacknowledgedQueue.removeAll { it.id == report.id }
+        unacknowledgedQueue.add(0, report)
+        if (context != null) {
+            try {
+                OfficerPushNotificationHelper.notifyOfficerForNewReport(context.applicationContext, report)
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    @Synchronized
+    fun getUnacknowledgedAlerts(): List<CitizenDisasterReport> = unacknowledgedQueue.toList()
 
     /**
      * Memproses daftar laporan dari stream `citizen_disaster_reports`
@@ -99,11 +147,11 @@ class OfficerRealtimeNewReportDetector {
             isBaselineInitialized = true
             pendingSortedDesc.forEach { seenReportIds.add(it.id) }
             lastReadReportId = pendingSortedDesc.firstOrNull()?.id
-            return null
+            return unacknowledgedQueue.firstOrNull()
         }
 
         if (pendingSortedDesc.isEmpty()) {
-            return null
+            return unacknowledgedQueue.firstOrNull()
         }
 
         val topNewest = pendingSortedDesc.first()
@@ -113,7 +161,16 @@ class OfficerRealtimeNewReportDetector {
             pendingSortedDesc.firstOrNull { !seenReportIds.contains(it.id) }
         }
 
+        // Tangkap seluruh laporan baru yang belum pernah dilihat dalam snapshot ini
+        val allNewUnseen = pendingSortedDesc.filter { !seenReportIds.contains(it.id) }
         pendingSortedDesc.forEach { seenReportIds.add(it.id) }
+
+        if (allNewUnseen.isNotEmpty()) {
+            for (newRep in allNewUnseen.asReversed()) {
+                unacknowledgedQueue.removeAll { it.id == newRep.id }
+                unacknowledgedQueue.add(0, newRep)
+            }
+        }
 
         return if (newestUnseen != null) {
             lastReadReportId = newestUnseen.id
@@ -132,6 +189,7 @@ class OfficerRealtimeNewReportDetector {
         if (trimmed.isNotBlank()) {
             seenReportIds.add(trimmed)
             lastReadReportId = trimmed
+            unacknowledgedQueue.removeAll { it.id == trimmed }
         }
     }
 
@@ -139,6 +197,7 @@ class OfficerRealtimeNewReportDetector {
     fun resetForTesting() {
         lastReadReportId = null
         seenReportIds.clear()
+        unacknowledgedQueue.clear()
         isBaselineInitialized = false
     }
 }

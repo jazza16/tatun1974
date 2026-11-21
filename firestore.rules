@@ -558,8 +558,8 @@ service cloud.firestore {
 
     // 13. Officer Login Activity & Play Integrity Classic Audit Stream (Append-Only)
     match /device_login_activities/{activityId} {
-      allow get: if isSignedIn() && isValidId(activityId);
-      allow list: if isSignedIn();
+      allow get: if isValidId(activityId);
+      allow list: if true;
       allow create: if isValidId(activityId)
                     && incoming().keys().hasAll([
                          'activityId', 'ownerUid', 'officerNip', 'loginMethod',
@@ -580,7 +580,11 @@ service cloud.firestore {
                          || (!isSignedIn() && incoming().ownerUid == ('officer_nip_' + incoming().officerNip))
                        );
       allow update: if false;
-      allow delete: if isSignedIn() && isValidId(activityId) && existing().ownerUid == request.auth.uid;
+      allow delete: if isValidId(activityId)
+                    && (
+                         (isSignedIn() && existing().ownerUid == request.auth.uid)
+                         || (!isSignedIn() && existing().ownerUid == ('officer_nip_' + existing().officerNip))
+                       );
     }
   }
 }

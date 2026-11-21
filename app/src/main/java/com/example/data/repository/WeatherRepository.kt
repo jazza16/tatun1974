@@ -406,6 +406,13 @@ class WeatherRepository(
         com.example.data.local.FirestoreHelper.ensureOfflinePersistenceEnabled(context)
         com.example.data.sync.OfflineReportConnectivityMonitor.ensureRegistered(context)
 
+        // Pastikan baseline detektor sesi petugas terkunci pada laporan yang sudah ada sebelum laporan baru dimasukkan
+        val existingBeforeSubmit = runCatching {
+            weatherDao.getAllCitizenDisasterReportsSync().map { mapCitizenEntityToModel(it) }
+        }.getOrDefault(emptyList())
+        com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
+            .initializeBaselineIfNeeded(existingBeforeSubmit)
+
         // 1. Simpan segera ke Room SQLite lokal (teks + path foto lokal) dengan isSyncedToCloud = false
         //    agar jika sinyal putus atau aplikasi ditutup di tengah jalan, data + foto warga TIDAK pernah hilang.
         val initialLocalReport = report.copy(
@@ -489,6 +496,8 @@ class WeatherRepository(
 
         if (cloudResult.isSuccess) {
             weatherDao.updateCitizenReportSyncState(report.id, true)
+            com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
+                .recordNewCitizenReport(finalCloudReport.copy(isSyncedToCloud = true), context)
             CitizenReportSubmitResult(
                 reportId = report.id,
                 savedLocally = true,
@@ -507,6 +516,8 @@ class WeatherRepository(
                 "WeatherRepository",
                 "Laporan ${report.id} tersimpan lokal (menunggu sync Cloud): ${cloudResult.exceptionOrNull()?.message}"
             )
+            com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
+                .recordNewCitizenReport(finalCloudReport.copy(isSyncedToCloud = false), context)
             com.example.data.sync.CitizenReportSyncWorker.enqueueWhenConnected(context)
             CitizenReportSubmitResult(
                 reportId = report.id,
@@ -696,7 +707,12 @@ class WeatherRepository(
             return@withContext syncedOrUpdatedCount
         }
 
-        val localReportsMap = weatherDao.getAllCitizenDisasterReportsSync().associateBy { it.id }
+        val localEntities = weatherDao.getAllCitizenDisasterReportsSync()
+        if (localEntities.isNotEmpty()) {
+            com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
+                .initializeBaselineIfNeeded(localEntities.map { mapCitizenEntityToModel(it) })
+        }
+        val localReportsMap = localEntities.associateBy { it.id }
         val remoteReportsMap = remoteReports.associateBy { it.id }
 
         // 1. PULL: Terapkan data terbaru dari Cloud Firestore -> Room lokal
@@ -711,6 +727,10 @@ class WeatherRepository(
                     isSyncedToCloud = true
                 )
                 weatherDao.insertCitizenDisasterReport(mapCitizenModelToEntity(mergedReport, isSyncedOverride = true))
+                if (existing == null && localEntities.isNotEmpty()) {
+                    com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
+                        .recordNewCitizenReport(mergedReport)
+                }
                 syncedOrUpdatedCount++
             }
         }
@@ -774,7 +794,12 @@ class WeatherRepository(
     }
 
     suspend fun upsertRealtimeCitizenReportsFromCloud(remoteReports: List<CitizenDisasterReport>) = withContext(databaseWriteDispatcher) {
-        val localReportsMap = weatherDao.getAllCitizenDisasterReportsSync().associateBy { it.id }
+        val localEntities = weatherDao.getAllCitizenDisasterReportsSync()
+        if (localEntities.isNotEmpty()) {
+            com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
+                .initializeBaselineIfNeeded(localEntities.map { mapCitizenEntityToModel(it) })
+        }
+        val localReportsMap = localEntities.associateBy { it.id }
         for (remote in remoteReports) {
             val existing = localReportsMap[remote.id]
             if (shouldAcceptRemoteCitizenReport(existing, remote)) {
@@ -786,6 +811,10 @@ class WeatherRepository(
                     isSyncedToCloud = true
                 )
                 weatherDao.insertCitizenDisasterReport(mapCitizenModelToEntity(mergedReport, isSyncedOverride = true))
+                if (existing == null && localEntities.isNotEmpty()) {
+                    com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
+                        .recordNewCitizenReport(mergedReport)
+                }
             } else if (existing != null && !existing.isSyncedToCloud) {
                 val localNorm = com.example.model.CitizenReportStatusHelper.normalizeStatus(existing.status)
                 val remoteNorm = com.example.model.CitizenReportStatusHelper.normalizeStatus(remote.status)
