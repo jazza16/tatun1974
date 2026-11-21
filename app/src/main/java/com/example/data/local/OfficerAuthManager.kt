@@ -128,52 +128,64 @@ class OfficerAuthManager(private val context: Context) {
      *   and obsolete simulation flags so raw/hashed PINs are NEVER stored on the device.
      */
     private fun ensureUpdateSafeStorageMigration() {
-        val currentVersion = sharedPrefs.getInt(PREF_STORAGE_SCHEMA_VERSION, 0)
-        val hasLegacyPinKeys = sharedPrefs.contains(PREF_OFFICER_PIN) ||
-            sharedPrefs.contains(PREF_OFFICER_PIN_HASH) ||
-            sharedPrefs.contains(PREF_OFFICER_PIN_SALT) ||
-            sharedPrefs.contains(PREF_LEGACY_SIM_CLEAN_LOCAL) ||
-            sharedPrefs.contains(PREF_LEGACY_SIM_CLEAN_CLOUD)
-
-        if (currentVersion >= CURRENT_STORAGE_SCHEMA_VERSION && !hasLegacyPinKeys) {
-            return
-        }
-
-        val editor = sharedPrefs.edit()
-        // If older build stored a custom PIN hash locally, preserve only the non-secret boolean status
-        if (sharedPrefs.contains(PREF_OFFICER_PIN_HASH) && !sharedPrefs.contains(PREF_HAS_CLOUD_CUSTOM_PIN)) {
-            editor.putBoolean(PREF_HAS_CLOUD_CUSTOM_PIN, true)
-        }
-        // Purge ONLY legacy PIN secrets & obsolete flags — strictly preserve saved_nip and officer session!
-        editor.remove(PREF_OFFICER_PIN)
-            .remove(PREF_OFFICER_PIN_HASH)
-            .remove(PREF_OFFICER_PIN_SALT)
-            .remove(PREF_LEGACY_SIM_CLEAN_LOCAL)
-            .remove(PREF_LEGACY_SIM_CLEAN_CLOUD)
-
-        // Backfill saved_nip non-destructively if upgrading from older version that only saved officer_badge_id
-        // or PusdalopsSession NIP
-        val existingSavedNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_SAVED_NIP)?.trim().orEmpty()
-        if (existingSavedNip.isBlank()) {
-            val legacyBadgeNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID)?.trim().orEmpty()
-            val candidateNip = if (legacyBadgeNip.isNotBlank() && !legacyBadgeNip.equals("PUSDALOPS-117", ignoreCase = true)) {
-                legacyBadgeNip
-            } else {
-                val sessionPrefs = context.getSharedPreferences("PusdalopsSession", Context.MODE_PRIVATE)
-                val sessionNip = SecureStorageHelper.getDecrypted(sessionPrefs, "nip_petugas")?.trim().orEmpty()
-                if (sessionNip.isNotBlank() && !sessionNip.equals("PUSDALOPS-117", ignoreCase = true)) sessionNip else ""
+        try {
+            val currentVersion = try {
+                sharedPrefs.getInt(PREF_STORAGE_SCHEMA_VERSION, 0)
+            } catch (_: Exception) {
+                0
             }
-            if (candidateNip.isNotBlank()) {
-                SecureStorageHelper.putEncrypted(editor, PREF_SAVED_NIP, candidateNip)
-            }
-        }
+            val hasLegacyPinKeys = sharedPrefs.contains(PREF_OFFICER_PIN) ||
+                sharedPrefs.contains(PREF_OFFICER_PIN_HASH) ||
+                sharedPrefs.contains(PREF_OFFICER_PIN_SALT) ||
+                sharedPrefs.contains(PREF_LEGACY_SIM_CLEAN_LOCAL) ||
+                sharedPrefs.contains(PREF_LEGACY_SIM_CLEAN_CLOUD)
 
-        editor.putInt(PREF_STORAGE_SCHEMA_VERSION, CURRENT_STORAGE_SCHEMA_VERSION)
-        editor.apply()
+            if (currentVersion >= CURRENT_STORAGE_SCHEMA_VERSION && !hasLegacyPinKeys) {
+                return
+            }
+
+            val editor = sharedPrefs.edit()
+            // If older build stored a custom PIN hash locally, preserve only the non-secret boolean status
+            if (sharedPrefs.contains(PREF_OFFICER_PIN_HASH) && !sharedPrefs.contains(PREF_HAS_CLOUD_CUSTOM_PIN)) {
+                editor.putBoolean(PREF_HAS_CLOUD_CUSTOM_PIN, true)
+            }
+            // Purge ONLY legacy PIN secrets & obsolete flags — strictly preserve saved_nip and officer session!
+            editor.remove(PREF_OFFICER_PIN)
+                .remove(PREF_OFFICER_PIN_HASH)
+                .remove(PREF_OFFICER_PIN_SALT)
+                .remove(PREF_LEGACY_SIM_CLEAN_LOCAL)
+                .remove(PREF_LEGACY_SIM_CLEAN_CLOUD)
+
+            // Backfill saved_nip non-destructively if upgrading from older version that only saved officer_badge_id
+            // or PusdalopsSession NIP
+            val existingSavedNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_SAVED_NIP)?.trim().orEmpty()
+            if (existingSavedNip.isBlank()) {
+                val legacyBadgeNip = SecureStorageHelper.getDecrypted(sharedPrefs, PREF_OFFICER_BADGE_ID)?.trim().orEmpty()
+                val candidateNip = if (legacyBadgeNip.isNotBlank() && !legacyBadgeNip.equals("PUSDALOPS-117", ignoreCase = true)) {
+                    legacyBadgeNip
+                } else {
+                    val sessionPrefs = context.getSharedPreferences("PusdalopsSession", Context.MODE_PRIVATE)
+                    val sessionNip = SecureStorageHelper.getDecrypted(sessionPrefs, "nip_petugas")?.trim().orEmpty()
+                    if (sessionNip.isNotBlank() && !sessionNip.equals("PUSDALOPS-117", ignoreCase = true)) sessionNip else ""
+                }
+                if (candidateNip.isNotBlank()) {
+                    SecureStorageHelper.putEncrypted(editor, PREF_SAVED_NIP, candidateNip)
+                }
+            }
+
+            editor.putInt(PREF_STORAGE_SCHEMA_VERSION, CURRENT_STORAGE_SCHEMA_VERSION)
+            editor.apply()
+        } catch (e: Throwable) {
+            android.util.Log.w("OfficerAuthManager", "Non-fatal error in ensureUpdateSafeStorageMigration: ${e.message}")
+        }
     }
 
     fun isOfficerLoggedIn(): Boolean {
-        return sharedPrefs.getBoolean(PREF_IS_OFFICER_LOGGED_IN, false)
+        return try {
+            sharedPrefs.getBoolean(PREF_IS_OFFICER_LOGGED_IN, false)
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /**

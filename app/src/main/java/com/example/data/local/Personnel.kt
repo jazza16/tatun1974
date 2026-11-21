@@ -353,28 +353,32 @@ object OfficialAsnBpbdPersonnel {
 fun seedDataAsnMukomuko2026(context: Context) {
     val appContext = context.applicationContext
     CoroutineScope(Dispatchers.IO).launch {
-        val db = AppDatabase.getInstance(appContext)
-        val personnelDao = db.personnelDao()
+        try {
+            val db = AppDatabase.getInstance(appContext)
+            val personnelDao = db.personnelDao()
 
-        for (official in OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL) {
-            val name = official.name.trim()
-            val nip = official.nip.trim()
-            if (name.isEmpty() || nip.isEmpty()) continue
+            for (official in OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL) {
+                val name = official.name.trim()
+                val nip = official.nip.trim()
+                if (name.isEmpty() || nip.isEmpty()) continue
 
-            // Hanya masukkan data direktori non-rahasia ke tabel `personnel` jika NIP belum terdaftar
-            val existingPersonnel = personnelDao.getPersonnelByNip(nip)
-            if (existingPersonnel == null) {
-                personnelDao.insertPersonnel(
-                    Personnel(
-                        name = name,
-                        nip = nip,
-                        role = official.role,
-                        unit = official.unit,
-                        shift = official.shift,
-                        phone = official.phone
+                // Hanya masukkan data direktori non-rahasia ke tabel `personnel` jika NIP belum terdaftar
+                val existingPersonnel = personnelDao.getPersonnelByNip(nip)
+                if (existingPersonnel == null) {
+                    personnelDao.insertPersonnel(
+                        Personnel(
+                            name = name,
+                            nip = nip,
+                            role = official.role,
+                            unit = official.unit,
+                            shift = official.shift,
+                            phone = official.phone
+                        )
                     )
-                )
+                }
             }
+        } catch (e: Throwable) {
+            android.util.Log.w("PersonnelSeed", "Gagal melakukan seed data ASN Mukomuko (non-fatal): ${e.message}")
         }
     }
 }

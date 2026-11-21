@@ -88,6 +88,22 @@ object FirebaseStoragePhotoUploader {
             }
         }
 
+        // Priority 1 on production devices: Upload directly to Supabase Storage bucket `reports` when configured
+        if (SupabaseClient.isConfigured() || SupabaseClient.ensureCloudConfigLoaded(context)) {
+            val sbResult = runCatching { SupabaseClient.uploadPhotoToSupabase(bitmap, reportId).getOrNull() }.getOrNull()
+            if (!sbResult.isNullOrBlank() &&
+                (sbResult.startsWith("https://", ignoreCase = true) || sbResult.startsWith("http://", ignoreCase = true))
+            ) {
+                val normalizedSbUrl = if (sbResult.startsWith("http://", ignoreCase = true)) {
+                    "https://" + sbResult.substring(7)
+                } else {
+                    sbResult
+                }
+                Log.i(TAG, "Supabase Storage primary upload 100% complete for $reportId -> $normalizedSbUrl")
+                return@withContext PhotoUploadOutcome.Success(normalizedSbUrl)
+            }
+        }
+
         try {
             val optimized = ImageUtils.optimizeReportBitmap(bitmap)
             val baos = ByteArrayOutputStream()
@@ -102,7 +118,11 @@ object FirebaseStoragePhotoUploader {
                 .ifBlank { "LAP_${System.currentTimeMillis()}" }
                 .take(80)
             val fileName = "${safeId}_${UUID.randomUUID().toString().take(8)}.jpg"
-            val storageRef = Firebase.storage.reference
+            val storageInstance = Firebase.storage.apply {
+                maxUploadRetryTimeMillis = 3500L
+                maxOperationRetryTimeMillis = 3500L
+            }
+            val storageRef = storageInstance.reference
                 .child(FOLDER_CITIZEN_REPORTS)
                 .child(fileName)
 
@@ -113,8 +133,12 @@ object FirebaseStoragePhotoUploader {
                 .build()
 
             Log.i(TAG, "Uploading $fileName (${jpegBytes.size} bytes) to Firebase Storage...")
-            storageRef.putBytes(jpegBytes, metadata).await()
-            val downloadUrl = storageRef.downloadUrl.await().toString().trim()
+            kotlinx.coroutines.withTimeout(5000L) {
+                storageRef.putBytes(jpegBytes, metadata).await()
+            }
+            val downloadUrl = kotlinx.coroutines.withTimeout(4000L) {
+                storageRef.downloadUrl.await().toString().trim()
+            }
 
             if (downloadUrl.startsWith("https://", ignoreCase = true) ||
                 downloadUrl.startsWith("http://", ignoreCase = true)
@@ -130,7 +154,14 @@ object FirebaseStoragePhotoUploader {
                 PhotoUploadOutcome.StorageUnavailable("Download URL Firebase Storage tidak valid")
             }
         } catch (e: Throwable) {
-            classifyUploadException(reportId, e)
+            if (isNetworkOnline(context)) {
+                Log.w(TAG, "Firebase Storage bucket unavailable while device is online for $reportId (${e.message}) — falling back to Supabase/inline Cloud Data URI.")
+                PhotoUploadOutcome.StorageUnavailable(
+                    "Firebase Storage tidak tersedia: ${e.localizedMessage ?: e.javaClass.simpleName}"
+                )
+            } else {
+                classifyUploadException(reportId, e)
+            }
         }
     }
 

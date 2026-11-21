@@ -235,20 +235,44 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // STEP 0: Automatic Post-Update Sanitizer (Auto Clear Cache & Safe Data Migration)
+        // Eliminates post-update Force Close without requiring manual "Hapus Cache & Hapus Data"
+        com.example.util.AppUpgradeSanitizer.runOnStartupIfUpdated(this, intent)
+
         // STEP 1: Configure App Check with launch intent before any UI, ViewModels, or Firebase operations
         configureAppCheck(this, intent)
         notificationIntentFlow.value = intent
 
+        // STEP 1b: Sync Supabase Storage configuration with Firestore & SharedPreferences cache
+        // Ensures both AI Studio builds and local Android Studio builds share the configured SUPABASE_URL & SUPABASE_KEY
+        try {
+            com.example.data.api.SupabaseClient.syncConfigWithFirestore(this)
+        } catch (e: Throwable) {
+            Log.w("MainActivity", "Supabase config sync skipped: ${e.message}")
+        }
+
         // Seed 34 data ASN BPBD Kabupaten Mukomuko (hanya jika NIP belum terdaftar)
-        com.example.data.local.seedDataAsnMukomuko2026(this)
+        try {
+            com.example.data.local.seedDataAsnMukomuko2026(this)
+        } catch (e: Throwable) {
+            Log.w("MainActivity", "Seed ASN skipped: ${e.message}")
+        }
 
         // Jadwalkan WorkManager sinkronisasi periodik titik panas FIRMS (1-3 jam) & BMKG (3-6 jam)
-        com.example.service.KarhutlaSyncScheduler.schedulePeriodicSync(this)
+        try {
+            com.example.service.KarhutlaSyncScheduler.schedulePeriodicSync(this)
+        } catch (e: Throwable) {
+            Log.w("MainActivity", "KarhutlaSyncScheduler skipped: ${e.message}")
+        }
 
         // Initialize BMKG Earthquake and Severe Weather Notification Channels
-        com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
-        com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
-        com.example.util.WeatherNotificationHelper.initAppUpdateNotificationChannel(this)
+        try {
+            com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
+            com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
+            com.example.util.WeatherNotificationHelper.initAppUpdateNotificationChannel(this)
+        } catch (e: Throwable) {
+            Log.w("MainActivity", "NotificationChannel init skipped: ${e.message}")
+        }
 
         // Pemicu pemeriksaan Auto-Update GitHub saat aplikasi dibuka
         checkForAppUpdates(this)
@@ -489,7 +513,8 @@ fun WeatherAppScreen(
         val navTab = notifIntent.getIntExtra("EXTRA_NAVIGATE_TAB", -1)
         val openUpdate = notifIntent.getBooleanExtra("EXTRA_OPEN_UPDATE_SHEET", false)
         val autoStartUpdate = notifIntent.getBooleanExtra("EXTRA_AUTO_START_UPDATE", false)
-        if (navTab >= 0 || openUpdate || autoStartUpdate) {
+        val hasValidUpdate = uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated
+        if (navTab >= 0 || (openUpdate && hasValidUpdate) || (autoStartUpdate && hasValidUpdate)) {
             viewModel.dismissStartupWallpaper()
         }
         if (navTab >= 0) {
@@ -497,12 +522,16 @@ fun WeatherAppScreen(
             notifIntent.removeExtra("EXTRA_NAVIGATE_TAB")
         }
         if (openUpdate) {
-            viewModel.setAppUpdateSheetOpen(true)
             notifIntent.removeExtra("EXTRA_OPEN_UPDATE_SHEET")
+            if (hasValidUpdate) {
+                viewModel.setAppUpdateSheetOpen(true)
+            }
         }
         if (autoStartUpdate) {
-            viewModel.downloadAndApplyUpdate(context)
             notifIntent.removeExtra("EXTRA_AUTO_START_UPDATE")
+            if (hasValidUpdate) {
+                viewModel.downloadAndApplyUpdate(context)
+            }
         }
     }
 
@@ -530,7 +559,7 @@ fun WeatherAppScreen(
         if (initialTab >= 0) {
             viewModel.selectTab(initialTab)
         }
-        if (shouldOpenUpdate) {
+        if (shouldOpenUpdate && uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated) {
             viewModel.setAppUpdateSheetOpen(true)
         }
         // Seamlessly check for newest version online on startup and notify
@@ -548,17 +577,25 @@ fun WeatherAppScreen(
     ) { _ -> }
 
     LaunchedEffect(Unit) {
-        viewModel.runAutomatedCleanup90Days()
-        com.example.data.sync.IntegrityCheckWorker.performCheck(context, database)
-        com.example.service.WeatherReportAggregator.schedulePeriodic(context)
-        com.example.data.sync.DatabaseMaintenanceWorker.schedule(context)
-        com.example.data.local.DatabaseIndexManager.ensureIndexes(database)
+        try {
+            viewModel.runAutomatedCleanup90Days()
+            com.example.data.sync.IntegrityCheckWorker.performCheck(context, database)
+            com.example.service.WeatherReportAggregator.schedulePeriodic(context)
+            com.example.data.sync.DatabaseMaintenanceWorker.schedule(context)
+            com.example.data.local.DatabaseIndexManager.ensureIndexes(database)
+        } catch (e: Throwable) {
+            Log.w("WeatherAppScreen", "Startup DB maintenance warning: ${e.message}")
+        }
 
         // Request notification permission for Android 13+ so simultaneous disaster alerts are delivered
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
             }
+        } catch (e: Throwable) {
+            Log.w("WeatherAppScreen", "Notification permission check warning: ${e.message}")
         }
     }
 

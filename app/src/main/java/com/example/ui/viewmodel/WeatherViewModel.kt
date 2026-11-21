@@ -112,81 +112,99 @@ class WeatherViewModel(
         )
 
     init {
-        // Initialize persistent update state from DataStore/SharedPreferences
-        updatePreferences?.let { prefs ->
-            val initialInstalled = prefs.getInstalledVersion()
-            val initialServer = prefs.getLatestServerVersion()
-            val hasUpdate = com.example.util.AppVersionHelper.isVersionNewer(initialInstalled, initialServer)
-            val isPermanentlyInstalled = prefs.isUpdatePermanentlyInstalled()
-            val isUpdated = !hasUpdate && (initialInstalled == initialServer)
+        // Initialize persistent update state from DataStore/SharedPreferences safely
+        try {
+            updatePreferences?.let { prefs ->
+                val initialInstalled = prefs.getInstalledVersion()
+                val initialServer = prefs.getLatestServerVersion()
+                val hasUpdate = com.example.util.AppVersionHelper.isVersionNewer(initialInstalled, initialServer)
+                val isPermanentlyInstalled = prefs.isUpdatePermanentlyInstalled()
+                val isUpdated = !hasUpdate && (initialInstalled == initialServer)
 
-            val baseChangelogs = _uiState.value.updateState.changelogs.ifEmpty {
-                com.example.model.DEFAULT_RELEASE_CHANGELOGS
-            }
-            val initialChangelogs = baseChangelogs.map { log ->
-                when {
-                    log.version == initialInstalled -> log.copy(isCurrent = true, isLatest = (initialInstalled == initialServer))
-                    log.version == initialServer -> log.copy(isCurrent = false, isLatest = true)
-                    else -> log.copy(isCurrent = false)
+                val baseChangelogs = _uiState.value.updateState.changelogs.ifEmpty {
+                    com.example.model.DEFAULT_RELEASE_CHANGELOGS
                 }
-            }
-
-            _uiState.value = _uiState.value.copy(
-                updateState = _uiState.value.updateState.copy(
-                    currentVersion = initialInstalled,
-                    latestVersion = initialServer,
-                    isUpdateAvailable = hasUpdate,
-                    isUpdated = isUpdated,
-                    isPermanentlyInstalled = isPermanentlyInstalled,
-                    lastCheckedVersion = prefs.getLastCheckedVersion(),
-                    updateStatusMessage = if (isUpdated) {
-                        "Aplikasi menggunakan rilis resmi v$initialInstalled terbaru secara permanen."
-                    } else {
-                        "Pembaruan versi $initialServer terdeteksi dan siap dipasang secara daring tanpa offline update."
-                    },
-                    changelogs = initialChangelogs
-                )
-            )
-        }
-
-        viewModelScope.launch {
-            repository.seedInitial15DistrictsWeatherCacheIfEmpty()
-            val cachedAll = repository.getCachedAll15DistrictsSummary()
-            if (cachedAll.isNotEmpty() && _uiState.value.allDistrictsSummary.isEmpty()) {
-                _uiState.value = _uiState.value.copy(allDistrictsSummary = cachedAll)
-            }
-            repository.observeAllDistrictsWeatherCache().collect { cachedReports ->
-                if (cachedReports.isNotEmpty()) {
-                    _uiState.value = _uiState.value.copy(allDistrictsSummary = cachedReports)
-                }
-            }
-        }
-
-        viewModelScope.launch {
-            repository.seedInitialCommunityReportsIfEmpty()
-            repository.ensureHazardZonesSeeded()
-            // Tarik laporan nyata dari Cloud Firestore lebih dulu sebelum mengisi fallback kosong
-            repository.syncCitizenDisasterReportsOnline()
-            repository.seedInitialCitizenDisasterReportsIfEmpty()
-
-            citizenReportsRealtimeListener?.remove()
-            citizenReportsRealtimeListener = com.example.data.local.FirestoreHelper.listenCitizenReportsRealtime(
-                onUpdate = { remoteReports ->
-                    viewModelScope.launch {
-                        repository.upsertRealtimeCitizenReportsFromCloud(remoteReports)
+                val initialChangelogs = baseChangelogs.map { log ->
+                    when {
+                        log.version == initialInstalled -> log.copy(isCurrent = true, isLatest = (initialInstalled == initialServer))
+                        log.version == initialServer -> log.copy(isCurrent = false, isLatest = true)
+                        else -> log.copy(isCurrent = false)
                     }
-                },
-                onError = { e ->
-                    android.util.Log.e("WeatherViewModel", "Realtime citizen_disaster_reports listener error: ${e.message}", e)
                 }
-            )
+
+                _uiState.value = _uiState.value.copy(
+                    updateState = _uiState.value.updateState.copy(
+                        currentVersion = initialInstalled,
+                        latestVersion = initialServer,
+                        isUpdateAvailable = hasUpdate,
+                        isUpdated = isUpdated,
+                        isPermanentlyInstalled = isPermanentlyInstalled,
+                        lastCheckedVersion = prefs.getLastCheckedVersion(),
+                        updateStatusMessage = if (isUpdated) {
+                            "Aplikasi menggunakan rilis resmi v$initialInstalled terbaru secara permanen."
+                        } else {
+                            "Pembaruan versi $initialServer terdeteksi dan siap dipasang secara daring tanpa offline update."
+                        },
+                        changelogs = initialChangelogs
+                    )
+                )
+            }
+        } catch (e: Throwable) {
+            android.util.Log.w("WeatherViewModel", "Update preferences init fallback: ${e.message}")
+        }
+
+        viewModelScope.launch {
+            try {
+                repository.seedInitial15DistrictsWeatherCacheIfEmpty()
+                val cachedAll = repository.getCachedAll15DistrictsSummary()
+                if (cachedAll.isNotEmpty() && _uiState.value.allDistrictsSummary.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(allDistrictsSummary = cachedAll)
+                }
+                repository.observeAllDistrictsWeatherCache().collect { cachedReports ->
+                    if (cachedReports.isNotEmpty()) {
+                        _uiState.value = _uiState.value.copy(allDistrictsSummary = cachedReports)
+                    }
+                }
+            } catch (e: Throwable) {
+                android.util.Log.w("WeatherViewModel", "Initial 15 districts cache load warning: ${e.message}")
+            }
+        }
+
+        viewModelScope.launch {
+            try {
+                repository.seedInitialCommunityReportsIfEmpty()
+                repository.ensureHazardZonesSeeded()
+                // Tarik laporan nyata dari Cloud Firestore lebih dulu sebelum mengisi fallback kosong
+                repository.syncCitizenDisasterReportsOnline()
+                repository.seedInitialCitizenDisasterReportsIfEmpty()
+            } catch (e: Throwable) {
+                android.util.Log.w("WeatherViewModel", "Initial reports seed warning: ${e.message}")
+            }
+
+            try {
+                citizenReportsRealtimeListener?.remove()
+                citizenReportsRealtimeListener = com.example.data.local.FirestoreHelper.listenCitizenReportsRealtime(
+                    onUpdate = { remoteReports ->
+                        viewModelScope.launch {
+                            try {
+                                repository.upsertRealtimeCitizenReportsFromCloud(remoteReports)
+                            } catch (_: Throwable) {}
+                        }
+                    },
+                    onError = { e ->
+                        android.util.Log.e("WeatherViewModel", "Realtime citizen_disaster_reports listener error: ${e.message}", e)
+                    }
+                )
+            } catch (e: Throwable) {
+                android.util.Log.w("WeatherViewModel", "Firestore listener init warning: ${e.message}")
+            }
 
             // Continuous real-time listener polling so officer updates appear instantly on citizen devices
             while (true) {
                 kotlinx.coroutines.delay(10000)
                 try {
                     repository.syncCitizenDisasterReportsOnline()
-                } catch (_: Exception) {}
+                } catch (_: Throwable) {}
             }
         }
         loadWeatherForDistrict(MukomukoDistricts.defaultDistrict)

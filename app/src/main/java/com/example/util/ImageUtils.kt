@@ -49,6 +49,34 @@ object ImageUtils {
 
     private const val REPORT_PHOTOS_DIR = "citizen_report_photos"
 
+    private val inlineDataUriByReportId = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val inlineDataUriByUrl = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    @Volatile
+    var lastSelectedCitizenReportPhotoUri: String? = null
+
+    fun rememberInlineDataUriForReport(reportId: String?, dataUri: String?) {
+        val id = reportId?.trim()?.takeIf { it.isNotBlank() } ?: return
+        val uri = dataUri?.trim()?.takeIf { it.startsWith("data:image", ignoreCase = true) } ?: return
+        inlineDataUriByReportId[id] = uri
+    }
+
+    fun getInlineDataUriForReport(reportId: String?): String? {
+        val id = reportId?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return inlineDataUriByReportId[id]
+    }
+
+    fun rememberInlineDataUriForUrl(url: String?, dataUri: String?) {
+        val cleanUrl = url?.trim()?.takeIf { it.isNotBlank() } ?: return
+        val uri = dataUri?.trim()?.takeIf { it.startsWith("data:image", ignoreCase = true) } ?: return
+        inlineDataUriByUrl[cleanUrl] = uri
+    }
+
+    fun getInlineDataUriForUrl(url: String?): String? {
+        val cleanUrl = url?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return inlineDataUriByUrl[cleanUrl]
+    }
+
     /**
      * Result of resolving a citizen report photo prior to Firestore sync.
      * Guarantees strict atomicity: if a citizen attached a photo, the report is NEVER
@@ -362,9 +390,16 @@ object ImageUtils {
         if (photoSource.isNullOrBlank()) return null
         val trimmed = photoSource.trim()
         if (trimmed.startsWith("http://", ignoreCase = true) ||
-            trimmed.startsWith("https://", ignoreCase = true) ||
-            trimmed.startsWith("android.resource://", ignoreCase = true)
+            trimmed.startsWith("https://", ignoreCase = true)
         ) {
+            com.example.data.api.SupabaseClient.getCachedPhotoBitmap(trimmed)?.let { return it }
+            val fallbackDataUri = getInlineDataUriForUrl(trimmed)
+            if (!fallbackDataUri.isNullOrBlank()) {
+                return decodePhotoSourceToBitmap(fallbackDataUri, context)
+            }
+            return null
+        }
+        if (trimmed.startsWith("android.resource://", ignoreCase = true)) {
             return null
         }
 
@@ -487,6 +522,7 @@ object ImageUtils {
 
         if (isDeviceLocalPhotoPath(trimmed)) {
             val bitmap = decodePhotoSourceToBitmap(trimmed) ?: return null
+            val inlineBackup = encodeBitmapToCloudDataUri(bitmap)
             val remoteUrl = try {
                 supabaseUploader(bitmap)?.trim()?.takeIf {
                     it.startsWith("https://", ignoreCase = true) ||
@@ -496,13 +532,16 @@ object ImageUtils {
                 null
             }
             if (!remoteUrl.isNullOrBlank()) {
-                return if (remoteUrl.startsWith("http://", ignoreCase = true)) {
+                val normalized = if (remoteUrl.startsWith("http://", ignoreCase = true)) {
                     "https://" + remoteUrl.substring(7)
                 } else {
                     remoteUrl
                 }
+                rememberInlineDataUriForUrl(normalized, inlineBackup)
+                com.example.data.api.SupabaseClient.cachePhotoBitmap(normalized, bitmap)
+                return normalized
             }
-            return encodeBitmapToCloudDataUri(bitmap)
+            return inlineBackup
         }
 
         return null
@@ -514,9 +553,9 @@ object ImageUtils {
      * 2. Already an HTTPS URL or portable Data URI -> [CloudPhotoResolution.ReadyForCloud]
      * 3. Device-local watermarked photo:
      *    - Checks network connectivity first; if offline -> [CloudPhotoResolution.DeferredOffline] (NEVER sends text-only!)
-     *    - Uploads 100% to Firebase Storage first and awaits `downloadUrl`
-     *    - If Firebase Storage reports a network/offline error -> [CloudPhotoResolution.DeferredOffline]
-     *    - If Firebase Storage bucket is unavailable/unconfigured while online -> tries Supabase Storage,
+     *    - Uploads 100% to Cloud Storage (Supabase / Firebase) and awaits `downloadUrl`
+     *    - Caches an inline JPEG Data URI backup for cross-device Firestore fallback
+     *    - If external bucket is unavailable/unconfigured while online -> tries Supabase Storage,
      *      then falls back to compact inline JPEG Data URI (<= 300 KB) so photo is STILL guaranteed attached.
      *    - If all attempts fail -> [CloudPhotoResolution.DeferredOffline] (NEVER drops photo!)
      */
@@ -562,14 +601,22 @@ object ImageUtils {
                 return CloudPhotoResolution.DeferredOffline("Perangkat sedang offline")
             }
             val decoded = decodePhotoSourceToBitmap(trimmed, context)
+            val recompressedInline = decoded?.let { encodeBitmapToCloudDataUri(it, MAX_CLOUD_PHOTO_DATA_URI_CHARS) }
+            rememberInlineDataUriForReport(reportId, recompressedInline ?: trimmed)
             if (decoded != null) {
                 when (val fbOutcome = firebaseUploader(decoded)) {
-                    is PhotoUploadOutcome.Success -> return CloudPhotoResolution.ReadyForCloud(fbOutcome.downloadUrl)
+                    is PhotoUploadOutcome.Success -> {
+                        rememberInlineDataUriForUrl(fbOutcome.downloadUrl, recompressedInline ?: trimmed)
+                        com.example.data.api.SupabaseClient.cachePhotoBitmap(fbOutcome.downloadUrl, decoded)
+                        return CloudPhotoResolution.ReadyForCloud(fbOutcome.downloadUrl)
+                    }
                     is PhotoUploadOutcome.NetworkOffline -> return CloudPhotoResolution.DeferredOffline(fbOutcome.reason)
                     is PhotoUploadOutcome.StorageUnavailable -> {
                         val sbUrl = runCatching { supabaseUploader(decoded) }.getOrNull()?.trim()
                         if (!sbUrl.isNullOrBlank() && (sbUrl.startsWith("https://", true) || sbUrl.startsWith("http://", true))) {
                             val normalizedUrl = if (sbUrl.startsWith("http://", true)) "https://" + sbUrl.substring(7) else sbUrl
+                            rememberInlineDataUriForUrl(normalizedUrl, recompressedInline ?: trimmed)
+                            com.example.data.api.SupabaseClient.cachePhotoBitmap(normalizedUrl, decoded)
                             return CloudPhotoResolution.ReadyForCloud(normalizedUrl)
                         }
                     }
@@ -584,11 +631,11 @@ object ImageUtils {
             if (cleanBase64.isBlank()) return CloudPhotoResolution.DeferredOffline("Data foto kosong")
             val normalizedDataUri = "${header}base64,$cleanBase64"
             if (normalizedDataUri.length <= MAX_CLOUD_PHOTO_DATA_URI_CHARS) {
+                rememberInlineDataUriForReport(reportId, normalizedDataUri)
                 return CloudPhotoResolution.ReadyForCloud(normalizedDataUri)
             }
-            val recompressed = decoded?.let { encodeBitmapToCloudDataUri(it, MAX_CLOUD_PHOTO_DATA_URI_CHARS) }
-            return if (!recompressed.isNullOrBlank()) {
-                CloudPhotoResolution.ReadyForCloud(recompressed)
+            return if (!recompressedInline.isNullOrBlank()) {
+                CloudPhotoResolution.ReadyForCloud(recompressedInline)
             } else {
                 CloudPhotoResolution.DeferredOffline("Gagal mengompresi foto untuk unggahan cloud")
             }
@@ -603,6 +650,9 @@ object ImageUtils {
             val bitmap = decodePhotoSourceToBitmap(trimmed, context)
                 ?: return CloudPhotoResolution.DeferredOffline("File foto lokal tidak ditemukan atau rusak")
 
+            val inlineDataUri = encodeBitmapToCloudDataUri(bitmap, MAX_CLOUD_PHOTO_DATA_URI_CHARS)
+            rememberInlineDataUriForReport(reportId, inlineDataUri)
+
             val fbOutcome = try {
                 firebaseUploader(bitmap)
             } catch (e: Throwable) {
@@ -611,6 +661,8 @@ object ImageUtils {
 
             when (fbOutcome) {
                 is PhotoUploadOutcome.Success -> {
+                    rememberInlineDataUriForUrl(fbOutcome.downloadUrl, inlineDataUri)
+                    com.example.data.api.SupabaseClient.cachePhotoBitmap(fbOutcome.downloadUrl, bitmap)
                     return CloudPhotoResolution.ReadyForCloud(fbOutcome.downloadUrl)
                 }
                 is PhotoUploadOutcome.NetworkOffline -> {
@@ -631,9 +683,10 @@ object ImageUtils {
                         } else {
                             sbUrl
                         }
+                        rememberInlineDataUriForUrl(normalized, inlineDataUri)
+                        com.example.data.api.SupabaseClient.cachePhotoBitmap(normalized, bitmap)
                         return CloudPhotoResolution.ReadyForCloud(normalized)
                     }
-                    val inlineDataUri = encodeBitmapToCloudDataUri(bitmap, MAX_CLOUD_PHOTO_DATA_URI_CHARS)
                     return if (!inlineDataUri.isNullOrBlank()) {
                         CloudPhotoResolution.ReadyForCloud(inlineDataUri)
                     } else {

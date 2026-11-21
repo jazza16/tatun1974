@@ -49,7 +49,7 @@ class AppUpdatePreferences(private val context: Context) {
         private const val PREF_DISMISSED_DIALOG_VERSION = "dismissed_dialog_version"
         private const val PREF_IS_ONBOARDING_COMPLETED = "is_onboarding_completed"
 
-        const val DEFAULT_LATEST_VERSION = "1.0.0"
+        const val DEFAULT_LATEST_VERSION = "1.0.7"
         const val PREVIOUS_VERSION_MOCK = "0.9.0"
     }
 
@@ -61,7 +61,7 @@ class AppUpdatePreferences(private val context: Context) {
      * Inspects the binary version from [BuildConfig.VERSION_NAME] against persistent preferences.
      * Automatically handles:
      * 1. Fresh app install: initializes preferences to the binary version and latest release.
-     * 2. APK Upgrade (e.g. installing v1.5.0 APK over v1.4.0): detects new binary version,
+     * 2. APK Upgrade (e.g. installing v1.0.7 APK over v1.0.6): detects new binary version,
      *    automatically migrates stored version, marks update permanent, and clears dismissal flags.
      * 3. Previous versions running on device: ensures server version is recognized as at least
      *    [DEFAULT_LATEST_VERSION] so update dialogs and banners trigger promptly.
@@ -73,53 +73,68 @@ class AppUpdatePreferences(private val context: Context) {
             DEFAULT_LATEST_VERSION
         }
 
-        val recordedBuild = sharedPrefs.getString(PREF_RECORDED_BUILD_VERSION, null)
-        val savedInstalled = sharedPrefs.getString(PREF_INSTALLED_VERSION, null)
-        val savedServer = sharedPrefs.getString(PREF_LATEST_SERVER_VERSION, null)
+        try {
+            val recordedBuild = try { sharedPrefs.getString(PREF_RECORDED_BUILD_VERSION, null) } catch (_: Exception) { null }
+            val savedInstalled = try { sharedPrefs.getString(PREF_INSTALLED_VERSION, null) } catch (_: Exception) { null }
+            val savedServer = try { sharedPrefs.getString(PREF_LATEST_SERVER_VERSION, null) } catch (_: Exception) { null }
 
-        val editor = sharedPrefs.edit()
+            val editor = sharedPrefs.edit()
 
-        if (recordedBuild == null && savedInstalled == null) {
-            // Brand new installation
-            val targetLatest = maxVersion(currentBuildVersion, DEFAULT_LATEST_VERSION)
-            val isCurrent = (currentBuildVersion == targetLatest)
-            editor.putString(PREF_RECORDED_BUILD_VERSION, currentBuildVersion)
-            editor.putString(PREF_INSTALLED_VERSION, currentBuildVersion)
-            editor.putString(PREF_LATEST_SERVER_VERSION, targetLatest)
-            editor.putBoolean(PREF_IS_PERMANENTLY_INSTALLED, isCurrent)
-            editor.putString(PREF_LAST_CHECKED_VERSION, targetLatest)
-            editor.apply()
-            syncStateToDataStore(currentBuildVersion, targetLatest, targetLatest, isCurrent, clearDismissed = false)
-        } else if (recordedBuild != currentBuildVersion) {
-            // An APK update was installed onto the phone!
-            editor.putString(PREF_RECORDED_BUILD_VERSION, currentBuildVersion)
-            editor.putString(PREF_INSTALLED_VERSION, currentBuildVersion)
-            val targetLatest = maxVersion(currentBuildVersion, DEFAULT_LATEST_VERSION)
-            editor.putString(PREF_LATEST_SERVER_VERSION, targetLatest)
-            editor.putBoolean(PREF_IS_PERMANENTLY_INSTALLED, true)
-            editor.remove(PREF_DISMISSED_DIALOG_VERSION)
-            editor.putString(PREF_LAST_CHECKED_VERSION, currentBuildVersion)
-            editor.apply()
-            syncStateToDataStore(currentBuildVersion, currentBuildVersion, targetLatest, true, clearDismissed = true)
-        } else {
-            // Same binary build is running. Ensure server version is at least DEFAULT_LATEST_VERSION.
-            val currentServer = savedServer ?: DEFAULT_LATEST_VERSION
-            if (AppVersionHelper.isVersionNewer(currentServer, DEFAULT_LATEST_VERSION)) {
-                editor.putString(PREF_LATEST_SERVER_VERSION, DEFAULT_LATEST_VERSION)
-                val installed = savedInstalled ?: currentBuildVersion
-                val hasNewer = AppVersionHelper.isVersionNewer(installed, DEFAULT_LATEST_VERSION)
-                if (hasNewer) {
-                    editor.remove(PREF_DISMISSED_DIALOG_VERSION)
-                    editor.putBoolean(PREF_IS_PERMANENTLY_INSTALLED, false)
-                }
+            if (recordedBuild == null && savedInstalled == null) {
+                // Brand new installation
+                val targetLatest = maxVersion(currentBuildVersion, DEFAULT_LATEST_VERSION)
+                val isCurrent = (currentBuildVersion == targetLatest)
+                editor.putString(PREF_RECORDED_BUILD_VERSION, currentBuildVersion)
+                editor.putString(PREF_INSTALLED_VERSION, currentBuildVersion)
+                editor.putString(PREF_LATEST_SERVER_VERSION, targetLatest)
+                editor.putBoolean(PREF_IS_PERMANENTLY_INSTALLED, isCurrent)
+                editor.putString(PREF_LAST_CHECKED_VERSION, targetLatest)
                 editor.apply()
-                syncStateToDataStore(
-                    installedVersion = installed,
-                    lastCheckedVersion = sharedPrefs.getString(PREF_LAST_CHECKED_VERSION, DEFAULT_LATEST_VERSION) ?: DEFAULT_LATEST_VERSION,
-                    latestServerVersion = DEFAULT_LATEST_VERSION,
-                    isPermanent = !hasNewer,
-                    clearDismissed = hasNewer
-                )
+                syncStateToDataStore(currentBuildVersion, targetLatest, targetLatest, isCurrent, clearDismissed = false)
+            } else if (recordedBuild != currentBuildVersion) {
+                // An APK update was installed onto the phone!
+                editor.putString(PREF_RECORDED_BUILD_VERSION, currentBuildVersion)
+                editor.putString(PREF_INSTALLED_VERSION, currentBuildVersion)
+                val targetLatest = maxVersion(currentBuildVersion, DEFAULT_LATEST_VERSION)
+                editor.putString(PREF_LATEST_SERVER_VERSION, targetLatest)
+                editor.putBoolean(PREF_IS_PERMANENTLY_INSTALLED, true)
+                editor.remove(PREF_DISMISSED_DIALOG_VERSION)
+                editor.putString(PREF_LAST_CHECKED_VERSION, currentBuildVersion)
+                editor.apply()
+                syncStateToDataStore(currentBuildVersion, currentBuildVersion, targetLatest, true, clearDismissed = true)
+            } else {
+                // Same binary build is running. Ensure server version is at least currentBuildVersion.
+                val currentServer = savedServer ?: currentBuildVersion
+                val baselineLatest = maxVersion(currentBuildVersion, DEFAULT_LATEST_VERSION)
+                if (AppVersionHelper.isVersionNewer(currentServer, baselineLatest)) {
+                    editor.putString(PREF_LATEST_SERVER_VERSION, baselineLatest)
+                    val installed = savedInstalled ?: currentBuildVersion
+                    val hasNewer = AppVersionHelper.isVersionNewer(installed, baselineLatest)
+                    if (hasNewer) {
+                        editor.remove(PREF_DISMISSED_DIALOG_VERSION)
+                        editor.putBoolean(PREF_IS_PERMANENTLY_INSTALLED, false)
+                    }
+                    editor.apply()
+                    syncStateToDataStore(
+                        installedVersion = installed,
+                        lastCheckedVersion = try { sharedPrefs.getString(PREF_LAST_CHECKED_VERSION, baselineLatest) } catch (_: Exception) { baselineLatest } ?: baselineLatest,
+                        latestServerVersion = baselineLatest,
+                        isPermanent = !hasNewer,
+                        clearDismissed = hasNewer
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            try {
+                sharedPrefs.edit()
+                    .clear()
+                    .putString(PREF_RECORDED_BUILD_VERSION, currentBuildVersion)
+                    .putString(PREF_INSTALLED_VERSION, currentBuildVersion)
+                    .putString(PREF_LATEST_SERVER_VERSION, currentBuildVersion)
+                    .putBoolean(PREF_IS_PERMANENTLY_INSTALLED, true)
+                    .putString(PREF_LAST_CHECKED_VERSION, currentBuildVersion)
+                    .apply()
+            } catch (_: Exception) {
             }
         }
     }
@@ -154,14 +169,14 @@ class AppUpdatePreferences(private val context: Context) {
      * DataStore Flow for the last checked version from remote update server.
      */
     val lastCheckedVersionFlow: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[KEY_LAST_CHECKED_VERSION] ?: sharedPrefs.getString(PREF_LAST_CHECKED_VERSION, DEFAULT_LATEST_VERSION) ?: DEFAULT_LATEST_VERSION
+        preferences[KEY_LAST_CHECKED_VERSION] ?: try { sharedPrefs.getString(PREF_LAST_CHECKED_VERSION, DEFAULT_LATEST_VERSION) } catch (_: Exception) { DEFAULT_LATEST_VERSION } ?: DEFAULT_LATEST_VERSION
     }
 
     /**
      * DataStore Flow for the currently recognized installed version.
      */
     val installedVersionFlow: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[KEY_INSTALLED_VERSION] ?: sharedPrefs.getString(PREF_INSTALLED_VERSION, DEFAULT_LATEST_VERSION) ?: DEFAULT_LATEST_VERSION
+        preferences[KEY_INSTALLED_VERSION] ?: try { sharedPrefs.getString(PREF_INSTALLED_VERSION, DEFAULT_LATEST_VERSION) } catch (_: Exception) { DEFAULT_LATEST_VERSION } ?: DEFAULT_LATEST_VERSION
     }
 
     /**
@@ -169,18 +184,18 @@ class AppUpdatePreferences(private val context: Context) {
      */
     fun getInstalledVersion(): String {
         val buildVersion = try { BuildConfig.VERSION_NAME } catch (_: Exception) { DEFAULT_LATEST_VERSION }
-        return sharedPrefs.getString(PREF_INSTALLED_VERSION, buildVersion) ?: buildVersion
+        return try { sharedPrefs.getString(PREF_INSTALLED_VERSION, buildVersion) } catch (_: Exception) { buildVersion } ?: buildVersion
     }
 
     /**
      * Synchronous getter for latest version detected on remote update server or bundled release.
      */
     fun getLatestServerVersion(): String {
-        val saved = sharedPrefs.getString(PREF_LATEST_SERVER_VERSION, null)
+        val saved = try { sharedPrefs.getString(PREF_LATEST_SERVER_VERSION, null) } catch (_: Exception) { null }
         return when {
             saved == null -> DEFAULT_LATEST_VERSION
             AppVersionHelper.isVersionNewer(saved, DEFAULT_LATEST_VERSION) -> {
-                sharedPrefs.edit().putString(PREF_LATEST_SERVER_VERSION, DEFAULT_LATEST_VERSION).apply()
+                try { sharedPrefs.edit().putString(PREF_LATEST_SERVER_VERSION, DEFAULT_LATEST_VERSION).apply() } catch (_: Exception) {}
                 DEFAULT_LATEST_VERSION
             }
             else -> saved
@@ -191,7 +206,7 @@ class AppUpdatePreferences(private val context: Context) {
      * Synchronous getter for last checked version.
      */
     fun getLastCheckedVersion(): String {
-        return sharedPrefs.getString(PREF_LAST_CHECKED_VERSION, "") ?: ""
+        return try { sharedPrefs.getString(PREF_LAST_CHECKED_VERSION, "") } catch (_: Exception) { "" } ?: ""
     }
 
     /**
@@ -202,7 +217,8 @@ class AppUpdatePreferences(private val context: Context) {
         val installed = getInstalledVersion()
         val server = getLatestServerVersion()
         val hasNewer = AppVersionHelper.isVersionNewer(installed, server)
-        return !hasNewer && sharedPrefs.getBoolean(PREF_IS_PERMANENTLY_INSTALLED, true)
+        val permanentFlag = try { sharedPrefs.getBoolean(PREF_IS_PERMANENTLY_INSTALLED, true) } catch (_: Exception) { true }
+        return !hasNewer && permanentFlag
     }
 
     /**

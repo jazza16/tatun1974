@@ -1314,10 +1314,12 @@ fun CitizenReportPhotoThumbnail(
     val resolvedModel = remember(photoUrl) {
         com.example.ui.components.decodeCitizenPhotoModel(photoUrl)
     }
+    val fallbackBitmap = com.example.ui.components.rememberCitizenReportPhotoBitmap(photoUrl)
+    val activeBitmap = fallbackBitmap ?: (resolvedModel as? android.graphics.Bitmap)
 
-    if (resolvedModel is android.graphics.Bitmap) {
+    if (activeBitmap != null) {
         Image(
-            bitmap = resolvedModel.asImageBitmap(),
+            bitmap = activeBitmap.asImageBitmap(),
             contentDescription = contentDescription,
             contentScale = ContentScale.Crop,
             modifier = modifier

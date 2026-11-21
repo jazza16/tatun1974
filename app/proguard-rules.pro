@@ -59,9 +59,20 @@
 # Aturan Anti-Rusak untuk Model Data Firestore
 -keep class com.aistudio.cuacamukomuko.wmzq.model.** { *; }
 -keepclassmembers class com.aistudio.cuacamukomuko.wmzq.model.** { *; }
--keep class com.example.security.DeviceSecuritySession { *; }
--keepclassmembers class com.example.security.DeviceSecuritySession { *; }
+-keep class com.example.security.** { *; }
+-keepclassmembers class com.example.security.** { *; }
 -keep @androidx.annotation.Keep class * { *; }
 -keepclassmembers class * {
     @androidx.annotation.Keep *;
 }
+
+# 8. WorkManager & Background Services (Mencegah Force Close pasca-update APK saat R8 aktif)
+-keep class * extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+-keep class * extends androidx.work.CoroutineWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+-keep class com.example.service.** { *; }
+-keep class com.example.data.sync.** { *; }
+

@@ -67,6 +67,10 @@ fun SupabaseStorageDiagnosticCard(
     var report by remember { mutableStateOf<SupabaseUploadDiagnosticReport?>(null) }
     var showRawLog by remember { mutableStateOf(false) }
 
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        SupabaseClient.ensureCloudConfigLoaded(context)
+    }
+
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -140,6 +144,7 @@ fun SupabaseStorageDiagnosticCard(
                         if (isRunning) return@Button
                         isRunning = true
                         coroutineScope.launch {
+                            SupabaseClient.ensureCloudConfigLoaded(context)
                             report = SupabaseClient.diagnoseImageUploadPath(
                                 reportId = "diag_${System.currentTimeMillis() % 100000}",
                                 cleanupProbeObject = true

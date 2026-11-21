@@ -3622,8 +3622,12 @@ fun CitizenReportScreen(
                         val fullPhotoModel = remember(previewPhotoUri) {
                             decodeCitizenPhotoModel(previewPhotoUri)
                         }
+                        val fallbackFullBitmap = rememberCitizenReportPhotoBitmap(previewPhotoUri, activeRep.id)
                         var isZoomPhotoError by remember(previewPhotoUri) {
-                            mutableStateOf(fullPhotoModel == null)
+                            mutableStateOf(fullPhotoModel == null && fallbackFullBitmap == null)
+                        }
+                        if (fallbackFullBitmap != null && isZoomPhotoError) {
+                            isZoomPhotoError = false
                         }
                         val zoomModifier = Modifier
                             .fillMaxSize()
@@ -3634,7 +3638,14 @@ fun CitizenReportScreen(
                                 translationY = panOffset.y
                             )
 
-                        if (isZoomPhotoError || fullPhotoModel == null) {
+                        if (fallbackFullBitmap != null) {
+                            Image(
+                                bitmap = fallbackFullBitmap.asImageBitmap(),
+                                contentDescription = "Foto Bencana Resolusi Penuh",
+                                contentScale = ContentScale.Fit,
+                                modifier = zoomModifier
+                            )
+                        } else if (isZoomPhotoError || fullPhotoModel == null) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center,
@@ -3672,7 +3683,11 @@ fun CitizenReportScreen(
                                     .build(),
                                 contentDescription = "Foto Bencana Resolusi Penuh",
                                 onSuccess = { isZoomPhotoError = false },
-                                onError = { isZoomPhotoError = true },
+                                onError = {
+                                    if (fallbackFullBitmap == null) {
+                                        isZoomPhotoError = true
+                                    }
+                                },
                                 contentScale = ContentScale.Fit,
                                 modifier = zoomModifier
                             )
@@ -4069,14 +4084,18 @@ private fun CitizenReportItemCard(
                 val resolvedPhotoModel = remember(report.photoUri) {
                     decodeCitizenPhotoModel(report.photoUri)
                 }
+                val fallbackCardBitmap = rememberCitizenReportPhotoBitmap(report.photoUri, report.id)
                 var isPhotoLoadError by remember(report.photoUri) {
-                    mutableStateOf(resolvedPhotoModel == null)
+                    mutableStateOf(resolvedPhotoModel == null && fallbackCardBitmap == null)
+                }
+                if (fallbackCardBitmap != null && isPhotoLoadError) {
+                    isPhotoLoadError = false
                 }
 
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD1D5DB)),
-                    color = if (isPhotoLoadError) Color(0xFFE5E7EB) else Color(0xFF1E293B),
+                    color = if (isPhotoLoadError && fallbackCardBitmap == null) Color(0xFFE5E7EB) else Color(0xFF1E293B),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(160.dp)
@@ -4085,10 +4104,10 @@ private fun CitizenReportItemCard(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .clickable(enabled = !isPhotoLoadError) { onViewPhoto(report.photoUri) },
+                            .clickable(enabled = !isPhotoLoadError || fallbackCardBitmap != null) { onViewPhoto(report.photoUri) },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (isPhotoLoadError || resolvedPhotoModel == null) {
+                        if (isPhotoLoadError && fallbackCardBitmap == null) {
                             // Placeholder default abu-abu agar gambar rusak/gagal dimuat tidak pernah tampil glitch
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -4113,9 +4132,10 @@ private fun CitizenReportItemCard(
                                 )
                             }
                         } else {
-                            if (resolvedPhotoModel is Bitmap) {
+                            val activeBitmap = fallbackCardBitmap ?: (resolvedPhotoModel as? Bitmap)
+                            if (activeBitmap != null) {
                                 Image(
-                                    bitmap = resolvedPhotoModel.asImageBitmap(),
+                                    bitmap = activeBitmap.asImageBitmap(),
                                     contentDescription = "Foto Bukti Laporan Bencana",
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
@@ -4128,7 +4148,11 @@ private fun CitizenReportItemCard(
                                         .build(),
                                     contentDescription = "Foto Bukti Laporan Bencana",
                                     onSuccess = { isPhotoLoadError = false },
-                                    onError = { isPhotoLoadError = true },
+                                    onError = {
+                                        if (fallbackCardBitmap == null) {
+                                            isPhotoLoadError = true
+                                        }
+                                    },
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )
@@ -4613,7 +4637,8 @@ internal fun isReportSyncedWithServer(report: CitizenDisasterReport): Boolean {
  * - Jika berupa string Base64 (dengan prefix `data:image/...;base64,` maupun raw Base64),
  *   didekode menggunakan `Base64.decode` menjadi `Bitmap`.
  * - Jika berupa URI `file://` atau path file lokal, memverifikasi keberadaan file.
- * - Jika berupa URI `content://` atau URL `http(s)://`, diteruskan langsung ke Coil `AsyncImage`.
+ * - Jika berupa URL `http(s)://`, memeriksa cache `Bitmap` / backup Data URI terlebih dahulu,
+ *   atau meneruskan URL HTTPS ke Coil `AsyncImage`.
  */
 internal fun decodeCitizenPhotoModel(photoSource: String?): Any? {
     if (photoSource.isNullOrBlank()) return null
@@ -4635,10 +4660,21 @@ internal fun decodeCitizenPhotoModel(photoSource: String?): Any? {
         if (trimmed.startsWith("file://", ignoreCase = true)) {
             return com.example.util.ImageUtils.decodePhotoSourceToBitmap(trimmed)
         }
-        if (trimmed.startsWith("http://", ignoreCase = true)) {
-            return "https://" + trimmed.substring(7)
+        val normalizedUrl = if (trimmed.startsWith("http://", ignoreCase = true)) {
+            "https://" + trimmed.substring(7)
+        } else {
+            trimmed
         }
-        return trimmed
+        if (normalizedUrl.startsWith("https://", ignoreCase = true)) {
+            com.example.data.api.SupabaseClient.getCachedPhotoBitmap(normalizedUrl)?.let { return it }
+            com.example.util.ImageUtils.getInlineDataUriForUrl(normalizedUrl)?.let { inlineDataUri ->
+                com.example.util.ImageUtils.decodePhotoSourceToBitmap(inlineDataUri)?.let { bmp ->
+                    com.example.data.api.SupabaseClient.cachePhotoBitmap(normalizedUrl, bmp)
+                    return bmp
+                }
+            }
+        }
+        return normalizedUrl
     }
 
     // 3. Cek path file absolut lokal (/data/..., /storage/...)
@@ -4648,6 +4684,50 @@ internal fun decodeCitizenPhotoModel(photoSource: String?): Any? {
 
     // 4. Fallback: raw Base64 string tanpa prefix
     return com.example.util.ImageUtils.decodePhotoSourceToBitmap(trimmed)
+}
+
+/**
+ * Mengambil Bitmap foto bukti laporan warga secara reaktif:
+ * - Mendukung Data URI Base64, file lokal, serta mengunduh secara terautentikasi dari Supabase Storage
+ *   (baik bucket `reports` berstatus Public maupun Authenticated/Private) agar foto laporan warga
+ *   selalu tampil di Halaman Petugas & Laporan Warga.
+ */
+@Composable
+internal fun rememberCitizenReportPhotoBitmap(
+    photoSource: String?,
+    reportId: String = ""
+): Bitmap? {
+    val trimmed = photoSource?.trim().orEmpty()
+    var resolvedBitmap by remember(trimmed, reportId) {
+        val initialModel = decodeCitizenPhotoModel(trimmed)
+        val fromModel = initialModel as? Bitmap
+        val fromReportCache = if (fromModel == null && reportId.isNotBlank()) {
+            com.example.util.ImageUtils.getInlineDataUriForReport(reportId)?.let {
+                com.example.util.ImageUtils.decodePhotoSourceToBitmap(it)
+            }
+        } else {
+            null
+        }
+        mutableStateOf(fromModel ?: fromReportCache)
+    }
+
+    LaunchedEffect(trimmed, reportId) {
+        if (resolvedBitmap == null &&
+            (trimmed.startsWith("https://", ignoreCase = true) || trimmed.startsWith("http://", ignoreCase = true))
+        ) {
+            val downloaded = com.example.data.api.SupabaseClient.downloadReportPhotoBitmap(trimmed)
+            if (downloaded != null) {
+                resolvedBitmap = downloaded
+            } else if (reportId.isNotBlank()) {
+                val backupUri = com.example.util.ImageUtils.getInlineDataUriForReport(reportId)
+                if (!backupUri.isNullOrBlank()) {
+                    resolvedBitmap = com.example.util.ImageUtils.decodePhotoSourceToBitmap(backupUri)
+                }
+            }
+        }
+    }
+
+    return resolvedBitmap
 }
 
 /**

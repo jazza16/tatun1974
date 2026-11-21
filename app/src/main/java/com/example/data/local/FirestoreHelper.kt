@@ -341,9 +341,23 @@ object FirestoreHelper {
         val dead = doc.getLong("casualtiesDead")?.toInt() ?: 0
         val injured = doc.getLong("casualtiesInjured")?.toInt() ?: 0
         val missing = doc.getLong("casualtiesMissing")?.toInt() ?: 0
-        val photoUri = doc.getString("fotoUrl")?.trim()?.takeIf { it.isNotBlank() }
-            ?: doc.getString("fotoLampiran")?.trim()?.takeIf { it.isNotBlank() }
-            ?: doc.getString("photoUri")?.trim()?.takeIf { it.isNotBlank() }
+        val rawFotoUrl = doc.getString("fotoUrl")?.trim()?.takeIf { it.isNotBlank() }
+        val rawFotoLampiran = doc.getString("fotoLampiran")?.trim()?.takeIf { it.isNotBlank() }
+        val rawPhotoUri = doc.getString("photoUri")?.trim()?.takeIf { it.isNotBlank() }
+        val allPhotoCandidates = listOfNotNull(rawFotoUrl, rawFotoLampiran, rawPhotoUri)
+        val inlineCandidate = allPhotoCandidates.firstOrNull {
+            it.startsWith("data:image", ignoreCase = true) || it.contains("base64,", ignoreCase = true)
+        }
+        val httpsCandidate = allPhotoCandidates.firstOrNull {
+            it.startsWith("https://", ignoreCase = true) || it.startsWith("http://", ignoreCase = true)
+        }
+        if (inlineCandidate != null) {
+            com.example.util.ImageUtils.rememberInlineDataUriForReport(id, inlineCandidate)
+            if (httpsCandidate != null) {
+                com.example.util.ImageUtils.rememberInlineDataUriForUrl(httpsCandidate, inlineCandidate)
+            }
+        }
+        val photoUri = rawFotoUrl ?: rawFotoLampiran ?: rawPhotoUri ?: com.example.util.ImageUtils.getInlineDataUriForReport(id)
         val reporterName = doc.getString("reporterName") ?: "Warga"
         val reporterPhone = doc.getString("reporterPhone") ?: ""
         val notes = doc.getString("additionalNotes") ?: ""

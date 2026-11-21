@@ -717,11 +717,13 @@ class FormTab1Fragment : Fragment() {
             etUpayaDilakukan.setText("Tim Reaksi Cepat (TRC) Pusdalops BPBD Mukomuko melakukan verifikasi lapangan dan kaji cepat atas laporan warga.")
         }
 
-        // Sinkronisasi ke ViewModel (termasuk jumlah korban dari warga)
+        // Sinkronisasi ke ViewModel (termasuk jumlah korban & bukti foto dokumentasi dari warga)
+        com.example.util.ImageUtils.lastSelectedCitizenReportPhotoUri = selectedItem.photoUrl
         simpanDataKeViewModel()
         sharedViewModel.laporanSementara = sharedViewModel.laporanSementara.copy(
             korbanMeninggal = selectedItem.casualtiesDead,
-            korbanLuka = selectedItem.casualtiesInjured
+            korbanLuka = selectedItem.casualtiesInjured,
+            fotoDokumentasiUri = selectedItem.photoUrl.orEmpty()
         )
 
         // 2. Tampilkan preview foto & ringkasan laporan warga yang dipakai di bawah tombol

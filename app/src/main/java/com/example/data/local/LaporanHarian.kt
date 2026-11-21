@@ -113,6 +113,9 @@ class LaporanHarianEntity(
             tanggalLaporan = value
         }
 
+    @Ignore
+    var fotoDokumentasiUri: String = ""
+
     @get:Ignore
     val operatorCanonicalName: String
         get() = OfficialAsnBpbdPersonnel.resolveCanonicalPersonnel(operatorName).name
@@ -155,7 +158,8 @@ class LaporanHarianEntity(
         operatorName: String = petugasJaga,
         tanggalLaporanDibuat: String = this.tanggalLaporan,
         tanggalLaporan: String = tanggalLaporanDibuat,
-        stationId: String = this.stationId
+        stationId: String = this.stationId,
+        fotoDokumentasiUri: String = this.fotoDokumentasiUri
     ): LaporanHarianEntity {
         return LaporanHarianEntity(
             id = id,
@@ -180,7 +184,9 @@ class LaporanHarianEntity(
             tanggalTerima = tanggalTerima,
             operatorName = operatorName,
             stationId = stationId
-        )
+        ).also {
+            it.fotoDokumentasiUri = fotoDokumentasiUri
+        }
     }
 }
 

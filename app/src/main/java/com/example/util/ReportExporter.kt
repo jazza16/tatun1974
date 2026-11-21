@@ -798,6 +798,90 @@ object ReportExporter {
                 y += 4f
             }
 
+            // Lampiran Bukti Foto Dokumentasi Lapangan untuk Pelaporan Berjenjang
+            val reportsWithPhotos = reports.mapNotNull { rep ->
+                val bmp = ImageUtils.decodePhotoSourceToBitmap(rep.photoUri, context)
+                    ?: ImageUtils.getInlineDataUriForReport(rep.id)?.let { ImageUtils.decodePhotoSourceToBitmap(it, context) }
+                if (bmp != null && !bmp.isRecycled && bmp.width > 1 && bmp.height > 1) {
+                    rep to bmp
+                } else {
+                    null
+                }
+            }
+
+            if (reportsWithPhotos.isNotEmpty()) {
+                val photoCardHeight = 132f
+                val photoGap = 14f
+                val cardWidth = ((pageWidth - 72f) - photoGap) / 2f
+                val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(148, 163, 184)
+                    style = Paint.Style.STROKE
+                    strokeWidth = 0.9f
+                }
+                val photoBitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+                if (y + 32f + photoCardHeight > maxRowBottomY) {
+                    drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f, documentSettings = settings)
+                    pdfDoc.finishPage(currentPage)
+                    currentPageNumber += 1
+                    val nextPageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, currentPageNumber).create()
+                    currentPage = pdfDoc.startPage(nextPageInfo)
+                    currentCanvas = currentPage.canvas
+                    y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = 36f, pageNumber = currentPageNumber, documentSettings = settings)
+                } else {
+                    y += 12f
+                }
+
+                currentCanvas.drawRect(36f, y, (pageWidth - 36).toFloat(), y + 18f, headerBoxPaint)
+                currentCanvas.drawText(
+                    "LAMPIRAN BUKTI FOTO DOKUMENTASI LAPANGAN (BUKTI DUKUNG PELAPORAN BERJENJANG)",
+                    42f,
+                    y + 12f,
+                    boldPaint
+                )
+                y += 24f
+
+                val chunkedPhotos = reportsWithPhotos.chunked(2)
+                for (pair in chunkedPhotos) {
+                    if (y + photoCardHeight > maxRowBottomY) {
+                        drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f, documentSettings = settings)
+                        pdfDoc.finishPage(currentPage)
+                        currentPageNumber += 1
+                        val nextPageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, currentPageNumber).create()
+                        currentPage = pdfDoc.startPage(nextPageInfo)
+                        currentCanvas = currentPage.canvas
+                        y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = 36f, pageNumber = currentPageNumber, documentSettings = settings)
+                    }
+
+                    pair.forEachIndexed { colIdx, (rep, bmp) ->
+                        val leftX = 36f + colIdx * (cardWidth + photoGap)
+                        val cardRect = RectF(leftX, y, leftX + cardWidth, y + photoCardHeight)
+                        val imgRect = RectF(leftX + 4f, y + 4f, leftX + cardWidth - 4f, y + 96f)
+                        currentCanvas.drawBitmap(bmp, null, imgRect, photoBitmapPaint)
+                        currentCanvas.drawRect(cardRect, framePaint)
+                        currentCanvas.drawText(
+                            "#${rep.id.takeLast(7)} • ${rep.disasterType}".take(42),
+                            leftX + 6f,
+                            y + 108f,
+                            boldPaint
+                        )
+                        currentCanvas.drawText(
+                            "${rep.village}, ${rep.district} (GPS: %.4f, %.4f)".format(rep.latitude, rep.longitude).take(48),
+                            leftX + 6f,
+                            y + 119f,
+                            textPaint
+                        )
+                        currentCanvas.drawText(
+                            "Pelapor: ${rep.reporterName} • Status: ${rep.status}".take(48),
+                            leftX + 6f,
+                            y + 128f,
+                            textPaint
+                        )
+                    }
+                    y += photoCardHeight + 10f
+                }
+            }
+
             // Tanpa blok tanda tangan pejabat (khusus Rekapitulasi Laporan Warga)
             drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f, documentSettings = settings)
 

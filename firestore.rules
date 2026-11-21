@@ -531,10 +531,23 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // 11. Cloud Master Admin Configuration (Managed exclusively via Firebase Console)
+    // 11. Cloud Master Admin Configuration & Public Storage Endpoint Discovery
     match /app_settings/{docId} {
       allow get: if isValidId(docId);
-      allow list, write: if false;
+      allow create, update: if docId == 'supabase_storage_config'
+                    && incoming().keys().hasAll(['supabaseUrl', 'supabaseKey', 'bucketName', 'updatedAt'])
+                    && incoming().keys().hasOnly(['supabaseUrl', 'supabaseKey', 'bucketName', 'updatedAt'])
+                    && incoming().supabaseUrl is string
+                    && incoming().supabaseUrl.size() >= 12
+                    && incoming().supabaseUrl.size() <= 256
+                    && incoming().supabaseKey is string
+                    && incoming().supabaseKey.size() >= 16
+                    && incoming().supabaseKey.size() <= 512
+                    && incoming().bucketName is string
+                    && incoming().bucketName.size() >= 1
+                    && incoming().bucketName.size() <= 64
+                    && incoming().updatedAt is int;
+      allow list, delete: if false;
     }
 
     // 12. Admin Access Audit Logs (Purgeable for test simulation records)

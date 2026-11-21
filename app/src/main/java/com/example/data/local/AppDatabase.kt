@@ -24,7 +24,7 @@ import androidx.room.RoomDatabase
         DistribusiLogistikEntity::class,
         KarhutlaHotspotEntity::class
     ],
-    version = 6,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -39,83 +39,114 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun karhutlaHotspotDao(): KarhutlaHotspotDao
 
     companion object {
+        private const val TAG = "AppDatabase"
+        const val DATABASE_NAME = "sipagar_database"
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        private val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE citizen_disaster_reports ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE citizen_disaster_reports ADD COLUMN handledByOfficerName TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE citizen_disaster_reports ADD COLUMN handledByOfficerNip TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE citizen_disaster_reports ADD COLUMN handledByOfficerRole TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE citizen_disaster_reports ADD COLUMN isSyncedToCloud INTEGER NOT NULL DEFAULT 1")
-                db.execSQL("UPDATE citizen_disaster_reports SET updatedAt = timestamp WHERE updatedAt = 0")
-            }
-        }
-
-        fun getDatabase(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "sipagar_database"
-                ).addMigrations(MIGRATION_5_6)
+        private fun buildRoomInstance(appContext: Context): AppDatabase {
+            return Room.databaseBuilder(
+                appContext,
+                AppDatabase::class.java,
+                DATABASE_NAME
+            )
                 .fallbackToDestructiveMigration(true)
                 .fallbackToDestructiveMigrationOnDowngrade(true)
                 .allowMainThreadQueries()
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                         super.onCreate(db)
-                        // Pre-populate official ASN BPBD personnel (leadership & operators)
-                        for (op in OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL) {
-                            val sql = "INSERT OR IGNORE INTO personnel (name, nip, role, unit, shift, phone) VALUES (?, ?, ?, ?, ?, ?)"
-                            db.execSQL(sql, arrayOf(op.name, op.nip, op.role, op.unit, op.shift, op.phone))
+                        try {
+                            // Pre-populate official ASN BPBD personnel (leadership & operators)
+                            for (op in OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL) {
+                                val sql = "INSERT OR IGNORE INTO personnel (name, nip, role, unit, shift, phone) VALUES (?, ?, ?, ?, ?, ?)"
+                                db.execSQL(sql, arrayOf(op.name, op.nip, op.role, op.unit, op.shift, op.phone))
+                            }
+
+                            // Pre-populate sample official Laporan Harian & Log Komunikasi
+                            val sqlLaporan = """
+                                INSERT OR IGNORE INTO laporan_harian (
+                                    id, tanggalLaporan, jenisBencana, tanggalKejadian, waktuKejadian, kedalaman, lokasi, koordinat,
+                                    cakupanDampak, kondisiCuaca, cuacaSaatKejadian, upayaDilakukan, kondisiMutakhir, korbanLuka, korbanMeninggal,
+                                    kerusakan, penyebab, sumberInformasi, tanggalSurat, tanggalTerima, operatorName, stationId
+                                ) VALUES (
+                                    1, '09 November 2026', 'Gempa Bumi Tektonik', '09 November 2026', '06:15:20 WIB', '15 km',
+                                    'Pesisir Samudra Hindia, Kec. Kota Mukomuko', '-2.5830, 101.1240',
+                                    '3 Desa pesisir merasakan guncangan skala III MMI', '29°C, Cerah Berawan', '29°C, Cerah Berawan',
+                                    'Pusdalops BPBD Mukomuko melakukan diseminasi informasi dan patroli TRC ke bibir pantai',
+                                    'Kondisi kondusif, tidak ada potensi tsunami, warga tetap beraktivitas normal',
+                                    0, 0, 'Nihil kerusakan berat (retak rambut pada 1 pos ronda)',
+                                    'Aktivitas Subduksi Lempeng Indo-Australia terhadap Eurasia', 'BMKG Stasiun Geofisika Kepahiang',
+                                    '09/11/2026', '09/11/2026', 'HITATUN ARAZAK', 'PUSDALOPS-MM-01'
+                                )
+                            """.trimIndent()
+                            db.execSQL(sqlLaporan)
+
+                            val sqlLog = """
+                                INSERT OR IGNORE INTO log_komunikasi (
+                                    id, laporanId, waktu, stationIdFrom, stationIdTo, subjek, operatorName
+                                ) VALUES (
+                                    1, 1, '06:18 WIB', 'Radio VHF Ch.1 - Pusdalops', 'Kalaksa BPBD Mukomuko',
+                                    'Laporan gempa M 4.8 kedalaman 15 km di pesisir Kota Mukomuko. Tidak berpotensi tsunami.',
+                                    'HITATUN ARAZAK'
+                                )
+                            """.trimIndent()
+                            db.execSQL(sqlLog)
+
+                            // Pre-populate sample Laporan Warga Hari Ini
+                            val sqlWarga = """
+                                INSERT OR IGNORE INTO laporan_warga (
+                                    id, tanggal, waktu, namaPelapor, nomorKontak, jenisBencana, lokasi, koordinat, kecamatan, desa, deskripsi, status, timestamp
+                                ) VALUES (
+                                    1, '09-11-2026', '08:30 WIB', 'Budi Santoso', '081273910022', 'Genangan Pasang Air Laut (Rob)',
+                                    'RT 03 Pasar Bantal', '-2.7123, 101.2345', 'Teramang Jaya', 'Pasar Bantal', 'Air laut pasang naik ke jalan desa setinggi 20 cm, lalu lintas agak terhambat.',
+                                    'Terverifikasi', 1794281400000
+                                )
+                            """.trimIndent()
+                            db.execSQL(sqlWarga)
+                        } catch (e: Exception) {
+                            android.util.Log.w(TAG, "Seeding awal onCreate dilewati sebagian: ${e.message}")
                         }
-
-                        // Pre-populate sample official Laporan Harian & Log Komunikasi
-                        val sqlLaporan = """
-                            INSERT OR IGNORE INTO laporan_harian (
-                                id, tanggalLaporan, jenisBencana, tanggalKejadian, waktuKejadian, kedalaman, lokasi, koordinat,
-                                cakupanDampak, kondisiCuaca, cuacaSaatKejadian, upayaDilakukan, kondisiMutakhir, korbanLuka, korbanMeninggal,
-                                kerusakan, penyebab, sumberInformasi, tanggalSurat, tanggalTerima, operatorName, stationId
-                            ) VALUES (
-                                1, '09 November 2026', 'Gempa Bumi Tektonik', '09 November 2026', '06:15:20 WIB', '15 km',
-                                'Pesisir Samudra Hindia, Kec. Kota Mukomuko', '-2.5830, 101.1240',
-                                '3 Desa pesisir merasakan guncangan skala III MMI', '29°C, Cerah Berawan', '29°C, Cerah Berawan',
-                                'Pusdalops BPBD Mukomuko melakukan diseminasi informasi dan patroli TRC ke bibir pantai',
-                                'Kondisi kondusif, tidak ada potensi tsunami, warga tetap beraktivitas normal',
-                                0, 0, 'Nihil kerusakan berat (retak rambut pada 1 pos ronda)',
-                                'Aktivitas Subduksi Lempeng Indo-Australia terhadap Eurasia', 'BMKG Stasiun Geofisika Kepahiang',
-                                '09/11/2026', '09/11/2026', 'HITATUN ARAZAK', 'PUSDALOPS-MM-01'
-                            )
-                        """.trimIndent()
-                        db.execSQL(sqlLaporan)
-
-                        val sqlLog = """
-                            INSERT OR IGNORE INTO log_komunikasi (
-                                id, laporanId, waktu, stationIdFrom, stationIdTo, subjek, operatorName
-                            ) VALUES (
-                                1, 1, '06:18 WIB', 'Radio VHF Ch.1 - Pusdalops', 'Kalaksa BPBD Mukomuko',
-                                'Laporan gempa M 4.8 kedalaman 15 km di pesisir Kota Mukomuko. Tidak berpotensi tsunami.',
-                                'HITATUN ARAZAK'
-                            )
-                        """.trimIndent()
-                        db.execSQL(sqlLog)
-
-                        // Pre-populate sample Laporan Warga Hari Ini
-                        val sqlWarga = """
-                            INSERT OR IGNORE INTO laporan_warga (
-                                id, tanggal, waktu, namaPelapor, nomorKontak, jenisBencana, lokasi, koordinat, kecamatan, desa, deskripsi, status, timestamp
-                            ) VALUES (
-                                1, '09-11-2026', '08:30 WIB', 'Budi Santoso', '081273910022', 'Genangan Pasang Air Laut (Rob)',
-                                'RT 03 Pasar Bantal', '-2.7123, 101.2345', 'Teramang Jaya', 'Pasar Bantal', 'Air laut pasang naik ke jalan desa setinggi 20 cm, lalu lintas agak terhambat.',
-                                'Terverifikasi', 1794281400000
-                            )
-                        """.trimIndent()
-                        db.execSQL(sqlWarga)
                     }
                 })
                 .build()
+        }
+
+        fun resetAndDeleteDatabase(context: Context) {
+            synchronized(this) {
+                try {
+                    INSTANCE?.close()
+                } catch (_: Exception) {
+                }
+                INSTANCE = null
+                try {
+                    context.applicationContext.deleteDatabase(DATABASE_NAME)
+                } catch (_: Exception) {
+                }
+            }
+        }
+
+        fun getDatabase(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE?.let { return@synchronized it }
+                val appContext = context.applicationContext
+                val instance = try {
+                    val candidate = buildRoomInstance(appContext)
+                    // Verifikasi integritas skema secara langsung; jika gagal pasca-update, pulihkan otomatis
+                    candidate.openHelper.writableDatabase
+                    candidate
+                } catch (t: Throwable) {
+                    android.util.Log.e(
+                        TAG,
+                        "Deteksi ketidaksesuaian skema/korupsi database pasca-update (${t.message}). Memulihkan database otomatis tanpa force close..."
+                    )
+                    try {
+                        appContext.deleteDatabase(DATABASE_NAME)
+                    } catch (_: Exception) {
+                    }
+                    buildRoomInstance(appContext)
+                }
                 INSTANCE = instance
                 instance
             }

@@ -334,6 +334,7 @@ object PdfGenerator {
                 lng = lngStr,
                 lokasiLabel = laporan.lokasiBencana.ifBlank { "Wilayah Kabupaten Mukomuko" }
             )
+        val evidencePhotoBitmap = resolveCitizenReportPhotoForPdf(context, laporan)
         val currentYear = Calendar.getInstance().get(Calendar.YEAR)
         val (monthlyData, pieSlices) = ReportExporter.buildDefaultMonthlyAnalyticsForAttachment(
             context = context,
@@ -346,12 +347,43 @@ object PdfGenerator {
             listLog = listLog,
             listLogistik = listLogistik,
             mapBitmap = mapBitmap,
+            evidencePhotoBitmap = evidencePhotoBitmap,
             monthlyData = monthlyData,
             pieSlices = pieSlices,
             selectedYear = currentYear,
             allDistrictsSummary = allDistrictsSummary,
             settings = settings
         )
+    }
+
+    private suspend fun resolveCitizenReportPhotoForPdf(
+        context: Context,
+        laporan: LaporanHarianEntity
+    ): Bitmap? = withContext(Dispatchers.IO) {
+        try {
+            var candidateUri = laporan.fotoDokumentasiUri.trim()
+                .ifBlank { ImageUtils.lastSelectedCitizenReportPhotoUri?.trim().orEmpty() }
+            if (candidateUri.isBlank()) {
+                val allReports = runCatching {
+                    com.example.data.local.AppDatabase.getInstance(context)
+                        .weatherDao()
+                        .getAllCitizenDisasterReportsSync()
+                }.getOrDefault(emptyList())
+                val matched = allReports.firstOrNull { r ->
+                    !r.photoUri.isNullOrBlank() && (
+                        (laporan.sumberInformasi.isNotBlank() && laporan.sumberInformasi.contains(r.reporterName, ignoreCase = true)) ||
+                            (laporan.lokasiBencana.isNotBlank() && r.village.isNotBlank() && laporan.lokasiBencana.contains(r.village, ignoreCase = true)) ||
+                            (laporan.jenisBencana.isNotBlank() && r.disasterType.equals(laporan.jenisBencana, ignoreCase = true))
+                        )
+                }
+                candidateUri = matched?.photoUri?.trim().orEmpty()
+            }
+            if (candidateUri.isBlank()) return@withContext null
+            com.example.data.api.SupabaseClient.downloadReportPhotoBitmap(candidateUri)
+                ?: ImageUtils.decodePhotoSourceToBitmap(candidateUri, context)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**
@@ -451,6 +483,7 @@ object PdfGenerator {
         listLog: List<LogKomunikasiEntity>,
         listLogistik: List<DistribusiLogistikEntity>,
         mapBitmap: Bitmap?,
+        evidencePhotoBitmap: Bitmap? = null,
         monthlyData: List<MonthlyDisasterSummary> = emptyList(),
         pieSlices: List<PieSliceData> = emptyList(),
         selectedYear: Int = Calendar.getInstance().get(Calendar.YEAR),
@@ -462,7 +495,7 @@ object PdfGenerator {
             // ==================== HALAMAN 1 (DENGAN KOP SURAT) ====================
             val page1Info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create()
             val page1 = pdfDocument.startPage(page1Info)
-            drawPage1(context, page1.canvas, laporan, listLog, mapBitmap, settings)
+            drawPage1(context, page1.canvas, laporan, listLog, mapBitmap, evidencePhotoBitmap, settings)
             pdfDocument.finishPage(page1)
 
             // ==================== HALAMAN 2 (TANPA KOP SURAT) ====================
@@ -514,6 +547,7 @@ object PdfGenerator {
         laporan: LaporanHarianEntity,
         listLog: List<LogKomunikasiEntity>,
         mapBitmap: Bitmap?,
+        evidencePhotoBitmap: Bitmap? = null,
         settings: DocumentSettings
     ) {
         val margin = PAGE_MARGIN
@@ -636,9 +670,16 @@ object PdfGenerator {
             y += rowHeight
         }
 
-        // 4. Bagian II: Layer Gambar Citra Satelit / Peta Lokasi Kejadian (OpenStreetMap Static Map)
+        // 4. Bagian II: Layer Gambar Citra Satelit / Peta Lokasi & Foto Bukti Kejadian
+        val hasEvidencePhoto = evidencePhotoBitmap != null && !evidencePhotoBitmap.isRecycled &&
+            evidencePhotoBitmap.width > 1 && evidencePhotoBitmap.height > 1
         y += 8f
-        canvas.drawText("II. Layer Gambar Citra Satelit / Peta Lokasi Kejadian", margin, y + 8f, sectionTitlePaint)
+        val section2Title = if (hasEvidencePhoto) {
+            "II. Layer Gambar Citra Satelit / Peta Lokasi & Foto Bukti Dokumentasi Lapangan"
+        } else {
+            "II. Layer Gambar Citra Satelit / Peta Lokasi Kejadian"
+        }
+        canvas.drawText(section2Title, margin, y + 8f, sectionTitlePaint)
         y += 12f
 
         val mapContainerHeight = 148f
@@ -655,13 +696,6 @@ object PdfGenerator {
         canvas.drawRoundRect(mapContainerRect, 4f, 4f, mapContainerBgPaint)
         canvas.drawRoundRect(mapContainerRect, 4f, 4f, mapContainerBorderPaint)
 
-        // Kotak peta di dalam container dengan bingkai tipis di sekeliling gambar peta
-        val mapFrameWidth = 240f
-        val mapFrameHeight = 120f
-        val mapFrameLeft = margin + (contentWidth - mapFrameWidth) / 2f
-        val mapFrameTop = y + 6f
-        val mapFrameRect = RectF(mapFrameLeft, mapFrameTop, mapFrameLeft + mapFrameWidth, mapFrameTop + mapFrameHeight)
-
         val thinFramePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(30, 41, 59)
             style = Paint.Style.STROKE
@@ -671,7 +705,13 @@ object PdfGenerator {
             color = Color.WHITE
             style = Paint.Style.FILL
         }
-        canvas.drawRect(mapFrameRect, whiteFillPaint)
+        val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        val captionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(51, 65, 85)
+            textSize = 7.6f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
 
         val resolvedMapBitmap = if (mapBitmap != null && !mapBitmap.isRecycled && mapBitmap.width > 1 && mapBitmap.height > 1) {
             mapBitmap
@@ -684,29 +724,61 @@ object PdfGenerator {
                 lokasiLabel = lokasiTampil
             )
         }
-        val innerImageRect = RectF(
-            mapFrameRect.left + 1.5f,
-            mapFrameRect.top + 1.5f,
-            mapFrameRect.right - 1.5f,
-            mapFrameRect.bottom - 1.5f
-        )
-        val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        canvas.drawBitmap(resolvedMapBitmap, null, innerImageRect, bitmapPaint)
-        canvas.drawRect(mapFrameRect, thinFramePaint)
 
-        // Teks kecil di bawah peta
-        val captionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(51, 65, 85)
-            textSize = 8.0f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
+        val mapFrameWidth = 240f
+        val mapFrameHeight = 120f
+        val mapFrameTop = y + 6f
+
+        if (hasEvidencePhoto && evidencePhotoBitmap != null) {
+            val gap = 14f
+            val totalPairW = mapFrameWidth * 2f + gap
+            val leftStart = margin + (contentWidth - totalPairW) / 2f
+            val leftMapRect = RectF(leftStart, mapFrameTop, leftStart + mapFrameWidth, mapFrameTop + mapFrameHeight)
+            val rightPhotoLeft = leftStart + mapFrameWidth + gap
+            val rightPhotoRect = RectF(rightPhotoLeft, mapFrameTop, rightPhotoLeft + mapFrameWidth, mapFrameTop + mapFrameHeight)
+
+            // Kiri: Peta Satelit GIS
+            canvas.drawRect(leftMapRect, whiteFillPaint)
+            val innerMapRect = RectF(leftMapRect.left + 1.5f, leftMapRect.top + 1.5f, leftMapRect.right - 1.5f, leftMapRect.bottom - 1.5f)
+            canvas.drawBitmap(resolvedMapBitmap, null, innerMapRect, bitmapPaint)
+            canvas.drawRect(leftMapRect, thinFramePaint)
+            canvas.drawText(
+                "Peta Lokasi Kejadian (Citra Satelit & GIS)",
+                leftMapRect.centerX(),
+                leftMapRect.bottom + 13f,
+                captionPaint
+            )
+
+            // Kanan: Foto Bukti Dokumentasi Warga
+            canvas.drawRect(rightPhotoRect, whiteFillPaint)
+            val innerPhotoRect = RectF(rightPhotoRect.left + 1.5f, rightPhotoRect.top + 1.5f, rightPhotoRect.right - 1.5f, rightPhotoRect.bottom - 1.5f)
+            canvas.drawBitmap(evidencePhotoBitmap, null, innerPhotoRect, bitmapPaint)
+            canvas.drawRect(rightPhotoRect, thinFramePaint)
+            canvas.drawText(
+                "Bukti Foto Dokumentasi Lapangan (Terverifikasi GPS)",
+                rightPhotoRect.centerX(),
+                rightPhotoRect.bottom + 13f,
+                captionPaint
+            )
+        } else {
+            val mapFrameLeft = margin + (contentWidth - mapFrameWidth) / 2f
+            val mapFrameRect = RectF(mapFrameLeft, mapFrameTop, mapFrameLeft + mapFrameWidth, mapFrameTop + mapFrameHeight)
+            canvas.drawRect(mapFrameRect, whiteFillPaint)
+            val innerImageRect = RectF(
+                mapFrameRect.left + 1.5f,
+                mapFrameRect.top + 1.5f,
+                mapFrameRect.right - 1.5f,
+                mapFrameRect.bottom - 1.5f
+            )
+            canvas.drawBitmap(resolvedMapBitmap, null, innerImageRect, bitmapPaint)
+            canvas.drawRect(mapFrameRect, thinFramePaint)
+            canvas.drawText(
+                "Peta Lokasi Kejadian (Radius 100m) - Citra Satelit & GIS Pusdalops",
+                PAGE_WIDTH / 2f,
+                mapFrameRect.bottom + 13f,
+                captionPaint
+            )
         }
-        canvas.drawText(
-            "Peta Lokasi Kejadian (Radius 100m) - Citra Satelit & GIS Pusdalops",
-            PAGE_WIDTH / 2f,
-            mapFrameRect.bottom + 13f,
-            captionPaint
-        )
 
         y += mapContainerHeight + 6f
 

@@ -3782,12 +3782,16 @@ private fun OfficerIncidentReportCard(
                 val resolvedPhotoModel = remember(report.photoUri) {
                     decodeCitizenPhotoModel(report.photoUri)
                 }
+                val fallbackOfficerBitmap = rememberCitizenReportPhotoBitmap(report.photoUri, report.id)
                 var isThumbError by remember(report.photoUri) {
-                    mutableStateOf(resolvedPhotoModel == null)
+                    mutableStateOf(resolvedPhotoModel == null && fallbackOfficerBitmap == null)
+                }
+                if (fallbackOfficerBitmap != null && isThumbError) {
+                    isThumbError = false
                 }
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = if (isThumbError) Color(0xFFE5E7EB) else Color(0xFF0F172A),
+                    color = if (isThumbError && fallbackOfficerBitmap == null) Color(0xFFE5E7EB) else Color(0xFF0F172A),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3798,9 +3802,9 @@ private fun OfficerIncidentReportCard(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .fillMaxSize()
-                            .clickable(enabled = !isThumbError) { onViewPhoto(report.photoUri) }
+                            .clickable(enabled = !isThumbError || fallbackOfficerBitmap != null) { onViewPhoto(report.photoUri) }
                     ) {
-                        if (isThumbError || resolvedPhotoModel == null) {
+                        if (isThumbError && fallbackOfficerBitmap == null) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center,
@@ -3824,9 +3828,10 @@ private fun OfficerIncidentReportCard(
                                 )
                             }
                         } else {
-                            if (resolvedPhotoModel is android.graphics.Bitmap) {
+                            val activeBitmap = fallbackOfficerBitmap ?: (resolvedPhotoModel as? android.graphics.Bitmap)
+                            if (activeBitmap != null) {
                                 androidx.compose.foundation.Image(
-                                    bitmap = resolvedPhotoModel.asImageBitmap(),
+                                    bitmap = activeBitmap.asImageBitmap(),
                                     contentDescription = "Foto Bukti Kejadian dari Warga",
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
@@ -3839,7 +3844,11 @@ private fun OfficerIncidentReportCard(
                                         .build(),
                                     contentDescription = "Foto Bukti Kejadian dari Warga",
                                     onSuccess = { isThumbError = false },
-                                    onError = { isThumbError = true },
+                                    onError = {
+                                        if (fallbackOfficerBitmap == null) {
+                                            isThumbError = true
+                                        }
+                                    },
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )

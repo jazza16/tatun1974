@@ -52,19 +52,47 @@ object SecureStorageHelper {
         }
     }
 
+    private fun deleteHardwareKeyQuietly() {
+        try {
+            val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE)
+            keyStore.load(null)
+            if (keyStore.containsAlias(KEY_ALIAS)) {
+                keyStore.deleteEntry(KEY_ALIAS)
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     fun isEncryptedValue(value: String?): Boolean {
         return !value.isNullOrBlank() && value.startsWith(PREFIX)
     }
 
     fun encryptString(plaintext: String): String {
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        val iv = cipher.iv
-        val cipherBytes = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
-        val combined = ByteArray(iv.size + cipherBytes.size)
-        System.arraycopy(iv, 0, combined, 0, iv.size)
-        System.arraycopy(cipherBytes, 0, combined, iv.size, cipherBytes.size)
-        return PREFIX + Base64.encodeToString(combined, Base64.NO_WRAP)
+        return try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+            val iv = cipher.iv
+            val cipherBytes = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
+            val combined = ByteArray(iv.size + cipherBytes.size)
+            System.arraycopy(iv, 0, combined, 0, iv.size)
+            System.arraycopy(cipherBytes, 0, combined, iv.size, cipherBytes.size)
+            PREFIX + Base64.encodeToString(combined, Base64.NO_WRAP)
+        } catch (_: Exception) {
+            // Jika kunci AndroidKeyStore terinvalidasi pasca-update, regenerasi kunci baru atau gunakan plaintext fallback aman
+            try {
+                deleteHardwareKeyQuietly()
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+                val iv = cipher.iv
+                val cipherBytes = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
+                val combined = ByteArray(iv.size + cipherBytes.size)
+                System.arraycopy(iv, 0, combined, 0, iv.size)
+                System.arraycopy(cipherBytes, 0, combined, iv.size, cipherBytes.size)
+                PREFIX + Base64.encodeToString(combined, Base64.NO_WRAP)
+            } catch (_: Exception) {
+                plaintext
+            }
+        }
     }
 
     fun decryptString(value: String?): String? {
@@ -84,15 +112,22 @@ object SecureStorageHelper {
     }
 
     fun putEncrypted(editor: SharedPreferences.Editor, key: String, value: String?) {
-        if (value == null) {
-            editor.remove(key)
-        } else {
-            editor.putString(key, encryptString(value))
+        try {
+            if (value == null) {
+                editor.remove(key)
+            } else {
+                editor.putString(key, encryptString(value))
+            }
+        } catch (_: Exception) {
         }
     }
 
     fun getDecrypted(prefs: SharedPreferences, key: String): String? {
-        val raw = prefs.getString(key, null) ?: return null
+        val raw = try {
+            prefs.getString(key, null)
+        } catch (_: Exception) {
+            null
+        } ?: return null
         return decryptString(raw)
     }
 }

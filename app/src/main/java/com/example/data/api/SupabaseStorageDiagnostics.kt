@@ -128,8 +128,8 @@ object SupabaseStorageDiagnostics {
 
     private val defaultStorageAdapter = object : StorageProbeAdapter {
         override fun isConfigured(): Boolean = SupabaseClient.isConfigured()
-        override fun supabaseUrl(): String = BuildConfig.SUPABASE_URL.trim().trimEnd('/')
-        override fun supabaseKey(): String = BuildConfig.SUPABASE_KEY.trim()
+        override fun supabaseUrl(): String = SupabaseClient.getEffectiveSupabaseUrl().trimEnd('/')
+        override fun supabaseKey(): String = SupabaseClient.getEffectiveSupabaseKey()
         override suspend fun uploadBytes(bucket: String, path: String, bytes: ByteArray): Result<String> =
             SupabaseClient.uploadRawJpegBytes(bucket = bucket, filePath = path, imageBytes = bytes)
 
@@ -204,6 +204,9 @@ object SupabaseStorageDiagnostics {
     ): SupabaseUploadDiagnosticReport = withContext(Dispatchers.IO) {
         val nowMs = System.currentTimeMillis()
         val adapter = overrideStorageAdapterForTesting ?: defaultStorageAdapter
+        if (overrideStorageAdapterForTesting == null && !adapter.isConfigured()) {
+            SupabaseClient.ensureCloudConfigLoaded()
+        }
         val httpExecutor = overrideHttpProbeExecutorForTesting ?: defaultHttpProbeExecutor
         val steps = mutableListOf<SupabaseDiagnosticStep>()
 
@@ -357,7 +360,7 @@ object SupabaseStorageDiagnostics {
             )
         )
 
-        // STEP 5: Probe AUTHENTICATED Retrieval (With apikey + Authorization: Bearer)
+        // STEP 5: Probe AUTHENTICATED Retrieval (With apikey + Authorization: Bearer, or apikey-only for sb_publishable_)
         val effectiveBearer = authBearerToken?.trim()?.takeIf { it.isNotBlank() } ?: apiKey
         val authHeaders = mapOf(
             "apikey" to apiKey,
@@ -372,6 +375,21 @@ object SupabaseStorageDiagnostics {
             if (directProbe.statusCode in 200..299 || authProbe.statusCode == 404) {
                 authProbe = directProbe
                 resolvedAuthUrl = directObjectUrl
+            }
+        }
+        if (authProbe.statusCode !in 200..299 && apiKey.startsWith("sb_publishable_", ignoreCase = true)) {
+            val publishableHeaders = mapOf("apikey" to apiKey)
+            val pubAuthProbe = httpExecutor.executeGet(expectedAuthUrl, publishableHeaders)
+            if (pubAuthProbe.statusCode in 200..299) {
+                authProbe = pubAuthProbe
+                resolvedAuthUrl = expectedAuthUrl
+            } else {
+                val directObjectUrl = "$baseUrl/storage/v1/object/$bucketName/$objectPath"
+                val pubDirectProbe = httpExecutor.executeGet(directObjectUrl, publishableHeaders)
+                if (pubDirectProbe.statusCode in 200..299) {
+                    authProbe = pubDirectProbe
+                    resolvedAuthUrl = directObjectUrl
+                }
             }
         }
         val authDownloadedSize = if (authProbe.statusCode in 200..299) authProbe.bodyBytes.size else null
@@ -475,6 +493,9 @@ object SupabaseStorageDiagnostics {
     ): SupabaseUploadDiagnosticReport = withContext(Dispatchers.IO) {
         val nowMs = System.currentTimeMillis()
         val adapter = overrideStorageAdapterForTesting ?: defaultStorageAdapter
+        if (overrideStorageAdapterForTesting == null && !adapter.isConfigured()) {
+            SupabaseClient.ensureCloudConfigLoaded()
+        }
         val httpExecutor = overrideHttpProbeExecutorForTesting ?: defaultHttpProbeExecutor
         val steps = mutableListOf<SupabaseDiagnosticStep>()
 
