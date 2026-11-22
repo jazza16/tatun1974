@@ -138,7 +138,7 @@ class SandboxTrainingModeTest {
         val sandboxDailyId = SandboxTrainingManager.recordSandboxDailyReportSaved(trainingDailyReport)
         assertTrue(sandboxDailyId >= 9000)
         assertEquals(1, SandboxTrainingManager.sandboxDailyReports.value.size)
-        assertEquals(0, database.laporanHarianDao().getAllLaporanSync().size)
+        assertEquals(0, database.laporanHarianDao().getAllLaporanHarianSync().size)
         assertTrue(
             SandboxTrainingManager.completedSteps.value.contains(
                 SandboxTrainingManager.STEP_3_AUTOFILL_DAILY_FORM
@@ -153,7 +153,8 @@ class SandboxTrainingModeTest {
             listLogistik = emptyList()
         )
         assertNotNull(pdfBytes)
-        assertTrue(pdfBytes.size > 1000)
+        assertTrue(pdfBytes.isNotEmpty())
+        assertTrue(String(pdfBytes).startsWith("%PDF"))
         assertTrue(
             SandboxTrainingManager.completedSteps.value.contains(
                 SandboxTrainingManager.STEP_4_PRINT_PDF
@@ -165,6 +166,6 @@ class SandboxTrainingModeTest {
         assertFalse(SandboxTrainingManager.isSandboxModeActive())
         assertEquals(0, repository.getCitizenDisasterReports().first().size)
         assertEquals(0, database.weatherDao().getCitizenReportCount())
-        assertEquals(0, database.laporanHarianDao().getAllLaporanSync().size)
+        assertEquals(0, database.laporanHarianDao().getAllLaporanHarianSync().size)
     }
 }

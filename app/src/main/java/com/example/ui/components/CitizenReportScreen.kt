@@ -381,6 +381,7 @@ fun CitizenReportScreen(
     // Officer Login & Status Gating Modal State
     var showOfficerLoginDialog by remember { mutableStateOf(initialShowOfficerLogin) }
     var showDisasterWallpaperDialog by remember { mutableStateOf(false) }
+    var showVolunteerCoordinationDialog by remember { mutableStateOf(false) }
     LaunchedEffect(initialShowOfficerLogin) {
         if (initialShowOfficerLogin) {
             showOfficerLoginDialog = true
@@ -2325,7 +2326,9 @@ fun CitizenReportScreen(
 
                 3 -> {
                     // TAB 3: KONTAK PENTING DARURAT MUKOMUKO
-                    CitizenEmergencyContactsView()
+                    CitizenEmergencyContactsView(
+                        onOpenVolunteerRegistration = { showVolunteerCoordinationDialog = true }
+                    )
                 }
 
                 4 -> {
@@ -3540,6 +3543,30 @@ fun CitizenReportScreen(
         MukomukoDisasterWallpaperDialog(
             onDismiss = { showDisasterWallpaperDialog = false }
         )
+    }
+
+    // Full-Screen Dialog Modul Pendataan & Koordinasi Relawan
+    if (showVolunteerCoordinationDialog) {
+        Dialog(
+            onDismissRequest = { showVolunteerCoordinationDialog = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            VolunteerCoordinationScreen(
+                isOfficerLoggedIn = isOfficerLoggedIn,
+                officerName = officerName,
+                officerNip = officerBadgeId,
+                officerRole = officerRole,
+                onClose = { showVolunteerCoordinationDialog = false },
+                onRequestOfficerLogin = {
+                    showVolunteerCoordinationDialog = false
+                    selectedTab = 4
+                    showOfficerLoginDialog = true
+                }
+            )
+        }
     }
 
     // Enlarged Fullscreen Photo Dialog (with interactive pinch-to-zoom & +/- zoom controls)

@@ -586,5 +586,41 @@ service cloud.firestore {
                          || (!isSignedIn() && existing().ownerUid == ('officer_nip_' + existing().officerNip))
                        );
     }
+
+    // 14. BPBD Volunteer Registration & Coordination (Offline-First SQLite -> Auto-Sync Cloud Firestore)
+    function isValidBpbdVolunteer(data) {
+      return data.id is string && data.id.size() >= 1 && data.id.size() <= 128
+          && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 150
+          && data.nik is string && data.nik.size() >= 4 && data.nik.size() <= 32
+          && data.phoneNumber is string && data.phoneNumber.size() >= 4 && data.phoneNumber.size() <= 40
+          && data.organization is string && data.organization.size() >= 1 && data.organization.size() <= 120
+          && data.skillsCsv is string && data.skillsCsv.size() >= 1 && data.skillsCsv.size() <= 500
+          && data.status is string && data.status.size() >= 1 && data.status.size() <= 40
+          && (!('homeDistrict' in data) || (data.homeDistrict is string && data.homeDistrict.size() <= 100))
+          && (!('assignedDistrict' in data) || (data.assignedDistrict is string && data.assignedDistrict.size() <= 100))
+          && (!('assignedPoskoName' in data) || (data.assignedPoskoName is string && data.assignedPoskoName.size() <= 200))
+          && (!('assignedShift' in data) || (data.assignedShift is string && data.assignedShift.size() <= 120))
+          && (!('isActive' in data) || data.isActive is bool)
+          && (!('needsAssistance' in data) || data.needsAssistance is bool)
+          && (!('assistanceNote' in data) || (data.assistanceNote is string && data.assistanceNote.size() <= 500))
+          && (!('selfiePhotoUri' in data) || data.selfiePhotoUri == null || (data.selfiePhotoUri is string && data.selfiePhotoUri.size() <= 400000))
+          && (!('certificatePhotoUri' in data) || data.certificatePhotoUri == null || (data.certificatePhotoUri is string && data.certificatePhotoUri.size() <= 400000))
+          && (!('waktu_checkin' in data) || data.waktu_checkin == null || data.waktu_checkin is int)
+          && (!('waktu_checkout' in data) || data.waktu_checkout == null || data.waktu_checkout is int)
+          && (!('suratTugasNumber' in data) || data.suratTugasNumber == null || (data.suratTugasNumber is string && data.suratTugasNumber.size() <= 120))
+          && (!('suratTugasPdfPath' in data) || data.suratTugasPdfPath == null || (data.suratTugasPdfPath is string && data.suratTugasPdfPath.size() <= 500))
+          && (!('registeredAt' in data) || data.registeredAt is int)
+          && (!('updatedAt' in data) || data.updatedAt is int)
+          && (!('verifiedByOfficer' in data) || (data.verifiedByOfficer is string && data.verifiedByOfficer.size() <= 150))
+          && (!('isSyncedToCloud' in data) || data.isSyncedToCloud is bool);
+    }
+
+    match /bpbd_volunteers/{volunteerId} {
+      allow read: if true;
+      allow create, update: if isValidId(volunteerId)
+                    && incoming().keys().hasAll(['id', 'fullName', 'nik', 'phoneNumber', 'organization', 'skillsCsv', 'status'])
+                    && isValidBpbdVolunteer(incoming());
+      allow delete: if isSignedIn() && isValidId(volunteerId);
+    }
   }
 }

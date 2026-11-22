@@ -79,7 +79,8 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun CitizenEmergencyContactsView(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenVolunteerRegistration: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -321,6 +322,64 @@ fun CitizenEmergencyContactsView(
                                 ).show()
                             }
                         )
+                    }
+                }
+            }
+
+            if (onOpenVolunteerRegistration != null) {
+                item(key = "volunteer_registration_portal_card") {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                        border = BorderStroke(1.dp, Color(0xFF86EFAC)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .testTag("card_open_volunteer_portal_from_contacts")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 12.dp)
+                            ) {
+                                Text(
+                                    text = "Pendataan & Registrasi Relawan BPBD",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF14532D)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Pendaftaran relawan kebencanaan (Individu & Organisasi/Komunitas terdaftar di BPBD Mukomuko).",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF166534),
+                                    lineHeight = 15.sp
+                                )
+                            }
+                            Button(
+                                onClick = onOpenVolunteerRegistration,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier
+                                    .heightIn(min = 44.dp)
+                                    .testTag("btn_header_open_volunteer_module")
+                            ) {
+                                Text(
+                                    text = "Portal Relawan",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -408,6 +408,8 @@ fun OfficerDashboardConsoleView(
     var showDatabaseExplorer by remember { mutableStateOf(false) }
     var showFormLaporanHarian by remember { mutableStateOf(false) }
     var showDalaModule by remember { mutableStateOf(false) }
+    var showVolunteerModule by remember { mutableStateOf(false) }
+    var showSandboxPanel by remember { mutableStateOf(false) }
     var integrityCheckResult by remember { mutableStateOf<com.example.data.sync.IntegrityCheckResult?>(null) }
     var isCheckingIntegrity by remember { mutableStateOf(false) }
     var editingPersonnel by remember { mutableStateOf<com.example.data.local.Personnel?>(null) }
@@ -1135,6 +1137,46 @@ fun OfficerDashboardConsoleView(
                                 Text(text = "Form Harian", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
 
+                            // Modul Pendataan & Koordinasi Relawan (Dashboard, Registrasi Offline-First, Verifikasi & Penugasan)
+                            Button(
+                                onClick = { showVolunteerModule = true },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D9488)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .heightIn(min = 40.dp)
+                                    .testTag("btn_open_volunteer_module")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Buka Modul Pendataan & Koordinasi Relawan",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "Koordinasi Relawan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            // Tombol Toggle Mode Latihan Petugas (Sandbox Simulasi Terisolasi)
+                            Button(
+                                onClick = { showSandboxPanel = !showSandboxPanel },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isSandboxModeActive) Color(0xFFD97706) else Color(0xFF475569)
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .heightIn(min = 40.dp)
+                                    .testTag("btn_toggle_sandbox_panel")
+                            ) {
+                                Text(
+                                    text = if (isSandboxModeActive) "Mode Latihan: AKTIF" else "Mode Latihan",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+
                             if (isExportAuthorized) {
                                 // PDF Export Button (Tier 1 & Tier 2, atau Mode Latihan)
                                 Button(
@@ -1195,8 +1237,8 @@ fun OfficerDashboardConsoleView(
             }
         }
 
-        // PANEL MODE LATIHAN PETUGAS (SANDBOX TERISOLASI) UNTUK ORIENTASI PUSDALOPS & TRC
-        if (isOfficerLoggedIn) {
+        // PANEL MODE LATIHAN PETUGAS (SANDBOX TERISOLASI) - Hanya ditampilkan saat Mode Latihan aktif atau dibuka manual agar tidak menggeser Core Respon Petugas
+        if (isOfficerLoggedIn && (isSandboxModeActive || showSandboxPanel)) {
             item {
                 SandboxTrainingControlCard(
                     onOpenDailyReportForm = { showFormLaporanHarian = true },
@@ -3269,6 +3311,25 @@ fun OfficerDashboardConsoleView(
                 officerName = officerName,
                 officerNip = officerBadgeId,
                 onClose = { showDalaModule = false }
+            )
+        }
+    }
+
+    // FULL SCREEN DIALOG MODUL PENDATAAN & KOORDINASI RELAWAN
+    if (showVolunteerModule) {
+        Dialog(
+            onDismissRequest = { showVolunteerModule = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            VolunteerCoordinationScreen(
+                isOfficerLoggedIn = isOfficerLoggedIn,
+                officerName = officerName,
+                officerNip = officerBadgeId,
+                officerRole = officerRole,
+                onClose = { showVolunteerModule = false }
             )
         }
     }
