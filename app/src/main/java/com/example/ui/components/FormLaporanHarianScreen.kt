@@ -76,6 +76,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -259,11 +260,13 @@ fun FormLaporanHarianScreen(
     var isLoadingCitizenReports by remember { mutableStateOf(false) }
     var showDariWargaModalSheet by remember { mutableStateOf(false) }
     var attachedCitizenReport by remember { mutableStateOf<IncomingCitizenReportItem?>(null) }
+    val isSandboxModeActive by com.example.training.SandboxTrainingManager.isSandboxEnabled.collectAsState()
+    val sandboxReportsSnapshot by com.example.training.SandboxTrainingManager.sandboxReports.collectAsState()
     val unreadCitizenCount = remember(incomingCitizenReports) {
         incomingCitizenReports.count { it.isUnreadOrUnprocessed }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(isSandboxModeActive, sandboxReportsSnapshot) {
         isLoadingCitizenReports = true
         incomingCitizenReports = CitizenIncomingReportsProvider.loadIncomingCitizenReports(
             context = context,
@@ -459,7 +462,7 @@ fun FormLaporanHarianScreen(
                             if (currentStep < 3) {
                                 currentStep += 1
                             } else {
-                                // Jika lolos validasi koordinat, simpan ke Room Database
+                                // Jika lolos validasi koordinat, simpan ke Room Database (atau ke Sandbox saat Mode Latihan)
                                 // BENAR: Ambil namaOperator & idStasiun dari user yang terverifikasi di token sesi (bukan dari UI state)
                                 isSaving = true
                                 scope.launch(Dispatchers.IO) {
@@ -490,26 +493,30 @@ fun FormLaporanHarianScreen(
                                         operatorName = namaOperator,
                                         stationId = idStasiun
                                     )
-                                    val insertedLaporanId = database.laporanHarianDao().insertLaporan(newLaporan).toInt()
+                                    val insertedLaporanId = if (com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
+                                        com.example.training.SandboxTrainingManager.recordSandboxDailyReportSaved(newLaporan)
+                                    } else {
+                                        val id = database.laporanHarianDao().insertLaporan(newLaporan).toInt()
+                                        // Insert associated communication logs with verified operator identity
+                                        val logEntities = logsList.map {
+                                            it.copy(
+                                                id = 0,
+                                                laporanId = id,
+                                                operatorName = namaOperator
+                                            )
+                                        }
+                                        if (logEntities.isNotEmpty()) {
+                                            database.laporanHarianDao().insertLogKomunikasiList(logEntities)
+                                        }
 
-                                    // Insert associated communication logs with verified operator identity
-                                    val logEntities = logsList.map {
-                                        it.copy(
-                                            id = 0,
-                                            laporanId = insertedLaporanId,
-                                            operatorName = namaOperator
-                                        )
-                                    }
-                                    if (logEntities.isNotEmpty()) {
-                                        database.laporanHarianDao().insertLogKomunikasiList(logEntities)
-                                    }
-
-                                    // Insert associated logistics distribution items
-                                    val logistikEntities = logistikList.map {
-                                        it.copy(id = 0, laporanId = insertedLaporanId)
-                                    }
-                                    if (logistikEntities.isNotEmpty()) {
-                                        database.laporanHarianDao().insertLogistikList(logistikEntities)
+                                        // Insert associated logistics distribution items
+                                        val logistikEntities = logistikList.map {
+                                            it.copy(id = 0, laporanId = id)
+                                        }
+                                        if (logistikEntities.isNotEmpty()) {
+                                            database.laporanHarianDao().insertLogistikList(logistikEntities)
+                                        }
+                                        id
                                     }
 
                                     withContext(Dispatchers.Main) {
@@ -529,7 +536,11 @@ fun FormLaporanHarianScreen(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
-                            text = if (currentStep == 3) "Simpan Laporan" else "Selanjutnya",
+                            text = if (currentStep == 3) {
+                                if (isSandboxModeActive) "Simpan (Latihan)" else "Simpan Laporan"
+                            } else {
+                                "Selanjutnya"
+                            },
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -555,6 +566,22 @@ fun FormLaporanHarianScreen(
                 .padding(innerPadding)
                 .background(Color(0xFFF5F5F5))
         ) {
+            SandboxTrainingCompactNoticeBanner(
+                screenContextLabel = "Form Laporan Harian",
+                onInjectDrillClick = {
+                    com.example.training.SandboxTrainingManager.injectSimulatedCitizenReport(
+                        context = context,
+                        triggerRealtimeAlertBanner = false
+                    )
+                    Toast.makeText(
+                        context,
+                        "Laporan simulasi baru ditambahkan! Klik tombol 'DARI WARGA' untuk menarik data.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
+
             // Tab Menu TabLayout
             ScrollableTabRow(
                 selectedTabIndex = currentStep,
@@ -612,7 +639,11 @@ fun FormLaporanHarianScreen(
                         },
                         onTarikLaporanKemarin = {
                             scope.launch(Dispatchers.IO) {
-                                val laporanKemarin = database.laporanHarianDao().getLaporanTerakhir()
+                                val laporanKemarin = if (com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
+                                    com.example.training.SandboxTrainingManager.sandboxDailyReports.value.firstOrNull()
+                                } else {
+                                    database.laporanHarianDao().getLaporanTerakhir()
+                                }
                                 withContext(Dispatchers.Main) {
                                     if (laporanKemarin != null) {
                                         jenisBencana = laporanKemarin.jenisBencana.ifBlank { jenisBencana }

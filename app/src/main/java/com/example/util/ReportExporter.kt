@@ -377,7 +377,66 @@ object ReportExporter {
         y += 2.5f
         canvas.drawLine(margin, y, pageWidth - margin, y, thinLinePaint)
 
+        if (com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
+            drawSandboxTrainingWatermark(canvas, pageWidth, A4_PAGE_HEIGHT, margin)
+        }
+
         return y + 15f
+    }
+
+    /**
+     * Menggambar pita peringatan atas & watermark diagonal transparan pada halaman PDF
+     * selama Mode Latihan Petugas (Sandbox) aktif agar dokumen latihan tidak pernah tertukar
+     * dengan rilis resmi Pusdalops-PB BPBD Kabupaten Mukomuko.
+     */
+    fun drawSandboxTrainingWatermark(
+        canvas: Canvas,
+        pageWidth: Int,
+        pageHeight: Int,
+        margin: Float = 30f
+    ) {
+        // 1. Pita merah/oranye di bagian paling atas halaman
+        val bannerRect = RectF(margin, 14f, pageWidth - margin, 32f)
+        val bannerFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(254, 243, 199)
+            style = Paint.Style.FILL
+        }
+        val bannerStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(217, 119, 6)
+            style = Paint.Style.STROKE
+            strokeWidth = 1.2f
+        }
+        val bannerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(180, 83, 9)
+            textSize = 8.5f
+            isFakeBoldText = true
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawRoundRect(bannerRect, 4f, 4f, bannerFill)
+        canvas.drawRoundRect(bannerRect, 4f, 4f, bannerStroke)
+        canvas.drawText(
+            "★ ${com.example.training.SandboxTrainingManager.WATERMARK_HEADER_TEXT} ★",
+            pageWidth / 2f,
+            26f,
+            bannerTextPaint
+        )
+
+        // 2. Watermark diagonal tipis di tengah halaman
+        canvas.save()
+        canvas.rotate(-32f, pageWidth / 2f, pageHeight / 2f)
+        val watermarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(34, 217, 119, 6)
+            textSize = 26f
+            isFakeBoldText = true
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(
+            "SIMULASI LATIHAN PETUGAS - NON PRODUKSI",
+            pageWidth / 2f,
+            pageHeight / 2f,
+            watermarkPaint
+        )
+        canvas.restore()
     }
 
     /**
@@ -399,17 +458,25 @@ object ReportExporter {
             strokeWidth = 0.6f
             isAntiAlias = true
         }
+        val isSandbox = com.example.training.SandboxTrainingManager.isSandboxModeActive()
         val footerPaint = Paint().apply {
-            color = Color.rgb(100, 116, 139)
+            color = if (isSandbox) Color.rgb(180, 83, 9) else Color.rgb(100, 116, 139)
             textSize = 7.2f
+            isFakeBoldText = isSandbox
             isAntiAlias = true
             textAlign = Paint.Align.CENTER
+        }
+
+        val effectiveFooterText = if (isSandbox) {
+            "${com.example.training.SandboxTrainingManager.WATERMARK_SHORT_BADGE} • ${settings.footerText}"
+        } else {
+            settings.footerText
         }
 
         canvas.drawLine(margin, footerLineY, pageWidth - margin, footerLineY, linePaint)
         PdfTextAutoShrinkHelper.drawAutoShrinkText(
             canvas = canvas,
-            text = settings.footerText,
+            text = effectiveFooterText,
             x = pageWidth / 2f,
             y = footerTextY,
             maxWidth = pageWidth - (margin * 2f),
@@ -618,6 +685,13 @@ object ReportExporter {
         if (reports.isEmpty()) {
             Toast.makeText(context, "Tidak ada data laporan untuk diekspor ke PDF", Toast.LENGTH_SHORT).show()
             return
+        }
+        if (com.example.training.SandboxTrainingManager.isSandboxModeActive() ||
+            reports.any { com.example.training.SandboxTrainingManager.isSandboxReportId(it.id) }
+        ) {
+            com.example.training.SandboxTrainingManager.markTrainingStepCompleted(
+                com.example.training.SandboxTrainingManager.STEP_4_PRINT_PDF
+            )
         }
 
         val pdfDoc = PdfDocument()
@@ -929,6 +1003,13 @@ object ReportExporter {
         }
 
         try {
+            if (com.example.training.SandboxTrainingManager.isSandboxModeActive() ||
+                reports.any { com.example.training.SandboxTrainingManager.isSandboxReportId(it.id) }
+            ) {
+                com.example.training.SandboxTrainingManager.markTrainingStepCompleted(
+                    com.example.training.SandboxTrainingManager.STEP_4_PRINT_PDF
+                )
+            }
             val settings = DocumentSettingsRepository.getCachedOrDefaultSettings(context).clamped()
             val resolvedOfficer = DocumentSettingsRepository.resolveOfficerIdentity(
                 context = context,
@@ -938,6 +1019,9 @@ object ReportExporter {
             )
             val csvFile = File(getExportCacheDir(context), "Laporan_Bencana_Pusdalops_Mukomuko.csv")
             csvFile.bufferedWriter().use { writer ->
+                if (com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
+                    writer.write("\"# ${com.example.training.SandboxTrainingManager.WATERMARK_HEADER_TEXT}\"\n")
+                }
                 // CSV Header (Dilengkapi Nama & NIP Petugas Validasi yang tersinkronisasi & Data-Driven)
                 writer.write("No,ID_Laporan,Jenis_Bencana,Waktu_Kejadian,Kecamatan,Desa,Detail_Lokasi,Latitude,Longitude,Akurasi_GPS_m,Korban_Meninggal,Korban_Luka,Korban_Hilang,Status,Catatan_Tindak_Lanjut_TRC,Nama_Pelapor,Nomor_Telepon,Petugas_Validasi,NIP_Petugas_Validasi\n")
 

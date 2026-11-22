@@ -236,9 +236,13 @@ fun OfficerDashboardConsoleView(
     var realtimeCloudReports by remember {
         mutableStateOf<List<CitizenDisasterReport>>(emptyList())
     }
+    val isSandboxModeActive by com.example.training.SandboxTrainingManager.isSandboxEnabled.collectAsStateWithLifecycle()
+    val sandboxReportsList by com.example.training.SandboxTrainingManager.sandboxReports.collectAsStateWithLifecycle()
 
-    val liveReports = remember(reports, realtimeCloudReports) {
-        if (realtimeCloudReports.isEmpty()) {
+    val liveReports = remember(reports, realtimeCloudReports, isSandboxModeActive, sandboxReportsList) {
+        if (isSandboxModeActive) {
+            sandboxReportsList.sortedByDescending { it.timestamp }
+        } else if (realtimeCloudReports.isEmpty()) {
             reports.sortedByDescending { it.timestamp }
         } else {
             val combinedMap = LinkedHashMap<String, CitizenDisasterReport>()
@@ -1080,8 +1084,8 @@ fun OfficerDashboardConsoleView(
                             }
                         }
 
-                        // MENU OPERASIONAL (DALA & FORM HARIAN) + EKSPOR (TIER 1 & TIER 2)
-                        val isExportAuthorized = isOfficerLoggedIn && UserRole.canExportReports(officerRole)
+                        // MENU OPERASIONAL (DALA & FORM HARIAN) + EKSPOR (TIER 1 & TIER 2, ATAU MODE LATIHAN SANDBOX)
+                        val isExportAuthorized = isOfficerLoggedIn && (isSandboxModeActive || UserRole.canExportReports(officerRole))
                         Spacer(modifier = Modifier.height(12.dp))
                         HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
                         Spacer(modifier = Modifier.height(12.dp))
@@ -1132,11 +1136,14 @@ fun OfficerDashboardConsoleView(
                             }
 
                             if (isExportAuthorized) {
-                                // PDF Export Button (Tier 1 & Tier 2)
+                                // PDF Export Button (Tier 1 & Tier 2, atau Mode Latihan)
                                 Button(
                                     onClick = {
-                                        val exportList = reports.filter { it.status.equals("Divalidasi", ignoreCase = true) || it.status.equals("Selesai", ignoreCase = true) }
-                                        val finalExport = if (exportList.isNotEmpty()) exportList else reports
+                                        val exportList = liveReports.filter {
+                                            it.status.equals("Divalidasi", ignoreCase = true) ||
+                                                it.status.equals("Selesai", ignoreCase = true)
+                                        }
+                                        val finalExport = if (exportList.isNotEmpty()) exportList else liveReports
                                         ReportExporter.exportToPdf(context, finalExport, officerName, officerBadgeId)
                                     },
                                     shape = RoundedCornerShape(8.dp),
@@ -1151,13 +1158,17 @@ fun OfficerDashboardConsoleView(
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = "Ekspor PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = if (isSandboxModeActive) "Ekspor PDF (Latihan)" else "Ekspor PDF",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
 
-                                // CSV Export Button (Tier 1 & Tier 2)
+                                // CSV Export Button (Tier 1 & Tier 2, atau Mode Latihan)
                                 Button(
                                     onClick = {
-                                        ReportExporter.exportToCsv(context, reports, officerName, officerBadgeId)
+                                        ReportExporter.exportToCsv(context, liveReports, officerName, officerBadgeId)
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
@@ -1171,12 +1182,28 @@ fun OfficerDashboardConsoleView(
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = "Ekspor CSV (Excel)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = if (isSandboxModeActive) "Ekspor CSV (Latihan)" else "Ekspor CSV (Excel)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+
+        // PANEL MODE LATIHAN PETUGAS (SANDBOX TERISOLASI) UNTUK ORIENTASI PUSDALOPS & TRC
+        if (isOfficerLoggedIn) {
+            item {
+                SandboxTrainingControlCard(
+                    onOpenDailyReportForm = { showFormLaporanHarian = true },
+                    onScenarioInjected = { _ ->
+                        dashboardSubTab = 0
+                    }
+                )
             }
         }
 

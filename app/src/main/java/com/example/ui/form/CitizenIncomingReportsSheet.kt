@@ -154,16 +154,41 @@ object CitizenIncomingReportsProvider {
         database: AppDatabase,
         report: IncomingCitizenReportItem
     ) = withContext(Dispatchers.IO) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val current = prefs.getStringSet(KEY_PROCESSED_REPORT_IDS, emptySet())?.toMutableSet() ?: mutableSetOf()
-        current.add(report.id)
-        prefs.edit().putStringSet(KEY_PROCESSED_REPORT_IDS, current).apply()
-
         val officerAuth = com.example.data.local.OfficerAuthManager(context)
         val authMgr = runCatching { com.example.data.auth.AuthManager.getInstance(context) }.getOrNull()
         val activeOfficerName = officerAuth.getOfficerName().ifBlank { authMgr?.getDisplayName().orEmpty() }
         val activeOfficerNip = officerAuth.getOfficerBadgeId().ifBlank { authMgr?.getBadgeOrUid().orEmpty() }
         val activeOfficerRole = officerAuth.getOfficerRole()
+
+        if (com.example.training.SandboxTrainingManager.isSandboxModeActive() ||
+            com.example.training.SandboxTrainingManager.isSandboxReportId(report.id)
+        ) {
+            val currentNormalized = com.example.model.CitizenReportStatusHelper.normalizeStatus(report.status)
+            val targetStatus = if (com.example.model.CitizenReportStatusHelper.statusRank(currentNormalized) >=
+                com.example.model.CitizenReportStatusHelper.statusRank(com.example.model.CitizenReportStatusHelper.STATUS_DIVALIDASI)
+            ) {
+                currentNormalized
+            } else {
+                com.example.model.CitizenReportStatusHelper.STATUS_DIVALIDASI
+            }
+            com.example.training.SandboxTrainingManager.updateSandboxReportStatus(
+                reportId = report.id,
+                newStatus = targetStatus,
+                officerName = activeOfficerName,
+                officerNip = activeOfficerNip,
+                officerRole = activeOfficerRole
+            )
+            com.example.training.SandboxTrainingManager.markTrainingStepCompleted(
+                com.example.training.SandboxTrainingManager.STEP_3_AUTOFILL_DAILY_FORM
+            )
+            return@withContext
+        }
+
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val current = prefs.getStringSet(KEY_PROCESSED_REPORT_IDS, emptySet())?.toMutableSet() ?: mutableSetOf()
+        current.add(report.id)
+        prefs.edit().putStringSet(KEY_PROCESSED_REPORT_IDS, current).apply()
+
         val now = System.currentTimeMillis()
 
         try {
@@ -249,7 +274,6 @@ object CitizenIncomingReportsProvider {
         context: Context,
         database: AppDatabase
     ): List<IncomingCitizenReportItem> = withContext(Dispatchers.IO) {
-        val processedIds = getProcessedIds(context)
         val pkg = context.packageName
         val todayStr = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
 
@@ -259,6 +283,48 @@ object CitizenIncomingReportsProvider {
             R.drawable.img_mukomuko_wallpaper,
             R.drawable.wallpaper_startup_bpbd
         )
+
+        if (com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
+            if (com.example.training.SandboxTrainingManager.sandboxReports.value.isEmpty()) {
+                com.example.training.SandboxTrainingManager.seedInitialTrainingReports(context)
+            }
+            return@withContext com.example.training.SandboxTrainingManager.sandboxReports.value
+                .sortedByDescending { it.effectiveUpdatedAt() }
+                .mapIndexed { index, report ->
+                    val parsedDateAndTime = splitIncidentTime(report.incidentTime, todayStr)
+                    val fallbackRes = fallbackDrawables[index % fallbackDrawables.size]
+                    val resolvedPhoto = report.photoUri?.takeIf { it.isNotBlank() }
+                        ?: "android.resource://$pkg/$fallbackRes"
+                    val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(report.status)
+                    val isAlreadyResolved = com.example.model.CitizenReportStatusHelper.isResolved(normalizedStatus)
+
+                    IncomingCitizenReportItem(
+                        id = report.id,
+                        reporterName = report.reporterName.ifBlank { "Warga Simulasi Mukomuko" },
+                        reporterPhone = report.reporterPhone.ifBlank { "-" },
+                        dateText = parsedDateAndTime.first,
+                        timeText = parsedDateAndTime.second,
+                        disasterType = report.disasterType.ifBlank { "Banjir" },
+                        district = report.district.ifBlank { "Kota Mukomuko" },
+                        village = report.village.ifBlank { "Pasar Mukomuko" },
+                        locationDetail = report.incidentLocation.ifBlank { "Kec. ${report.district}" },
+                        coordinates = String.format(Locale.US, "%.4f, %.4f", report.latitude, report.longitude),
+                        description = report.additionalNotes.ifBlank {
+                            "[SIMULASI LATIHAN] Dilaporkan kejadian ${report.disasterType} oleh ${report.reporterName} di ${report.incidentLocation}."
+                        },
+                        photoUrl = resolvedPhoto,
+                        fallbackDrawableRes = fallbackRes,
+                        casualtiesDead = report.casualtiesDead,
+                        casualtiesInjured = report.casualtiesInjured,
+                        status = "[LATIHAN] $normalizedStatus",
+                        isGpsVerified = report.isGpsVerified,
+                        isUnreadOrUnprocessed = !isAlreadyResolved,
+                        timestampMillis = report.effectiveUpdatedAt()
+                    )
+                }
+        }
+
+        val processedIds = getProcessedIds(context)
 
         // 0. Sinkronkan lebih dulu data laporan warga terbaru dari Cloud Firestore agar "DARI WARGA" selalu sinkron dengan laporan warga nyata
         try {

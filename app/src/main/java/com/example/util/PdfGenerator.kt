@@ -309,18 +309,27 @@ object PdfGenerator {
         listLogistik: List<DistribusiLogistikEntity> = emptyList(),
         overrideSettings: DocumentSettings? = null
     ): ByteArray = withContext(Dispatchers.IO) {
+        val isSandbox = com.example.training.SandboxTrainingManager.isSandboxModeActive() ||
+            laporan.lokasi.contains("[SIMULASI", ignoreCase = true)
+        if (isSandbox) {
+            com.example.training.SandboxTrainingManager.markTrainingStepCompleted(
+                com.example.training.SandboxTrainingManager.STEP_4_PRINT_PDF
+            )
+        }
         val settings = (overrideSettings ?: DocumentSettingsRepository.fetchDocumentSettings(context)).clamped()
 
-        // 1. Remote Template PDF: minta PDF siap cetak dari Backend lebih dulu
-        val remoteResult = DocumentSettingsRepository.fetchRemotePdfIfAvailable(
-            context = context,
-            laporan = laporan,
-            listLog = listLog,
-            listLogistik = listLogistik,
-            settings = settings
-        )
-        if (remoteResult != null && DocumentSettingsRepository.isValidPdfBytes(remoteResult.pdfBytes)) {
-            return@withContext remoteResult.pdfBytes
+        // 1. Remote Template PDF: minta PDF siap cetak dari Backend lebih dulu (kecuali saat Mode Latihan Sandbox agar watermark lokal terpasang)
+        if (!isSandbox) {
+            val remoteResult = DocumentSettingsRepository.fetchRemotePdfIfAvailable(
+                context = context,
+                laporan = laporan,
+                listLog = listLog,
+                listLogistik = listLogistik,
+                settings = settings
+            )
+            if (remoteResult != null && DocumentSettingsRepository.isValidPdfBytes(remoteResult.pdfBytes)) {
+                return@withContext remoteResult.pdfBytes
+            }
         }
 
         // 2. Fallback Lokal berbasis konfigurasi JSON `DocumentSettings`
@@ -363,6 +372,17 @@ object PdfGenerator {
         try {
             var candidateUri = laporan.fotoDokumentasiUri.trim()
                 .ifBlank { ImageUtils.lastSelectedCitizenReportPhotoUri?.trim().orEmpty() }
+            if (candidateUri.isBlank() && com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
+                val sandboxList = com.example.training.SandboxTrainingManager.sandboxReports.value
+                val matchedSandbox = sandboxList.firstOrNull { r ->
+                    !r.photoUri.isNullOrBlank() && (
+                        (laporan.sumberInformasi.isNotBlank() && laporan.sumberInformasi.contains(r.reporterName, ignoreCase = true)) ||
+                            (laporan.lokasiBencana.isNotBlank() && r.village.isNotBlank() && laporan.lokasiBencana.contains(r.village, ignoreCase = true)) ||
+                            (laporan.jenisBencana.isNotBlank() && r.disasterType.equals(laporan.jenisBencana, ignoreCase = true))
+                        )
+                } ?: sandboxList.firstOrNull { !it.photoUri.isNullOrBlank() }
+                candidateUri = matchedSandbox?.photoUri?.trim().orEmpty()
+            }
             if (candidateUri.isBlank()) {
                 val allReports = runCatching {
                     com.example.data.local.AppDatabase.getInstance(context)

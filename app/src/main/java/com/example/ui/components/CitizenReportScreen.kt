@@ -903,6 +903,24 @@ fun CitizenReportScreen(
             }
         }
 
+        if (selectedTab != 4) {
+            SandboxTrainingCompactNoticeBanner(
+                screenContextLabel = "Mode Warga / Simulasi",
+                onInjectDrillClick = {
+                    com.example.training.SandboxTrainingManager.injectSimulatedCitizenReport(
+                        context = context,
+                        triggerRealtimeAlertBanner = true
+                    )
+                    Toast.makeText(
+                        context,
+                        "Laporan simulasi warga disuntikkan ke Sandbox! Buka tab Ruang Kerja untuk menindaklanjuti.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        }
+
         // Main White Rounded Card Body
         Surface(
             shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),

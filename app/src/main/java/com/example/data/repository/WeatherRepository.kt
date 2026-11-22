@@ -24,8 +24,10 @@ import com.example.model.HourlyItem
 import com.example.model.MarineWeather
 import com.example.model.WeatherAlert
 import com.example.model.WeatherFullReport
+import com.example.training.SandboxTrainingManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -263,14 +265,30 @@ class WeatherRepository(
 
     // Citizen Disaster Reports (Anti-Hoax GPS Verified)
     fun getCitizenDisasterReports(): Flow<List<CitizenDisasterReport>> {
-        return weatherDao.getAllCitizenDisasterReports().map { entities ->
-            entities.map { mapCitizenEntityToModel(it) }
+        return combine(
+            weatherDao.getAllCitizenDisasterReports(),
+            SandboxTrainingManager.isSandboxEnabled,
+            SandboxTrainingManager.sandboxReports
+        ) { entities, isSandbox, sandboxList ->
+            if (isSandbox) {
+                sandboxList
+            } else {
+                entities.map { mapCitizenEntityToModel(it) }
+            }
         }
     }
 
     fun getCitizenReportsByStatus(status: String): Flow<List<CitizenDisasterReport>> {
-        return weatherDao.getCitizenReportsByStatus(status).map { entities ->
-            entities.map { mapCitizenEntityToModel(it) }
+        return combine(
+            weatherDao.getCitizenReportsByStatus(status),
+            SandboxTrainingManager.isSandboxEnabled,
+            SandboxTrainingManager.sandboxReports
+        ) { entities, isSandbox, sandboxList ->
+            if (isSandbox) {
+                sandboxList.filter { com.example.model.CitizenReportStatusHelper.matchesFilter(it.status, status) }
+            } else {
+                entities.map { mapCitizenEntityToModel(it) }
+            }
         }
     }
 
@@ -397,6 +415,23 @@ class WeatherRepository(
         report: CitizenDisasterReport,
         context: android.content.Context? = null
     ): CitizenReportSubmitResult = withContext(databaseWriteDispatcher) {
+        if (SandboxTrainingManager.isSandboxModeActive() || SandboxTrainingManager.isSandboxReportId(report.id)) {
+            val savedSandbox = SandboxTrainingManager.submitSandboxCitizenReport(
+                context = context,
+                report = report,
+                triggerRealtimeAlertBanner = true
+            )
+            return@withContext CitizenReportSubmitResult(
+                reportId = savedSandbox.id,
+                savedLocally = true,
+                syncedToCloud = true,
+                hasPhoto = !savedSandbox.photoUri.isNullOrBlank(),
+                cloudPhotoUrl = savedSandbox.photoUri,
+                deferredOffline = false,
+                message = "[MODE LATIHAN SANDBOX] Laporan simulasi (${savedSandbox.id}) berhasil diterima di lingkungan latihan tanpa menyentuh database produksi."
+            )
+        }
+
         val rawPhoto = report.photoUri?.trim()?.takeIf { it.isNotBlank() }
         val hasPhoto = rawPhoto != null
         val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(report.status)
@@ -543,6 +578,17 @@ class WeatherRepository(
         officerNip: String = "",
         officerRole: String = ""
     ): Boolean = withContext(databaseWriteDispatcher) {
+        if (SandboxTrainingManager.isSandboxModeActive() || SandboxTrainingManager.isSandboxReportId(reportId)) {
+            SandboxTrainingManager.updateSandboxReportStatus(
+                reportId = reportId,
+                newStatus = newStatus,
+                notes = null,
+                officerName = officerName,
+                officerNip = officerNip,
+                officerRole = officerRole
+            )
+            return@withContext true
+        }
         val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(newStatus)
         val now = System.currentTimeMillis()
         weatherDao.updateCitizenReportStatus(
@@ -592,6 +638,17 @@ class WeatherRepository(
         officerNip: String = "",
         officerRole: String = ""
     ): Boolean = withContext(databaseWriteDispatcher) {
+        if (SandboxTrainingManager.isSandboxModeActive() || SandboxTrainingManager.isSandboxReportId(reportId)) {
+            SandboxTrainingManager.updateSandboxReportStatus(
+                reportId = reportId,
+                newStatus = newStatus,
+                notes = notes,
+                officerName = officerName,
+                officerNip = officerNip,
+                officerRole = officerRole
+            )
+            return@withContext true
+        }
         val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(newStatus)
         val now = System.currentTimeMillis()
         weatherDao.updateCitizenReportStatusAndNotes(
@@ -642,6 +699,10 @@ class WeatherRepository(
         reportId: String,
         officerRole: String?
     ): Boolean = withContext(databaseWriteDispatcher) {
+        if (SandboxTrainingManager.isSandboxModeActive() || SandboxTrainingManager.isSandboxReportId(reportId)) {
+            SandboxTrainingManager.deleteSandboxReport(reportId)
+            return@withContext true
+        }
         if (!com.example.security.UserRole.canDeleteReports(officerRole)) {
             android.util.Log.w(
                 "WeatherRepository",
@@ -666,6 +727,9 @@ class WeatherRepository(
      *    sehingga perangkat petugas dan warga selalu 100% sinkron.
      */
     suspend fun syncCitizenDisasterReportsOnline(): Int = withContext(databaseWriteDispatcher) {
+        if (SandboxTrainingManager.isSandboxModeActive()) {
+            return@withContext 0
+        }
         var syncedOrUpdatedCount = 0
 
         val fetchResult = com.example.data.local.FirestoreHelper.fetchCitizenReportsFromServerSuspend()
@@ -794,6 +858,9 @@ class WeatherRepository(
     }
 
     suspend fun upsertRealtimeCitizenReportsFromCloud(remoteReports: List<CitizenDisasterReport>) = withContext(databaseWriteDispatcher) {
+        if (SandboxTrainingManager.isSandboxModeActive()) {
+            return@withContext
+        }
         val localEntities = weatherDao.getAllCitizenDisasterReportsSync()
         if (localEntities.isNotEmpty()) {
             com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
