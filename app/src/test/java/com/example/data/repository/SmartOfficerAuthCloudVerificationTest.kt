@@ -21,7 +21,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class SmartOfficerAuthCloudVerificationTest {
 
     private lateinit var context: Context
@@ -674,4 +674,97 @@ class SmartOfficerAuthCloudVerificationTest {
         assertFalse("Operator must NOT see Validasi Laporan", com.example.security.UserRole.canValidateReports(authManager.getOfficerRole()))
         assertTrue("Operator must see operational menus (Laporan Warga, Form Harian/DALA, Peta)", com.example.security.UserRole.canAccessOperationalMenus(authManager.getOfficerRole()))
     }
+
+    @Test
+    fun `manual officer input via Kelola Petugas (YAKI, NIP 123412 and new 18-digit ASN) can immediately log in by Name or NIP`() = runBlocking {
+        val cloudCredentialsStore = mutableMapOf<String, OfficerCredentialEntity>()
+        FirestoreHelper.overrideCloudCredentialFetcherForTesting = { reqNip ->
+            val found = cloudCredentialsStore[reqNip]
+            if (found != null) CloudCredentialLookupResult.Found(found) else CloudCredentialLookupResult.NotFound
+        }
+        FirestoreHelper.overrideCloudCredentialWriterForTesting = { entity ->
+            cloudCredentialsStore[entity.nip] = entity
+            Result.success(Unit)
+        }
+
+        val repo = SmartOfficerAuthRepository(context)
+
+        // 1. Admin menginput petugas manual: Nama = "YAKI", NIP = "123412"
+        val regYaki = repo.registerOrUpdateManualOfficer(
+            fullName = "YAKI",
+            nip = "123412",
+            role = OfficerRoles.OPERATOR
+        )
+        assertTrue("Manual registration for YAKI must succeed", regYaki.isSuccess)
+        assertEquals("123412", regYaki.getOrNull()?.effectiveInitialPin)
+        assertTrue("Cloud credential must be provisioned for 123412", cloudCredentialsStore.containsKey("123412"))
+
+        // 2. Petugas YAKI login menggunakan Nama "YAKI" dan PIN "123412" (sesuai screenshot user)
+        val loginByName = repo.authenticateByNipOrNameAndPin("YAKI", "123412")
+        assertTrue("Login by Name 'YAKI' with PIN '123412' must succeed: ${loginByName.exceptionOrNull()?.message}", loginByName.isSuccess)
+        assertEquals("YAKI", loginByName.getOrNull()?.fullName)
+        assertEquals("123412", loginByName.getOrNull()?.nip)
+
+        // 3. Petugas YAKI login menggunakan NIP "123412" dan PIN "123412"
+        val loginByNip = repo.authenticateByNipOrNameAndPin("123412", "123412")
+        assertTrue("Login by NIP '123412' must succeed", loginByNip.isSuccess)
+
+        // 4. Petugas YAKI login menggunakan gabungan "YAKI, 123412"
+        val loginByCombined = repo.authenticateByNipOrNameAndPin("YAKI, 123412", "123412")
+        assertTrue("Login by combined 'YAKI, 123412' must succeed", loginByCombined.isSuccess)
+
+        // 5. Admin menginput ASN baru dengan NIP 18 digit standar: "Ramdani Pratama, S.T.", NIP "19910815 202012 1 007"
+        val regAsn = repo.registerOrUpdateManualOfficer(
+            fullName = "Ramdani Pratama, S.T.",
+            nip = "19910815 202012 1 007",
+            role = OfficerRoles.PETUGAS_JAGA
+        )
+        assertTrue("Manual registration for new 18-digit ASN must succeed", regAsn.isSuccess)
+        assertEquals("121007", regAsn.getOrNull()?.effectiveInitialPin)
+
+        val loginAsnByName = repo.authenticateByNipOrNameAndPin("Ramdani Pratama", "121007")
+        assertTrue("New 18-digit ASN must be able to log in by Name + 6-digit NIP PIN", loginAsnByName.isSuccess)
+        assertEquals("199108152020121007", loginAsnByName.getOrNull()?.nip)
+    }
+
+    @Test
+    fun `cross-device login by Name succeeds for manually added officer fetched from Cloud officers directory`() = runBlocking {
+        val cloudCredentialsStore = mutableMapOf<String, OfficerCredentialEntity>()
+        FirestoreHelper.overrideCloudCredentialFetcherForTesting = { reqNip ->
+            val found = cloudCredentialsStore[reqNip]
+            if (found != null) CloudCredentialLookupResult.Found(found) else CloudCredentialLookupResult.NotFound
+        }
+        FirestoreHelper.overrideCloudCredentialWriterForTesting = { entity ->
+            cloudCredentialsStore[entity.nip] = entity
+            Result.success(Unit)
+        }
+        // Simulasikan petugas "YAKI" (NIP 123412) didaftarkan di perangkat Admin lain dan tersimpan di Cloud Firestore `officers`
+        FirestoreHelper.overrideOfficersDirectoryFetcherForTesting = {
+            Result.success(
+                listOf(
+                    com.example.data.local.OfficerProfile(
+                        id = "officer_123412",
+                        fullName = "YAKI",
+                        nip = "123412",
+                        role = OfficerRoles.OPERATOR,
+                        unit = "Pusdalops BPBD Kab. Mukomuko",
+                        shift = "Shift Siaga 24 Jam",
+                        phone = "08123456789"
+                    )
+                )
+            )
+        }
+
+        val repo = SmartOfficerAuthRepository(context)
+
+        // Perangkat baru (belum ada YAKI di cache lokal) langsung login dengan Nama "YAKI" dan PIN "123412"
+        val crossDeviceLogin = repo.authenticateByNipOrNameAndPin("YAKI", "123412")
+        assertTrue(
+            "Cross-device login by Name 'YAKI' must resolve from Cloud officers directory and succeed: ${crossDeviceLogin.exceptionOrNull()?.message}",
+            crossDeviceLogin.isSuccess
+        )
+        assertEquals("YAKI", crossDeviceLogin.getOrNull()?.fullName)
+        assertEquals("123412", crossDeviceLogin.getOrNull()?.nip)
+    }
 }
+

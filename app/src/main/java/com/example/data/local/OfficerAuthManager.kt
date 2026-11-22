@@ -439,7 +439,8 @@ class OfficerAuthManager(private val context: Context) {
 
     /**
      * Gets the full roster of officers, operators, and field responders.
-     * Guarantees all official ASN BPBD Pusdalops personnel are present with synchronized name and NIP.
+     * Guarantees all official ASN BPBD Pusdalops personnel are present while preserving
+     * any manually added or edited officer profiles without overwriting their custom name or NIP.
      */
     fun getOfficerRoster(): List<OfficerProfile> {
         val jsonString = sharedPrefs.getString(PREF_OFFICER_ROSTER_JSON, null)
@@ -452,18 +453,23 @@ class OfficerAuthManager(private val context: Context) {
             val list = mutableListOf<OfficerProfile>()
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
-                val rawFullName = obj.getString("fullName")
-                val rawNip = obj.getString("nip")
-                val official = OfficialAsnBpbdPersonnel.findByNipOrName(rawNip)
-                    ?: OfficialAsnBpbdPersonnel.findByNipOrName(rawFullName)
+                val rawFullName = obj.optString("fullName", "").trim()
+                val rawNip = obj.optString("nip", "").trim().replace(Regex("[\\s\\-]+"), "")
+                if (rawFullName.isBlank() && rawNip.isBlank()) continue
+                val exactOfficial = OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.firstOrNull {
+                    it.nip.equals(rawNip, ignoreCase = true)
+                }
+                val resolvedName = rawFullName.ifBlank { exactOfficial?.name ?: "" }
+                val resolvedNip = rawNip.ifBlank { exactOfficial?.nip ?: "" }
+                if (resolvedName.isBlank() || resolvedNip.isBlank()) continue
                 list.add(
                     OfficerProfile(
                         id = obj.optString("id", UUID.randomUUID().toString()),
-                        fullName = official?.name ?: rawFullName,
-                        nip = official?.nip ?: rawNip,
-                        role = obj.getString("role").ifBlank { official?.role ?: OfficerRoles.OPERATOR },
-                        unit = obj.optString("unit", official?.unit ?: "Pusdalops BPBD Kab. Mukomuko"),
-                        shift = obj.optString("shift", official?.shift ?: "Shift Siaga 24 Jam"),
+                        fullName = resolvedName,
+                        nip = resolvedNip,
+                        role = obj.optString("role", "").ifBlank { exactOfficial?.role ?: OfficerRoles.OPERATOR },
+                        unit = obj.optString("unit", exactOfficial?.unit ?: "Pusdalops BPBD Kab. Mukomuko"),
+                        shift = obj.optString("shift", exactOfficial?.shift ?: "Shift Siaga 24 Jam"),
                         phone = obj.optString("phone", "")
                     )
                 )
@@ -493,7 +499,7 @@ class OfficerAuthManager(private val context: Context) {
             }
             array.put(obj)
         }
-        sharedPrefs.edit().putString(PREF_OFFICER_ROSTER_JSON, array.toString()).apply()
+        sharedPrefs.edit().putString(PREF_OFFICER_ROSTER_JSON, array.toString()).commit()
     }
 
     /**
@@ -508,7 +514,7 @@ class OfficerAuthManager(private val context: Context) {
         phone: String = ""
     ): Result<OfficerProfile> {
         val trimmedName = fullName.trim()
-        val trimmedNip = nip.trim()
+        val trimmedNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
 
         if (trimmedName.length < 3) {
             return Result.failure(IllegalArgumentException("Nama petugas minimal 3 karakter."))
@@ -518,9 +524,11 @@ class OfficerAuthManager(private val context: Context) {
         }
 
         val currentRoster = getOfficerRoster().toMutableList()
-        val existingIndex = currentRoster.indexOfFirst { it.nip.equals(trimmedNip, ignoreCase = true) }
+        val existingIndex = currentRoster.indexOfFirst {
+            it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(trimmedNip, ignoreCase = true)
+        }
         val newOfficer = OfficerProfile(
-            id = if (existingIndex >= 0) currentRoster[existingIndex].id else UUID.randomUUID().toString(),
+            id = if (existingIndex >= 0) currentRoster[existingIndex].id else "officer_$trimmedNip",
             fullName = trimmedName,
             nip = trimmedNip,
             role = role.ifBlank { OfficerRoles.PETUGAS_JAGA },
@@ -535,7 +543,7 @@ class OfficerAuthManager(private val context: Context) {
             currentRoster.add(0, newOfficer)
         }
         saveOfficerRoster(currentRoster)
-        FirestoreHelper.syncOfficerToCloud(newOfficer)
+        FirestoreHelper.syncOfficerToCloud(newOfficer, context)
         return Result.success(newOfficer)
     }
 
@@ -565,7 +573,7 @@ class OfficerAuthManager(private val context: Context) {
         phone: String = ""
     ): Result<OfficerProfile> {
         val trimmedName = fullName.trim()
-        val trimmedNip = nip.trim()
+        val trimmedNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
 
         if (trimmedName.length < 3) {
             return Result.failure(IllegalArgumentException("Nama petugas minimal 3 karakter."))
@@ -575,9 +583,11 @@ class OfficerAuthManager(private val context: Context) {
         }
 
         val currentRoster = getOfficerRoster().toMutableList()
-        val existingIndex = currentRoster.indexOfFirst { it.id == id || it.nip.equals(trimmedNip, ignoreCase = true) }
+        val existingIndex = currentRoster.indexOfFirst {
+            it.id == id || it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(trimmedNip, ignoreCase = true)
+        }
         val updated = OfficerProfile(
-            id = if (existingIndex >= 0) currentRoster[existingIndex].id else id.ifBlank { UUID.randomUUID().toString() },
+            id = if (existingIndex >= 0) currentRoster[existingIndex].id else id.ifBlank { "officer_$trimmedNip" },
             fullName = trimmedName,
             nip = trimmedNip,
             role = role.ifBlank { OfficerRoles.PETUGAS_JAGA },
@@ -592,7 +602,7 @@ class OfficerAuthManager(private val context: Context) {
             currentRoster.add(0, updated)
         }
         saveOfficerRoster(currentRoster)
-        FirestoreHelper.syncOfficerToCloud(updated)
+        FirestoreHelper.syncOfficerToCloud(updated, context)
         return Result.success(updated)
     }
 

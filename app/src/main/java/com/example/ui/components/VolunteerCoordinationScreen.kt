@@ -23,14 +23,15 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -259,8 +260,11 @@ fun VolunteerCoordinationScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
         modifier = Modifier
             .fillMaxSize()
+            .background(Color(0xFF0F172A))
+            .safeDrawingPadding()
             .testTag("volunteer_coordination_screen"),
         containerColor = Color(0xFFF1F5F9),
         topBar = {
@@ -272,63 +276,84 @@ fun VolunteerCoordinationScreen(
                             colors = listOf(Color(0xFF0F172A), Color(0xFF1E293B))
                         )
                     )
-                    .statusBarsPadding()
             ) {
-                // Baris Judul Command Center
+                // Baris Judul Command Center (Ringkas & Efisien)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
                         onClick = onClose,
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(36.dp)
                             .testTag("btn_close_volunteer_module")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Tutup Modul Relawan",
-                            tint = Color.White
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "PENDATAAN & KOORDINASI RELAWAN",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (isOfficerLoggedIn) {
+                                "Pusdalops-PB • Admin: ${officerName.ifBlank { "Petugas" }} (Akses Penuh)"
+                            } else {
+                                "Pusdalops-PB • Mode Publik (NIK Disamarkan 1234********)"
+                            },
+                            fontSize = 10.sp,
+                            color = Color(0xFF94A3B8),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "PENDATAAN & KOORDINASI RELAWAN",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = Color(0xFFEA580C)
+                    if (isOfficerLoggedIn) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (simulatePublicPrivacyMask) Color(0xFFF59E0B) else Color(0xFF334155),
+                            modifier = Modifier
+                                .clickable { simulatePublicPrivacyMask = !simulatePublicPrivacyMask }
+                                .testTag("btn_toggle_privacy_mask_preview")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Icon(
+                                    imageVector = if (simulatePublicPrivacyMask) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = "Uji Samaran NIK",
+                                    tint = if (simulatePublicPrivacyMask) Color.Black else Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = "PUSDALOPS-PB",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    text = if (simulatePublicPrivacyMask) "Publik" else "Admin",
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (simulatePublicPrivacyMask) Color.Black else Color.White,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
-                        Text(
-                            text = if (isOfficerLoggedIn) {
-                                "Admin Aktif: ${officerName.ifBlank { "Petugas Pusdalops" }} • Akses Penuh NIK & Surat Tugas PDF"
-                            } else {
-                                "Mode Publik / Relawan • Privasi NIK Disamarkan (1234********)"
-                            },
-                            fontSize = 11.sp,
-                            color = Color(0xFF94A3B8),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Spacer(modifier = Modifier.width(6.dp))
                     }
 
                     // Tombol Sinkronisasi Offline SQLite <-> Cloud Firestore
@@ -354,12 +379,12 @@ fun VolunteerCoordinationScreen(
                             .testTag("btn_sync_volunteers_cloud")
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (isSyncing) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(13.dp),
+                                    modifier = Modifier.size(12.dp),
                                     strokeWidth = 2.dp,
                                     color = Color.White
                                 )
@@ -368,7 +393,7 @@ fun VolunteerCoordinationScreen(
                                     imageVector = if (isOnline) Icons.Default.CloudDone else Icons.Default.CloudOff,
                                     contentDescription = "Status Sinkronisasi",
                                     tint = if (isOnline) Color(0xFF34D399) else Color(0xFFFBBF24),
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(4.dp))
@@ -376,13 +401,15 @@ fun VolunteerCoordinationScreen(
                                 text = if (unsyncedLocalCount > 0) "SQLite ($unsyncedLocalCount)" else "Sinkron",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
                 }
 
-                // Banner Status Offline-First SQLite + Kontrol Privasi NIK
+                // Strip Status Offline-First SQLite + Kontrol Privasi NIK (1 Baris Ramping)
                 Surface(
                     color = Color(0xFF0F172A).copy(alpha = 0.65f),
                     modifier = Modifier.fillMaxWidth()
@@ -390,67 +417,32 @@ fun VolunteerCoordinationScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.weight(1f),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (isEffectiveAdminView) Icons.Default.VerifiedUser else Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = if (isEffectiveAdminView) Color(0xFF38BDF8) else Color(0xFFFBBF24),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (isEffectiveAdminView) {
-                                    "Primary Key: NIK 16 Digit • Admin Login (NIK & No. HP Utuh) • $lastSyncStatus"
-                                } else {
-                                    "Primary Key: NIK 16 Digit • Mode Publik (NIK Disamarkan 1234********) • $lastSyncStatus"
-                                },
-                                fontSize = 10.sp,
-                                color = Color(0xFFE2E8F0),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        if (isOfficerLoggedIn) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = if (simulatePublicPrivacyMask) Color(0xFFF59E0B) else Color(0xFF334155),
-                                modifier = Modifier
-                                    .clickable { simulatePublicPrivacyMask = !simulatePublicPrivacyMask }
-                                    .testTag("btn_toggle_privacy_mask_preview")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (simulatePublicPrivacyMask) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = "Uji Samaran NIK",
-                                        tint = if (simulatePublicPrivacyMask) Color.Black else Color.White,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (simulatePublicPrivacyMask) "Mode Publik" else "Mode Admin",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (simulatePublicPrivacyMask) Color.Black else Color.White
-                                    )
-                                }
-                            }
-                        }
+                        Icon(
+                            imageVector = if (isEffectiveAdminView) Icons.Default.VerifiedUser else Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = if (isEffectiveAdminView) Color(0xFF38BDF8) else Color(0xFFFBBF24),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = if (isEffectiveAdminView) {
+                                "Primary Key: NIK 16 Digit • Admin Login (NIK & No. HP Utuh) • $lastSyncStatus"
+                            } else {
+                                "Primary Key: NIK 16 Digit • Mode Publik (NIK Disamarkan 1234********) • $lastSyncStatus"
+                            },
+                            fontSize = 9.5.sp,
+                            color = Color(0xFFE2E8F0),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
 
-                // TabBar Utama (3 Tab)
+                // TabBar Utama (3 Tab Tunggal yang Rapi Tanpa Duplikasi Bottom Navigation)
                 TabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = Color(0xFF1E293B),
@@ -468,21 +460,26 @@ fun VolunteerCoordinationScreen(
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        modifier = Modifier.testTag("tab_volunteer_dashboard"),
+                        modifier = Modifier
+                            .heightIn(min = 42.dp)
+                            .testTag("tab_volunteer_dashboard"),
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Dashboard,
                                     contentDescription = null,
-                                    modifier = Modifier.size(15.dp),
+                                    modifier = Modifier.size(14.dp),
                                     tint = if (selectedTab == 0) Color(0xFFF97316) else Color(0xFF94A3B8)
                                 )
-                                Spacer(modifier = Modifier.width(5.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Dashboard Relawan",
+                                    text = "Dashboard",
                                     fontSize = 11.sp,
                                     fontWeight = if (selectedTab == 0) FontWeight.ExtraBold else FontWeight.Medium,
-                                    color = if (selectedTab == 0) Color.White else Color(0xFF94A3B8)
+                                    color = if (selectedTab == 0) Color.White else Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -491,21 +488,26 @@ fun VolunteerCoordinationScreen(
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        modifier = Modifier.testTag("tab_volunteer_registration"),
+                        modifier = Modifier
+                            .heightIn(min = 42.dp)
+                            .testTag("tab_volunteer_registration"),
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.PersonAdd,
                                     contentDescription = null,
-                                    modifier = Modifier.size(15.dp),
+                                    modifier = Modifier.size(14.dp),
                                     tint = if (selectedTab == 1) Color(0xFFF97316) else Color(0xFF94A3B8)
                                 )
-                                Spacer(modifier = Modifier.width(5.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Registrasi Relawan",
+                                    text = "Registrasi",
                                     fontSize = 11.sp,
                                     fontWeight = if (selectedTab == 1) FontWeight.ExtraBold else FontWeight.Medium,
-                                    color = if (selectedTab == 1) Color.White else Color(0xFF94A3B8)
+                                    color = if (selectedTab == 1) Color.White else Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -514,21 +516,26 @@ fun VolunteerCoordinationScreen(
                     Tab(
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
-                        modifier = Modifier.testTag("tab_volunteer_verification"),
+                        modifier = Modifier
+                            .heightIn(min = 42.dp)
+                            .testTag("tab_volunteer_verification"),
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.HowToReg,
                                     contentDescription = null,
-                                    modifier = Modifier.size(15.dp),
+                                    modifier = Modifier.size(14.dp),
                                     tint = if (selectedTab == 2) Color(0xFFF97316) else Color(0xFF94A3B8)
                                 )
-                                Spacer(modifier = Modifier.width(5.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Verifikasi & Tugas",
+                                    text = "Verifikasi",
                                     fontSize = 11.sp,
                                     fontWeight = if (selectedTab == 2) FontWeight.ExtraBold else FontWeight.Medium,
-                                    color = if (selectedTab == 2) Color.White else Color(0xFF94A3B8)
+                                    color = if (selectedTab == 2) Color.White else Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 if (pendingVerificationCount > 0) {
                                     Spacer(modifier = Modifier.width(4.dp))
@@ -539,7 +546,9 @@ fun VolunteerCoordinationScreen(
                                         Text(
                                             text = "$pendingVerificationCount",
                                             fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
@@ -547,72 +556,6 @@ fun VolunteerCoordinationScreen(
                         }
                     )
                 }
-            }
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = Color.White,
-                tonalElevation = 8.dp,
-                modifier = Modifier.navigationBarsPadding()
-            ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Dashboard,
-                            contentDescription = "Dashboard Relawan"
-                        )
-                    },
-                    label = { Text("Dashboard Relawan", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFFEA580C),
-                        selectedTextColor = Color(0xFFEA580C),
-                        indicatorColor = Color(0xFFFFEDD5)
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.PersonAdd,
-                            contentDescription = "Registrasi Relawan"
-                        )
-                    },
-                    label = { Text("Registrasi Relawan", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFFEA580C),
-                        selectedTextColor = Color(0xFFEA580C),
-                        indicatorColor = Color(0xFFFFEDD5)
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.HowToReg,
-                                contentDescription = "Verifikasi & Penugasan"
-                            )
-                            if (pendingVerificationCount > 0) {
-                                Badge(
-                                    containerColor = Color(0xFFDC2626),
-                                    contentColor = Color.White
-                                ) {
-                                    Text("$pendingVerificationCount")
-                                }
-                            }
-                        }
-                    },
-                    label = { Text("Verifikasi & Tugas", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFFEA580C),
-                        selectedTextColor = Color(0xFFEA580C),
-                        indicatorColor = Color(0xFFFFEDD5)
-                    )
-                )
             }
         }
     ) { innerPadding ->
@@ -914,12 +857,12 @@ private fun VolunteerDashboardTabContent(
         modifier = Modifier
             .fillMaxSize()
             .testTag("volunteer_dashboard_list"),
-        contentPadding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // 1. 4 Kartu Statistik Utama (KPI Cards)
+        // 1. 4 Kartu Statistik Utama (KPI Cards - Ringkas & Proporsional)
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -989,42 +932,50 @@ private fun VolunteerDashboardTabContent(
             )
         }
 
-        // 3. Filter Dropdown Berdasarkan Keahlian & Status (Aktif/Non-aktif)
+        // 4. Filter Dropdown Berdasarkan Keahlian & Status (Aktif/Non-aktif)
         item {
             Card(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.FilterList,
                                 contentDescription = null,
                                 tint = Color(0xFFEA580C),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Filter Sebaran Keahlian & Status Relawan",
-                                fontSize = 13.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A)
+                                color = Color(0xFF0F172A),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
                         if (selectedSkillFilter != "Semua" || selectedStatusFilter != "Semua") {
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Reset Filter",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFDC2626),
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.clickable {
                                     selectedSkillFilter = "Semua"
                                     selectedStatusFilter = "Semua"
@@ -1033,7 +984,7 @@ private fun VolunteerDashboardTabContent(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1044,10 +995,10 @@ private fun VolunteerDashboardTabContent(
                             OutlinedButton(
                                 onClick = { skillDropdownExpanded = true },
                                 shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(min = 48.dp)
+                                    .heightIn(min = 44.dp)
                                     .testTag("dropdown_filter_skill")
                             ) {
                                 Column(
@@ -1057,11 +1008,12 @@ private fun VolunteerDashboardTabContent(
                                     Text(
                                         text = "Keahlian",
                                         fontSize = 9.sp,
-                                        color = Color(0xFF64748B)
+                                        color = Color(0xFF64748B),
+                                        maxLines = 1
                                     )
                                     Text(
                                         text = selectedSkillFilter,
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF0F172A),
                                         maxLines = 1,
@@ -1097,10 +1049,10 @@ private fun VolunteerDashboardTabContent(
                             OutlinedButton(
                                 onClick = { statusDropdownExpanded = true },
                                 shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(min = 48.dp)
+                                    .heightIn(min = 44.dp)
                                     .testTag("dropdown_filter_status")
                             ) {
                                 Column(
@@ -1110,11 +1062,12 @@ private fun VolunteerDashboardTabContent(
                                     Text(
                                         text = "Status Relawan",
                                         fontSize = 9.sp,
-                                        color = Color(0xFF64748B)
+                                        color = Color(0xFF64748B),
+                                        maxLines = 1
                                     )
                                     Text(
                                         text = selectedStatusFilter,
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF0F172A),
                                         maxLines = 1,
@@ -1146,7 +1099,7 @@ private fun VolunteerDashboardTabContent(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // Chip Filter Cepat Keahlian
                     Row(
@@ -1164,7 +1117,9 @@ private fun VolunteerDashboardTabContent(
                                     Text(
                                         text = skillChip,
                                         fontSize = 11.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 },
                                 colors = FilterChipDefaults.filterChipColors(
@@ -1178,7 +1133,7 @@ private fun VolunteerDashboardTabContent(
             }
         }
 
-        // 4. Header Daftar Relawan & Info Privasi NIK
+        // 5. Header Daftar Relawan & Info Privasi NIK
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1188,24 +1143,30 @@ private fun VolunteerDashboardTabContent(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Direktori Personel Relawan (${filteredVolunteers.size} Orang)",
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF0F172A)
+                        color = Color(0xFF0F172A),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "Ketuk relawan untuk Check-in / Check-out Posko & Unduh Surat Tugas PDF",
-                        fontSize = 11.sp,
+                        fontSize = 10.5.sp,
                         color = Color(0xFF475569),
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Button(
                     onClick = onNavigateToRegister,
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    modifier = Modifier.heightIn(min = 38.dp)
+                    modifier = Modifier.heightIn(min = 36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PersonAdd,
@@ -1213,12 +1174,18 @@ private fun VolunteerDashboardTabContent(
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Daftar Baru", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Daftar Baru",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }
 
-        // 5. Kartu Item Relawan (dengan Check-in / Check-out Posko & Unduh Surat Tugas)
+        // 6. Kartu Item Relawan (dengan Check-in / Check-out Posko & Unduh Surat Tugas)
         items(filteredVolunteers, key = { it.nik }) { volunteer ->
             VolunteerDirectoryCard(
                 volunteer = volunteer,
@@ -1243,13 +1210,13 @@ private fun VolunteerStatKpiCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, accentColor.copy(alpha = 0.28f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier.testTag(testTag)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1259,35 +1226,52 @@ private fun VolunteerStatKpiCard(
                     text = title,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF475569)
+                    color = Color(0xFF475569),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
+                Spacer(modifier = Modifier.width(4.dp))
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = bgColor
                 ) {
                     Text(
                         text = if (count > 0 && title == "Butuh Bantuan") "SIAGA" else "LIVE",
-                        fontSize = 9.sp,
+                        fontSize = 8.5.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = accentColor,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "$count",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = accentColor
-            )
-            Text(
-                text = subtitle,
-                fontSize = 10.sp,
-                color = Color(0xFF64748B),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "$count",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = accentColor,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 9.5.sp,
+                    color = Color(0xFF64748B),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(bottom = 2.dp)
+                )
+            }
         }
     }
 }
@@ -1335,53 +1319,54 @@ private fun VolunteerPoskoDistributionMapCard(
     }
 
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
         border = BorderStroke(1.dp, Color(0xFF334155)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("volunteer_posko_map_card")
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Map,
-                        contentDescription = null,
-                        tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(18.dp)
+                Icon(
+                    imageVector = Icons.Default.Map,
+                    contentDescription = null,
+                    tint = Color(0xFF38BDF8),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "PETA SEBARAN POSKO & RELAWAN (15 KECAMATAN)",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Column {
-                        Text(
-                            text = "PETA SEBARAN POSKO & RELAWAN (15 KECAMATAN)",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "Ketuk titik Posko untuk melihat jumlah personel & keahlian di tiap kecamatan",
-                            fontSize = 10.sp,
-                            color = Color(0xFF94A3B8)
-                        )
-                    }
+                    Text(
+                        text = "Ketuk titik Posko untuk melihat jumlah personel & keahlian di tiap kecamatan",
+                        fontSize = 9.5.sp,
+                        color = Color(0xFF94A3B8),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(215.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .height(140.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Color(0xFF091326))
-                    .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(12.dp))
+                    .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(10.dp))
             ) {
                 Canvas(
                     modifier = Modifier
@@ -1403,12 +1388,12 @@ private fun VolunteerPoskoDistributionMapCard(
                     val h = size.height
 
                     val gridColor = Color(0xFF1E293B)
-                    for (i in 1..5) {
-                        val y = h * (i / 6f)
+                    for (i in 1..4) {
+                        val y = h * (i / 5f)
                         drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
                     }
-                    for (i in 1..7) {
-                        val x = w * (i / 8f)
+                    for (i in 1..6) {
+                        val x = w * (i / 7f)
                         drawLine(gridColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1f)
                     }
 
@@ -1421,8 +1406,8 @@ private fun VolunteerPoskoDistributionMapCard(
                         path = coastPath,
                         color = Color(0xFF0284C7).copy(alpha = 0.55f),
                         style = Stroke(
-                            width = 4f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                            width = 3.5f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
                         )
                     )
 
@@ -1442,7 +1427,7 @@ private fun VolunteerPoskoDistributionMapCard(
                         if (isSelected || hasEmergency || count > 0) {
                             drawCircle(
                                 color = markerColor.copy(alpha = if (isSelected) 0.35f else 0.20f),
-                                radius = if (isSelected) 28f else 20f,
+                                radius = if (isSelected) 24f else 17f,
                                 center = Offset(cx, cy)
                             )
                         }
@@ -1450,57 +1435,59 @@ private fun VolunteerPoskoDistributionMapCard(
                         if (isSelected) {
                             drawCircle(
                                 color = Color(0xFFFBBF24),
-                                radius = 16f,
+                                radius = 14f,
                                 center = Offset(cx, cy),
-                                style = Stroke(width = 3f)
+                                style = Stroke(width = 2.5f)
                             )
                         }
 
                         drawCircle(
                             color = markerColor,
-                            radius = if (count > 0) 11f else 7f,
+                            radius = if (count > 0) 9.5f else 6f,
                             center = Offset(cx, cy)
                         )
                     }
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(6.dp),
                     color = Color(0xFF0F172A).copy(alpha = 0.88f),
                     border = BorderStroke(1.dp, Color(0xFF334155)),
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(8.dp)
+                        .padding(6.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         LegendDot(color = Color(0xFF22C55E), label = "Posko Aktif")
-                        LegendDot(color = Color(0xFFEF4444), label = "Butuh Bantuan")
-                        LegendDot(color = Color(0xFF64748B), label = "Posko Siaga (0)")
+                        LegendDot(color = Color(0xFFEF4444), label = "Darurat")
+                        LegendDot(color = Color(0xFF64748B), label = "Siaga (0)")
                     }
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(6.dp),
                     color = Color(0xFF1E293B).copy(alpha = 0.9f),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
+                        .padding(6.dp)
                 ) {
                     Text(
                         text = "${selectedPoskoPoint.districtName} (${selectedPoskoVolunteers.size} Relawan)",
-                        fontSize = 10.sp,
+                        fontSize = 9.5.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color(0xFFFBBF24),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier
@@ -1533,25 +1520,29 @@ private fun VolunteerPoskoDistributionMapCard(
                         modifier = Modifier.clickable { onSelectDistrict(posko.districtName) }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = posko.districtName,
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
                             Surface(
                                 shape = CircleShape,
                                 color = if (count > 0) Color(0xFF22C55E) else Color(0xFF475569)
                             ) {
                                 Text(
                                     text = "$count",
-                                    fontSize = 10.sp,
+                                    fontSize = 9.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false,
                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                                 )
                             }
@@ -1576,6 +1567,7 @@ private fun VolunteerPoskoDistributionMapCard(
                 }
             }
 
+            // Box Detail Posko Terpilih (Anti-Vertical-Squish & Proporsional di Layar Ponsel)
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = Color(0xFF1E293B),
@@ -1583,7 +1575,7 @@ private fun VolunteerPoskoDistributionMapCard(
             ) {
                 Column(
                     modifier = Modifier.padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1591,46 +1583,35 @@ private fun VolunteerPoskoDistributionMapCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = selectedPoskoPoint.poskoName,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFF0284C7).copy(alpha = 0.25f),
-                                    border = BorderStroke(0.8.dp, Color(0xFF38BDF8))
-                                ) {
-                                    Text(
-                                        text = "TES / TEA EVAKUASI",
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color(0xFF38BDF8),
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                    )
-                                }
-                            }
                             Text(
-                                text = "Kec. ${selectedPoskoPoint.districtName} • Koordinat: ${selectedPoskoPoint.latitude}, ${selectedPoskoPoint.longitude}",
-                                fontSize = 10.sp,
-                                color = Color(0xFF94A3B8)
+                                text = selectedPoskoPoint.poskoName,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Kec. ${selectedPoskoPoint.districtName} • TES/TEA (${selectedPoskoPoint.latitude}, ${selectedPoskoPoint.longitude})",
+                                fontSize = 9.5.sp,
+                                color = Color(0xFF94A3B8),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color(0xFF0F172A)
                         ) {
                             Text(
                                 text = "${selectedPoskoVolunteers.size} Relawan",
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFF4ADE80),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                             )
                         }
                     }
@@ -1645,8 +1626,10 @@ private fun VolunteerPoskoDistributionMapCard(
                         )
                         Text(
                             text = "Keahlian Aktif (Standar Roadmap): ${poskoActiveSkills.joinToString(", ")}",
-                            fontSize = 10.sp,
-                            color = Color(0xFFA7F3D0)
+                            fontSize = 9.5.sp,
+                            color = Color(0xFFA7F3D0),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -1663,8 +1646,11 @@ private fun VolunteerPoskoDistributionMapCard(
                                 "Rekomendasi Pemerataan Pusdalops (Roadmap): Posko Kec. ${selectedPoskoPoint.districtName} masih membutuhkan keahlian [${missingCoreRoadmapSkills.joinToString(", ")}] untuk layanan Pengungsi Terpilah, Respon SOS & Kaji Cepat DALA."
                             },
                             fontSize = 9.5.sp,
+                            lineHeight = 13.sp,
                             color = if (missingCoreRoadmapSkills.isEmpty()) Color(0xFF4ADE80) else Color(0xFFFBBF24),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }
@@ -1735,7 +1721,7 @@ private fun VolunteerRoadmapAlignmentCard(
     }
 
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -1744,8 +1730,8 @@ private fun VolunteerRoadmapAlignmentCard(
             .testTag("volunteer_roadmap_alignment_card")
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Header Keselarasan Roadmap SIPAGAR KITA
             Row(
@@ -1766,25 +1752,31 @@ private fun VolunteerRoadmapAlignmentCard(
                             contentDescription = null,
                             tint = Color(0xFFFBBF24),
                             modifier = Modifier
-                                .padding(7.dp)
-                                .size(16.dp)
+                                .padding(6.dp)
+                                .size(14.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "KOMANDO PUSDALOPS — KESELARASAN ROADMAP SIPAGAR KITA",
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF0F172A)
+                            color = Color(0xFF0F172A),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Penempatan Personil Bantuan Secara Merata & Terukur di 15 Kecamatan",
-                            fontSize = 10.sp,
-                            color = Color(0xFF475569)
+                            fontSize = 9.5.sp,
+                            color = Color(0xFF475569),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(6.dp))
 
                 Surface(
                     shape = RoundedCornerShape(6.dp),
@@ -1796,25 +1788,20 @@ private fun VolunteerRoadmapAlignmentCard(
                 ) {
                     Text(
                         text = if (isSandboxActive) "SANDBOX LATIHAN" else "OPERASI AKTIF",
-                        fontSize = 9.sp,
+                        fontSize = 8.5.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = if (isSandboxActive) Color(0xFF92400E) else Color(0xFF166534),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
 
             // 1. Matriks Sinergi Keahlian Relawan terhadap Fase Roadmap (Klik untuk Filter Cepat)
-            Text(
-                text = "Keterukuran Personil Berdasarkan Pilar Keahlian Roadmap (Ketuk untuk Filter):",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1E293B)
-            )
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 RoadmapSkillPillarBox(
                     skillTitle = "Medis ($medisCount)",
@@ -1836,7 +1823,7 @@ private fun VolunteerRoadmapAlignmentCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 RoadmapSkillPillarBox(
                     skillTitle = "SAR & Evakuasi ($sarCount)",
@@ -1864,8 +1851,8 @@ private fun VolunteerRoadmapAlignmentCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1874,15 +1861,21 @@ private fun VolunteerRoadmapAlignmentCard(
                     ) {
                         Text(
                             text = "Indeks Pemerataan Wilayah Tugas Posko (TES / TEA):",
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF0F172A)
+                            color = Color(0xFF0F172A),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "$coveredDistrictsCount / $totalDistricts Kecamatan Terisi",
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF15803D)
+                            color = Color(0xFF15803D),
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
 
@@ -1890,9 +1883,11 @@ private fun VolunteerRoadmapAlignmentCard(
                         Text(
                             text = "Prioritas Pemerataan Pusdalops (Posko Belum Terisi): ${uncoveredDistrictNames.take(5).joinToString(", ")}" +
                                 if (uncoveredDistrictNames.size > 5) " (+${uncoveredDistrictNames.size - 5} kec. lainnya)" else "",
-                            fontSize = 10.sp,
+                            fontSize = 9.5.sp,
                             color = Color(0xFFB45309),
-                            lineHeight = 14.sp
+                            lineHeight = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -1906,14 +1901,18 @@ private fun VolunteerRoadmapAlignmentCard(
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF166534),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Atur Penempatan ➜",
-                            fontSize = 10.5.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFFEA580C),
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier
                                 .clickable { onNavigateToVerification() }
                                 .testTag("btn_roadmap_distribute_volunteers")
@@ -1941,8 +1940,8 @@ private fun RoadmapSkillPillarBox(
         modifier = modifier.clickable { onClick() }
     ) {
         Column(
-            modifier = Modifier.padding(9.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1951,12 +1950,14 @@ private fun RoadmapSkillPillarBox(
             ) {
                 Text(
                     text = skillTitle,
-                    fontSize = 11.sp,
+                    fontSize = 10.5.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = accentColor,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
+                Spacer(modifier = Modifier.width(4.dp))
                 Surface(
                     shape = RoundedCornerShape(4.dp),
                     color = accentColor.copy(alpha = 0.16f)
@@ -1966,16 +1967,18 @@ private fun RoadmapSkillPillarBox(
                         fontSize = 8.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = accentColor,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 }
             }
             Text(
                 text = roadmapRole,
-                fontSize = 9.5.sp,
+                fontSize = 9.sp,
                 color = Color(0xFF334155),
-                lineHeight = 13.sp,
-                maxLines = 2,
+                lineHeight = 12.sp,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
@@ -1987,15 +1990,17 @@ private fun LegendDot(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
-                .size(8.dp)
+                .size(7.dp)
                 .clip(CircleShape)
                 .background(color)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = label,
-            fontSize = 9.sp,
-            color = Color(0xFFCBD5E1)
+            fontSize = 8.5.sp,
+            color = Color(0xFFCBD5E1),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
@@ -2027,7 +2032,7 @@ private fun VolunteerDirectoryCard(
     val displayedPhone = VolunteerPrivacyHelper.maskPhone(volunteer.phoneNumber, isAdminView)
 
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (volunteer.needsAssistance) Color(0xFFFEF2F2) else Color.White
         ),
@@ -2041,31 +2046,33 @@ private fun VolunteerDirectoryCard(
             .clickable { onOpenDetailClick() }
             .testTag("volunteer_card_${volunteer.nik}")
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(10.dp)) {
             if (volunteer.needsAssistance) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = Color(0xFFDC2626),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 8.dp)
+                        .padding(bottom = 6.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.Warning,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "BUTUH BANTUAN DARURAT: ${volunteer.assistanceNote.ifBlank { "Membutuhkan dukungan di titik posko" }}",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -2080,7 +2087,7 @@ private fun VolunteerDirectoryCard(
                     shape = CircleShape,
                     color = Color(0xFFE2E8F0),
                     border = BorderStroke(1.5.dp, statusColor),
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
                     if (!volunteer.selfiePhotoUri.isNullOrBlank()) {
                         AsyncImage(
@@ -2095,7 +2102,7 @@ private fun VolunteerDirectoryCard(
                                 imageVector = Icons.Default.Groups,
                                 contentDescription = null,
                                 tint = Color(0xFF475569),
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
@@ -2110,9 +2117,12 @@ private fun VolunteerDirectoryCard(
                     ) {
                         Text(
                             text = volunteer.fullName,
-                            fontSize = 14.sp,
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF0F172A)
+                            color = Color(0xFF0F172A),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         Surface(
                             shape = RoundedCornerShape(4.dp),
@@ -2123,6 +2133,8 @@ private fun VolunteerDirectoryCard(
                                 fontSize = 8.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = if (volunteer.isSyncedToCloud) Color(0xFF166534) else Color(0xFF92400E),
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                             )
                         }
@@ -2130,9 +2142,11 @@ private fun VolunteerDirectoryCard(
 
                     Text(
                         text = "${volunteer.organization} • ID: ${volunteer.id}",
-                        fontSize = 11.sp,
+                        fontSize = 10.5.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF475569)
+                        color = Color(0xFF475569),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
                     Row(
@@ -2143,19 +2157,23 @@ private fun VolunteerDirectoryCard(
                             imageVector = if (isAdminView) Icons.Default.Badge else Icons.Default.Lock,
                             contentDescription = null,
                             tint = if (isAdminView) Color(0xFF0284C7) else Color(0xFF64748B),
-                            modifier = Modifier.size(12.dp)
+                            modifier = Modifier.size(11.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "NIK: $displayedNik • HP: $displayedPhone",
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.SemiBold,
                             color = if (isAdminView) Color(0xFF0F172A) else Color(0xFF64748B),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.testTag("volunteer_nik_${volunteer.nik}")
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(6.dp))
 
                 Column(horizontalAlignment = Alignment.End) {
                     Surface(
@@ -2165,28 +2183,32 @@ private fun VolunteerDirectoryCard(
                     ) {
                         Text(
                             text = "${statusEnum.code} (${statusEnum.displayLabel})",
-                            fontSize = 10.sp,
+                            fontSize = 9.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = statusColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = "Detail & Absensi ➜",
-                        fontSize = 10.sp,
+                        fontSize = 9.5.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFFEA580C)
+                        color = Color(0xFFEA580C),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Daftar Chips Keahlian
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 volunteer.skillsList().forEach { skill ->
                     Surface(
@@ -2195,7 +2217,7 @@ private fun VolunteerDirectoryCard(
                         border = BorderStroke(1.dp, Color(0xFFCBD5E1))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -2209,7 +2231,8 @@ private fun VolunteerDirectoryCard(
                                 text = skill,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B)
+                                color = Color(0xFF1E293B),
+                                maxLines = 1
                             )
                         }
                     }
@@ -2221,7 +2244,7 @@ private fun VolunteerDirectoryCard(
             // 2. Dua Tombol Besar: [ CHECK-IN POSKO ] (Hijau) & [ CHECK-OUT POSKO ] (Merah)
             // 3. Tombol "Unduh Surat Tugas" (PDF)
             if (statusEnum == VolunteerStatus.ASSIGNED) {
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 val isCheckedIn = volunteer.isCurrentlyCheckedInAtPosko()
 
                 Surface(
@@ -2233,18 +2256,18 @@ private fun VolunteerDirectoryCard(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
+                    Column(modifier = Modifier.padding(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(9.dp)
+                                    .size(8.dp)
                                     .clip(CircleShape)
                                     .background(if (isCheckedIn) Color(0xFF16A34A) else Color(0xFFD97706))
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = volunteer.realtimeAttendanceStatusText(),
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = if (isCheckedIn) Color(0xFF065F46) else Color(0xFF334155),
                                 modifier = Modifier.testTag("realtime_attendance_${volunteer.nik}")
@@ -2255,12 +2278,14 @@ private fun VolunteerDirectoryCard(
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Shift: ${volunteer.assignedShift} • Kec. ${volunteer.effectivePoskoDistrict()}",
-                                fontSize = 10.sp,
-                                color = Color(0xFF475569)
+                                fontSize = 9.5.sp,
+                                color = Color(0xFF475569),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
                         // Dua Tombol Besar: [ CHECK-IN POSKO ] (Hijau) dan [ CHECK-OUT POSKO ] (Merah)
                         Row(
@@ -2271,22 +2296,24 @@ private fun VolunteerDirectoryCard(
                                 onClick = onCheckInPosko,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .heightIn(min = 44.dp)
+                                    .heightIn(min = 40.dp)
                                     .testTag("btn_checkin_${volunteer.nik}")
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Login,
                                     contentDescription = null,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "CHECK-IN POSKO",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.ExtraBold
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
 
@@ -2294,27 +2321,29 @@ private fun VolunteerDirectoryCard(
                                 onClick = onCheckOutPosko,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .heightIn(min = 44.dp)
+                                    .heightIn(min = 40.dp)
                                     .testTag("btn_checkout_${volunteer.nik}")
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Logout,
                                     contentDescription = null,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "CHECK-OUT POSKO",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.ExtraBold
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
                         // Tombol "Unduh Surat Tugas" (PDF)
                         OutlinedButton(
@@ -2324,21 +2353,23 @@ private fun VolunteerDirectoryCard(
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = 42.dp)
+                                .heightIn(min = 38.dp)
                                 .testTag("btn_download_surat_tugas_${volunteer.nik}")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PictureAsPdf,
                                 contentDescription = null,
                                 tint = Color(0xFF0284C7),
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Unduh Surat Tugas (PDF)",
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF0284C7)
+                                color = Color(0xFF0284C7),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -2411,13 +2442,13 @@ private fun VolunteerRegistrationTabContent(
         modifier = Modifier
             .fillMaxSize()
             .testTag("volunteer_registration_form"),
-        contentPadding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // Banner Jaminan Offline-First SQLite & Primary Key NIK
         item {
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = if (isOnline) Color(0xFFECFDF5) else Color(0xFFFFFBEB),
                 border = BorderStroke(
                     1.dp,
@@ -2426,29 +2457,33 @@ private fun VolunteerRegistrationTabContent(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = if (isOnline) Icons.Default.CloudDone else Icons.Default.CloudOff,
                         contentDescription = null,
                         tint = if (isOnline) Color(0xFF059669) else Color(0xFFD97706),
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Validasi NIK Primary Key (Anti Data Ganda) + Offline SQLite",
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = if (isOnline) Color(0xFF065F46) else Color(0xFF92400E)
+                            color = if (isOnline) Color(0xFF065F46) else Color(0xFF92400E),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "NIK 16 digit berfungsi sebagai Primary Key di SQLite & Cloud Firestore. Pendaftaran NIK ganda otomatis ditolak." +
                                 if (unsyncedLocalCount > 0) " ($unsyncedLocalCount antrean lokal siap sinkron)" else "",
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             color = if (isOnline) Color(0xFF047857) else Color(0xFFB45309),
-                            lineHeight = 15.sp
+                            lineHeight = 14.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -2458,26 +2493,29 @@ private fun VolunteerRegistrationTabContent(
         // Card Form Input Utama
         item {
             Card(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(
-                        text = "Formulir Registrasi Relawan Kebencanaan",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF0F172A)
-                    )
-                    Text(
-                        text = "Data NIK (Primary Key) & No. HP Anda dilindungi enkripsi privasi dan hanya dapat dilihat oleh Admin Pusdalops BPBD.",
-                        fontSize = 11.sp,
-                        color = Color(0xFF64748B)
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Formulir Registrasi Relawan Kebencanaan",
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF0F172A)
+                        )
+                        Text(
+                            text = "Data NIK (Primary Key) & No. HP Anda dilindungi enkripsi privasi dan hanya dapat dilihat oleh Admin Pusdalops BPBD.",
+                            fontSize = 10.5.sp,
+                            color = Color(0xFF64748B),
+                            lineHeight = 14.sp
+                        )
+                    }
 
                     HorizontalDivider(color = Color(0xFFE2E8F0))
 
@@ -2544,15 +2582,21 @@ private fun VolunteerRegistrationTabContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Uji Cepat Validasi Anti Data Ganda:",
+                                text = "Uji Validasi Anti Data Ganda:",
                                 fontSize = 10.sp,
-                                color = Color(0xFF64748B)
+                                color = Color(0xFF64748B),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Coba NIK Terdaftar (1706011408910001)",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFEA580C),
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier
                                     .clickable {
                                         nik = "1706011408910001"
@@ -2581,7 +2625,7 @@ private fun VolunteerRegistrationTabContent(
                     )
 
                     // 4. Asal Organisasi / Komunitas
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         val isRegisteredPresetOrg = MukomukoVolunteerPoskoCatalog.ORGANIZATION_PRESETS.any {
                             it.equals(organization.trim(), ignoreCase = true)
                         }
@@ -2612,13 +2656,13 @@ private fun VolunteerRegistrationTabContent(
 
                         Text(
                             text = "Pilihan Cepat Organisasi / Komunitas (Terdaftar di BPBD Mukomuko):",
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF475569)
                         )
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             MukomukoVolunteerPoskoCatalog.ORGANIZATION_PRESETS.forEach { presetOrg ->
                                 val selected = organization.equals(presetOrg, ignoreCase = true)
@@ -2628,7 +2672,7 @@ private fun VolunteerRegistrationTabContent(
                                     label = {
                                         Text(
                                             text = presetOrg,
-                                            fontSize = 11.sp,
+                                            fontSize = 10.5.sp,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                                         )
                                     },
@@ -2646,7 +2690,7 @@ private fun VolunteerRegistrationTabContent(
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = "Kecamatan Domisili / Posko Terdekat:",
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
                         )
@@ -2656,7 +2700,7 @@ private fun VolunteerRegistrationTabContent(
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(min = 48.dp)
+                                    .heightIn(min = 44.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -2665,9 +2709,12 @@ private fun VolunteerRegistrationTabContent(
                                 ) {
                                     Text(
                                         text = "Kecamatan $homeDistrict",
-                                        fontSize = 13.sp,
+                                        fontSize = 12.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF0F172A)
+                                        color = Color(0xFF0F172A),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
                                     )
                                     Icon(
                                         imageVector = Icons.Default.LocationOn,
@@ -2694,16 +2741,16 @@ private fun VolunteerRegistrationTabContent(
                     }
 
                     // 6. Pilihan Keahlian (Multi-Select Chips)
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = "Pilihan Keahlian (Multi-select chips - Pilih minimal 1) *",
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF0F172A)
                         )
                         FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             VolunteerSkills.ALL_SKILLS.forEach { skill ->
                                 val isSelected = selectedSkills.contains(skill)
@@ -2720,7 +2767,7 @@ private fun VolunteerRegistrationTabContent(
                                     label = {
                                         Text(
                                             text = skill,
-                                            fontSize = 12.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                         )
                                     },
@@ -2729,7 +2776,7 @@ private fun VolunteerRegistrationTabContent(
                                             Icon(
                                                 imageVector = Icons.Default.CheckCircle,
                                                 contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
+                                                modifier = Modifier.size(15.dp)
                                             )
                                         }
                                     } else null,
@@ -2745,21 +2792,21 @@ private fun VolunteerRegistrationTabContent(
                     }
 
                     // 7. Upload Foto Diri & Sertifikat Keahlian (Jika Ada)
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = "Lampiran Dokumen Identitas & Sertifikasi",
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF0F172A)
                         )
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             VolunteerPhotoUploadCard(
                                 title = "Foto Diri Relawan",
-                                subtitle = "Wajib / Identitas Lapangan",
+                                subtitle = "Wajib / Identitas",
                                 photoPath = selfiePhotoPath,
                                 onPickPhoto = {
                                     selfiePickerLauncher.launch(
@@ -2810,7 +2857,7 @@ private fun VolunteerRegistrationTabContent(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = validationError.orEmpty(),
-                                    fontSize = 12.sp,
+                                    fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFB91C1C)
                                 )
@@ -2853,11 +2900,11 @@ private fun VolunteerRegistrationTabContent(
                                 }
                             }
                         },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 52.dp)
+                            .heightIn(min = 48.dp)
                             .testTag("btn_submit_volunteer_registration")
                     ) {
                         Icon(
@@ -2868,9 +2915,11 @@ private fun VolunteerRegistrationTabContent(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Kirim Pendaftaran",
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -2890,7 +2939,7 @@ private fun VolunteerPhotoUploadCard(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(10.dp),
         color = Color(0xFFF8FAFC),
         border = BorderStroke(
             1.dp,
@@ -2901,14 +2950,14 @@ private fun VolunteerPhotoUploadCard(
             .testTag(testTag)
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (!photoPath.isNullOrBlank()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(92.dp)
+                        .height(64.dp)
                         .clip(RoundedCornerShape(8.dp))
                 ) {
                     AsyncImage(
@@ -2921,14 +2970,14 @@ private fun VolunteerPhotoUploadCard(
                         onClick = onClearPhoto,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .size(26.dp)
+                            .size(24.dp)
                             .background(Color.Black.copy(alpha = 0.6f), CircleShape)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Hapus Foto",
                             tint = Color.White,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                     }
                 }
@@ -2936,33 +2985,37 @@ private fun VolunteerPhotoUploadCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(92.dp)
+                        .height(64.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color(0xFFE2E8F0).copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.AddAPhoto,
                             contentDescription = null,
                             tint = Color(0xFF475569),
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Pilih Foto",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF334155)
+                            color = Color(0xFF334155),
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = title,
-                fontSize = 11.sp,
+                fontSize = 10.5.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color(0xFF0F172A),
                 maxLines = 1,
@@ -2970,7 +3023,7 @@ private fun VolunteerPhotoUploadCard(
             )
             Text(
                 text = if (photoPath != null) "Lampiran Siap ✓" else subtitle,
-                fontSize = 10.sp,
+                fontSize = 9.5.sp,
                 color = if (photoPath != null) Color(0xFF15803D) else Color(0xFF64748B),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -3005,55 +3058,59 @@ private fun VolunteerVerificationTabContent(
         modifier = Modifier
             .fillMaxSize()
             .testTag("volunteer_verification_list"),
-        contentPadding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // Banner Status Otorisasi Admin Pusdalops
         item {
             if (!isOfficerLoggedIn) {
                 Card(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
                     border = BorderStroke(1.dp, Color(0xFFEF4444)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.Security,
                                 contentDescription = null,
                                 tint = Color(0xFFDC2626),
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Akses Terbatas: Khusus Admin / Operator Pusdalops-PB",
-                                fontSize = 13.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF991B1B)
+                                color = Color(0xFF991B1B),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Sesuai ketentuan keamanan Data Privacy, NIK penuh, No. HP, serta tombol aksi Verifikasi, Tolak, dan Tugaskan hanya aktif bagi Admin Pusdalops yang sudah login di Ruang Kerja.",
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             color = Color(0xFF7F1D1D),
-                            lineHeight = 15.sp
+                            lineHeight = 14.sp
                         )
                         if (onRequestOfficerLogin != null) {
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = onRequestOfficerLogin,
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.heightIn(min = 38.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
                                     contentDescription = null,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Login Petugas Pusdalops Sekarang", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Login Petugas Pusdalops Sekarang", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -3066,29 +3123,38 @@ private fun VolunteerVerificationTabContent(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Simulasi Tampilan Publik Sedang Aktif",
-                                fontSize = 12.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF92400E)
+                                color = Color(0xFF92400E),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "NIK disamarkan menjadi 1706********. Kembalikan ke Mode Admin untuk melihat NIK utuh.",
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 color = Color(0xFFB45309)
                             )
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Button(
                             onClick = onDisablePublicSimulation,
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                         ) {
-                            Text("Buka NIK Admin", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Buka NIK Admin",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }
@@ -3100,27 +3166,31 @@ private fun VolunteerVerificationTabContent(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.VerifiedUser,
                             contentDescription = null,
                             tint = Color(0xFF059669),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Konsol Verifikasi, Penugasan & Surat Tugas PDF (${officerName.ifBlank { "Petugas Resmi" }})",
-                                fontSize = 12.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF065F46)
+                                color = Color(0xFF065F46),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "Alur State Management: Pending ➔ Verified ➔ Assigned (Cetak Surat Tugas PDF + Check-in/Out Posko) ➔ Done.",
-                                fontSize = 11.sp,
-                                color = Color(0xFF047857)
+                                text = "Alur State Management: Pending ➔ Verified ➔ Assigned (Surat Tugas PDF + Check-in/Out Posko) ➔ Done.",
+                                fontSize = 10.sp,
+                                color = Color(0xFF047857),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -3135,7 +3205,7 @@ private fun VolunteerVerificationTabContent(
             val displayedPhone = VolunteerPrivacyHelper.maskPhone(volunteer.phoneNumber, isEffectiveAdminView)
 
             Card(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 border = BorderStroke(
                     1.dp,
@@ -3153,7 +3223,7 @@ private fun VolunteerVerificationTabContent(
                     .clickable { onOpenDetailVolunteer(volunteer) }
                     .testTag("verify_item_${volunteer.nik}")
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -3162,22 +3232,28 @@ private fun VolunteerVerificationTabContent(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = volunteer.fullName,
-                                fontSize = 15.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF0F172A)
+                                color = Color(0xFF0F172A),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "${volunteer.organization} • Domisili: Kec. ${volunteer.homeDistrict}",
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF475569)
+                                color = Color(0xFF475569),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
+
+                        Spacer(modifier = Modifier.width(6.dp))
 
                         VolunteerStatusPipelineBadge(statusEnum = statusEnum)
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // Box Data Privasi NIK (Primary Key) & No. HP
                     Surface(
@@ -3189,49 +3265,53 @@ private fun VolunteerVerificationTabContent(
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
+                        Column(modifier = Modifier.padding(8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Badge,
                                     contentDescription = null,
                                     tint = Color(0xFF0284C7),
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = "NIK KTP (Primary Key): $displayedNik",
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF0F172A)
+                                    color = Color(0xFF0F172A),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Phone,
                                     contentDescription = null,
                                     tint = Color(0xFF15803D),
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = "No. HP/WA: $displayedPhone",
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0F172A)
+                                    color = Color(0xFF0F172A),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // Keahlian & Sertifikat
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         volunteer.skillsList().forEach { skill ->
                             Surface(
@@ -3244,7 +3324,7 @@ private fun VolunteerVerificationTabContent(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF9A3412),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                                 )
                             }
                         }
@@ -3256,21 +3336,23 @@ private fun VolunteerVerificationTabContent(
                                 border = BorderStroke(1.dp, Color(0xFF6EE7B7))
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.WorkspacePremium,
                                         contentDescription = null,
                                         tint = Color(0xFF059669),
-                                        modifier = Modifier.size(12.dp)
+                                        modifier = Modifier.size(11.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = "Sertifikat Terlampir",
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF065F46)
+                                        color = Color(0xFF065F46),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -3279,25 +3361,27 @@ private fun VolunteerVerificationTabContent(
 
                     // Informasi Penugasan Aktif & Kehadiran Real-time (Jika Sudah Ditugaskan)
                     if (statusEnum == VolunteerStatus.ASSIGNED) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color(0xFFF0FDF4),
                             border = BorderStroke(1.dp, Color(0xFF86EFAC)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
+                            Column(modifier = Modifier.padding(8.dp)) {
                                 Text(
                                     text = volunteer.realtimeAttendanceStatusText(),
-                                    fontSize = 11.sp,
+                                    fontSize = 10.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFF166534)
                                 )
                                 Text(
                                     text = "Lokasi: ${volunteer.effectivePoskoName()} (Kec. ${volunteer.effectivePoskoDistrict()}) • ${volunteer.assignedShift}",
-                                    fontSize = 10.sp,
+                                    fontSize = 9.5.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF15803D)
+                                    color = Color(0xFF15803D),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Row(
@@ -3311,7 +3395,13 @@ private fun VolunteerVerificationTabContent(
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Text("CHECK-IN POSKO", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                                        Text(
+                                            text = "CHECK-IN POSKO",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
                                     }
                                     Button(
                                         onClick = { onCheckOutPosko(volunteer) },
@@ -3320,22 +3410,28 @@ private fun VolunteerVerificationTabContent(
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Text("CHECK-OUT POSKO", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                                        Text(
+                                            text = "CHECK-OUT POSKO",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
                                     }
                                 }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     HorizontalDivider(color = Color(0xFFE2E8F0))
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Tombol Aksi per Item: "Verifikasi", "Tolak", "Tugaskan", "Unduh Surat Tugas", "Selesai", & "Butuh Bantuan"
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         // 1. Tombol "Verifikasi"
                         Button(
@@ -3343,18 +3439,24 @@ private fun VolunteerVerificationTabContent(
                             enabled = isOfficerLoggedIn && statusEnum != VolunteerStatus.VERIFIED && statusEnum != VolunteerStatus.ASSIGNED,
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             modifier = Modifier
-                                .heightIn(min = 40.dp)
+                                .heightIn(min = 38.dp)
                                 .testTag("btn_verify_${volunteer.nik}")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Verifikasi", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Verifikasi",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
 
                         // 2. Tombol "Tolak"
@@ -3363,23 +3465,25 @@ private fun VolunteerVerificationTabContent(
                             enabled = isOfficerLoggedIn && statusEnum != VolunteerStatus.REJECTED,
                             shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(1.dp, Color(0xFFDC2626)),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             modifier = Modifier
-                                .heightIn(min = 40.dp)
+                                .heightIn(min = 38.dp)
                                 .testTag("btn_reject_${volunteer.nik}")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = null,
                                 tint = Color(0xFFDC2626),
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Tolak",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFDC2626)
+                                color = Color(0xFFDC2626),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
 
@@ -3389,18 +3493,24 @@ private fun VolunteerVerificationTabContent(
                             enabled = isOfficerLoggedIn && statusEnum != VolunteerStatus.REJECTED,
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             modifier = Modifier
-                                .heightIn(min = 40.dp)
+                                .heightIn(min = 38.dp)
                                 .testTag("btn_assign_${volunteer.nik}")
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Assignment,
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Tugaskan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Tugaskan",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
 
                         // 4. Tombol "Unduh Surat Tugas" (PDF) untuk relawan yang sudah ditugaskan
@@ -3409,23 +3519,25 @@ private fun VolunteerVerificationTabContent(
                                 onClick = { onDownloadSuratTugas(volunteer) },
                                 shape = RoundedCornerShape(8.dp),
                                 border = BorderStroke(1.dp, Color(0xFF0284C7)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                                 modifier = Modifier
-                                    .heightIn(min = 40.dp)
+                                    .heightIn(min = 38.dp)
                                     .testTag("btn_verify_download_pdf_${volunteer.nik}")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PictureAsPdf,
                                     contentDescription = null,
                                     tint = Color(0xFF0284C7),
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Unduh Surat Tugas",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF0284C7)
+                                    color = Color(0xFF0284C7),
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -3437,12 +3549,18 @@ private fun VolunteerVerificationTabContent(
                                 enabled = isOfficerLoggedIn,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                                 modifier = Modifier
-                                    .heightIn(min = 40.dp)
+                                    .heightIn(min = 38.dp)
                                     .testTag("btn_done_${volunteer.nik}")
                             ) {
-                                Text("Selesai (Done)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = "Selesai (Done)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                         }
 
@@ -3457,21 +3575,23 @@ private fun VolunteerVerificationTabContent(
                             ),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             modifier = Modifier
-                                .heightIn(min = 40.dp)
+                                .heightIn(min = 38.dp)
                                 .testTag("btn_assistance_${volunteer.nik}")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = null,
                                 tint = if (volunteer.needsAssistance) Color(0xFF15803D) else Color(0xFFB91C1C),
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = if (volunteer.needsAssistance) "Bantuan Terpenuhi" else "Butuh Bantuan",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (volunteer.needsAssistance) Color(0xFF15803D) else Color(0xFFB91C1C)
+                                color = if (volunteer.needsAssistance) Color(0xFF15803D) else Color(0xFFB91C1C),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -3490,36 +3610,42 @@ private fun VolunteerStatusPipelineBadge(statusEnum: VolunteerStatus) {
         VolunteerStatus.DONE
     )
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(6.dp),
         color = Color(0xFFF1F5F9),
         border = BorderStroke(1.dp, Color(0xFFCBD5E1))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             if (statusEnum == VolunteerStatus.REJECTED) {
                 Text(
                     text = "DITOLAK",
-                    fontSize = 10.sp,
+                    fontSize = 9.5.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFFDC2626)
+                    color = Color(0xFFDC2626),
+                    maxLines = 1,
+                    softWrap = false
                 )
             } else {
                 steps.forEachIndexed { index, step ->
                     val isCurrent = step == statusEnum
                     Text(
                         text = step.code,
-                        fontSize = 9.sp,
+                        fontSize = 8.5.sp,
                         fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
-                        color = if (isCurrent) Color(0xFFEA580C) else Color(0xFF94A3B8)
+                        color = if (isCurrent) Color(0xFFEA580C) else Color(0xFF94A3B8),
+                        maxLines = 1,
+                        softWrap = false
                     )
                     if (index < steps.lastIndex) {
                         Text(
                             text = "→",
-                            fontSize = 9.sp,
-                            color = Color(0xFFCBD5E1)
+                            fontSize = 8.5.sp,
+                            color = Color(0xFFCBD5E1),
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }

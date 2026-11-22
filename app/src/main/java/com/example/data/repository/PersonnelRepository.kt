@@ -139,13 +139,14 @@ class PersonnelRepository(
         phone: String = ""
     ): Long {
         val cleanName = name.trim()
-        val cleanNip = nip.trim()
+        val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
         if (cleanName.isBlank() || cleanNip.isBlank()) return -1L
 
         val existing = personnelDao.getPersonnelByNip(cleanNip)
         val id = if (existing != null) {
             val updated = existing.copy(
                 name = cleanName,
+                nip = cleanNip,
                 role = role,
                 unit = unit,
                 shift = shift,
@@ -191,13 +192,26 @@ class PersonnelRepository(
             onUpdate = { remoteList ->
                 scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     for (officer in remoteList) {
-                        if (officer.nip.isNotBlank()) {
-                            val local = personnelDao.getPersonnelByNip(officer.nip)
+                        val cleanNip = officer.nip.trim().replace(Regex("[\\s\\-]+"), "")
+                        val cleanName = officer.fullName.trim()
+                        if (cleanNip.isNotBlank() && cleanName.isNotBlank()) {
+                            val local = personnelDao.getPersonnelByNip(cleanNip)
                             if (local == null) {
                                 personnelDao.insertPersonnel(
                                     Personnel(
-                                        name = officer.fullName,
-                                        nip = officer.nip,
+                                        name = cleanName,
+                                        nip = cleanNip,
+                                        role = officer.role,
+                                        unit = officer.unit,
+                                        shift = officer.shift,
+                                        phone = officer.phone
+                                    )
+                                )
+                            } else if (local.name != cleanName || local.role != officer.role || local.phone != officer.phone) {
+                                personnelDao.updatePersonnel(
+                                    local.copy(
+                                        name = cleanName,
+                                        nip = cleanNip,
                                         role = officer.role,
                                         unit = officer.unit,
                                         shift = officer.shift,

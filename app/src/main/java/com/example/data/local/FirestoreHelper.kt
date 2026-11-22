@@ -91,6 +91,9 @@ object FirestoreHelper {
     @Volatile
     var overrideOfficersCollectionRoleFetcherForTesting: (suspend (String) -> String?)? = null
 
+    @Volatile
+    var overrideOfficersDirectoryFetcherForTesting: (suspend () -> Result<List<OfficerProfile>>)? = null
+
     fun resetTestHooks() {
         overrideFirestoreForTesting = null
         overrideCloudCredentialFetcherForTesting = null
@@ -99,6 +102,7 @@ object FirestoreHelper {
         overrideCitizenReportUploaderForTesting = null
         overrideCitizenReportStatusUpdaterForTesting = null
         overrideOfficersCollectionRoleFetcherForTesting = null
+        overrideOfficersDirectoryFetcherForTesting = null
     }
 
     private fun currentUid(): String? = try {
@@ -217,21 +221,16 @@ object FirestoreHelper {
     }
 
     /**
-     * Real-time listener for BPBD Officer / Personnel roster scoped to the authenticated account.
+     * Real-time listener for BPBD Officer / Personnel roster across Pusdalops & TRC devices.
      */
     fun listenOfficersRealtime(
         onUpdate: (List<OfficerProfile>) -> Unit,
         onError: ((Exception) -> Unit)? = null
     ): ListenerRegistration? {
-        val uid = currentUid()
-        if (uid == null) {
-            Log.d(TAG, "listenOfficersRealtime skipped: user not authenticated with Google.")
-            return null
-        }
         val db = firestore ?: return null
+        ensureAppCheckTokenAttached()
         return try {
             db.collection(COLLECTION_OFFICERS)
-                .whereEqualTo("ownerUid", uid)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.w(TAG, "Error listening to officers snapshot", error)
@@ -242,8 +241,9 @@ object FirestoreHelper {
                         val list = mutableListOf<OfficerProfile>()
                         for (doc in snapshot.documents) {
                             val id = doc.getString("id") ?: doc.id
-                            val fullName = doc.getString("fullName") ?: continue
-                            val nip = doc.getString("nip") ?: ""
+                            val fullName = doc.getString("fullName")?.trim() ?: continue
+                            if (fullName.isBlank()) continue
+                            val nip = (doc.getString("nip") ?: doc.id).trim()
                             val role = doc.getString("role") ?: OfficerRoles.PETUGAS_JAGA
                             val unit = doc.getString("unit") ?: "Pusdalops BPBD Kab. Mukomuko"
                             val shift = doc.getString("shift") ?: "Shift Siaga 24 Jam"
@@ -270,29 +270,34 @@ object FirestoreHelper {
     }
 
     /**
-     * Pushes officer profile data to Firestore so authorized devices under this account stay in sync.
+     * Pushes officer profile data to Firestore so all Pusdalops & TRC devices stay in sync.
+     * Supports both Google-authenticated sessions and NIP-authenticated officer sessions.
      */
-    fun syncOfficerToCloud(officer: OfficerProfile) {
-        val uid = currentUid() ?: return
-        val db = firestore ?: return
+    fun syncOfficerToCloud(officer: OfficerProfile, context: Context? = null) {
+        val db = getFirestoreOrThrow(context).getOrNull() ?: firestore ?: return
+        ensureAppCheckTokenAttached()
         try {
-            val docId = if (officer.id.isNotBlank()) officer.id else officer.nip
+            val cleanNip = officer.nip.trim().replace(Regex("[\\s\\-]+"), "")
+            val effectiveNip = cleanNip.ifBlank { officer.nip.trim() }
+            if (effectiveNip.isBlank()) return
+            val docId = effectiveNip
+            val effectiveOwnerUid = currentUid() ?: "officer_nip_$effectiveNip"
             val data = mapOf(
-                "id" to officer.id,
-                "ownerUid" to uid,
-                "fullName" to officer.fullName,
-                "nip" to officer.nip,
-                "role" to officer.role,
-                "unit" to officer.unit,
-                "shift" to officer.shift,
-                "phone" to officer.phone,
+                "id" to officer.id.ifBlank { "officer_$effectiveNip" },
+                "ownerUid" to effectiveOwnerUid,
+                "fullName" to officer.fullName.trim(),
+                "nip" to effectiveNip,
+                "role" to officer.role.ifBlank { OfficerRoles.PETUGAS_JAGA },
+                "unit" to officer.unit.ifBlank { "Pusdalops BPBD Kab. Mukomuko" },
+                "shift" to officer.shift.ifBlank { "Shift Siaga 24 Jam" },
+                "phone" to officer.phone.trim(),
                 "updatedAt" to System.currentTimeMillis()
             )
             db.collection(COLLECTION_OFFICERS)
                 .document(docId)
                 .set(data, SetOptions.merge())
                 .addOnSuccessListener {
-                    Log.d(TAG, "Officer successfully synced to Firestore: ${officer.fullName}")
+                    Log.d(TAG, "Officer successfully synced to Firestore: ${officer.fullName} ($effectiveNip)")
                 }
                 .addOnFailureListener { e ->
                     Log.w(TAG, "Failed to sync officer to Firestore", e)
@@ -303,17 +308,69 @@ object FirestoreHelper {
     }
 
     /**
+     * Suspend version of [syncOfficerToCloud] for deterministic registration of new manual officers.
+     */
+    suspend fun syncOfficerToCloudSuspend(
+        officer: OfficerProfile,
+        context: Context? = null
+    ): Result<Unit> {
+        if (overrideCloudCredentialWriterForTesting != null && overrideFirestoreForTesting == null) {
+            return Result.success(Unit)
+        }
+        val dbResult = getFirestoreOrThrow(context)
+        val db = dbResult.getOrNull()
+            ?: return Result.failure(dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia"))
+        ensureAppCheckTokenAttached()
+        val cleanNip = officer.nip.trim().replace(Regex("[\\s\\-]+"), "")
+        val effectiveNip = cleanNip.ifBlank { officer.nip.trim() }
+        if (effectiveNip.isBlank()) {
+            return Result.failure(IllegalArgumentException("NIP petugas tidak boleh kosong"))
+        }
+        val effectiveOwnerUid = currentUid() ?: "officer_nip_$effectiveNip"
+        val data = mapOf(
+            "id" to officer.id.ifBlank { "officer_$effectiveNip" },
+            "ownerUid" to effectiveOwnerUid,
+            "fullName" to officer.fullName.trim(),
+            "nip" to effectiveNip,
+            "role" to officer.role.ifBlank { OfficerRoles.PETUGAS_JAGA },
+            "unit" to officer.unit.ifBlank { "Pusdalops BPBD Kab. Mukomuko" },
+            "shift" to officer.shift.ifBlank { "Shift Siaga 24 Jam" },
+            "phone" to officer.phone.trim(),
+            "updatedAt" to System.currentTimeMillis()
+        )
+        return suspendCancellableCoroutine { cont ->
+            try {
+                db.collection(COLLECTION_OFFICERS)
+                    .document(effectiveNip)
+                    .set(data, SetOptions.merge())
+                    .addOnSuccessListener {
+                        if (cont.isActive) cont.resume(Result.success(Unit))
+                    }
+                    .addOnFailureListener { e ->
+                        logFirestoreError("syncOfficerToCloudSuspend($effectiveNip)", e)
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                logFirestoreError("syncOfficerToCloudSuspend(exception)", e)
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
+    }
+
+    /**
      * Removes officer profile from Firestore.
      */
     fun deleteOfficerFromCloud(officerId: String) {
-        if (currentUid() == null) return
         val db = firestore ?: return
+        ensureAppCheckTokenAttached()
         try {
+            val cleanId = officerId.trim()
+            if (cleanId.isBlank()) return
             db.collection(COLLECTION_OFFICERS)
-                .document(officerId)
+                .document(cleanId)
                 .delete()
                 .addOnSuccessListener {
-                    Log.d(TAG, "Officer $officerId deleted from Firestore")
+                    Log.d(TAG, "Officer $cleanId deleted from Firestore")
                 }
                 .addOnFailureListener { e ->
                     Log.w(TAG, "Failed to delete officer from Firestore", e)
@@ -1740,15 +1797,19 @@ object FirestoreHelper {
 
     /**
      * Mengambil direktori personil (Nama, Gelar, NIP, Jabatan) terbaru dari koleksi Firestore `officers`.
+     * Tidak mewajibkan sesi Google Sign-In agar perangkat baru dapat mengenali petugas yang baru diinput manual.
      */
-    suspend fun fetchOfficersDirectoryFromCloudSuspend(): Result<List<OfficerProfile>> =
-        suspendCancellableCoroutine { cont ->
-            val uid = currentUid()
-            if (uid == null) {
-                if (cont.isActive) cont.resume(Result.success(emptyList()))
-                return@suspendCancellableCoroutine
-            }
-            val dbResult = getFirestoreOrThrow()
+    suspend fun fetchOfficersDirectoryFromCloudSuspend(
+        context: Context? = null
+    ): Result<List<OfficerProfile>> {
+        overrideOfficersDirectoryFetcherForTesting?.let { fetcher ->
+            return fetcher()
+        }
+        if (overrideCloudCredentialFetcherForTesting != null && overrideFirestoreForTesting == null) {
+            return Result.success(emptyList())
+        }
+        return suspendCancellableCoroutine { cont ->
+            val dbResult = getFirestoreOrThrow(context)
             val db = dbResult.getOrNull()
             if (db == null) {
                 val err = dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia")
@@ -1758,7 +1819,6 @@ object FirestoreHelper {
             ensureAppCheckTokenAttached()
             try {
                 db.collection(COLLECTION_OFFICERS)
-                    .whereEqualTo("ownerUid", uid)
                     .get(Source.SERVER)
                     .addOnSuccessListener { snapshot ->
                         if (!cont.isActive) return@addOnSuccessListener
@@ -1766,12 +1826,14 @@ object FirestoreHelper {
                         if (snapshot != null) {
                             for (doc in snapshot.documents) {
                                 val id = doc.getString("id") ?: doc.id
-                                val fullName = doc.getString("fullName") ?: continue
+                                val fullName = doc.getString("fullName")?.trim() ?: continue
+                                if (fullName.isBlank()) continue
+                                val nip = (doc.getString("nip") ?: doc.id).trim()
                                 list.add(
                                     OfficerProfile(
                                         id = id,
                                         fullName = fullName,
-                                        nip = doc.getString("nip") ?: "",
+                                        nip = nip,
                                         role = doc.getString("role") ?: OfficerRoles.PETUGAS_JAGA,
                                         unit = doc.getString("unit") ?: "Pusdalops BPBD Kab. Mukomuko",
                                         shift = doc.getString("shift") ?: "Shift Siaga 24 Jam",
@@ -1791,6 +1853,66 @@ object FirestoreHelper {
                 if (cont.isActive) cont.resume(Result.failure(e))
             }
         }
+    }
+
+    /**
+     * Mengambil profil petugas tunggal berdasarkan NIP dari koleksi Firestore `officers/{nip}`.
+     */
+    suspend fun fetchOfficerProfileFromOfficersCollectionSuspend(
+        nip: String,
+        context: Context? = null
+    ): OfficerProfile? {
+        val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
+        if (cleanNip.isBlank()) return null
+
+        overrideOfficersDirectoryFetcherForTesting?.let { fetcher ->
+            return fetcher().getOrNull()?.firstOrNull {
+                it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true)
+            }
+        }
+
+        if (overrideCloudCredentialFetcherForTesting != null && overrideFirestoreForTesting == null) {
+            return null
+        }
+
+        val db = getFirestoreOrThrow(context).getOrNull() ?: return null
+        ensureAppCheckTokenAttached()
+        return withTimeoutOrNull(2500L) {
+            suspendCancellableCoroutine { cont ->
+                try {
+                    db.collection(COLLECTION_OFFICERS)
+                        .document(cleanNip)
+                        .get(Source.SERVER)
+                        .addOnSuccessListener { doc ->
+                            if (!cont.isActive) return@addOnSuccessListener
+                            if (doc != null && doc.exists()) {
+                                val fullName = doc.getString("fullName")?.trim().orEmpty()
+                                if (fullName.isNotBlank()) {
+                                    cont.resume(
+                                        OfficerProfile(
+                                            id = doc.getString("id") ?: doc.id,
+                                            fullName = fullName,
+                                            nip = (doc.getString("nip") ?: cleanNip).trim(),
+                                            role = doc.getString("role") ?: OfficerRoles.PETUGAS_JAGA,
+                                            unit = doc.getString("unit") ?: "Pusdalops BPBD Kab. Mukomuko",
+                                            shift = doc.getString("shift") ?: "Shift Siaga 24 Jam",
+                                            phone = doc.getString("phone") ?: ""
+                                        )
+                                    )
+                                    return@addOnSuccessListener
+                                }
+                            }
+                            cont.resume(null)
+                        }
+                        .addOnFailureListener {
+                            if (cont.isActive) cont.resume(null)
+                        }
+                } catch (_: Exception) {
+                    if (cont.isActive) cont.resume(null)
+                }
+            }
+        }
+    }
 
     /**
      * Mengambil field `role` untuk NIP petugas tertentu dari koleksi Firestore `officers`

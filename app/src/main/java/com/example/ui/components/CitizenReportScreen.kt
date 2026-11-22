@@ -376,6 +376,7 @@ fun CitizenReportScreen(
 
     LaunchedEffect(Unit) {
         personnelRepository.seedDefaultAsnPersonnelIfNeeded()
+        personnelRepository.startAutoSyncFromCloud(coroutineScope)
     }
 
     // Officer Login & Status Gating Modal State
@@ -3510,13 +3511,14 @@ fun CitizenReportScreen(
                                 coroutineScope.launch {
                                     isSyncingCloud = true
                                     try {
-                                        smartAuthRepo.harvestAndSyncAllOfficers()
+                                        val syncedTotal = smartAuthRepo.harvestAndSyncAllOfficers()
                                         smartAuthRepo.pullCredentialsFromCloud { success, count ->
                                             isSyncingCloud = false
-                                            syncStatusMessage = if (success) {
-                                                "Sinkronisasi berhasil ($count kredensial diperbarui)"
+                                            val totalUpdated = maxOf(syncedTotal, count)
+                                            syncStatusMessage = if (success || totalUpdated > 0) {
+                                                "Sinkronisasi berhasil ($totalUpdated data petugas diperbarui)"
                                             } else {
-                                                "Kredensial database lokal sudah mutakhir"
+                                                "Direktori & kredensial petugas sudah mutakhir"
                                             }
                                             Toast.makeText(
                                                 context,

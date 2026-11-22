@@ -11,6 +11,7 @@ import com.example.data.local.OfficerCredentialEntity
 import com.example.data.local.OfficerProfile
 import com.example.data.local.OfficerRoles
 import com.example.data.local.OfficialAsnBpbdPersonnel
+import com.example.data.local.Personnel
 import com.example.data.local.PersonnelAuditLogEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -204,12 +205,264 @@ class SmartOfficerAuthRepository(private val context: Context) {
             .find(rawQuery)?.value
         if (!badgeMatch.isNullOrBlank()) return badgeMatch.uppercase()
 
+        // 4. Short 4..7 digit NIP inside comma/pipe separated "Nama, NIP" input (e.g. "YAKI, 123412")
+        if (rawQuery.contains(",") || rawQuery.contains("|") || rawQuery.contains("/")) {
+            val segments = rawQuery.split(",", "|", "/")
+            for (seg in segments) {
+                val cleanedSeg = seg.trim().replace(Regex("[\\s\\-]+"), "")
+                if (cleanedSeg.length in 4..22 && cleanedSeg.all { it.isDigit() }) {
+                    return cleanedSeg
+                }
+            }
+        }
+
         return null
     }
 
     /**
+     * Hasil pendaftaran / pembaruan personil manual dari menu "Kelola Petugas / Kelola Personil".
+     */
+    data class ManualOfficerRegistrationResult(
+        val profile: OfficerProfile,
+        val effectiveInitialPin: String,
+        val isCloudCredentialSynced: Boolean,
+        val preservedExistingCustomPin: Boolean = false
+    )
+
+    /**
+     * Mendaftarkan atau memperbarui petugas/ASN baru secara manual dari menu "Kelola Petugas"
+     * ke seluruh lapisan penyimpanan secara terpadu:
+     * 1. Roster lokal [OfficerAuthManager] (`SharedPreferences`)
+     * 2. Tabel Room lokal `personnel` ([personnelDao])
+     * 3. Koleksi direktori Cloud Firestore `officers/{cleanNip}`
+     * 4. Koleksi kredensial Cloud Firestore `officer_credentials/{cleanNip}` (dengan hash PBKDF2 + salt
+     *    dari PIN awal petugas, atau mempertahankan PIN kustom yang sudah pernah diatur petugas)
+     * 5. Cache metadata Room lokal `officer_credentials` ([credentialDao], tanpa menyimpan PIN mentah/hash)
+     */
+    suspend fun registerOrUpdateManualOfficer(
+        fullName: String,
+        nip: String,
+        role: String,
+        unit: String = "Pusdalops BPBD Kab. Mukomuko",
+        shift: String = "Shift Siaga 24 Jam",
+        phone: String = "",
+        customInitialPin: String? = null,
+        existingId: String? = null
+    ): Result<ManualOfficerRegistrationResult> = withContext(Dispatchers.IO) {
+        val trimmedName = fullName.trim()
+        val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
+
+        if (trimmedName.length < 3) {
+            return@withContext Result.failure(IllegalArgumentException("Nama petugas minimal 3 karakter."))
+        }
+        if (cleanNip.length < 4) {
+            return@withContext Result.failure(IllegalArgumentException("NIP / Nomor Registrasi minimal 4 karakter."))
+        }
+
+        val resolvedRole = role.trim().ifBlank { OfficerRoles.OPERATOR }
+        val resolvedUnit = unit.trim().ifBlank { "Pusdalops BPBD Kab. Mukomuko" }
+        val resolvedShift = shift.trim().ifBlank { "Shift Siaga 24 Jam" }
+        val resolvedPhone = phone.trim()
+
+        val effectiveInitialPin = if (!customInitialPin.isNullOrBlank()) {
+            val candidatePin = customInitialPin.trim()
+            if (candidatePin.length < 4) {
+                return@withContext Result.failure(
+                    IllegalArgumentException("PIN login awal minimal 4 karakter.")
+                )
+            }
+            if (FORBIDDEN_DEFAULT_PINS.any { it.equals(candidatePin, ignoreCase = true) }) {
+                return@withContext Result.failure(
+                    IllegalArgumentException(
+                        "PIN '$candidatePin' termasuk PIN lemah yang dilarang. Gunakan kombinasi angka unik atau kosongkan agar otomatis menggunakan 6 digit terakhir NIP."
+                    )
+                )
+            }
+            candidatePin
+        } else {
+            val rawLastSix = cleanNip.takeLast(6)
+            if (rawLastSix.length in 4..6 &&
+                rawLastSix.all { it.isDigit() } &&
+                FORBIDDEN_DEFAULT_PINS.none { it.equals(rawLastSix, ignoreCase = true) }
+            ) {
+                rawLastSix
+            } else {
+                OfficerCredentialEntity.generateInitialPinForNip(cleanNip)
+            }
+        }
+
+        // 1. Update OfficerAuthManager roster
+        val rosterResult = if (!existingId.isNullOrBlank()) {
+            officerAuthManager.updateOfficer(
+                id = existingId,
+                fullName = trimmedName,
+                nip = cleanNip,
+                role = resolvedRole,
+                shift = resolvedShift,
+                unit = resolvedUnit,
+                phone = resolvedPhone
+            )
+        } else {
+            officerAuthManager.addOfficer(
+                fullName = trimmedName,
+                nip = cleanNip,
+                role = resolvedRole,
+                shift = resolvedShift,
+                unit = resolvedUnit,
+                phone = resolvedPhone
+            )
+        }
+        val savedProfile = rosterResult.getOrElse { err ->
+            return@withContext Result.failure(err)
+        }
+
+        // 2. Upsert into local Room `personnel` directory
+        try {
+            val allRoomPersonnel = personnelDao.getAllPersonnelList()
+            val existingRoom = allRoomPersonnel.firstOrNull {
+                it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true)
+            }
+            if (existingRoom != null) {
+                personnelDao.updatePersonnel(
+                    existingRoom.copy(
+                        name = trimmedName,
+                        nip = cleanNip,
+                        role = resolvedRole,
+                        phone = resolvedPhone
+                    )
+                )
+            } else {
+                personnelDao.insertPersonnel(
+                    Personnel(
+                        name = trimmedName,
+                        nip = cleanNip,
+                        role = resolvedRole,
+                        unit = resolvedUnit,
+                        shift = resolvedShift,
+                        phone = resolvedPhone
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Gagal menyimpan personil manual ke tabel Room personnel: ${e.message}")
+        }
+
+        // 3. Sync officer profile to Cloud Firestore `officers/{cleanNip}`
+        FirestoreHelper.syncOfficerToCloudSuspend(savedProfile, context)
+
+        // 4. Provision or update Cloud Firestore `officer_credentials/{cleanNip}`
+        val now = System.currentTimeMillis()
+        val existingCloudLookup = FirestoreHelper.fetchOfficerCredentialStrictFromServer(cleanNip, context)
+        var preservedExistingCustomPin = false
+        var existingOwnerUid: String? = null
+
+        val credentialToSync = when (existingCloudLookup) {
+            is CloudCredentialLookupResult.Found -> {
+                existingOwnerUid = existingCloudLookup.ownerUid
+                val existingCred = existingCloudLookup.credential
+                if (customInitialPin.isNullOrBlank() &&
+                    existingCred.pinHash.isNotBlank() &&
+                    existingCred.salt.isNotBlank()
+                ) {
+                    preservedExistingCustomPin = existingCred.isCustomPinSet
+                    existingCred.copy(
+                        nip = cleanNip,
+                        fullName = trimmedName,
+                        role = resolvedRole,
+                        unit = resolvedUnit,
+                        shift = resolvedShift,
+                        phone = resolvedPhone,
+                        initialSecurePin = "",
+                        isSyncedWithCloud = true,
+                        updatedAt = now
+                    )
+                } else {
+                    val salt = OfficerCredentialEntity.generateCryptographicSalt()
+                    val pinHash = OfficerCredentialEntity.hashWithSalt(effectiveInitialPin, salt)
+                    existingCred.copy(
+                        nip = cleanNip,
+                        fullName = trimmedName,
+                        role = resolvedRole,
+                        unit = resolvedUnit,
+                        shift = resolvedShift,
+                        phone = resolvedPhone,
+                        pinHash = pinHash,
+                        salt = salt,
+                        isCustomPinSet = !customInitialPin.isNullOrBlank(),
+                        initialSecurePin = "",
+                        isSyncedWithCloud = true,
+                        updatedAt = now
+                    )
+                }
+            }
+            else -> {
+                val salt = OfficerCredentialEntity.generateCryptographicSalt()
+                val pinHash = OfficerCredentialEntity.hashWithSalt(effectiveInitialPin, salt)
+                OfficerCredentialEntity(
+                    nip = cleanNip,
+                    fullName = trimmedName,
+                    role = resolvedRole,
+                    unit = resolvedUnit,
+                    shift = resolvedShift,
+                    phone = resolvedPhone,
+                    pinHash = pinHash,
+                    salt = salt,
+                    isCustomPinSet = !customInitialPin.isNullOrBlank(),
+                    initialSecurePin = "",
+                    lastLoginAt = 0L,
+                    lastLoginDevice = "Terdaftar via Kelola Petugas (${Build.MANUFACTURER} ${Build.MODEL})",
+                    isSyncedWithCloud = true,
+                    updatedAt = now
+                )
+            }
+        }
+
+        val cloudCredSyncResult = FirestoreHelper.syncCredentialToCloudSuspend(
+            credential = credentialToSync,
+            context = context,
+            preserveOwnerUid = existingOwnerUid
+        )
+
+        // 5. Cache sanitized metadata into local Room `officer_credentials`
+        try {
+            credentialDao.insertCredential(
+                sanitizeForLocalMetadataCache(
+                    credentialToSync.copy(isSyncedWithCloud = cloudCredSyncResult.isSuccess)
+                )
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Gagal menyimpan metadata kredensial petugas ke Room: ${e.message}")
+        }
+
+        safeInsertAuditLog(
+            PersonnelAuditLogEntity(
+                nip = cleanNip,
+                name = trimmedName,
+                role = resolvedRole,
+                shift = resolvedShift,
+                action = if (cloudCredSyncResult.isSuccess) {
+                    "OFFICER_REGISTERED_AND_SYNCED_TO_CLOUD"
+                } else {
+                    "OFFICER_REGISTERED_LOCAL_PENDING_CLOUD"
+                },
+                deviceInfo = "Didaftarkan melalui Kelola Petugas pada ${Build.MANUFACTURER} ${Build.MODEL}"
+            )
+        )
+
+        return@withContext Result.success(
+            ManualOfficerRegistrationResult(
+                profile = savedProfile,
+                effectiveInitialPin = effectiveInitialPin,
+                isCloudCredentialSynced = cloudCredSyncResult.isSuccess,
+                preservedExistingCustomPin = preservedExistingCustomPin
+            )
+        )
+    }
+
+    /**
      * Resolves an officer's NIP from non-secret directory sources (direct NIP input, combined "Nama, NIP",
-     * Official ASN list, OfficerAuthManager roster, or Room Personnel directory). NEVER creates or seeds PINs.
+     * Official ASN list, OfficerAuthManager roster, Room Personnel directory, Room Credential metadata cache,
+     * and Cloud Firestore `officers` directory). NEVER creates or seeds default PINs.
      */
     suspend fun resolveNipFromDirectoryOrInput(nipOrName: String): String? = withContext(Dispatchers.IO) {
         val rawQuery = nipOrName.trim()
@@ -221,20 +474,24 @@ class SmartOfficerAuthRepository(private val context: Context) {
         val querySegments = rawQuery
             .split(",", "|", "/", ";", "\n", "(", ")")
             .map { normalizeNameForMatch(it) }
-            .filter { it.length >= 3 }
+            .filter { it.length >= 2 }
 
         fun matchesOfficer(candidateNip: String, candidateName: String): Boolean {
             val cleanNip = candidateNip.trim().replace(Regex("[\\s\\-]+"), "")
             val cleanName = normalizeNameForMatch(candidateName)
+            if (cleanNip.isBlank() && cleanName.isBlank()) return false
             if (embeddedNip != null && cleanNip.equals(embeddedNip, ignoreCase = true)) return true
-            if (cleanNip.equals(compactQuery, ignoreCase = true)) return true
+            if (cleanNip.isNotBlank() && cleanNip.equals(compactQuery, ignoreCase = true)) return true
             if (embeddedNip != null && embeddedNip.length >= 6 && cleanNip.contains(embeddedNip, ignoreCase = true)) return true
             if (compactQuery.length >= 6 && compactQuery.all { it.isDigit() } && cleanNip.contains(compactQuery, ignoreCase = true)) return true
-            if (cleanName == normalizedQueryName) return true
-            if (normalizedQueryName.length >= 3 && (cleanName.contains(normalizedQueryName) || normalizedQueryName.contains(cleanName))) return true
+            if (cleanName.isNotBlank() && cleanName == normalizedQueryName) return true
+            if (normalizedQueryName.length >= 3 && cleanName.isNotBlank() &&
+                (cleanName.contains(normalizedQueryName) || normalizedQueryName.contains(cleanName))
+            ) return true
             if (querySegments.any { seg ->
-                    cleanName == seg || cleanName.contains(seg) ||
-                        (cleanNip.length >= 6 && cleanNip.equals(seg.replace(" ", ""), ignoreCase = true))
+                    (seg.length >= 3 && cleanName.isNotBlank() && (cleanName == seg || cleanName.contains(seg))) ||
+                        (cleanName.isNotBlank() && cleanName == seg) ||
+                        (cleanNip.length >= 4 && cleanNip.equals(seg.replace(" ", ""), ignoreCase = true))
                 }
             ) return true
             return false
@@ -243,12 +500,13 @@ class SmartOfficerAuthRepository(private val context: Context) {
         // 1. Check Official ASN BPBD directory
         OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.firstOrNull { asn ->
             matchesOfficer(asn.nip, asn.name)
-        }?.let { return@withContext it.nip.trim().replace(" ", "") }
+        }?.let { return@withContext it.nip.trim().replace(Regex("[\\s\\-]+"), "") }
 
         // 2. Check OfficerAuthManager roster (non-secret profile directory)
-        officerAuthManager.getOfficerRoster().firstOrNull { r ->
+        val rosterList = officerAuthManager.getOfficerRoster()
+        rosterList.firstOrNull { r ->
             matchesOfficer(r.nip, r.fullName)
-        }?.let { return@withContext it.nip.trim().replace(" ", "") }
+        }?.let { return@withContext it.nip.trim().replace(Regex("[\\s\\-]+"), "") }
 
         // 3. Check local Room Personnel directory (non-secret)
         val roomPersonnel = try {
@@ -258,29 +516,89 @@ class SmartOfficerAuthRepository(private val context: Context) {
         }
         roomPersonnel.firstOrNull { p ->
             matchesOfficer(p.nip, p.name)
-        }?.let { return@withContext it.nip.trim().replace(" ", "") }
+        }?.let { matched ->
+            val cleanMatchedNip = matched.nip.trim().replace(Regex("[\\s\\-]+"), "")
+            if (rosterList.none { it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanMatchedNip, ignoreCase = true) }) {
+                officerAuthManager.addOfficer(
+                    fullName = matched.name,
+                    nip = cleanMatchedNip,
+                    role = matched.role,
+                    phone = matched.phone
+                )
+            }
+            return@withContext cleanMatchedNip
+        }
 
-        // 4. Embedded NIP token from combined "Nama, NIP" input (allows Cloud-only officers to log in seamlessly)
+        // 4. Check local Room OfficerCredentialEntity metadata cache (non-secret)
+        val cachedCredentials = try {
+            credentialDao.getAllCredentialsList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+        cachedCredentials.firstOrNull { c ->
+            matchesOfficer(c.nip, c.fullName)
+        }?.let { matched ->
+            return@withContext matched.nip.trim().replace(Regex("[\\s\\-]+"), "")
+        }
+
+        // 5. Embedded NIP token from combined "Nama, NIP" input (allows Cloud-only officers to log in seamlessly)
         if (!embeddedNip.isNullOrBlank()) {
             return@withContext embeddedNip
         }
 
-        // 5. Unambiguous minor-typo fuzzy match on full/base name (e.g., "Hitatur Arazak" -> "HITATUN ARAZAK")
+        // 6. Query Cloud Firestore `officers` directory for officers manually added on this or another device
+        val cloudOfficers = try {
+            FirestoreHelper.fetchOfficersDirectoryFromCloudSuspend(context).getOrNull().orEmpty()
+        } catch (_: Exception) {
+            emptyList()
+        }
+        if (cloudOfficers.isNotEmpty()) {
+            officerAuthManager.syncRosterFromCloud(cloudOfficers)
+            for (cloudOff in cloudOfficers) {
+                val cleanCloudNip = cloudOff.nip.trim().replace(Regex("[\\s\\-]+"), "")
+                if (cleanCloudNip.isNotBlank() &&
+                    roomPersonnel.none { it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanCloudNip, ignoreCase = true) }
+                ) {
+                    try {
+                        personnelDao.insertPersonnel(
+                            Personnel(
+                                name = cloudOff.fullName,
+                                nip = cleanCloudNip,
+                                role = cloudOff.role,
+                                unit = cloudOff.unit,
+                                shift = cloudOff.shift,
+                                phone = cloudOff.phone
+                            )
+                        )
+                    } catch (_: Exception) {}
+                }
+            }
+            cloudOfficers.firstOrNull { c ->
+                matchesOfficer(c.nip, c.fullName)
+            }?.let { matched ->
+                return@withContext matched.nip.trim().replace(Regex("[\\s\\-]+"), "")
+            }
+        }
+
+        // 7. Unambiguous minor-typo fuzzy match on full/base name (e.g., "Hitatur Arazak" -> "HITATUN ARAZAK")
         val primaryQueryName = querySegments.firstOrNull { seg -> seg.any { it.isLetter() } } ?: normalizedQueryName
-        if (primaryQueryName.length >= 6 && primaryQueryName.any { it.isLetter() }) {
+        if (primaryQueryName.length >= 4 && primaryQueryName.any { it.isLetter() }) {
             val allCandidates = (
                 OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.map { it.nip to it.name } +
                     officerAuthManager.getOfficerRoster().map { it.nip to it.fullName } +
-                    roomPersonnel.map { it.nip to it.name }
+                    roomPersonnel.map { it.nip to it.name } +
+                    cachedCredentials.map { it.nip to it.fullName } +
+                    cloudOfficers.map { it.nip to it.fullName }
                 ).distinctBy { it.first.trim().replace(Regex("[\\s\\-]+"), "") }
 
+            val maxAllowedDist = if (primaryQueryName.length >= 6) 2 else 1
             val scored = allCandidates.mapNotNull { (candNip, candName) ->
                 val cleanCandFull = normalizeNameForMatch(candName)
                 val cleanCandBase = normalizeNameForMatch(candName.substringBefore(","))
                 val distFull = levenshteinDistance(primaryQueryName, cleanCandFull)
                 val distBase = levenshteinDistance(primaryQueryName, cleanCandBase)
                 val bestDist = minOf(distFull, distBase)
-                if (bestDist in 1..2) candNip.trim().replace(Regex("[\\s\\-]+"), "") to bestDist else null
+                if (bestDist in 1..maxAllowedDist) candNip.trim().replace(Regex("[\\s\\-]+"), "") to bestDist else null
             }.sortedBy { it.second }
 
             if (scored.isNotEmpty()) {
@@ -292,7 +610,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
             }
         }
 
-        // 6. Direct NIP/Registration ID input (allows Cloud-only officers added in Firebase Console to log in)
+        // 8. Direct NIP/Registration ID input (allows Cloud-only officers added in Firebase Console to log in)
         val looksLikeNipOrBadge = compactQuery.length >= 4 &&
             compactQuery.matches(Regex("^[a-zA-Z0-9_\\-]+$")) &&
             compactQuery.any { it.isDigit() }
@@ -304,8 +622,8 @@ class SmartOfficerAuthRepository(private val context: Context) {
     }
 
     /**
-     * Resolves an official registered officer profile from local non-secret directories (for first-time
-     * Cloud activation or biometric display label). NEVER returns or generates a hardcoded default PIN.
+     * Resolves an official registered officer profile from local and Cloud non-secret directories
+     * (for first-time Cloud activation or biometric display label). NEVER returns or generates a hardcoded default PIN.
      */
     private suspend fun findRegisteredOfficerMetadata(nip: String): OfficerProfile? = withContext(Dispatchers.IO) {
         val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
@@ -343,7 +661,43 @@ class SmartOfficerAuthRepository(private val context: Context) {
             )
         }
 
+        try {
+            credentialDao.getCredentialByNip(cleanNip)?.takeIf { it.fullName.isNotBlank() }?.let { cred ->
+                return@withContext OfficerProfile(
+                    id = "cred-${cred.nip.trim()}",
+                    fullName = cred.fullName,
+                    nip = cred.nip.trim(),
+                    role = cred.role,
+                    unit = cred.unit,
+                    shift = cred.shift,
+                    phone = cred.phone
+                )
+            }
+        } catch (_: Exception) {}
+
+        FirestoreHelper.fetchOfficerProfileFromOfficersCollectionSuspend(cleanNip, context)?.let { cloudProfile ->
+            officerAuthManager.syncRosterFromCloud(listOf(cloudProfile))
+            return@withContext cloudProfile
+        }
+
         return@withContext null
+    }
+
+    /**
+     * Checks whether [trimmedPin] matches the unique NIP-derived initial activation key for [cleanLookupNip]
+     * (supporting standard 18-digit ASN NIPs, 6-digit registration NIPs like `123412`, and 4..8 char badge IDs)
+     * while strictly rejecting all [FORBIDDEN_DEFAULT_PINS].
+     */
+    private fun isValidFirstTimeActivationPin(cleanLookupNip: String, trimmedPin: String): Boolean {
+        if (trimmedPin.length < 4) return false
+        if (FORBIDDEN_DEFAULT_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) return false
+        val uniqueActivationKey = OfficerCredentialEntity.generateInitialPinForNip(cleanLookupNip)
+        val rawLastSix = cleanLookupNip.takeLast(6)
+        val digitsOnlyLastSix = cleanLookupNip.filter { it.isDigit() }.takeLast(6)
+        return (uniqueActivationKey.isNotBlank() && OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, uniqueActivationKey)) ||
+            (rawLastSix.length in 4..6 && OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, rawLastSix)) ||
+            (digitsOnlyLastSix.length in 4..6 && OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, digitsOnlyLastSix)) ||
+            (cleanLookupNip.length in 4..8 && OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, cleanLookupNip))
     }
 
     /**
@@ -358,6 +712,38 @@ class SmartOfficerAuthRepository(private val context: Context) {
             for (cloud in cloudCreds) {
                 credentialDao.insertCredential(sanitizeForLocalMetadataCache(cloud))
                 syncedCount++
+            }
+        }
+        val cloudDirectoryResult = FirestoreHelper.fetchOfficersDirectoryFromCloudSuspend(context)
+        if (cloudDirectoryResult.isSuccess) {
+            val cloudOfficers = cloudDirectoryResult.getOrNull().orEmpty()
+            if (cloudOfficers.isNotEmpty()) {
+                officerAuthManager.syncRosterFromCloud(cloudOfficers)
+                val existingRoom = try {
+                    personnelDao.getAllPersonnelList()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                for (officer in cloudOfficers) {
+                    val cleanNip = officer.nip.trim().replace(Regex("[\\s\\-]+"), "")
+                    if (cleanNip.isNotBlank() &&
+                        existingRoom.none { it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true) }
+                    ) {
+                        try {
+                            personnelDao.insertPersonnel(
+                                Personnel(
+                                    name = officer.fullName,
+                                    nip = cleanNip,
+                                    role = officer.role,
+                                    unit = officer.unit,
+                                    shift = officer.shift,
+                                    phone = officer.phone
+                                )
+                            )
+                            syncedCount++
+                        } catch (_: Exception) {}
+                    }
+                }
             }
         }
         return@withContext syncedCount
@@ -527,14 +913,9 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 val hasServerPlainPin = !cloudLookup.serverPlainPin.isNullOrBlank()
                 if (needsHashActivation && !hasServerPlainPin && !existingCred.isCustomPinSet && !existingCred.isPinChanged) {
                     // Existing Firestore doc without cryptographic hash (e.g. seeded via createDefault() or partial Console doc):
-                    // Activate securely if NIP is an official registered officer and PIN matches unique 6-digit NIP key.
+                    // Activate securely if NIP is an official registered officer and PIN matches unique NIP activation key.
                     val registeredOfficer = findRegisteredOfficerMetadata(cleanLookupNip)
-                    val uniqueActivationKey = OfficerCredentialEntity.generateInitialPinForNip(cleanLookupNip)
-                    val rawLastSix = cleanLookupNip.takeLast(6)
-                    val matchesUniqueNipKey = uniqueActivationKey.isNotBlank() && (
-                        OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, uniqueActivationKey) ||
-                            (rawLastSix.length == 6 && OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, rawLastSix))
-                        )
+                    val matchesUniqueNipKey = isValidFirstTimeActivationPin(cleanLookupNip, trimmedPin)
                     if (registeredOfficer != null && matchesUniqueNipKey) {
                         val activationSalt = OfficerCredentialEntity.generateCryptographicSalt()
                         val activationHash = OfficerCredentialEntity.hashWithSalt(trimmedPin, activationSalt)
@@ -590,14 +971,9 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 // have a document in Cloud Firestore:
                 // - ONLY when Cloud explicitly responded NotFound (online, no existing Cloud PIN)
                 // - NEVER accepts forbidden default PINs ('117', 'BPBD117', etc.)
-                // - Accepts the officer's unique 6-digit NIP activation key ONLY if Cloud Firestore write succeeds!
+                // - Accepts the officer's unique NIP activation key ONLY if Cloud Firestore write succeeds!
                 val registeredOfficer = findRegisteredOfficerMetadata(cleanLookupNip)
-                val uniqueActivationKey = OfficerCredentialEntity.generateInitialPinForNip(cleanLookupNip)
-                val rawLastSix = cleanLookupNip.takeLast(6)
-                val matchesUniqueNipKey = uniqueActivationKey.isNotBlank() && (
-                    OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, uniqueActivationKey) ||
-                        (rawLastSix.length == 6 && OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, rawLastSix))
-                    )
+                val matchesUniqueNipKey = isValidFirstTimeActivationPin(cleanLookupNip, trimmedPin)
 
                 if (registeredOfficer != null && matchesUniqueNipKey) {
                     val activationSalt = OfficerCredentialEntity.generateCryptographicSalt()
