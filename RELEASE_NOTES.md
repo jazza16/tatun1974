@@ -1,101 +1,44 @@
-# Catatan Rilis Resmi SIPAGAR KITA (v3.6.0)
-**Pusdalops-PB Badan Penanggulangan Bencana Daerah (BPBD) Kabupaten Mukomuko**
-*Rilis Versi: 3.6.0 (Build 14 - Rilis Kandidat) | Tanggal: 6 November 2026*
+# Catatan Rilis Resmi SIPAGAR KITA (v1.0.9)
+
+**Pusdalops-PB Badan Penanggulangan Bencana Daerah (BPBD) Kabupaten Mukomuko**  
+*Versi Rilis: **v1.0.9** (Build 10) | Tanggal Rilis: **23 November 2026***
 
 ---
 
-## 1. Ikhtisar Rilis (Executive Summary)
-Versi 3.6.0 merupakan rilis besar yang memfokuskan pada penyempurnaan identitas visual & kearifan lokal Kabupaten Mukomuko, penguatan keamanan berlapis menggunakan Play Integrity API (Mode Classic), penyeragaman tata ruang antarmuka Ruang Kerja dengan *vertical spacing* seragam 8dp, serta otomatisasi persistensi dan sinkronisasi data personil dinas secara *real-time* lintas perangkat berbasis Room Database v9 dan Cloud Firestore.
+## Ringkasan Rilis
+Rilis **SIPAGAR KITA v1.0.9** berfokus pada keandalan penuh alur autentikasi petugas (Login PIN Cloud, Biometrik Native, Logout Resmi, & Reset PIN), penutupan celah keamanan Mode Warga, perbaikan presisi tampilan tombol alarm darurat, serta optimalisasi performa besar-besaran pada **Ruang Kerja Mode Administrator** agar ringan, responsif, dan hemat baterai di perangkat fisik.
 
 ---
 
-## 2. Pembaruan Visual & Infografis Bencana Mukomuko
-- **Integrasi Lambang Resmi & Cap BPBD**:
-  - Mengganti logo Kabupaten Mukomuko dengan lambang resmi berperisai *"Kapuang Sakti Ratau Batuah"* lengkap dengan ornamen Sirih Carano, bintang emas, padi dan kapas.
-  - Memasang cap/stempel resmi melingkar Badan Penanggulangan Bencana Daerah Kabupaten Mukomuko (BPBD) dengan simbol segitiga biru di atas lingkaran oranye.
-- **Visualisasi Kearifan Lokal Budaya Mukomuko**:
-  - Infografis wallpaper menyajikan panorama budaya Rumah Adat Mukomuko (arsitektur panggung bertiang tinggi dengan sambungan pasak lentur peredam gempa tektonik) berlatar belakang pesisir Samudra Hindia dan gugusan hijau Bukit Barisan TNKS.
-  - Penegasan kearifan tradisi Sirih Carano yang melambangkan penghormatan dan gotong-royong warga saat tanggap darurat bencana.
-- **Pembersihan Spanduk & Penyelarasan Istilah Geologis**:
-  - Menghapus spanduk oranye kontak darurat di bagian bawah foto, nomor telepon, dan teks *"high resolution (9:16)"*.
-  - Menghapus logo Kabupaten Mukomuko dan teks judul besar *"GEOGRAFI & MITIGASI BENCANA KABUPATEN MUKOMUKO, BENGKULU"* dari atas gambar agar menghasilkan wallpaper ponsel yang bersih, elegan, dan estetik.
-  - Mengganti istilah "Sunda Megathrust / Gempa Megathrust" menjadi **Zona Subduksi & Megathrust Mentawai - Bengkulu** yang sesuai dengan zona tektonik riil wilayah pesisir Mukomuko.
-  - Menghapus penamaan spesifik "Air Rami", "Air Manjuto", "Sungai Manjuto", dan "Sungai Menjuto" pada infografis gambar dan kartu deskripsi.
+## ✨ Penambahan Fitur & Fungsi Baru
+- **Integrasi Info Lanskap & Wallpaper HD di Menu Info Aplikasi**: Akses dialog *Info Lanskap & Wallpaper HD Kabupaten Mukomuko* dipindahkan secara rapi ke menu **Info Aplikasi** agar layar utama tetap bersih namun fitur tetap tersedia penuh.
+- **Mekanisme Perlindungan Sesi Reset PIN**: Sistem kini membedakan secara tegas antara pencabutan akses oleh Administrator dengan proses **Reset PIN** oleh petugas, sehingga perangkat asli tetap diizinkan login kembali tanpa kendala.
+- **Otomatisasi Catatan Rilis GitHub (Bahasa Indonesia)**: Seluruh catatan penambahan fitur, fungsi, peningkatan, dan perbaikan kini terdokumentasi terstruktur dalam bahasa Indonesia di `CHANGELOG.md`, `RELEASE_NOTES.md`, halaman **Info Aplikasi**, serta otomatis diterbitkan pada setiap **GitHub Release**.
 
 ---
 
-## 3. Tata Letak UI & Ergonomi Ruang Kerja (8dp Uniform Spacing)
-- **Arrangement.spacedBy(8.dp)**:
-  - Seluruh elemen kartu pada konsol **Ruang Kerja** (`OfficerDashboardConsoleView.kt`) kini tersusun rapi di dalam `LazyColumn` dengan jarak vertikal seragam 8dp.
-  - Tata letak ini menjamin konsistensi visual yang padat, profesional, dan nyaman dibaca pada seluruh form factor (Ponsel, Layar Lipat/Foldable, dan Tablet).
-- **Penguncian Tinggi Badge 24dp**:
-  - Seluruh komponen badge status, indikator cuaca, dan identitas personil dikunci pada ketinggian tetap 24dp (`@dimen/badge_height_fixed`) dengan lebar dinamis mengikuti isi teks (*wrapContentWidth*), mencegah teks bertumpuk atau terpotong.
+## ⚡ Peningkatan & Optimalisasi
+- **Ruang Kerja Mode Administrator Lebih Ringan & Hemat Baterai**:
+  - Memutus siklus penulisan berulang antara database lokal (Room) dan Cloud Firestore pada sinkronisasi daftar personil sehingga layar tidak lagi *lag* atau *freeze* di ponsel fisik.
+  - Mengganti pelacakan aktivitas sentuhan/gulir agar tidak memicu penggambaran ulang (*recomposition*) seluruh halaman saat disentuh.
+  - Memindahkan pemrosesan data sesi keamanan, aktivitas login, dan rekonsiliasi detak jantung perangkat (*Device Heartbeat*) ke *background thread*.
+  - Melonggarkan jadwal sinkronisasi cadangan menjadi 60 detik (pembaruan utama tetap berjalan seketika secara *real-time*) dan membatasi waktu tunggu ping/heartbeat maksimal 5 detik.
+  - Menambahkan cache statistik laporan serta pembatasan muat awal kartu sesi keamanan agar perpindahan tab Administrator mulus.
+- **Presisi Teks Tombol Alarm Sirene**: Ukuran huruf dan jarak padding pada tombol **"SEGERA CEK & MATIKAN ALARM"** dan **"MATIKAN SIRENE"** disesuaikan agar presisi, jelas dibaca, dan tidak terpotong.
+- **Jaminan Bebas Spinner Menggantung**: Seluruh proses verifikasi Login PIN Cloud, Login Biometrik, Reset PIN, dan pemeriksaan sesi Ruang Kerja dilengkapi *timeout* terukur dan penutupan status *loading* yang aman.
 
 ---
 
-## 4. Keamanan Sistem & Integrasi Play Integrity API (Classic Mode)
-- **Validasi Token Play Integrity pada AuthManager**:
-  - Modul `AuthManager.kt` kini mengintegrasikan evaluasi `PlayIntegritySecurityManager.verifyCriticalAction(...)` sebelum memfinalisasi sesi pengguna dinas di modul Ruang Kerja.
-  - Setiap upaya validasi yang gagal secara otomatis dicatat ke dalam log audit keamanan lokal (`personnel_audit_logs` di Room Database) dengan tindakan `PLAY_INTEGRITY_TOKEN_FAILED` atau `PLAY_INTEGRITY_PERIODIC_CHECK_FAILED`.
-  - Mengamankan hardware dari manipulasi sesi, injeksi kredensial, dan lingkungan runtime yang tidak terpercaya.
+## 🐛 Perbaikan Bug & Keamanan
+- **Perbaikan Notifikasi "Sesi Dicabut" Palsu saat Reset PIN**: Reset PIN tidak lagi menulis status `REVOKED` / `is_active = false` ke server. Setelah Reset PIN berhasil, petugas menerima notifikasi jelas bahwa PIN kembali ke **6 digit terakhir NIP** dan dapat langsung login kembali ke Cloud.
+- **Perbaikan Alur Login, Logout, & Biometrik**:
+  - Relogin petugas setelah logout resmi kini berfungsi normal menggunakan PIN pribadi Cloud (tanpa kembali ke PIN default).
+  - Tombol **Login Biometrik (`BiometricPrompt`)** pada halaman awal (*Landing Page*) dan dialog login berfungsi kembali sebagaimana mestinya.
+  - **Isolasi Keamanan Mode Warga**: Memilih masuk sebagai warga kini selalu membersihkan sesi petugas yang tersisa sehingga Ruang Kerja tetap terkunci dan wajib autentikasi PIN/Biometrik.
+- **Perbaikan Timeout Audio Sirene (`ToneGenerator`)**: Mengatasi pesan error *Stop timed out* saat menghentikan nada alarm sirene darurat.
 
 ---
 
-## 5. Otomatisasi Simpan & Sinkronisasi Personil Antar-Perangkat
-- **Auto-Save & Real-Time Sync Administrator**:
-  - Ketika Administrator menginput Nama dan NIP petugas baru yang belum terdaftar, sistem secara otomatis mengeksekusi `autoSaveAndSyncNewPersonnel(...)`:
-    1. Menyimpan data petugas ke tabel `personnel` di Room Database lokal.
-    2. Mendaftarkan profil petugas ke `OfficerAuthManager`.
-    3. Mengunggah entitas petugas ke koleksi `officers` di Cloud Firestore.
-- **Penerimaan Otomatis pada Perangkat Baru**:
-  - Perangkat baru yang dipasangi aplikasi SIPAGAR KITA langsung menerima pembaharuan personil melalui *real-time snapshot listener* (`startAutoSyncFromCloud`), sehingga daftar petugas selalu tersinkronisasi tanpa input manual ulang.
-
----
-
-## 6. Persistensi Data & Catatan Operasional (Room v9 & Gemini AI)
-- **Room Database Versi 9**:
-  - Entitas `OfficerNoteEntity` dan DAO `NoteDao` terdaftar penuh dengan indeks performa tinggi.
-- **Catatan Operasional List-Detail Adaptif**:
-  - Menampilkan tampilan split dual-pane pada layar tablet/foldable (≥ 600dp) dan single-pane dengan `BackHandler` pada smartphone (< 600dp).
-  - Terintegrasi Gemini AI untuk aksi *"Ringkas Catatan"* dan *"Draf SOP Rekomendasi"*.
-
----
-
-## 7. Penempatan Logo Resmi Kabupaten Mukomuko pada Kop Laporan PDF & UI
-- **Pembaruan Kop Surat Laporan PDF Pimpinan & Rekap Cuaca**:
-  - Logo resmi Kabupaten Mukomuko bergambar perisai *"Kapuang Sakti Ratau Batuah"* (`ic_mukomuko_logo.png`) kini terpasang secara resmi di **sisi kanan kop laporan PDF**.
-  - Berdampingan secara proporsional dengan logo resmi BPBD Kabupaten Mukomuko di **sisi kiri kop laporan PDF**.
-  - Menggantikan logo placeholder sebelumnya pada berkas ekspor laporan rekapitulasi cuaca dan laporan kejadian bencana warga (`ReportExporter.kt`).
-- **Penyusunan Logo Bertumpuk (Stacked Logo Badge)**:
-  - Pada kartu identitas akronim SIPAGAR KITA (`SipagarKitaAcronymCard.kt`), logo BPBD dan logo Kabupaten Mukomuko ditumpuk rapi menggunakan kontainer `Box` melingkar dengan elevasi 4dp dan safe padding.
-
----
-
-## 8. Pemisahan Otoritas & Tanggung Jawab Aksi Petugas (Role Segregation)
-- **Aksi Validasi Laporan Khusus Operator**:
-  - Tombol **Validasi Laporan** ("Divalidasi") kini **hanya dapat dieksekusi oleh Operator Pusdalops** (`OfficerRoles.OPERATOR`).
-  - Apabila peran lain mencoba menekan tombol tersebut, sistem menampilkan pesan edukasi akuntabilitas tugas: *"Akses Ditolak: Tombol Validasi Laporan hanya dapat dieksekusi oleh Operator Pusdalops sebagai wujud tanggung jawab petugas."*
-- **Aksi Finalisasi Laporan Khusus Pimpinan**:
-  - Tombol **Selesai** kini **hanya dapat dieksekusi oleh Manajer Pusdalops** (`OfficerRoles.MANAJER`) dan **Koord. Administrasi** (`OfficerRoles.KOORD_ADMINISTRASI`).
-  - Peran lain akan ditolak dengan pesan: *"Akses Ditolak: Tombol Selesai hanya dapat dieksekusi oleh Manajer Pusdalops atau Koord. Administrasi sebagai wujud tanggung jawab petugas."*
-- **Label Tombol Informatif**:
-  - Kartu laporan pada dashboard dinas memperjelas tombol aksi menjadi *"Validasi (Operator)"* dan *"Selesai (Pimpinan)"*.
-
----
-
-## 9. Pembaruan Desain Badge Panggil Kontak Darurat (Mode Bulat)
-- **Badge Bulat Kontak Darurat**:
-  - Tombol panggil darurat pada kartu direktori kontak penting warga (`CitizenEmergencyContactsView.kt`) diperbarui dari bentuk persegi panjang tombol biasa menjadi **Badge Bulat Melingkar** (`CircleShape`, ukuran 40dp).
-  - Desain ini serasi dan identik dengan badge bulat pada judul *Direktori Kontak Darurat Mukomuko*.
-  - Dilengkapi ikon gagang telepon melingkar (`Icons.Default.PhoneInTalk`) dan warna dinamis sesuai tema instansi darurat (Damkar, BPBD, Kepolisian, PLN, PMI).
-
----
-
-## 10. Optimasi Responsif Peta Interaktif (Google Maps SDK)
-- **Kontainer Adaptif & Konsistensi Padding**:
-  - Modul peta sebaran laporan warga (`CitizenReportMapView.kt`) dan layar penuh peta interaktif (`MapActivity.kt`) kini dibungkus dalam kontainer `Box` terpusat dengan batasan lebar maksimum responsif `Modifier.widthIn(max = 840.dp)`.
-  - Memastikan tampilan peta presisi, tidak terdistorsi pada perangkat layar lebar (foldable/tablet), dengan padding dan elevasi yang konsisten di semua resolusi.
-
----
+> 📄 **Riwayat lengkap seluruh versi (v1.0.0 – v1.0.9)** tersedia di berkas [`CHANGELOG.md`](./CHANGELOG.md) serta pada menu **Info Aplikasi → Riwayat Catatan Rilis Versi** di dalam aplikasi.
 
 *Pusdalops-PB BPBD Kabupaten Mukomuko — Siaga, Tanggap, Tangguh Menghadapi Bencana.*

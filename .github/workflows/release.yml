@@ -1,0 +1,99 @@
+name: Terbitkan Catatan Rilis GitHub (Bahasa Indonesia)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag versi rilis (contoh: v1.0.9)"
+        required: true
+        default: "v1.0.9"
+      release_title:
+        description: "Judul rilis GitHub (opsional, default: SIPAGAR KITA <tag>)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release-notes:
+    name: Publikasikan Catatan Rilis Bahasa Indonesia
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ambil Kode Sumber Repositori
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ekstrak Catatan Rilis Bahasa Indonesia dari CHANGELOG.md
+        id: extract_notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_NAME="${{ github.event.inputs.tag || github.ref_name }}"
+          CLEAN_VERSION="${TAG_NAME#v}"
+          CLEAN_VERSION="${CLEAN_VERSION#V}"
+          RELEASE_TITLE="${{ github.event.inputs.release_title }}"
+          if [ -z "$RELEASE_TITLE" ]; then
+            RELEASE_TITLE="SIPAGAR KITA ${TAG_NAME}"
+          fi
+
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_title=${RELEASE_TITLE}" >> "$GITHUB_OUTPUT"
+
+          python3 - "$CLEAN_VERSION" <<'PY' > release_body.md
+          import re
+          import sys
+          from pathlib import Path
+
+          version = sys.argv[1]
+          changelog_path = Path("CHANGELOG.md")
+          release_notes_path = Path("RELEASE_NOTES.md")
+
+          extracted = ""
+          if changelog_path.exists():
+              text = changelog_path.read_text(encoding="utf-8")
+              pattern = rf"(?ms)^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)"
+              match = re.search(pattern, text)
+              if match:
+                  section = match.group(1).strip()
+                  extracted = (
+                      f"# Catatan Rilis SIPAGAR KITA v{version}\n"
+                      f"**Pusdalops-PB BPBD Kabupaten Mukomuko**\n\n"
+                      f"{section}\n\n"
+                      f"---\n"
+                      f"📄 Riwayat lengkap seluruh perubahan dapat dilihat pada [`CHANGELOG.md`](./CHANGELOG.md).\n"
+                  )
+
+          if not extracted and release_notes_path.exists():
+              extracted = release_notes_path.read_text(encoding="utf-8").strip() + "\n"
+
+          if not extracted:
+              extracted = (
+                  f"# Catatan Rilis SIPAGAR KITA v{version}\n\n"
+                  f"Pembaruan aplikasi SIPAGAR KITA versi v{version} untuk peningkatan fitur, fungsi, performa, dan keamanan.\n"
+              )
+
+          print(extracted)
+          PY
+
+          cat release_body.md
+
+      - name: Buat atau Perbarui GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.extract_notes.outputs.tag_name }}
+          RELEASE_TITLE: ${{ steps.extract_notes.outputs.release_title }}
+        run: |
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release edit "$TAG_NAME" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release_body.md
+          else
+            gh release create "$TAG_NAME" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release_body.md \
+              --generate-notes=false
+          fi

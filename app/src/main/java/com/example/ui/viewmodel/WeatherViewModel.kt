@@ -781,7 +781,7 @@ class WeatherViewModel(
         if (hasNewVersion && !state.isUpdated) {
             val targetLog = state.changelogs.find { it.version == state.latestVersion }
             val highlightText = targetLog?.highlights?.firstOrNull()
-                ?: com.example.model.INITIAL_RELEASE_CHANGELOG.highlights.first()
+                ?: com.example.model.LATEST_RELEASE_CHANGELOG.highlights.first()
             com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
                 context = context,
                 latestVersion = state.latestVersion,
@@ -832,7 +832,7 @@ class WeatherViewModel(
             }
             if (remoteInfo != null) {
                 val effectiveHighlights = remoteInfo.highlights.ifEmpty {
-                    com.example.model.INITIAL_RELEASE_CHANGELOG.highlights
+                    com.example.model.LATEST_RELEASE_CHANGELOG.highlights
                 }
                 val existingIdx = currentChangelogs.indexOfFirst { it.version == remoteInfo.latestVersion }
                 val remoteLog = com.example.model.VersionChangelog(
@@ -851,7 +851,7 @@ class WeatherViewModel(
 
             val targetLog = currentChangelogs.find { it.version == serverVer }
             val highlightText = targetLog?.highlights?.firstOrNull()
-                ?: com.example.model.INITIAL_RELEASE_CHANGELOG.highlights.first()
+                ?: com.example.model.LATEST_RELEASE_CHANGELOG.highlights.first()
 
             _uiState.value = _uiState.value.copy(
                 isUpdateDialogOpen = shouldShowDialog,
@@ -1034,7 +1034,7 @@ class WeatherViewModel(
             com.example.util.WeatherNotificationHelper.postAppUpdateNotification(
                 context = context,
                 latestVersion = targetRelease,
-                highlightText = com.example.model.INITIAL_RELEASE_CHANGELOG.highlights.first()
+                highlightText = com.example.model.LATEST_RELEASE_CHANGELOG.highlights.first()
             )
         }
     }

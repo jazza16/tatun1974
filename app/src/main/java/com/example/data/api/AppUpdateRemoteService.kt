@@ -157,7 +157,7 @@ object AppUpdateRemoteService {
                                     latestVersion = ver,
                                     versionCode = code,
                                     releaseDate = date,
-                                    highlights = highlightsList.ifEmpty { com.example.model.INITIAL_RELEASE_CHANGELOG.highlights },
+                                    highlights = highlightsList.ifEmpty { com.example.model.LATEST_RELEASE_CHANGELOG.highlights },
                                     downloadUrl = dlUrl,
                                     packageSizeMb = size
                                 )

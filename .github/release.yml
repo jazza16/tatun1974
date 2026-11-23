@@ -1,0 +1,43 @@
+# Konfigurasi Otomatis Catatan Rilis GitHub (Bahasa Indonesia)
+# Digunakan oleh fitur "Generate release notes" di GitHub Releases.
+
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+    authors:
+      - dependabot
+  categories:
+    - title: "✨ Penambahan Fitur & Fungsi Baru"
+      labels:
+        - feature
+        - fitur
+        - enhancement
+    - title: "⚡ Peningkatan & Optimalisasi"
+      labels:
+        - performance
+        - performa
+        - improvement
+        - peningkatan
+        - refactor
+    - title: "🐛 Perbaikan Bug & Keamanan"
+      labels:
+        - bug
+        - bugfix
+        - fix
+        - security
+        - keamanan
+    - title: "🎨 Pembaruan Tampilan (UI/UX)"
+      labels:
+        - ui
+        - ux
+        - design
+    - title: "🔧 Pemeliharaan & Dokumentasi"
+      labels:
+        - chore
+        - docs
+        - documentation
+        - ci
+    - title: "📌 Perubahan Lainnya"
+      labels:
+        - "*"

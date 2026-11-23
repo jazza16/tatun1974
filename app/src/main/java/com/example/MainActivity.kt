@@ -1499,7 +1499,7 @@ fun WeatherAppScreen(
                             val activeHighlights = uiState.updateState.changelogs
                                 .find { it.version == uiState.updateState.latestVersion }
                                 ?.highlights
-                                ?: com.example.model.INITIAL_RELEASE_CHANGELOG.highlights
+                                ?: com.example.model.LATEST_RELEASE_CHANGELOG.highlights
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 activeHighlights.take(4).forEach { hl ->
                                     Text(
