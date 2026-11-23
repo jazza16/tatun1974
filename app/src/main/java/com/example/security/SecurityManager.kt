@@ -13,9 +13,13 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -312,6 +316,8 @@ class SecurityManager private constructor(private val context: Context) {
             .build()
     }
 
+    private val listenerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val firestore: FirebaseFirestore? by lazy {
         try {
             val dbId = context.getString(com.example.R.string.firestore_database_id)
@@ -345,6 +351,35 @@ class SecurityManager private constructor(private val context: Context) {
         private const val LOGIN_COALESCE_WINDOW_MS = 3_000L
 
         private val recentLoginCoalesceMap = ConcurrentHashMap<String, Pair<Long, DeviceSecuritySession>>()
+        // Tracks NIPs currently undergoing intentional PIN Reset / account normalization so realtime
+        // listeners never falsely emit a "session revoked" toast or force-kick mid-reset.
+        private val pinResetSuppressionUntilMs = ConcurrentHashMap<String, Long>()
+
+        fun markPinResetInProgress(officerNip: String, durationMs: Long = 15_000L) {
+            val key = officerNip.trim().lowercase()
+            if (key.isNotBlank()) {
+                pinResetSuppressionUntilMs[key] = System.currentTimeMillis() + durationMs
+            }
+        }
+
+        fun clearPinResetInProgress(officerNip: String) {
+            val key = officerNip.trim().lowercase()
+            if (key.isNotBlank()) {
+                pinResetSuppressionUntilMs.remove(key)
+            }
+        }
+
+        fun isPinResetSuppressed(officerNip: String): Boolean {
+            val key = officerNip.trim().lowercase()
+            if (key.isBlank()) return false
+            val until = pinResetSuppressionUntilMs[key] ?: return false
+            return if (System.currentTimeMillis() <= until) {
+                true
+            } else {
+                pinResetSuppressionUntilMs.remove(key)
+                false
+            }
+        }
 
         fun normalizeVerdictLabel(rawVerdict: String?): String {
             val v = rawVerdict?.trim().orEmpty()
@@ -685,12 +720,19 @@ class SecurityManager private constructor(private val context: Context) {
             payload["login_time"] = normalizedSession.timestamp
             payload["is_active"] = normalizedSession.accessGranted
             val docId = sanitizeDocumentId(normalizedSession.officerNip)
-            db.collection(COLLECTION_OFFICER_SESSIONS)
-                .document(docId)
-                .set(payload, SetOptions.merge())
-                .await()
-            Log.i(TAG, "Officer session securely transmitted to Firestore collection '$COLLECTION_OFFICER_SESSIONS' for NIP: ${maskNip(normalizedSession.officerNip)} ($normalizedVerdict)")
-            true
+            val syncedInTime = withTimeoutOrNull(4_000L) {
+                db.collection(COLLECTION_OFFICER_SESSIONS)
+                    .document(docId)
+                    .set(payload, SetOptions.merge())
+                    .await()
+                true
+            } ?: false
+            if (syncedInTime) {
+                Log.i(TAG, "Officer session securely transmitted to Firestore collection '$COLLECTION_OFFICER_SESSIONS' for NIP: ${maskNip(normalizedSession.officerNip)} ($normalizedVerdict)")
+            } else {
+                Log.w(TAG, "Officer session Firestore ack exceeded 4s; queued via offline persistence for NIP: ${maskNip(normalizedSession.officerNip)}")
+            }
+            syncedInTime
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -701,7 +743,14 @@ class SecurityManager private constructor(private val context: Context) {
 
     private suspend fun appendLoginActivity(activity: OfficerLoginActivity): Boolean = withContext(Dispatchers.IO) {
         saveLocalLoginActivity(activity)
-        transmitLoginActivityToFirestore(activity)
+        // Dispatch cloud login activity audit asynchronously so interactive login never stalls waiting for a second 4s roundtrip
+        listenerScope.launch {
+            try {
+                transmitLoginActivityToFirestore(activity)
+            } catch (_: Exception) {
+            }
+        }
+        true
     }
 
     private suspend fun transmitLoginActivityToFirestore(activity: OfficerLoginActivity): Boolean = withContext(Dispatchers.IO) {
@@ -720,11 +769,14 @@ class SecurityManager private constructor(private val context: Context) {
                 .filterValues { it != null }
                 .toMutableMap()
             payload["ownerUid"] = resolvedOwnerUid
-            db.collection(COLLECTION_LOGIN_ACTIVITIES)
-                .document(safeDocId)
-                .set(payload)
-                .await()
-            true
+            val syncedInTime = withTimeoutOrNull(4_000L) {
+                db.collection(COLLECTION_LOGIN_ACTIVITIES)
+                    .document(safeDocId)
+                    .set(payload)
+                    .await()
+                true
+            } ?: false
+            syncedInTime
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -810,21 +862,25 @@ class SecurityManager private constructor(private val context: Context) {
         if (db != null) {
             try {
                 val trimmedNip = officerNip.trim()
-                val querySnapshot = db.collection(COLLECTION_OFFICER_SESSIONS)
-                    .whereEqualTo("nip", trimmedNip)
-                    .get()
-                    .await()
-
-                val matchedSessions = querySnapshot.documents.mapNotNull { snap ->
-                    snap.data?.let { DeviceSecuritySession.fromMap(it) }
-                }.toMutableList()
-
-                if (matchedSessions.isEmpty()) {
-                    val doc = db.collection(COLLECTION_OFFICER_SESSIONS)
-                        .document(docId)
+                val querySnapshot = withTimeoutOrNull(5_000L) {
+                    db.collection(COLLECTION_OFFICER_SESSIONS)
+                        .whereEqualTo("nip", trimmedNip)
                         .get()
                         .await()
-                    if (doc.exists() && doc.data != null) {
+                }
+
+                val matchedSessions = querySnapshot?.documents?.mapNotNull { snap ->
+                    snap.data?.let { DeviceSecuritySession.fromMap(it) }
+                }?.toMutableList() ?: mutableListOf()
+
+                if (matchedSessions.isEmpty()) {
+                    val doc = withTimeoutOrNull(5_000L) {
+                        db.collection(COLLECTION_OFFICER_SESSIONS)
+                            .document(docId)
+                            .get()
+                            .await()
+                    }
+                    if (doc != null && doc.exists() && doc.data != null) {
                         matchedSessions.add(DeviceSecuritySession.fromMap(doc.data!!))
                     }
                 }
@@ -843,9 +899,24 @@ class SecurityManager private constructor(private val context: Context) {
                 }
 
                 val session = matchedSessions.maxByOrNull { it.timestamp } ?: matchedSessions.first()
+                val localVerifiedTs = getLocalVerifiedSessionTimestamp(trimmedNip)
 
-                // 1. Strict Session Active Check (is_active == false -> force revoke)
+                // 1. Strict Session Active Check (is_active == false -> force revoke ONLY if server revocation
+                // is newer than or equal to our freshly verified local login session, preventing stale cache kickout)
                 if (!session.accessGranted || matchedSessions.none { it.accessGranted }) {
+                    val isStaleRemoteSnapshotBeforeFreshLogin = hasValidLocalSession &&
+                        localVerifiedTs > 0L &&
+                        session.timestamp < localVerifiedTs
+                    if (isStaleRemoteSnapshotBeforeFreshLogin) {
+                        Log.i(
+                            TAG,
+                            "Ignoring stale remote inactive session (remoteTs=${session.timestamp} < localTs=$localVerifiedTs) for freshly authenticated NIP ${maskNip(trimmedNip)}"
+                        )
+                        return@withContext SecurityAccessResult(
+                            isAuthorized = true,
+                            message = "Sesi baru terverifikasi aktif di perangkat ini."
+                        )
+                    }
                     removeLocalCachedSession(trimmedNip)
                     return@withContext SecurityAccessResult(
                         isAuthorized = false,
@@ -956,50 +1027,75 @@ class SecurityManager private constructor(private val context: Context) {
             } else {
                 db.collection(COLLECTION_OFFICER_SESSIONS)
             }
+            var lastEmittedSignature: String? = null
             query.addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w(TAG, "Officer sessions listener fallback: ${error.message}")
-                    onUpdate(filterForOfficer(getLocalCachedSessions()))
+                    listenerScope.launch {
+                        val fallback = filterForOfficer(getLocalCachedSessions())
+                        withContext(Dispatchers.Main) { onUpdate(fallback) }
+                    }
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
-                    val remoteList = snapshot.documents.mapNotNull { doc ->
-                        doc.data?.let { DeviceSecuritySession.fromMap(it) }
-                    }
-                    if (revocationTargetNip.isNotBlank()) {
-                        val revokedRemote = remoteList.firstOrNull {
-                            it.officerNip.trim().equals(revocationTargetNip, ignoreCase = true) && !it.accessGranted
-                        }
-                        if (revokedRemote != null) {
-                            removeLocalCachedSession(revocationTargetNip)
-                            if (cleanFilterNip.isNotBlank()) {
-                                onUpdate(emptyList())
+                    val rawDocs = snapshot.documents.mapNotNull { it.data }
+                    listenerScope.launch {
+                        val remoteList = rawDocs.map { DeviceSecuritySession.fromMap(it) }
+                        if (revocationTargetNip.isNotBlank() && !isPinResetSuppressed(revocationTargetNip)) {
+                            val matchingRemoteForTarget = remoteList.filter {
+                                it.officerNip.trim().equals(revocationTargetNip, ignoreCase = true)
                             }
-                            onActiveSessionRevoked?.invoke()
-                            if (cleanFilterNip.isNotBlank()) {
-                                return@addSnapshotListener
+                            val latestRemoteForTarget = matchingRemoteForTarget.maxByOrNull { it.timestamp }
+                            val localVerifiedTs = getLocalVerifiedSessionTimestamp(revocationTargetNip)
+                            // Only treat as an explicit server revocation when the doc is explicitly marked REVOKED
+                            // AND is newer than (or equal to) this device's active local verified login session.
+                            val isExplicitAdminRevoke = latestRemoteForTarget != null &&
+                                !latestRemoteForTarget.accessGranted &&
+                                latestRemoteForTarget.loginStatus.equals("REVOKED", ignoreCase = true)
+                            val isGenuinePostLoginRevocation = isExplicitAdminRevoke &&
+                                localVerifiedTs > 0L &&
+                                latestRemoteForTarget!!.timestamp >= localVerifiedTs
+                            if (isGenuinePostLoginRevocation) {
+                                removeLocalCachedSession(revocationTargetNip)
+                                withContext(Dispatchers.Main) {
+                                    if (cleanFilterNip.isNotBlank()) {
+                                        onUpdate(emptyList())
+                                    }
+                                    onActiveSessionRevoked?.invoke()
+                                }
+                                if (cleanFilterNip.isNotBlank()) {
+                                    return@launch
+                                }
+                            }
+                        }
+                        val visibleRemote = if (cleanFilterNip.isNotBlank()) {
+                            remoteList.filter { it.accessGranted }
+                        } else {
+                            remoteList
+                        }
+                        if (visibleRemote.isNotEmpty()) {
+                            cacheRemoteSessionsBatch(visibleRemote)
+                        }
+                        val localList = filterForOfficer(getLocalCachedSessions())
+                        val merged = filterForOfficer(mergeSessions(visibleRemote, localList))
+                        val sig = merged.joinToString("|") {
+                            "${it.officerNip}:${it.timestamp}:${it.accessGranted}:${it.adminVerified}:${it.loginCount}"
+                        }
+                        if (sig != lastEmittedSignature) {
+                            lastEmittedSignature = sig
+                            withContext(Dispatchers.Main) {
+                                onUpdate(merged)
                             }
                         }
                     }
-                    // Include all remote sessions (both active and blocked by admin) unless officerNipFilter explicitly checks for a single active officer
-                    val visibleRemote = if (cleanFilterNip.isNotBlank()) {
-                        remoteList.filter { it.accessGranted }
-                    } else {
-                        remoteList
-                    }
-                    visibleRemote.forEach { remoteSess ->
-                        if (remoteSess.officerNip.isNotBlank()) {
-                            cacheRemoteSessionInLocalList(remoteSess)
-                        }
-                    }
-                    val localList = filterForOfficer(getLocalCachedSessions())
-                    val merged = filterForOfficer(mergeSessions(visibleRemote, localList))
-                    onUpdate(merged)
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to attach officer_sessions listener: ${e.message}")
-            onUpdate(filterForOfficer(getLocalCachedSessions()))
+            listenerScope.launch {
+                val fallback = filterForOfficer(getLocalCachedSessions())
+                withContext(Dispatchers.Main) { onUpdate(fallback) }
+            }
             null
         }
     }
@@ -1012,31 +1108,50 @@ class SecurityManager private constructor(private val context: Context) {
         onUpdate: (List<OfficerLoginActivity>) -> Unit
     ): ListenerRegistration? {
         val db = firestore ?: run {
-            onUpdate(getLocalCachedLoginActivities())
+            listenerScope.launch {
+                val local = getLocalCachedLoginActivities()
+                withContext(Dispatchers.Main) { onUpdate(local) }
+            }
             return null
         }
         return try {
+            var lastEmittedSignature: String? = null
             db.collection(COLLECTION_LOGIN_ACTIVITIES)
                 .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(MAX_CACHED_ACTIVITIES.toLong())
+                .limit(60L)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.w(TAG, "Login activities listener fallback: ${error.message}")
-                        onUpdate(getLocalCachedLoginActivities())
+                        listenerScope.launch {
+                            val fallback = getLocalCachedLoginActivities()
+                            withContext(Dispatchers.Main) { onUpdate(fallback) }
+                        }
                         return@addSnapshotListener
                     }
                     if (snapshot != null) {
-                        val remoteList = snapshot.documents.mapNotNull { doc ->
-                            doc.data?.let { OfficerLoginActivity.fromMap(it) }
+                        val rawDocs = snapshot.documents.mapNotNull { it.data }
+                        listenerScope.launch {
+                            val remoteList = rawDocs.map { OfficerLoginActivity.fromMap(it) }
+                            if (remoteList.isNotEmpty()) {
+                                saveLocalLoginActivitiesBatch(remoteList)
+                            }
+                            val merged = mergeLoginActivities(remoteList, getLocalCachedLoginActivities())
+                            val sig = "${merged.size}:${merged.firstOrNull()?.activityId}:${merged.firstOrNull()?.timestamp}"
+                            if (sig != lastEmittedSignature) {
+                                lastEmittedSignature = sig
+                                withContext(Dispatchers.Main) {
+                                    onUpdate(merged)
+                                }
+                            }
                         }
-                        remoteList.forEach { saveLocalLoginActivity(it) }
-                        val merged = mergeLoginActivities(remoteList, getLocalCachedLoginActivities())
-                        onUpdate(merged)
                     }
                 }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to attach login activities listener: ${e.message}")
-            onUpdate(getLocalCachedLoginActivities())
+            listenerScope.launch {
+                val fallback = getLocalCachedLoginActivities()
+                withContext(Dispatchers.Main) { onUpdate(fallback) }
+            }
             null
         }
     }
@@ -1076,10 +1191,12 @@ class SecurityManager private constructor(private val context: Context) {
      */
     fun reconcileWithActiveHeartbeats(
         sessions: List<DeviceSecuritySession>,
-        heartbeats: List<com.example.data.sync.DeviceHeartbeat>
+        heartbeats: List<com.example.data.sync.DeviceHeartbeat>,
+        persistToCache: Boolean = false
     ): List<DeviceSecuritySession> {
         if (heartbeats.isEmpty()) return sessions
         val mutableSessions = sessions.toMutableList()
+        val newlySynthesized = mutableListOf<DeviceSecuritySession>()
         for (hb in heartbeats) {
             val rawName = hb.officerName.trim()
             if (rawName.isBlank() || rawName.equals("Piket Siaga", ignoreCase = true) || rawName.equals("Petugas", ignoreCase = true)) {
@@ -1136,9 +1253,12 @@ class SecurityManager private constructor(private val context: Context) {
                     lastActivityDetail = "Sesi aktif terdeteksi dari Detak Jantung Perangkat (${hb.deviceModel}, ${hb.latencyMs} ms)",
                     adminVerified = false
                 )
-                cacheRemoteSessionInLocalList(synthesized)
+                newlySynthesized.add(synthesized)
                 mutableSessions.add(synthesized)
             }
+        }
+        if (persistToCache && newlySynthesized.isNotEmpty()) {
+            cacheRemoteSessionsBatch(newlySynthesized)
         }
         return mutableSessions.sortedByDescending { it.timestamp }
     }
@@ -1165,20 +1285,24 @@ class SecurityManager private constructor(private val context: Context) {
         if (db != null) {
             if (cleanFilterNip.isNotBlank()) {
                 try {
-                    val snapshot = db.collection(COLLECTION_OFFICER_SESSIONS)
-                        .whereEqualTo("nip", cleanFilterNip)
-                        .get()
-                        .await()
-                    val allDocsForNip = snapshot.documents.mapNotNull { doc ->
-                        doc.data?.let { DeviceSecuritySession.fromMap(it) }
-                    }.toMutableList()
-
-                    if (allDocsForNip.isEmpty()) {
-                        val directDoc = db.collection(COLLECTION_OFFICER_SESSIONS)
-                            .document(sanitizeDocumentId(cleanFilterNip))
+                    val snapshot = withTimeoutOrNull(5_000L) {
+                        db.collection(COLLECTION_OFFICER_SESSIONS)
+                            .whereEqualTo("nip", cleanFilterNip)
                             .get()
                             .await()
-                        if (directDoc.exists() && directDoc.data != null) {
+                    }
+                    val allDocsForNip = snapshot?.documents?.mapNotNull { doc ->
+                        doc.data?.let { DeviceSecuritySession.fromMap(it) }
+                    }?.toMutableList() ?: mutableListOf()
+
+                    if (allDocsForNip.isEmpty()) {
+                        val directDoc = withTimeoutOrNull(4_000L) {
+                            db.collection(COLLECTION_OFFICER_SESSIONS)
+                                .document(sanitizeDocumentId(cleanFilterNip))
+                                .get()
+                                .await()
+                        }
+                        if (directDoc != null && directDoc.exists() && directDoc.data != null) {
                             allDocsForNip.add(DeviceSecuritySession.fromMap(directDoc.data!!))
                         }
                     }
@@ -1199,18 +1323,25 @@ class SecurityManager private constructor(private val context: Context) {
                 }
             }
 
+            var collectionQuerySucceeded = false
             try {
-                val snapshot = db.collection(COLLECTION_OFFICER_SESSIONS)
-                    .get()
-                    .await()
-                val remoteList = snapshot.documents.mapNotNull { doc ->
-                    doc.data?.let { DeviceSecuritySession.fromMap(it) }
-                }.let { list ->
-                    if (cleanFilterNip.isNotBlank()) list.filter { it.accessGranted } else list
+                val snapshot = withTimeoutOrNull(6_000L) {
+                    db.collection(COLLECTION_OFFICER_SESSIONS)
+                        .limit(50L)
+                        .get()
+                        .await()
                 }
-                if (remoteList.isNotEmpty()) {
-                    remoteList.forEach { cacheRemoteSessionInLocalList(it) }
-                    return@withContext filterByNip(mergeSessions(remoteList, getLocalCachedSessions()))
+                if (snapshot != null) {
+                    collectionQuerySucceeded = true
+                    val remoteList = snapshot.documents.mapNotNull { doc ->
+                        doc.data?.let { DeviceSecuritySession.fromMap(it) }
+                    }.let { list ->
+                        if (cleanFilterNip.isNotBlank()) list.filter { it.accessGranted } else list
+                    }
+                    if (remoteList.isNotEmpty()) {
+                        cacheRemoteSessionsBatch(remoteList)
+                        return@withContext filterByNip(mergeSessions(remoteList, getLocalCachedSessions()))
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -1218,39 +1349,25 @@ class SecurityManager private constructor(private val context: Context) {
                 Log.w(TAG, "Failed to list officer_sessions from Firestore: ${e.message}")
             }
 
-            // Fallback: fetch individual docs for candidate NIPs
-            val candidateNips = if (cleanFilterNip.isNotBlank()) {
-                listOf(cleanFilterNip)
-            } else {
-                (knownOfficialNips + localList.map { it.officerNip })
-                    .map { it.trim() }
-                    .filter { it.isNotBlank() }
-                    .distinctBy { it.uppercase() }
-                    .take(40)
-            }
-            if (candidateNips.isNotEmpty()) {
-                val remoteByNip = mutableListOf<DeviceSecuritySession>()
-                for (nip in candidateNips) {
-                    try {
-                        val doc = db.collection(COLLECTION_OFFICER_SESSIONS)
-                            .document(sanitizeDocumentId(nip))
+            // Bounded fallback ONLY when collection list failed (never fire 40 sequential requests on empty collection)
+            if (!collectionQuerySucceeded && cleanFilterNip.isNotBlank()) {
+                try {
+                    val doc = withTimeoutOrNull(4_000L) {
+                        db.collection(COLLECTION_OFFICER_SESSIONS)
+                            .document(sanitizeDocumentId(cleanFilterNip))
                             .get()
                             .await()
-                        if (doc.exists() && doc.data != null) {
-                            val parsed = DeviceSecuritySession.fromMap(doc.data!!)
-                            if (cleanFilterNip.isBlank() || parsed.accessGranted) {
-                                cacheRemoteSessionInLocalList(parsed)
-                                remoteByNip.add(parsed)
-                            }
-                        }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (_: Exception) {
-                        // Ignore individual doc lookup error
                     }
-                }
-                if (remoteByNip.isNotEmpty()) {
-                    return@withContext filterByNip(mergeSessions(remoteByNip, getLocalCachedSessions()))
+                    if (doc != null && doc.exists() && doc.data != null) {
+                        val parsed = DeviceSecuritySession.fromMap(doc.data!!)
+                        if (parsed.accessGranted) {
+                            cacheRemoteSessionInLocalList(parsed)
+                            return@withContext filterByNip(mergeSessions(listOf(parsed), getLocalCachedSessions()))
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
                 }
             }
         }
@@ -1266,15 +1383,19 @@ class SecurityManager private constructor(private val context: Context) {
         val db = firestore ?: return@withContext localList
 
         return@withContext try {
-            val snapshot = db.collection(COLLECTION_LOGIN_ACTIVITIES)
-                .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(MAX_CACHED_ACTIVITIES.toLong())
-                .get()
-                .await()
+            val snapshot = withTimeoutOrNull(6_000L) {
+                db.collection(COLLECTION_LOGIN_ACTIVITIES)
+                    .orderBy("timestamp", Query.Direction.DESCENDING)
+                    .limit(60L)
+                    .get()
+                    .await()
+            } ?: return@withContext localList
             val remoteList = snapshot.documents.mapNotNull { doc ->
                 doc.data?.let { OfficerLoginActivity.fromMap(it) }
             }
-            remoteList.forEach { saveLocalLoginActivity(it) }
+            if (remoteList.isNotEmpty()) {
+                saveLocalLoginActivitiesBatch(remoteList)
+            }
             mergeLoginActivities(remoteList, getLocalCachedLoginActivities())
         } catch (e: CancellationException) {
             throw e
@@ -1301,15 +1422,22 @@ class SecurityManager private constructor(private val context: Context) {
         val existingIds = existingCachedActivities.map { it.activityId }.toHashSet()
         val hw = collectHardwareTelemetry()
 
-        val loginRelatedLogs = auditLogs.filter { log ->
-            val act = log.action.uppercase()
-            act.startsWith("LOGIN_") ||
-                act.startsWith("AUTH_") ||
-                act.startsWith("PLAY_INTEGRITY_") ||
-                act.startsWith("ADMIN_ACCESS_") ||
-                act.contains("PIN_CHANGED")
-        }
+        val loginRelatedLogs = auditLogs
+            .asSequence()
+            .filter { log ->
+                val act = log.action.uppercase()
+                act.startsWith("LOGIN_") ||
+                    act.startsWith("AUTH_") ||
+                    act.startsWith("PLAY_INTEGRITY_") ||
+                    act.startsWith("ADMIN_ACCESS_") ||
+                    act.contains("PIN_CHANGED")
+            }
+            .sortedByDescending { it.timestamp }
+            .take(25)
+            .toList()
 
+        val cachedSessionsSnapshot = getLocalCachedSessions()
+        val newlyDerivedActivities = mutableListOf<OfficerLoginActivity>()
         for (log in loginRelatedLogs) {
             val cleanNip = log.nip.trim()
             if (cleanNip.isBlank()) continue
@@ -1330,7 +1458,7 @@ class SecurityManager private constructor(private val context: Context) {
                 else -> "FAILED"
             }
             val isSuccess = loginStatus == "SUCCESS"
-            val matchedSession = getLocalCachedSessions().firstOrNull {
+            val matchedSession = cachedSessionsSnapshot.firstOrNull {
                 it.officerNip.equals(cleanNip, ignoreCase = true)
             }
             val derivedActivity = OfficerLoginActivity(
@@ -1361,24 +1489,21 @@ class SecurityManager private constructor(private val context: Context) {
                 detail = log.deviceInfo.ifBlank { "Sinkronisasi aktivitas login (${log.action})" },
                 timestamp = log.timestamp
             )
-            saveLocalLoginActivity(derivedActivity)
-            transmitLoginActivityToFirestore(derivedActivity)
+            newlyDerivedActivities.add(derivedActivity)
             existingIds.add(deterministicId)
+        }
+        if (newlyDerivedActivities.isNotEmpty()) {
+            saveLocalLoginActivitiesBatch(newlyDerivedActivities)
         }
 
         val activities = fetchLoginActivities()
-        val allCandidateNips = (knownOfficialNips + loginRelatedLogs.map { it.nip } + activities.map { it.officerNip })
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .distinctBy { it.uppercase() }
-
         val fetchedSessions = fetchSecuritySessions(
-            knownOfficialNips = allCandidateNips,
+            knownOfficialNips = knownOfficialNips,
             officerNipFilter = officerNipFilter
         ).toMutableList()
 
         // Ensure every officer who has a successful login activity in the stream (when officerNipFilter is blank)
-        // also has a corresponding DeviceSecuritySession card if not already present or explicitly revoked.
+        // has a local in-memory DeviceSecuritySession entry without writing back to Firestore in a loop.
         if (officerNipFilter.isBlank()) {
             val existingSessionNips = fetchedSessions.map { it.officerNip.trim().uppercase() }.toMutableSet()
             val latestActivityByNip = activities
@@ -1388,7 +1513,6 @@ class SecurityManager private constructor(private val context: Context) {
 
             for ((upperNip, latestAct) in latestActivityByNip) {
                 if (latestAct == null || existingSessionNips.contains(upperNip)) continue
-                // If the latest activity for this officer was ADMIN_REVOKED_SESSION, do not resurrect an active session
                 if (latestAct.action.equals("ADMIN_REVOKED_SESSION", ignoreCase = true) ||
                     latestAct.loginStatus.equals("REVOKED", ignoreCase = true)
                 ) {
@@ -1435,8 +1559,6 @@ class SecurityManager private constructor(private val context: Context) {
                         lastActivityDetail = latestAct.detail,
                         adminVerified = false
                     )
-                    cacheRemoteSessionInLocalList(synthesized)
-                    transmitSessionToFirestore(synthesized)
                     fetchedSessions.add(synthesized)
                     existingSessionNips.add(upperNip)
                 }
@@ -1444,14 +1566,7 @@ class SecurityManager private constructor(private val context: Context) {
         }
 
         val finalSessions = if (officerNipFilter.isBlank() && activeDeviceHeartbeats.isNotEmpty()) {
-            val reconciled = reconcileWithActiveHeartbeats(fetchedSessions, activeDeviceHeartbeats)
-            // Persist any newly reconciled heartbeat session to Firestore so all admin consoles see it
-            reconciled.forEach { sess ->
-                if (sess.sessionId.startsWith("hb_")) {
-                    transmitSessionToFirestore(sess)
-                }
-            }
-            reconciled
+            reconcileWithActiveHeartbeats(fetchedSessions, activeDeviceHeartbeats, persistToCache = false)
         } else {
             fetchedSessions.sortedByDescending { it.timestamp }
         }
@@ -1627,6 +1742,11 @@ class SecurityManager private constructor(private val context: Context) {
         val trimmedNip = officerNip.trim()
         if (trimmedNip.isBlank()) return@withContext false
 
+        if (purgeActivities) {
+            // Suppress realtime revocation listeners while cleaning up session docs for Reset PIN / normalization
+            markPinResetInProgress(trimmedNip)
+        }
+
         val existingLocal = getLocalCachedSessions().firstOrNull {
             it.officerNip.equals(trimmedNip, ignoreCase = true)
         }
@@ -1673,51 +1793,70 @@ class SecurityManager private constructor(private val context: Context) {
         val db = firestore ?: return@withContext true
         val sanitizedId = sanitizeDocumentId(trimmedNip)
         var revokedRemote = false
+        val revokeTs = System.currentTimeMillis()
 
-        // 1. Update is_active = false in officer_sessions first
+        // 1. ONLY mark is_active = false / REVOKED when an Admin explicitly revokes a device (purgeActivities == false).
+        //    During Reset PIN / normalization (purgeActivities == true), NEVER write REVOKED or is_active = false so
+        //    the officer's real device is never falsely shown a "session revoked" toast or blocked from relogin.
         if (!purgeActivities) {
             try {
-                db.collection(COLLECTION_OFFICER_SESSIONS)
-                    .document(sanitizedId)
-                    .update(
-                        mapOf(
-                            "is_active" to false,
-                            "accessGranted" to false,
-                            "adminVerified" to false,
-                            "loginStatus" to "REVOKED"
+                withTimeoutOrNull(4_000L) {
+                    db.collection(COLLECTION_OFFICER_SESSIONS)
+                        .document(sanitizedId)
+                        .update(
+                            mapOf(
+                                "is_active" to false,
+                                "accessGranted" to false,
+                                "adminVerified" to false,
+                                "loginStatus" to "REVOKED",
+                                "timestamp" to revokeTs,
+                                "login_time" to revokeTs
+                            )
                         )
-                    )
-                    .await()
-                revokedRemote = true
+                        .await()
+                    revokedRemote = true
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
             }
         }
 
-        // 2. Also query by nip == trimmedNip to set is_active = false and delete all matching session documents
+        // 2. Query matching session documents by nip == trimmedNip and cleanly delete (only writing REVOKED if !purgeActivities)
         try {
-            val matchingDocs = db.collection(COLLECTION_OFFICER_SESSIONS)
-                .whereEqualTo("nip", trimmedNip)
-                .get()
-                .await()
-            for (doc in matchingDocs.documents) {
-                try {
-                    doc.reference.update(
-                        mapOf(
-                            "is_active" to false,
-                            "accessGranted" to false,
-                            "adminVerified" to false,
-                            "loginStatus" to "REVOKED"
-                        )
-                    ).await()
-                    revokedRemote = true
-                } catch (_: Exception) {
-                }
-                try {
-                    doc.reference.delete().await()
-                    revokedRemote = true
-                } catch (_: Exception) {
+            val matchingDocs = withTimeoutOrNull(4_000L) {
+                db.collection(COLLECTION_OFFICER_SESSIONS)
+                    .whereEqualTo("nip", trimmedNip)
+                    .get()
+                    .await()
+            }
+            if (matchingDocs != null) {
+                for (doc in matchingDocs.documents) {
+                    if (!purgeActivities) {
+                        try {
+                            withTimeoutOrNull(3_000L) {
+                                doc.reference.update(
+                                    mapOf(
+                                        "is_active" to false,
+                                        "accessGranted" to false,
+                                        "adminVerified" to false,
+                                        "loginStatus" to "REVOKED",
+                                        "timestamp" to revokeTs,
+                                        "login_time" to revokeTs
+                                    )
+                                ).await()
+                                revokedRemote = true
+                            }
+                        } catch (_: Exception) {
+                        }
+                    }
+                    try {
+                        withTimeoutOrNull(3_000L) {
+                            doc.reference.delete().await()
+                            revokedRemote = true
+                        }
+                    } catch (_: Exception) {
+                    }
                 }
             }
         } catch (e: CancellationException) {
@@ -1725,23 +1864,29 @@ class SecurityManager private constructor(private val context: Context) {
         } catch (_: Exception) {
         }
 
-        // 3. Also delete the session document by document ID from officer_sessions (and legacy device_security_sessions if present)
+        // 3. Delete the session document by document ID from officer_sessions (and legacy device_security_sessions if present)
         return@withContext try {
-            db.collection(COLLECTION_OFFICER_SESSIONS)
-                .document(sanitizedId)
-                .delete()
-                .await()
+            withTimeoutOrNull(4_000L) {
+                db.collection(COLLECTION_OFFICER_SESSIONS)
+                    .document(sanitizedId)
+                    .delete()
+                    .await()
+            }
             if (sanitizedId != trimmedNip) {
                 try {
-                    db.collection(COLLECTION_OFFICER_SESSIONS).document(trimmedNip).delete().await()
+                    withTimeoutOrNull(3_000L) {
+                        db.collection(COLLECTION_OFFICER_SESSIONS).document(trimmedNip).delete().await()
+                    }
                 } catch (_: Exception) {
                 }
             }
             try {
-                db.collection(COLLECTION_LEGACY_SECURITY_SESSIONS).document(sanitizedId).delete().await()
+                withTimeoutOrNull(3_000L) {
+                    db.collection(COLLECTION_LEGACY_SECURITY_SESSIONS).document(sanitizedId).delete().await()
+                }
             } catch (_: Exception) {
             }
-            Log.i(TAG, "Officer session deactivated & deleted from Firestore '$COLLECTION_OFFICER_SESSIONS' for NIP: ${maskNip(trimmedNip)}")
+            Log.i(TAG, "Officer session cleaned from Firestore '$COLLECTION_OFFICER_SESSIONS' for NIP: ${maskNip(trimmedNip)} (purgeActivities=$purgeActivities)")
             true
         } catch (e: CancellationException) {
             throw e
@@ -1781,7 +1926,7 @@ class SecurityManager private constructor(private val context: Context) {
     fun clearLocalSession() {
         AdminAccessSecurityManager.revokeToken()
         recentLoginCoalesceMap.clear()
-        context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE).edit().clear().apply()
+        context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE).edit().clear().commit()
     }
 
     private fun saveLocalSession(session: DeviceSecuritySession) {
@@ -1804,17 +1949,20 @@ class SecurityManager private constructor(private val context: Context) {
             jsonArr.put(obj)
         }
         editor.putString(KEY_CACHED_SESSIONS_JSON, jsonArr.toString())
-        editor.apply()
+        editor.commit()
     }
 
     private fun cacheRemoteSessionInLocalList(session: DeviceSecuritySession) {
+        cacheRemoteSessionsBatch(listOf(session))
+    }
+
+    @Synchronized
+    private fun cacheRemoteSessionsBatch(sessions: List<DeviceSecuritySession>) {
+        if (sessions.isEmpty()) return
         val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
-        val updatedList = getLocalCachedSessions(prefs)
-            .filterNot { it.officerNip.equals(session.officerNip, ignoreCase = true) }
-            .toMutableList()
-        updatedList.add(0, session)
+        val merged = mergeSessions(sessions, getLocalCachedSessions(prefs)).take(60)
         val jsonArr = JSONArray()
-        updatedList.sortedByDescending { it.timestamp }.forEach { s ->
+        merged.forEach { s ->
             val obj = JSONObject()
             s.toMap().forEach { (k, v) -> if (v != null) obj.put(k, v) }
             jsonArr.put(obj)
@@ -1823,14 +1971,16 @@ class SecurityManager private constructor(private val context: Context) {
     }
 
     private fun saveLocalLoginActivity(activity: OfficerLoginActivity) {
+        saveLocalLoginActivitiesBatch(listOf(activity))
+    }
+
+    @Synchronized
+    private fun saveLocalLoginActivitiesBatch(activities: List<OfficerLoginActivity>) {
+        if (activities.isEmpty()) return
         val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
-        val updatedList = getLocalCachedLoginActivities(prefs)
-            .filterNot { it.activityId == activity.activityId }
-            .toMutableList()
-        updatedList.add(0, activity)
-        val trimmed = updatedList.sortedByDescending { it.timestamp }.take(MAX_CACHED_ACTIVITIES)
+        val merged = mergeLoginActivities(activities, getLocalCachedLoginActivities(prefs))
         val jsonArr = JSONArray()
-        trimmed.forEach { item ->
+        merged.forEach { item ->
             val obj = JSONObject()
             item.toMap().forEach { (k, v) -> if (v != null) obj.put(k, v) }
             jsonArr.put(obj)
@@ -1914,7 +2064,7 @@ class SecurityManager private constructor(private val context: Context) {
                 .remove(KEY_LAST_VERIFIED_NIP)
                 .remove(KEY_LAST_SESSION_ID)
         }
-        editor.apply()
+        editor.commit()
     }
 
     private fun removeLocalCachedLoginActivities(officerNip: String) {
@@ -1929,6 +2079,19 @@ class SecurityManager private constructor(private val context: Context) {
             jsonArr.put(obj)
         }
         prefs.edit().putString(KEY_CACHED_LOGIN_ACTIVITIES_JSON, jsonArr.toString()).apply()
+    }
+
+    fun getLocalVerifiedSessionTimestamp(officerNip: String): Long {
+        if (officerNip.isBlank()) return 0L
+        val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
+        val savedNip = SecureStorageHelper.getDecrypted(prefs, KEY_LAST_VERIFIED_NIP) ?: return 0L
+        val accessGranted = prefs.getBoolean(KEY_ACCESS_GRANTED, false)
+        if (!accessGranted || !savedNip.equals(officerNip.trim(), ignoreCase = true)) return 0L
+        return prefs.getLong(KEY_VERIFICATION_TIMESTAMP, 0L)
+    }
+
+    fun hasActiveVerifiedLocalSession(officerNip: String): Boolean {
+        return isLocalSessionValid(officerNip)
     }
 
     private fun isLocalSessionValid(officerNip: String): Boolean {

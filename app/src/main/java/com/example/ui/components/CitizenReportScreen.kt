@@ -16,10 +16,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.biometric.AuthenticationRequest
-import androidx.biometric.AuthenticationResult
 import androidx.biometric.BiometricManager
-import androidx.biometric.compose.rememberAuthenticationLauncher
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -291,21 +288,32 @@ fun CitizenReportScreen(
     onDeleteReport: ((String) -> Unit)? = null,
     initialShowOfficerLogin: Boolean = false,
     initialOpenRuangKerja: Boolean = false,
+    officerLoginRequestId: Int = 0,
+    openRuangKerjaRequestId: Int = 0,
     onOfficerLoginDismissed: (() -> Unit)? = null,
+    onOfficerLogoutToLanding: (() -> Unit)? = null,
     hasSpecialAssignment: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var selectedTab by rememberSaveable { mutableIntStateOf(if (initialOpenRuangKerja) 4 else 0) } // 0 = Formulir, 1 = Peta Sebaran, 2 = Tabel Riwayat, 3 = Kontak Penting, 4 = Konsol Petugas
 
     // Officer & Firebase Authentication Manager (SIPAGAR KITA)
     val authManager = remember { com.example.data.auth.AuthManager.getInstance(context) }
     val officerAuthManager = remember { OfficerAuthManager(context) }
-    var isOfficerLoggedIn by rememberSaveable { mutableStateOf(authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn()) }
-    var officerName by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerName().ifBlank { authManager.getDisplayName() }) }
-    var officerBadgeId by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerBadgeId().ifBlank { authManager.getBadgeOrUid() }) }
-    var officerShift by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerShift()) }
-    var officerRole by rememberSaveable { mutableStateOf(officerAuthManager.getOfficerRole()) }
+    val securityManager = remember { SecurityManager.getInstance(context) }
+
+    // Strict source of truth: Ruang Kerja access ONLY when OfficerAuthManager has an active verified session.
+    // Never use rememberSaveable for isOfficerLoggedIn so stale cache/state after logout or Mode Warga can never bypass PIN.
+    var isOfficerLoggedIn by remember { mutableStateOf(officerAuthManager.isOfficerLoggedIn()) }
+    var selectedTab by rememberSaveable {
+        mutableIntStateOf(
+            if ((initialOpenRuangKerja || openRuangKerjaRequestId > 0) && officerAuthManager.isOfficerLoggedIn()) 4 else 0
+        )
+    } // 0 = Formulir, 1 = Peta Sebaran, 2 = Tabel Riwayat, 3 = Kontak Penting, 4 = Konsol Petugas
+    var officerName by remember { mutableStateOf(officerAuthManager.getOfficerName()) }
+    var officerBadgeId by remember { mutableStateOf(officerAuthManager.getOfficerBadgeId()) }
+    var officerShift by remember { mutableStateOf(officerAuthManager.getOfficerShift()) }
+    var officerRole by remember { mutableStateOf(officerAuthManager.getOfficerRole()) }
     var historyReportPendingDeletion by remember { mutableStateOf<CitizenDisasterReport?>(null) }
 
     // RBAC Multi-Tier: Tier 3 (Operator/Logistik/TRC/null) hanya akses menu operasional (tanpa Statistik)
@@ -321,29 +329,69 @@ fun CitizenReportScreen(
     val personnelRepository = remember { PersonnelRepository(database.personnelDao()) }
 
     // Firestore Session Management (officer_sessions)
-    val securityManager = remember { SecurityManager.getInstance(context) }
     var securityAccessResult by remember { mutableStateOf<SecurityAccessResult?>(null) }
     var isVerifyingSecurity by remember { mutableStateOf(false) }
 
+    // Officer Login & Status Gating Modal State
+    var showOfficerLoginDialog by remember { mutableStateOf(initialShowOfficerLogin || officerLoginRequestId > 0) }
+    var showVolunteerCoordinationDialog by remember { mutableStateOf(false) }
+    var pendingStatusReportId by remember { mutableStateOf<String?>(null) }
+    var pendingStatusTarget by remember { mutableStateOf<String?>(null) }
+
+    // Unified, atomic full logout helper for every exit / revocation path
+    val performFullOfficerLogout: (Boolean, String) -> Unit = { returnToLanding, toastMessage ->
+        securityManager.clearLocalSession()
+        authManager.signOut()
+        officerAuthManager.logoutOfficer()
+        isOfficerLoggedIn = false
+        officerName = officerAuthManager.getOfficerName()
+        officerBadgeId = officerAuthManager.getOfficerBadgeId()
+        officerShift = officerAuthManager.getOfficerShift()
+        officerRole = officerAuthManager.getOfficerRole()
+        securityAccessResult = null
+        isVerifyingSecurity = false
+        showOfficerLoginDialog = false
+        pendingStatusReportId = null
+        pendingStatusTarget = null
+        selectedTab = 0
+        onOfficerLoginDismissed?.invoke()
+        if (toastMessage.isNotBlank()) {
+            Toast.makeText(context, toastMessage, Toast.LENGTH_SHORT).show()
+        }
+        if (returnToLanding) {
+            onOfficerLogoutToLanding?.invoke()
+        }
+    }
+
+    // Strict sync on screen entry so stale rememberSaveable tab 4 can never open Ruang Kerja after logout/Mode Warga
+    LaunchedEffect(Unit) {
+        val actualLoggedIn = officerAuthManager.isOfficerLoggedIn()
+        isOfficerLoggedIn = actualLoggedIn
+        if (actualLoggedIn) {
+            officerName = officerAuthManager.getOfficerName()
+            officerBadgeId = officerAuthManager.getOfficerBadgeId()
+            officerShift = officerAuthManager.getOfficerShift()
+            officerRole = officerAuthManager.getOfficerRole()
+        } else {
+            securityAccessResult = null
+            if (selectedTab == 4 && !showOfficerLoginDialog && officerLoginRequestId == 0 && !initialShowOfficerLogin) {
+                selectedTab = 0
+            }
+        }
+    }
+
     DisposableEffect(isOfficerLoggedIn, officerBadgeId) {
-        val activeNip = officerBadgeId.ifBlank { authManager.getBadgeOrUid() }.trim()
-        val registration = if (isOfficerLoggedIn && activeNip.isNotBlank()) {
+        val activeNip = officerBadgeId.trim()
+        val registration = if (isOfficerLoggedIn && officerAuthManager.isOfficerLoggedIn() && activeNip.isNotBlank()) {
             securityManager.listenSecuritySessionsRealtime(
                 officerNipFilter = activeNip,
                 onActiveSessionRevoked = {
-                    securityManager.clearLocalSession()
-                    authManager.signOut()
-                    officerAuthManager.logoutOfficer()
-                    isOfficerLoggedIn = false
-                    securityAccessResult = null
-                    if (selectedTab == 4) {
-                        selectedTab = 0
+                    if (!SecurityManager.isPinResetSuppressed(activeNip)) {
+                        performFullOfficerLogout(
+                            true,
+                            "Akses sesi perangkat Anda telah dicabut dari server. Logout paksa dijalankan."
+                        )
                     }
-                    Toast.makeText(
-                        context,
-                        "Akses sesi perangkat Anda telah dicabut dari server. Logout paksa dijalankan.",
-                        Toast.LENGTH_LONG
-                    ).show()
                 },
                 onUpdate = { _ -> }
             )
@@ -356,21 +404,49 @@ fun CitizenReportScreen(
     }
 
     LaunchedEffect(selectedTab, isOfficerLoggedIn, officerBadgeId) {
-        if (selectedTab == 4 && (authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn())) {
-            val targetNip = officerBadgeId.ifBlank { authManager.getBadgeOrUid() }
+        if (selectedTab == 4 && isOfficerLoggedIn && officerAuthManager.isOfficerLoggedIn()) {
+            val targetNip = officerBadgeId.ifBlank { officerAuthManager.getOfficerBadgeId() }.trim()
             if (targetNip.isNotBlank()) {
-                isVerifyingSecurity = true
-                val result = securityManager.verifySessionBeforeGrantingRuangKerja(targetNip)
-                securityAccessResult = result
-                isVerifyingSecurity = false
-                if (!result.isAuthorized && result.session != null && !result.session.accessGranted) {
-                    securityManager.clearLocalSession()
-                    authManager.signOut()
-                    officerAuthManager.logoutOfficer()
-                    isOfficerLoggedIn = false
-                    selectedTab = 0
+                val localTs = securityManager.getLocalVerifiedSessionTimestamp(targetNip)
+                val isFreshlyVerifiedLogin = securityAccessResult?.isAuthorized == true &&
+                    securityManager.hasActiveVerifiedLocalSession(targetNip) &&
+                    localTs > 0L &&
+                    (System.currentTimeMillis() - localTs) in 0L..10_000L
+                if (!isFreshlyVerifiedLogin) {
+                    isVerifyingSecurity = true
+                    try {
+                        val result = kotlinx.coroutines.withTimeoutOrNull(10_000L) {
+                            securityManager.verifySessionBeforeGrantingRuangKerja(targetNip)
+                        } ?: if (securityManager.hasActiveVerifiedLocalSession(targetNip)) {
+                            SecurityAccessResult(
+                                isAuthorized = true,
+                                message = "Sesi lokal perangkat terverifikasi aktif."
+                            )
+                        } else {
+                            SecurityAccessResult(
+                                isAuthorized = false,
+                                message = "Waktu verifikasi keamanan ke server habis. Ketuk Cek Ulang atau Login Ulang."
+                            )
+                        }
+                        securityAccessResult = result
+                        if (!result.isAuthorized &&
+                            result.session != null &&
+                            !result.session.accessGranted &&
+                            result.session.loginStatus.equals("REVOKED", ignoreCase = true) &&
+                            !SecurityManager.isPinResetSuppressed(targetNip)
+                        ) {
+                            performFullOfficerLogout(
+                                true,
+                                "Akses sesi perangkat Anda telah dicabut dari server. Silakan login kembali."
+                            )
+                        }
+                    } finally {
+                        isVerifyingSecurity = false
+                    }
                 }
             }
+        } else {
+            isVerifyingSecurity = false
         }
     }
 
@@ -379,26 +455,52 @@ fun CitizenReportScreen(
         personnelRepository.startAutoSyncFromCloud(coroutineScope)
     }
 
-    // Officer Login & Status Gating Modal State
-    var showOfficerLoginDialog by remember { mutableStateOf(initialShowOfficerLogin) }
-    var showVolunteerCoordinationDialog by remember { mutableStateOf(false) }
-    LaunchedEffect(initialShowOfficerLogin) {
-        if (initialShowOfficerLogin) {
-            showOfficerLoginDialog = true
+    LaunchedEffect(officerLoginRequestId, initialShowOfficerLogin) {
+        if (officerLoginRequestId > 0 || initialShowOfficerLogin) {
+            val actualLoggedIn = officerAuthManager.isOfficerLoggedIn()
+            isOfficerLoggedIn = actualLoggedIn
+            if (actualLoggedIn) {
+                officerName = officerAuthManager.getOfficerName()
+                officerBadgeId = officerAuthManager.getOfficerBadgeId()
+                officerShift = officerAuthManager.getOfficerShift()
+                officerRole = officerAuthManager.getOfficerRole()
+                selectedTab = 4
+                showOfficerLoginDialog = false
+            } else {
+                securityAccessResult = null
+                showOfficerLoginDialog = true
+            }
+            onOfficerLoginDismissed?.invoke()
         }
     }
-    LaunchedEffect(initialOpenRuangKerja) {
-        if (initialOpenRuangKerja && (authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn())) {
-            isOfficerLoggedIn = true
-            officerName = officerAuthManager.getOfficerName().ifBlank { authManager.getDisplayName() }
-            officerBadgeId = officerAuthManager.getOfficerBadgeId().ifBlank { authManager.getBadgeOrUid() }
-            officerShift = officerAuthManager.getOfficerShift()
-            officerRole = officerAuthManager.getOfficerRole()
-            selectedTab = 4
+
+    LaunchedEffect(openRuangKerjaRequestId, initialOpenRuangKerja) {
+        if (openRuangKerjaRequestId > 0 || initialOpenRuangKerja) {
+            val actualLoggedIn = officerAuthManager.isOfficerLoggedIn()
+            if (actualLoggedIn) {
+                val resolvedNip = officerAuthManager.getOfficerBadgeId().trim()
+                isOfficerLoggedIn = true
+                officerName = officerAuthManager.getOfficerName()
+                officerBadgeId = resolvedNip
+                officerShift = officerAuthManager.getOfficerShift()
+                officerRole = officerAuthManager.getOfficerRole()
+                if (resolvedNip.isNotBlank() && securityManager.hasActiveVerifiedLocalSession(resolvedNip)) {
+                    securityAccessResult = SecurityAccessResult(
+                        isAuthorized = true,
+                        message = "Sesi Biometrik & perangkat terverifikasi aktif."
+                    )
+                }
+                showOfficerLoginDialog = false
+                selectedTab = 4
+            } else {
+                isOfficerLoggedIn = false
+                securityAccessResult = null
+                selectedTab = 0
+                showOfficerLoginDialog = true
+            }
+            onOfficerLoginDismissed?.invoke()
         }
     }
-    var pendingStatusReportId by remember { mutableStateOf<String?>(null) }
-    var pendingStatusTarget by remember { mutableStateOf<String?>(null) }
 
     // Photo Fullscreen Zoom Dialog State
     var previewPhotoUri by remember { mutableStateOf<String?>(null) }
@@ -825,10 +927,16 @@ fun CitizenReportScreen(
                 Tab(
                     selected = selectedTab == 4,
                     onClick = {
-                        if (authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn()) {
+                        if (officerAuthManager.isOfficerLoggedIn()) {
                             isOfficerLoggedIn = true
+                            officerName = officerAuthManager.getOfficerName()
+                            officerBadgeId = officerAuthManager.getOfficerBadgeId()
+                            officerShift = officerAuthManager.getOfficerShift()
+                            officerRole = officerAuthManager.getOfficerRole()
                             selectedTab = 4
                         } else {
+                            isOfficerLoggedIn = false
+                            securityAccessResult = null
                             selectedTab = 4
                             showOfficerLoginDialog = true
                         }
@@ -2085,15 +2193,13 @@ fun CitizenReportScreen(
 
                                         Button(
                                             onClick = {
-                                                if (isOfficerLoggedIn) {
-                                                    officerAuthManager.logoutOfficer()
-                                                    isOfficerLoggedIn = false
-                                                    officerName = officerAuthManager.getOfficerName()
-                                                    officerBadgeId = officerAuthManager.getOfficerBadgeId()
-                                                    officerShift = officerAuthManager.getOfficerShift()
-                                                    officerRole = officerAuthManager.getOfficerRole()
-                                                    Toast.makeText(context, "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)", Toast.LENGTH_SHORT).show()
+                                                if (isOfficerLoggedIn && officerAuthManager.isOfficerLoggedIn()) {
+                                                    performFullOfficerLogout(
+                                                        false,
+                                                        "Sesi Petugas Jaga diakhiri (Mode Warga Aktif)"
+                                                    )
                                                 } else {
+                                                    isOfficerLoggedIn = false
                                                     showOfficerLoginDialog = true
                                                 }
                                             },
@@ -2322,7 +2428,7 @@ fun CitizenReportScreen(
 
                 4 -> {
                     // TAB 4: RUANG KERJA PETUGAS PUSDALOPS BPBD & TIM TRC
-                    val hasActiveSession = authManager.isSessionActive() || officerAuthManager.isOfficerLoggedIn()
+                    val hasActiveSession = isOfficerLoggedIn && officerAuthManager.isOfficerLoggedIn()
                     if (hasActiveSession) {
                         if (isVerifyingSecurity) {
                             Column(
@@ -2389,10 +2495,18 @@ fun CitizenReportScreen(
                                     OutlinedButton(
                                         onClick = {
                                             coroutineScope.launch {
-                                                val targetNip = officerBadgeId.ifBlank { authManager.getBadgeOrUid() }
+                                                val targetNip = officerBadgeId.ifBlank { officerAuthManager.getOfficerBadgeId() }
                                                 isVerifyingSecurity = true
-                                                securityAccessResult = securityManager.verifySessionBeforeGrantingRuangKerja(targetNip)
-                                                isVerifyingSecurity = false
+                                                try {
+                                                    securityAccessResult = kotlinx.coroutines.withTimeoutOrNull(10_000L) {
+                                                        securityManager.verifySessionBeforeGrantingRuangKerja(targetNip)
+                                                    } ?: SecurityAccessResult(
+                                                        isAuthorized = false,
+                                                        message = "Waktu verifikasi keamanan habis. Periksa koneksi internet lalu coba lagi."
+                                                    )
+                                                } finally {
+                                                    isVerifyingSecurity = false
+                                                }
                                             }
                                         }
                                     ) {
@@ -2423,14 +2537,10 @@ fun CitizenReportScreen(
                                 officerRole = officerRole,
                                 onLoginClick = { showOfficerLoginDialog = true },
                                 onLogoutClick = {
-                                    authManager.signOut()
-                                    officerAuthManager.logoutOfficer()
-                                    isOfficerLoggedIn = false
-                                    officerName = officerAuthManager.getOfficerName()
-                                    officerBadgeId = officerAuthManager.getOfficerBadgeId()
-                                    securityAccessResult = null
-                                    selectedTab = 0
-                                    Toast.makeText(context, "Sesi Petugas Ruang Kerja diakhiri", Toast.LENGTH_SHORT).show()
+                                    performFullOfficerLogout(
+                                        true,
+                                        "Sesi Petugas Ruang Kerja diakhiri"
+                                    )
                                 },
                                 onUpdateReportStatus = onUpdateReportStatus,
                                 onUpdateReportStatusAndNotes = onUpdateReportStatusAndNotes,
@@ -2689,7 +2799,7 @@ fun CitizenReportScreen(
                             )
                         }
                     }
-                    if (isOfficerLoggedIn || authManager.isSessionActive()) {
+                    if (isOfficerLoggedIn && officerAuthManager.isOfficerLoggedIn()) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Button(
                             onClick = {
@@ -2771,14 +2881,7 @@ fun CitizenReportScreen(
         var syncStatusMessage by remember { mutableStateOf("") }
 
         val biometricStatus = remember(context) {
-            try {
-                BiometricManager.from(context).canAuthenticate(
-                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                        BiometricManager.Authenticators.BIOMETRIC_WEAK
-                )
-            } catch (_: Exception) {
-                BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE
-            }
+            com.example.security.checkBiometricAvailability(context)
         }
         val isBiometricAvailable = biometricStatus == BiometricManager.BIOMETRIC_SUCCESS
         val isBiometricNotEnrolled = biometricStatus == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED
@@ -2791,122 +2894,142 @@ fun CitizenReportScreen(
             }
         }
 
-        val biometricAuthLauncher = rememberAuthenticationLauncher { authResult ->
-            when (authResult) {
-                is AuthenticationResult.Success -> {
-                    isBiometricScanning = false
-                    triggerBiometricVibration(context, "SUCCESS")
-                    val targetIdentity = pendingBiometricNip.ifBlank {
-                        savedNip.ifBlank { inputNipOrName.trim() }
-                    }
-                    coroutineScope.launch {
-                        isSubmitting = true
-                        isError = false
-                        errorMessage = ""
-                        try {
-                            val bioResult = smartAuthRepo.authenticateWithBiometric(targetIdentity)
-                            if (bioResult.isSuccess) {
-                                val cred = bioResult.getOrThrow()
-                                val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
-                                    officerNip = cred.nip,
-                                    officerName = cred.fullName,
-                                    officerRole = cred.role,
-                                    loginMethod = "BIOMETRIK",
-                                    loginAction = "LOGIN_SUCCESSFUL_BIOMETRIC_AUTH"
-                                )
-                                val verifiedSession = sessionRes.getOrNull()
-                                val isDeviceAuthorized = sessionRes.isSuccess && (verifiedSession?.accessGranted == true)
-                                if (!isDeviceAuthorized) {
-                                    val denyReason = sessionRes.exceptionOrNull()?.message
-                                        ?: "Integritas perangkat tidak memenuhi syarat keamanan untuk mengakses Ruang Kerja."
-                                    securityAccessResult = SecurityAccessResult(
-                                        isAuthorized = false,
-                                        message = denyReason,
-                                        session = verifiedSession
-                                    )
-                                    officerAuthManager.logoutOfficer()
-                                    isOfficerLoggedIn = false
-                                    isError = true
-                                    errorMessage = denyReason
-                                    Toast.makeText(context, denyReason, Toast.LENGTH_LONG).show()
-                                    return@launch
-                                }
-
-                                securityAccessResult = SecurityAccessResult(
-                                    isAuthorized = true,
-                                    message = "Perangkat & Biometrik terverifikasi valid.",
-                                    session = verifiedSession
-                                )
-
-                                officerAuthManager.saveNipToSecureStorage(
-                                    nip = cred.nip,
-                                    fullName = cred.fullName,
-                                    role = cred.role,
-                                    shift = cred.shift
-                                )
-                                officerAuthManager.loginOfficerDirectly(
-                                    name = cred.fullName,
-                                    badgeId = cred.nip,
-                                    shift = cred.shift,
-                                    role = cred.role
-                                )
-                                savedNip = cred.nip
-                                savedName = cred.fullName
-                                isOfficerLoggedIn = true
-                                officerName = cred.fullName
-                                officerBadgeId = cred.nip
-                                officerShift = cred.shift
-                                officerRole = cred.role
-                                showOfficerLoginDialog = false
-                                onOfficerLoginDismissed?.invoke()
-                                selectedTab = 4 // Masuk langsung ke Ruang Kerja Petugas
-
-                                val targetId = pendingStatusReportId
-                                val targetStatus = pendingStatusTarget
-                                if (targetId != null && targetStatus != null) {
-                                    onUpdateReportStatus(targetId, targetStatus)
-                                    Toast.makeText(
-                                        context,
-                                        "Terverifikasi Biometrik sebagai ${cred.fullName}. Status diperbarui.",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "Selamat bertugas, ${cred.fullName}! (Biometrik Terverifikasi)",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                                pendingStatusReportId = null
-                                pendingStatusTarget = null
-                            } else {
-                                triggerBiometricVibration(context, "ERROR")
-                                isError = true
-                                errorMessage = bioResult.exceptionOrNull()?.message
-                                    ?: "Verifikasi kredensial biometrik gagal."
+        val handleBiometricAuthSuccess: (String) -> Unit = { targetIdentity ->
+            isBiometricScanning = false
+            triggerBiometricVibration(context, "SUCCESS")
+            coroutineScope.launch {
+                isSubmitting = true
+                isError = false
+                errorMessage = ""
+                try {
+                    val bioResult = smartAuthRepo.authenticateWithBiometric(targetIdentity)
+                    if (bioResult.isSuccess) {
+                        val cred = bioResult.getOrThrow()
+                        val verifiedSession = if (securityManager.hasActiveVerifiedLocalSession(cred.nip)) {
+                            securityManager.getLocalCachedSessions().firstOrNull {
+                                it.officerNip.equals(cred.nip, ignoreCase = true)
                             }
-                        } catch (e: Exception) {
-                            triggerBiometricVibration(context, "ERROR")
-                            isError = true
-                            errorMessage = e.localizedMessage
-                                ?: "Terjadi kendala saat autentikasi biometrik. Silakan coba lagi."
-                        } finally {
-                            isSubmitting = false
+                        } else {
+                            val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
+                                officerNip = cred.nip,
+                                officerName = cred.fullName,
+                                officerRole = cred.role,
+                                loginMethod = "BIOMETRIK",
+                                loginAction = "LOGIN_SUCCESSFUL_BIOMETRIC_AUTH"
+                            )
+                            val candidate = sessionRes.getOrNull()
+                            if (!sessionRes.isSuccess || candidate?.accessGranted != true) {
+                                val denyReason = sessionRes.exceptionOrNull()?.message
+                                    ?: "Integritas perangkat tidak memenuhi syarat keamanan untuk mengakses Ruang Kerja."
+                                securityAccessResult = SecurityAccessResult(
+                                    isAuthorized = false,
+                                    message = denyReason,
+                                    session = candidate
+                                )
+                                officerAuthManager.logoutOfficer()
+                                isOfficerLoggedIn = false
+                                isError = true
+                                errorMessage = denyReason
+                                Toast.makeText(context, denyReason, Toast.LENGTH_LONG).show()
+                                return@launch
+                            }
+                            candidate
                         }
+
+                        securityAccessResult = SecurityAccessResult(
+                            isAuthorized = true,
+                            message = "Perangkat & Biometrik terverifikasi valid.",
+                            session = verifiedSession
+                        )
+
+                        officerAuthManager.saveNipToSecureStorage(
+                            nip = cred.nip,
+                            fullName = cred.fullName,
+                            role = cred.role,
+                            shift = cred.shift
+                        )
+                        officerAuthManager.loginOfficerDirectly(
+                            name = cred.fullName,
+                            badgeId = cred.nip,
+                            shift = cred.shift,
+                            role = cred.role
+                        )
+                        savedNip = cred.nip
+                        savedName = cred.fullName
+                        isOfficerLoggedIn = true
+                        officerName = cred.fullName
+                        officerBadgeId = cred.nip
+                        officerShift = cred.shift
+                        officerRole = cred.role
+                        showOfficerLoginDialog = false
+                        onOfficerLoginDismissed?.invoke()
+                        selectedTab = 4 // Masuk langsung ke Ruang Kerja Petugas
+
+                        val targetId = pendingStatusReportId
+                        val targetStatus = pendingStatusTarget
+                        if (targetId != null && targetStatus != null) {
+                            onUpdateReportStatus(targetId, targetStatus)
+                            Toast.makeText(
+                                context,
+                                "Terverifikasi Biometrik sebagai ${cred.fullName}. Status diperbarui.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Selamat bertugas, ${cred.fullName}! (Biometrik Terverifikasi)",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        pendingStatusReportId = null
+                        pendingStatusTarget = null
+                    } else {
+                        triggerBiometricVibration(context, "ERROR")
+                        isError = true
+                        errorMessage = bioResult.exceptionOrNull()?.message
+                            ?: "Verifikasi kredensial biometrik gagal."
                     }
-                }
-                is AuthenticationResult.Error -> {
-                    isBiometricScanning = false
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
                     triggerBiometricVibration(context, "ERROR")
                     isError = true
-                    errorMessage = "Autentikasi biometrik gagal/dibatalkan: ${authResult.errString}"
+                    errorMessage = e.localizedMessage
+                        ?: "Terjadi kendala saat autentikasi biometrik. Silakan coba lagi."
+                } finally {
+                    isSubmitting = false
                 }
-                is AuthenticationResult.CustomFallbackSelected -> {
+            }
+        }
+
+        val invokeNativeBiometricPrompt: (String, String) -> Unit = { resolvedNip, displaySubtitle ->
+            pendingBiometricNip = resolvedNip
+            pendingBiometricLabel = displaySubtitle
+            isBiometricScanning = true
+            triggerBiometricVibration(context, "SCAN_START")
+            com.example.security.launchOfficerBiometricPrompt(
+                context = context,
+                title = "Login Biometrik Petugas Pusdalops",
+                subtitle = displaySubtitle,
+                negativeButtonText = "Gunakan PIN",
+                onSuccess = {
+                    handleBiometricAuthSuccess(resolvedNip)
+                },
+                onUsePinFallback = {
                     isBiometricScanning = false
                     isError = false
                     errorMessage = ""
+                },
+                onCancelled = {
+                    isBiometricScanning = false
+                },
+                onError = { errMsg ->
+                    isBiometricScanning = false
+                    triggerBiometricVibration(context, "ERROR")
+                    isError = true
+                    errorMessage = "Autentikasi biometrik gagal: $errMsg"
                 }
-            }
+            )
         }
 
         val launchBiometricLogin: () -> Unit = triggerBio@{
@@ -2925,21 +3048,10 @@ fun CitizenReportScreen(
             syncStatusMessage = ""
 
             if (hasSavedNip) {
-                pendingBiometricNip = savedNip
-                pendingBiometricLabel = savedOfficerDisplay.ifBlank { savedNip }
-                isBiometricScanning = true
-                triggerBiometricVibration(context, "SCAN_START")
-                val fallbackOption = AuthenticationRequest.Biometric.Fallback.CustomOption(
-                    "Gunakan PIN",
-                    AuthenticationRequest.Biometric.Fallback.ICON_TYPE_PASSWORD
+                invokeNativeBiometricPrompt(
+                    savedNip,
+                    savedOfficerDisplay.ifBlank { savedNip }
                 )
-                val biometricRequest = AuthenticationRequest.Biometric.Builder(
-                    "Login Biometrik Petugas Pusdalops",
-                    fallbackOption
-                )
-                    .setSubtitle(pendingBiometricLabel)
-                    .build()
-                biometricAuthLauncher.launch(biometricRequest)
             } else {
                 val typedIdentity = inputNipOrName.trim()
                 if (typedIdentity.isBlank()) {
@@ -2956,21 +3068,7 @@ fun CitizenReportScreen(
                             errorMessage = "NIP atau Nama '$typedIdentity' tidak dikenali. Periksa kembali Nama/NIP Anda."
                             return@launch
                         }
-                        pendingBiometricNip = resolvedNip
-                        pendingBiometricLabel = "$typedIdentity ($resolvedNip)"
-                        isBiometricScanning = true
-                        triggerBiometricVibration(context, "SCAN_START")
-                        val fallbackOption = AuthenticationRequest.Biometric.Fallback.CustomOption(
-                            "Gunakan PIN",
-                            AuthenticationRequest.Biometric.Fallback.ICON_TYPE_PASSWORD
-                        )
-                        val biometricRequest = AuthenticationRequest.Biometric.Builder(
-                            "Login Biometrik Petugas Pusdalops",
-                            fallbackOption
-                        )
-                            .setSubtitle(pendingBiometricLabel)
-                            .build()
-                        biometricAuthLauncher.launch(biometricRequest)
+                        invokeNativeBiometricPrompt(resolvedNip, "$typedIdentity ($resolvedNip)")
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -3014,33 +3112,38 @@ fun CitizenReportScreen(
             coroutineScope.launch {
                 isSubmitting = true
                 try {
-                    val authResult = if (hasSavedNip) {
-                        // Skenario B: Ambil saved_nip dari Secure Storage, gabungkan dengan PIN, verifikasi ke API/Repo
-                        smartAuthRepo.authenticateOfficer(
-                            nip = savedNip,
-                            inputPin = trimmedPin
-                        )
-                    } else {
-                        // Skenario A: Verifikasi NIP atau Nama beserta PIN ke API/Repo
-                        smartAuthRepo.authenticateByNipOrNameAndPin(
-                            nipOrName = inputNipOrName.trim(),
-                            inputPin = trimmedPin
-                        )
+                    val authResult = kotlinx.coroutines.withTimeout(22_000L) {
+                        if (hasSavedNip) {
+                            // Skenario B: Ambil saved_nip dari Secure Storage, gabungkan dengan PIN, verifikasi ke API/Repo
+                            smartAuthRepo.authenticateOfficer(
+                                nip = savedNip,
+                                inputPin = trimmedPin
+                            )
+                        } else {
+                            // Skenario A: Verifikasi NIP atau Nama beserta PIN ke API/Repo
+                            smartAuthRepo.authenticateByNipOrNameAndPin(
+                                nipOrName = inputNipOrName.trim(),
+                                inputPin = trimmedPin
+                            )
+                        }
                     }
 
                     if (authResult.isSuccess) {
                         val profile = authResult.getOrThrow()
-                        val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
-                            officerNip = profile.nip,
-                            officerName = profile.fullName,
-                            officerRole = profile.role,
-                            loginMethod = "PIN_CLOUD",
-                            loginAction = "LOGIN_SUCCESSFUL_CLOUD_VERIFIED"
-                        )
-                        val verifiedSession = sessionRes.getOrNull()
-                        val isDeviceAuthorized = sessionRes.isSuccess && (verifiedSession?.accessGranted == true)
+                        val sessionRes = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
+                            securityManager.verifyDeviceAuthenticityDuringLogin(
+                                officerNip = profile.nip,
+                                officerName = profile.fullName,
+                                officerRole = profile.role,
+                                loginMethod = "PIN_CLOUD",
+                                loginAction = "LOGIN_SUCCESSFUL_CLOUD_VERIFIED"
+                            )
+                        }
+                        val verifiedSession = sessionRes?.getOrNull()
+                        val isDeviceAuthorized = (sessionRes?.isSuccess == true && verifiedSession?.accessGranted == true) ||
+                            securityManager.hasActiveVerifiedLocalSession(profile.nip)
                         if (!isDeviceAuthorized) {
-                            val denyReason = sessionRes.exceptionOrNull()?.message
+                            val denyReason = sessionRes?.exceptionOrNull()?.message
                                 ?: "Integritas perangkat tidak memenuhi syarat keamanan (${verifiedSession?.verdict ?: "UNVERIFIED"}) untuk mengakses Ruang Kerja."
                             securityAccessResult = SecurityAccessResult(
                                 isAuthorized = false,
@@ -3055,6 +3158,7 @@ fun CitizenReportScreen(
                             return@launch
                         }
 
+                        SecurityManager.clearPinResetInProgress(profile.nip)
                         securityAccessResult = SecurityAccessResult(
                             isAuthorized = true,
                             message = "Perangkat terverifikasi valid.",
@@ -3109,6 +3213,11 @@ fun CitizenReportScreen(
                             ?: if (hasSavedNip) "PIN tidak sesuai." else "NIP/Nama atau PIN tidak sesuai."
                         errorMessage = errMsg
                     }
+                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                    isError = true
+                    errorMessage = "Waktu verifikasi ke server Firebase habis. Periksa koneksi internet Anda lalu coba login kembali."
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     isError = true
                     errorMessage = e.localizedMessage

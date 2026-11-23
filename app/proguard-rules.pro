@@ -76,3 +76,12 @@
 -keep class com.example.service.** { *; }
 -keep class com.example.data.sync.** { *; }
 
+# 9. Firebase App Check, reCAPTCHA Enterprise, & Auth Repository (Mencegah gagal verifikasi PIN Cloud di Release APK)
+-keep class com.google.firebase.appcheck.** { *; }
+-keep class com.google.android.recaptcha.** { *; }
+-dontwarn com.google.firebase.appcheck.**
+-dontwarn com.google.android.recaptcha.**
+-keep class com.example.data.repository.** { *; }
+-keepclassmembers class com.example.data.repository.** { *; }
+
+

@@ -1,14 +1,15 @@
 package com.example.ui.components
 
 import android.content.Context
-import android.media.AudioManager
-import android.media.ToneGenerator
+import android.media.AudioAttributes
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import com.example.util.EmergencyTonePlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -18,8 +19,10 @@ import kotlinx.coroutines.launch
  */
 object WrsAlertSoundHelper {
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     fun playWrsAlarmTone(context: Context, isTsunamiAlert: Boolean = false) {
-        CoroutineScope(Dispatchers.Default).launch {
+        scope.launch {
             try {
                 // Haptic vibration
                 val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -49,20 +52,18 @@ object WrsAlertSoundHelper {
                     }
                 }
 
-                // Dual-tone emergency beep matching InaTEWS receiver consoles
-                val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 95)
+                // Dual-tone emergency beep matching InaTEWS receiver consoles (PCM AudioTrack, zero ToneGenerator timeout)
+                val usage = if (isTsunamiAlert) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_NOTIFICATION
                 if (isTsunamiAlert) {
-                    toneGen.startTone(ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE, 400)
-                    delay(450)
-                    toneGen.startTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 700)
+                    EmergencyTonePlayer.playToneSuspend(freqHz1 = 960.0, freqHz2 = 1280.0, durationMs = 400, usage = usage)
+                    delay(120)
+                    EmergencyTonePlayer.playToneSuspend(freqHz1 = 880.0, freqHz2 = 1100.0, durationMs = 650, usage = usage)
                 } else {
-                    toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 300)
-                    delay(350)
-                    toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 400)
+                    EmergencyTonePlayer.playToneSuspend(freqHz1 = 1000.0, freqHz2 = 0.0, durationMs = 300, usage = usage)
+                    delay(120)
+                    EmergencyTonePlayer.playToneSuspend(freqHz1 = 1320.0, freqHz2 = 0.0, durationMs = 400, usage = usage)
                 }
-                delay(800)
-                toneGen.release()
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
                 // Graceful fallback if device audio is restricted
             }
         }

@@ -81,10 +81,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private val cachedSecurityDateFormat = ThreadLocal.withInitial {
+    SimpleDateFormat("dd MMM yyyy, HH:mm:ss", Locale("id", "ID"))
+}
+
 private fun formatSecurityTimestamp(timestampMs: Long): String {
     if (timestampMs <= 0L) return "-"
     return try {
-        SimpleDateFormat("dd MMM yyyy, HH:mm:ss", Locale("id", "ID")).format(Date(timestampMs))
+        cachedSecurityDateFormat.get()?.format(Date(timestampMs)) ?: timestampMs.toString()
     } catch (_: Exception) {
         timestampMs.toString()
     }
@@ -425,13 +429,31 @@ fun PlayIntegritySecuritySessionsCard(
                         message = "Belum ada sesi Play Integrity tersimpan di backend Firestore.\nPetugas akan divalidasi dan dicatat otomatis saat login PIN atau Biometrik."
                     )
                 } else {
+                    var showAllSessions by remember { mutableStateOf(false) }
+                    val visibleSessions = remember(securitySessions, showAllSessions) {
+                        if (showAllSessions) securitySessions else securitySessions.take(15)
+                    }
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        securitySessions.forEach { session ->
+                        visibleSessions.forEach { session ->
                             DeviceSecuritySessionItemCard(
                                 session = session,
                                 onInspectClick = { sessionPendingInspect = session },
                                 onRevokeClick = { sessionPendingRevoke = session }
                             )
+                        }
+                        if (!showAllSessions && securitySessions.size > 15) {
+                            OutlinedButton(
+                                onClick = { showAllSessions = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("btn_show_all_security_sessions")
+                            ) {
+                                Text(
+                                    text = "Tampilkan semua (${securitySessions.size} perangkat)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                 }

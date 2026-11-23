@@ -766,5 +766,220 @@ class SmartOfficerAuthCloudVerificationTest {
         assertEquals("YAKI", crossDeviceLogin.getOrNull()?.fullName)
         assertEquals("123412", crossDeviceLogin.getOrNull()?.nip)
     }
+
+    @Test
+    fun `official logout clears active officer session synchronously while preserving saved_nip for custom Cloud PIN relogin`() = runBlocking {
+        val salt = OfficerCredentialEntity.generateCryptographicSalt()
+        val cloudRecord = OfficerCredentialEntity(
+            nip = testNip,
+            fullName = testName,
+            role = OfficerRoles.MANAJER,
+            pinHash = OfficerCredentialEntity.hashWithSalt(testCustomPin, salt),
+            salt = salt,
+            isCustomPinSet = true,
+            initialSecurePin = "",
+            isSyncedWithCloud = true
+        )
+        FirestoreHelper.overrideCloudCredentialFetcherForTesting = { reqNip ->
+            if (reqNip == testNip) CloudCredentialLookupResult.Found(cloudRecord) else CloudCredentialLookupResult.NotFound
+        }
+        FirestoreHelper.overrideCloudCredentialWriterForTesting = { Result.success(Unit) }
+
+        val repo = SmartOfficerAuthRepository(context)
+        val officerAuth = OfficerAuthManager(context)
+        val securityManager = com.example.security.SecurityManager.getInstance(context)
+
+        // 1. Login pertama dengan PIN custom Cloud
+        val firstLogin = repo.authenticateOfficer(testNip, testCustomPin)
+        assertTrue("Initial Cloud PIN login must succeed", firstLogin.isSuccess)
+        assertTrue("Officer session must be active after login", officerAuth.isOfficerLoggedIn())
+        assertTrue("Local verified security session must be active", securityManager.hasActiveVerifiedLocalSession(testNip))
+
+        // 2. Petugas melakukan logout dari sesi resmi Ruang Kerja
+        officerAuth.logoutOfficer()
+        assertFalse("Officer session MUST be inactive immediately after logout", officerAuth.isOfficerLoggedIn())
+        assertFalse("Local security session MUST be cleared after logout", securityManager.hasActiveVerifiedLocalSession(testNip))
+        assertEquals("saved_nip must be preserved for quick relogin & biometric", testNip, officerAuth.getSavedNip())
+
+        // 3. Relogin dengan PIN default / 6-digit NIP tetap DITOLAK (tidak pernah reset ke PIN default)
+        assertTrue("Default PIN 117 must remain rejected after logout", repo.authenticateOfficer(testNip, "117").isFailure)
+        assertTrue("Initial 6-digit NIP must remain rejected after logout", repo.authenticateOfficer(testNip, testNip.takeLast(6)).isFailure)
+        assertFalse("Officer must remain logged out after rejected default PINs", officerAuth.isOfficerLoggedIn())
+
+        // 4. Relogin dengan PIN custom Cloud berhasil kembali dan membentuk sesi baru yang valid
+        val relogin = repo.authenticateOfficer(testNip, testCustomPin)
+        assertTrue("Relogin with custom Cloud PIN must succeed: ${relogin.exceptionOrNull()?.message}", relogin.isSuccess)
+        assertTrue("Officer session must be active after relogin", officerAuth.isOfficerLoggedIn())
+        assertTrue("Verified security session must be re-established after relogin", securityManager.hasActiveVerifiedLocalSession(testNip))
+        assertTrue("Local verified timestamp must be positive", securityManager.getLocalVerifiedSessionTimestamp(testNip) > 0L)
+    }
+
+    @Test
+    fun `entering citizen guest mode terminates lingering officer session and keeps Ruang Kerja locked`() = runBlocking {
+        val salt = OfficerCredentialEntity.generateCryptographicSalt()
+        val cloudRecord = OfficerCredentialEntity(
+            nip = testNip,
+            fullName = testName,
+            role = OfficerRoles.MANAJER,
+            pinHash = OfficerCredentialEntity.hashWithSalt(testCustomPin, salt),
+            salt = salt,
+            isCustomPinSet = true,
+            initialSecurePin = "",
+            isSyncedWithCloud = true
+        )
+        FirestoreHelper.overrideCloudCredentialFetcherForTesting = { reqNip ->
+            if (reqNip == testNip) CloudCredentialLookupResult.Found(cloudRecord) else CloudCredentialLookupResult.NotFound
+        }
+        FirestoreHelper.overrideCloudCredentialWriterForTesting = { Result.success(Unit) }
+
+        val repo = SmartOfficerAuthRepository(context)
+        val officerAuth = OfficerAuthManager(context)
+        val securityManager = com.example.security.SecurityManager.getInstance(context)
+
+        // Simulasikan petugas sempat aktif login sebelumnya
+        assertTrue(repo.authenticateOfficer(testNip, testCustomPin).isSuccess)
+        assertTrue(officerAuth.isOfficerLoggedIn())
+
+        // Simulasikan pengguna memilih "Masuk Sebagai Tamu / Warga" di Landing Page
+        securityManager.clearLocalSession()
+        officerAuth.logoutOfficer()
+
+        // Verifikasi isolasi ketat Mode Warga: tidak ada sesi petugas yang tersisa
+        assertFalse("Citizen guest mode MUST NOT retain active officer session", officerAuth.isOfficerLoggedIn())
+        assertFalse("Citizen guest mode MUST clear verified Ruang Kerja session", securityManager.hasActiveVerifiedLocalSession(testNip))
+        assertEquals("Local verified timestamp must be 0L in guest mode", 0L, securityManager.getLocalVerifiedSessionTimestamp(testNip))
+    }
+
+    @Test
+    fun `biometric relogin after official logout succeeds using preserved saved_nip without modifying Cloud PIN`() = runBlocking {
+        val salt = OfficerCredentialEntity.generateCryptographicSalt()
+        val expectedHash = OfficerCredentialEntity.hashWithSalt(testCustomPin, salt)
+        var cloudDoc = OfficerCredentialEntity(
+            nip = testNip,
+            fullName = testName,
+            role = OfficerRoles.PENGAWAS,
+            pinHash = expectedHash,
+            salt = salt,
+            isCustomPinSet = true,
+            initialSecurePin = "",
+            isSyncedWithCloud = true
+        )
+        FirestoreHelper.overrideCloudCredentialFetcherForTesting = { reqNip ->
+            if (reqNip == testNip) CloudCredentialLookupResult.Found(cloudDoc) else CloudCredentialLookupResult.NotFound
+        }
+        FirestoreHelper.overrideCloudCredentialWriterForTesting = { updated ->
+            cloudDoc = updated
+            Result.success(Unit)
+        }
+
+        val repo = SmartOfficerAuthRepository(context)
+        val officerAuth = OfficerAuthManager(context)
+        val securityManager = com.example.security.SecurityManager.getInstance(context)
+
+        // 1. Login awal dengan PIN custom -> lalu Logout resmi
+        assertTrue(repo.authenticateOfficer(testNip, testCustomPin).isSuccess)
+        officerAuth.logoutOfficer()
+        assertFalse(officerAuth.isOfficerLoggedIn())
+        val preservedNip = officerAuth.getSavedNip()
+        assertEquals(testNip, preservedNip)
+
+        // 2. Relogin menggunakan Biometrik pada Landing Page / Dialog Login memakai preserved saved_nip
+        val bioRelogin = repo.authenticateWithBiometric(preservedNip)
+        assertTrue("Biometric relogin after logout must succeed: ${bioRelogin.exceptionOrNull()?.message}", bioRelogin.isSuccess)
+        assertTrue("Officer session must be active after biometric relogin", officerAuth.isOfficerLoggedIn())
+        assertTrue("Verified local session must be active after biometric relogin", securityManager.hasActiveVerifiedLocalSession(testNip))
+        assertEquals("Cloud custom PIN hash must remain completely untouched", expectedHash, cloudDoc.pinHash)
+        assertTrue("Custom Cloud PIN must still verify intact", cloudDoc.verifyPin(testCustomPin))
+    }
+
+    @Test
+    fun `reset PIN suppresses false revocation and immediately allows Cloud relogin using 6-digit NIP PIN`() = runBlocking {
+        val salt = OfficerCredentialEntity.generateCryptographicSalt()
+        var cloudDoc = OfficerCredentialEntity(
+            nip = testNip,
+            fullName = testName,
+            role = OfficerRoles.MANAJER,
+            pinHash = OfficerCredentialEntity.hashWithSalt(testCustomPin, salt),
+            salt = salt,
+            isCustomPinSet = true,
+            initialSecurePin = "",
+            isSyncedWithCloud = true
+        )
+        FirestoreHelper.overrideCloudCredentialFetcherForTesting = { reqNip ->
+            if (reqNip == testNip) CloudCredentialLookupResult.Found(cloudDoc) else CloudCredentialLookupResult.NotFound
+        }
+        FirestoreHelper.overrideCloudCredentialWriterForTesting = { updated ->
+            cloudDoc = updated
+            Result.success(Unit)
+        }
+
+        val repo = SmartOfficerAuthRepository(context)
+        val officerAuth = OfficerAuthManager(context)
+        val securityManager = com.example.security.SecurityManager.getInstance(context)
+
+        // 1. Login awal menggunakan PIN custom
+        val initialLogin = repo.authenticateOfficer(testNip, testCustomPin)
+        assertTrue("Initial login with custom PIN must succeed", initialLogin.isSuccess)
+        assertTrue(officerAuth.isOfficerLoggedIn())
+
+        // 2. Jalankan Reset PIN -> kembali ke 6 digit terakhir NIP tanpa memblokir perangkat
+        val resetRes = repo.resetToInitialNipSecret(testNip)
+        assertTrue("Reset PIN must succeed: ${resetRes.exceptionOrNull()?.message}", resetRes.isSuccess)
+        assertFalse("Cloud custom PIN flag must revert to false", cloudDoc.isCustomPinSet)
+        assertFalse("Active officer session must be cleanly logged out after Reset PIN", officerAuth.isOfficerLoggedIn())
+        assertTrue("Revocation suppression must be active right after Reset PIN", com.example.security.SecurityManager.isPinResetSuppressed(testNip))
+
+        // 3. Petugas langsung login kembali menggunakan 6 digit terakhir NIP (tanpa hambatan / tanpa blokir perangkat)
+        val initialSixDigitPin = OfficerCredentialEntity.generateInitialPinForNip(testNip)
+        val reloginRes = repo.authenticateOfficer(testNip, initialSixDigitPin)
+        assertTrue("Immediate Cloud relogin with 6-digit NIP PIN after Reset PIN must succeed: ${reloginRes.exceptionOrNull()?.message}", reloginRes.isSuccess)
+        assertTrue("Officer session must be active after relogin", officerAuth.isOfficerLoggedIn())
+        assertTrue("Device session must be verified active after relogin", securityManager.hasActiveVerifiedLocalSession(testNip))
+        com.example.security.SecurityManager.clearPinResetInProgress(testNip)
+        assertFalse("Pin reset suppression must clear cleanly", com.example.security.SecurityManager.isPinResetSuppressed(testNip))
+    }
+
+    @Test
+    fun `local-only batch roster sync updates cache cleanly and reconcileWithActiveHeartbeats stays pure in-memory`() {
+        val officerAuth = OfficerAuthManager(context)
+        val securityManager = com.example.security.SecurityManager.getInstance(context)
+        val sampleRoster = listOf(
+            com.example.data.local.OfficerProfile(
+                id = "officer_197401282006041006",
+                fullName = "HITATUN ARAZAK",
+                nip = "197401282006041006",
+                role = OfficerRoles.MANAJER,
+                unit = "Pusdalops BPBD Kab. Mukomuko",
+                shift = "Manajerial 24 Jam",
+                phone = "081234567890"
+            )
+        )
+        officerAuth.syncRosterLocallyWithoutCloudWrite(sampleRoster)
+        val cachedRoster = officerAuth.getOfficerRoster()
+        assertTrue("Synced officer must exist in local roster cache", cachedRoster.any { it.nip == "197401282006041006" })
+
+        val beforeSessionsCount = securityManager.getLocalCachedSessions().size
+        val reconciled = securityManager.reconcileWithActiveHeartbeats(
+            sessions = emptyList(),
+            heartbeats = listOf(
+                com.example.data.sync.DeviceHeartbeat(
+                    deviceId = "dev_test_001",
+                    deviceModel = "Samsung SM-A546E",
+                    officerName = "HITATUN ARAZAK",
+                    lastSeen = System.currentTimeMillis(),
+                    latencyMs = 45L,
+                    status = "ONLINE"
+                )
+            ),
+            persistToCache = false
+        )
+        assertEquals("Reconciled list should include active heartbeat session", 1, reconciled.size)
+        assertEquals(
+            "Pure in-memory reconciliation must NOT mutate SharedPreferences cache",
+            beforeSessionsCount,
+            securityManager.getLocalCachedSessions().size
+        )
+    }
 }
+
 

@@ -2,10 +2,9 @@ package com.example.ui.components
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.AudioManager
 import android.media.Ringtone
 import android.media.RingtoneManager
-import android.media.ToneGenerator
+import com.example.util.EmergencyTonePlayer
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -22,10 +21,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -59,6 +62,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.sync.OfficerPushNotificationHelper
@@ -304,12 +309,17 @@ object OfficerAlarmPlayer {
             Log.w(TAG, "Ringtone alarm gagal diputar, beralih ke ToneGenerator: ${t.message}")
         }
 
-        // Sirine akustik singkat sebagai cadangan/penguat suara darurat
+        // Sirine akustik singkat berbasis PCM AudioTrack (bebas deadlock/timeout ToneGenerator)
         try {
-            val toneGen = ToneGenerator(AudioManager.STREAM_ALARM, 100)
-            toneGen.startTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 900)
+            EmergencyTonePlayer.playToneAsync(
+                freqHz1 = 880.0,
+                freqHz2 = 1100.0,
+                durationMs = 850,
+                usage = AudioAttributes.USAGE_ALARM,
+                volume = 0.85f
+            )
         } catch (t: Throwable) {
-            Log.d(TAG, "ToneGenerator tidak tersedia pada lingkungan ini: ${t.message}")
+            Log.d(TAG, "EmergencyTonePlayer tidak tersedia pada lingkungan ini: ${t.message}")
         }
     }
 
@@ -323,6 +333,10 @@ object OfficerAlarmPlayer {
         } catch (_: Throwable) {
         } finally {
             activeRingtone = null
+        }
+        try {
+            EmergencyTonePlayer.stop()
+        } catch (_: Throwable) {
         }
     }
 
@@ -536,8 +550,11 @@ fun OfficerRealtimeRedAlertBanner(
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
                     onClick = {
@@ -549,21 +566,27 @@ fun OfficerRealtimeRedAlertBanner(
                         contentColor = Color(0xFF991B1B)
                     ),
                     shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                     modifier = Modifier
-                        .weight(1.4f)
-                        .height(48.dp)
+                        .weight(1.35f)
+                        .fillMaxHeight()
+                        .heightIn(min = 48.dp)
                         .testTag("btn_inspect_realtime_alert_report")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Visibility,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "SEGERA CEK & MATIKAN ALARM",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black
+                        text = "SEGERA CEK &\nMATIKAN ALARM",
+                        fontSize = 11.sp,
+                        lineHeight = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -577,15 +600,21 @@ fun OfficerRealtimeRedAlertBanner(
                     ),
                     border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.8f)),
                     shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                     modifier = Modifier
-                        .weight(0.8f)
-                        .height(48.dp)
+                        .weight(0.85f)
+                        .fillMaxHeight()
+                        .heightIn(min = 48.dp)
                         .testTag("btn_silence_realtime_alarm")
                 ) {
                     Text(
-                        text = "MATIKAN SIRENE",
+                        text = "MATIKAN\nSIRENE",
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        lineHeight = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

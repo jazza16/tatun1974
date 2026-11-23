@@ -32,16 +32,17 @@ class AuthManager(private val context: Context) {
     val currentUserEmail: StateFlow<String?> = _currentUserEmail.asStateFlow()
 
     private fun checkInitialAuthState(): Boolean {
-        // User is considered authenticated for Ruang Kerja if Firebase user is logged in
-        // OR an official duty officer session is active in OfficerAuthManager
-        return auth.currentUser != null || officerAuthManager.isOfficerLoggedIn()
+        // Strict security boundary: Ruang Kerja session MUST require an explicit active officer session
+        // verified via Cloud PIN or Biometric, never merely a cached Google/Firebase Auth user.
+        return officerAuthManager.isOfficerLoggedIn()
     }
 
     /**
-     * Returns true if either Firebase Auth user or Officer local session is active.
+     * Returns true ONLY if an explicit duty officer session is currently active in OfficerAuthManager.
+     * Prevents cached Firebase Google accounts from bypassing Ruang Kerja PIN authentication.
      */
     fun isSessionActive(): Boolean {
-        val active = auth.currentUser != null || officerAuthManager.isOfficerLoggedIn()
+        val active = officerAuthManager.isOfficerLoggedIn()
         _isAuthenticated.value = active
         return active
     }
@@ -185,11 +186,7 @@ class AuthManager(private val context: Context) {
         auth.addAuthStateListener { firebaseAuth ->
             val user = firebaseAuth.currentUser
             _currentUserEmail.value = user?.email
-            if (user != null || officerAuthManager.isOfficerLoggedIn()) {
-                _isAuthenticated.value = true
-            } else {
-                _isAuthenticated.value = false
-            }
+            _isAuthenticated.value = officerAuthManager.isOfficerLoggedIn()
         }
     }
 
@@ -220,7 +217,7 @@ class AuthManager(private val context: Context) {
             val authResult = auth.signInWithCredential(firebaseCredential).await()
             val user = authResult.user
                 ?: return Result.failure(IllegalStateException("Akun Google tidak mengembalikan sesi pengguna."))
-            _isAuthenticated.value = true
+            _isAuthenticated.value = officerAuthManager.isOfficerLoggedIn()
             _currentUserEmail.value = user.email
             Result.success(user)
         } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
@@ -240,7 +237,7 @@ class AuthManager(private val context: Context) {
         auth.signInWithCredential(credential)
             .addOnSuccessListener { result ->
                 val user = result.user
-                _isAuthenticated.value = true
+                _isAuthenticated.value = officerAuthManager.isOfficerLoggedIn()
                 _currentUserEmail.value = user?.email
                 onComplete(true, null)
             }

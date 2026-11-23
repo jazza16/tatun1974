@@ -1,10 +1,7 @@
 package com.example.ui.components
 
 import android.widget.Toast
-import androidx.biometric.AuthenticationRequest
-import androidx.biometric.AuthenticationResult
 import androidx.biometric.BiometricManager
-import androidx.biometric.compose.rememberAuthenticationLauncher
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -47,6 +44,7 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -54,8 +52,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -97,65 +97,112 @@ fun StartupSplashWallpaperScreen(
     val coroutineScope = rememberCoroutineScope()
 
     val officerAuthManager = remember { OfficerAuthManager(context) }
-    val savedNip = officerAuthManager.getSavedNip().ifBlank { officerAuthManager.getOfficerBadgeId() }
-    val canAuthenticateBiometric = remember(context) {
-        BiometricManager.from(context).canAuthenticate(
-            BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                BiometricManager.Authenticators.BIOMETRIC_WEAK
-        ) == BiometricManager.BIOMETRIC_SUCCESS
+    val savedNip = remember(isVisible) {
+        officerAuthManager.getSavedNip().ifBlank { officerAuthManager.getOfficerBadgeId() }.trim()
+    }
+    val savedOfficerName = remember(isVisible) {
+        officerAuthManager.getOfficerName().trim()
+    }
+    val canAuthenticateBiometric = remember(context, isVisible) {
+        com.example.security.checkBiometricAvailability(context) == BiometricManager.BIOMETRIC_SUCCESS
     }
     val showBiometricButton = canAuthenticateBiometric && savedNip.isNotBlank()
+    var isBiometricAuthenticating by remember(isVisible) { mutableStateOf(false) }
 
-    val authLauncher = rememberAuthenticationLauncher { authResult ->
-        when (authResult) {
-            is AuthenticationResult.Success -> {
+    val handleSplashBiometricClick: () -> Unit = triggerSplashBio@{
+        if (isBiometricAuthenticating) return@triggerSplashBio
+        val currentNip = officerAuthManager.getSavedNip().ifBlank { officerAuthManager.getOfficerBadgeId() }.trim()
+        val currentName = officerAuthManager.getOfficerName().trim()
+        if (currentNip.isBlank()) {
+            Toast.makeText(
+                context,
+                "Login dengan PIN terlebih dahulu sekali untuk mengaktifkan Login Biometrik.",
+                Toast.LENGTH_LONG
+            ).show()
+            onLoginAsOfficer()
+            return@triggerSplashBio
+        }
+
+        val subtitle = if (currentName.isNotBlank()) "$currentName ($currentNip)" else currentNip
+        com.example.security.launchOfficerBiometricPrompt(
+            context = context,
+            title = "Login Biometrik Petugas Pusdalops",
+            subtitle = subtitle,
+            negativeButtonText = "Gunakan PIN",
+            onSuccess = {
                 coroutineScope.launch {
-                    val smartAuthRepo = SmartOfficerAuthRepository.getInstance(context)
-                    val securityManager = com.example.security.SecurityManager.getInstance(context)
-                    val bioResult = smartAuthRepo.authenticateWithBiometric(savedNip)
-                    if (bioResult.isSuccess) {
-                        val cred = bioResult.getOrThrow()
-                        val sessionRes = securityManager.verifyDeviceAuthenticityDuringLogin(
-                            officerNip = cred.nip,
-                            officerName = cred.fullName,
-                            officerRole = cred.role,
-                            loginMethod = "BIOMETRIK_SPLASH",
-                            loginAction = "LOGIN_SUCCESSFUL_BIOMETRIC_SPLASH"
-                        )
-                        val verifiedSession = sessionRes.getOrNull()
-                        if (sessionRes.isSuccess && verifiedSession?.accessGranted == true) {
-                            Toast.makeText(
-                                context,
-                                "Selamat bertugas, ${cred.fullName}! (Biometrik Terverifikasi)",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            onBiometricLoginSuccess()
-                        } else {
-                            officerAuthManager.logoutOfficer()
-                            Toast.makeText(
-                                context,
-                                "Integritas perangkat tidak memenuhi syarat keamanan untuk masuk ke Ruang Kerja.",
-                                Toast.LENGTH_LONG
-                            ).show()
+                    isBiometricAuthenticating = true
+                    try {
+                        val smartAuthRepo = SmartOfficerAuthRepository.getInstance(context)
+                        val securityManager = com.example.security.SecurityManager.getInstance(context)
+                        val bioResult = kotlinx.coroutines.withTimeout(22_000L) {
+                            smartAuthRepo.authenticateWithBiometric(currentNip)
                         }
-                    } else {
-                        val errMsg = bioResult.exceptionOrNull()?.message ?: "Gagal memverifikasi kredensial petugas."
-                        Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
-                        // JANGAN panggil onBiometricLoginSuccess()
+                        if (bioResult.isSuccess) {
+                            val cred = bioResult.getOrThrow()
+                            val hasSession = securityManager.hasActiveVerifiedLocalSession(cred.nip) || run {
+                                val sessionRes = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
+                                    securityManager.verifyDeviceAuthenticityDuringLogin(
+                                        officerNip = cred.nip,
+                                        officerName = cred.fullName,
+                                        officerRole = cred.role,
+                                        loginMethod = "BIOMETRIK",
+                                        loginAction = "LOGIN_SUCCESSFUL_BIOMETRIC_AUTH"
+                                    )
+                                }
+                                sessionRes?.isSuccess == true && sessionRes.getOrNull()?.accessGranted == true
+                            }
+                            if (hasSession && officerAuthManager.isOfficerLoggedIn()) {
+                                Toast.makeText(
+                                    context,
+                                    "Selamat bertugas, ${cred.fullName}! (Biometrik Terverifikasi)",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                onBiometricLoginSuccess()
+                            } else {
+                                officerAuthManager.logoutOfficer()
+                                Toast.makeText(
+                                    context,
+                                    "Integritas perangkat tidak memenuhi syarat keamanan untuk masuk ke Ruang Kerja.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        } else {
+                            val errMsg = bioResult.exceptionOrNull()?.message
+                                ?: "Gagal memverifikasi kredensial petugas."
+                            Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                        Toast.makeText(
+                            context,
+                            "Waktu verifikasi biometrik ke server habis. Periksa sinyal internet lalu coba lagi.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            context,
+                            e.localizedMessage ?: "Terjadi kendala saat login biometrik.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } finally {
+                        isBiometricAuthenticating = false
                     }
                 }
-            }
-            is AuthenticationResult.Error -> {
-                Toast.makeText(
-                    context,
-                    "Biometrik gagal: ${authResult.errString}",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-            is AuthenticationResult.CustomFallbackSelected -> {
+            },
+            onUsePinFallback = {
+                isBiometricAuthenticating = false
                 onLoginAsOfficer()
+            },
+            onCancelled = {
+                isBiometricAuthenticating = false
+            },
+            onError = { errMsg ->
+                isBiometricAuthenticating = false
+                Toast.makeText(context, "Biometrik gagal: $errMsg", Toast.LENGTH_SHORT).show()
             }
-        }
+        )
     }
 
     AnimatedVisibility(
@@ -410,6 +457,7 @@ fun StartupSplashWallpaperScreen(
                         ) {
                             Button(
                                 onClick = onEnterAsGuest,
+                                enabled = !isBiometricAuthenticating,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 48.dp)
@@ -444,6 +492,7 @@ fun StartupSplashWallpaperScreen(
 
                             Button(
                                 onClick = onLoginAsOfficer,
+                                enabled = !isBiometricAuthenticating,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 48.dp)
@@ -478,19 +527,8 @@ fun StartupSplashWallpaperScreen(
 
                             if (showBiometricButton) {
                                 OutlinedButton(
-                                    onClick = {
-                                        val fallbackOption = AuthenticationRequest.Biometric.Fallback.CustomOption(
-                                            "Gunakan PIN",
-                                            AuthenticationRequest.Biometric.Fallback.ICON_TYPE_PASSWORD
-                                        )
-                                        val biometricRequest = AuthenticationRequest.Biometric.Builder(
-                                            "Login Biometrik Petugas Pusdalops",
-                                            fallbackOption
-                                        )
-                                            .setSubtitle("${officerAuthManager.getOfficerName()} ($savedNip)")
-                                            .build()
-                                        authLauncher.launch(biometricRequest)
-                                    },
+                                    onClick = handleSplashBiometricClick,
+                                    enabled = !isBiometricAuthenticating,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(top = 16.dp)
@@ -503,19 +541,34 @@ fun StartupSplashWallpaperScreen(
                                         contentColor = Color.White
                                     )
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Fingerprint,
-                                        contentDescription = "Login Biometrik",
-                                        tint = OrangePrimary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Login Biometrik",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
+                                    if (isBiometricAuthenticating) {
+                                        CircularProgressIndicator(
+                                            color = OrangePrimary,
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Memverifikasi Biometrik...",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Fingerprint,
+                                            contentDescription = "Login Biometrik",
+                                            tint = OrangePrimary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = if (savedOfficerName.isNotBlank()) "Login Biometrik" else "Login Biometrik",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
                                 }
                             }
                         }

@@ -14,6 +14,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.PersistentCacheSettings
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Source
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
@@ -111,7 +112,17 @@ object FirestoreHelper {
         null
     }
 
+    @Volatile
+    private var lastAppCheckWarmupMs: Long = 0L
+
+    private const val APP_CHECK_WARMUP_INTERVAL_MS = 60_000L
+
     private fun ensureAppCheckTokenAttached() {
+        val now = System.currentTimeMillis()
+        if (now - lastAppCheckWarmupMs < APP_CHECK_WARMUP_INTERVAL_MS) {
+            return
+        }
+        lastAppCheckWarmupMs = now
         try {
             FirebaseAppCheck.getInstance().getAppCheckToken(false)
                 .addOnFailureListener { e ->
@@ -185,7 +196,7 @@ object FirestoreHelper {
     private val firestore: FirebaseFirestore?
         get() = getFirestoreOrThrow(null).getOrNull()
 
-    private fun getFirestoreOrThrow(context: Context? = null): Result<FirebaseFirestore> {
+    fun getFirestoreOrThrow(context: Context? = null): Result<FirebaseFirestore> {
         overrideFirestoreForTesting?.let {
             configureOfflinePersistence(it)
             return Result.success(it)
@@ -338,23 +349,25 @@ object FirestoreHelper {
             "phone" to officer.phone.trim(),
             "updatedAt" to System.currentTimeMillis()
         )
-        return suspendCancellableCoroutine { cont ->
-            try {
-                db.collection(COLLECTION_OFFICERS)
-                    .document(effectiveNip)
-                    .set(data, SetOptions.merge())
-                    .addOnSuccessListener {
-                        if (cont.isActive) cont.resume(Result.success(Unit))
-                    }
-                    .addOnFailureListener { e ->
-                        logFirestoreError("syncOfficerToCloudSuspend($effectiveNip)", e)
-                        if (cont.isActive) cont.resume(Result.failure(e))
-                    }
-            } catch (e: Exception) {
-                logFirestoreError("syncOfficerToCloudSuspend(exception)", e)
-                if (cont.isActive) cont.resume(Result.failure(e))
+        return withTimeoutOrNull(8_000L) {
+            suspendCancellableCoroutine { cont ->
+                try {
+                    db.collection(COLLECTION_OFFICERS)
+                        .document(effectiveNip)
+                        .set(data, SetOptions.merge())
+                        .addOnSuccessListener {
+                            if (cont.isActive) cont.resume(Result.success(Unit))
+                        }
+                        .addOnFailureListener { e ->
+                            logFirestoreError("syncOfficerToCloudSuspend($effectiveNip)", e)
+                            if (cont.isActive) cont.resume(Result.failure(e))
+                        }
+                } catch (e: Exception) {
+                    logFirestoreError("syncOfficerToCloudSuspend(exception)", e)
+                    if (cont.isActive) cont.resume(Result.failure(e))
+                }
             }
-        }
+        } ?: Result.failure(IllegalStateException("Waktu sinkronisasi profil petugas ke server Firebase habis (timeout 8 detik)."))
     }
 
     /**
@@ -1619,12 +1632,29 @@ object FirestoreHelper {
         }
 
         ensureAppCheckTokenAttached()
-        try {
-            db.enableNetwork()
-        } catch (_: Exception) {
-        }
 
-        val primaryResult = fetchSingleCredentialDocFromServer(db, trimmedNip)
+        var primaryResult = fetchSingleCredentialDocFromServer(db, trimmedNip)
+        // Resilient 1x retry ONLY on transient transport/handshake errors (cold-start gRPC / App Check warmup).
+        // Never falls back to local cache or default PINs; strictly queries Source.SERVER.
+        if (primaryResult is CloudCredentialLookupResult.Error &&
+            (primaryResult.errorCode == "UNAVAILABLE" || primaryResult.errorCode == "DEADLINE_EXCEEDED")
+        ) {
+            Log.w(TAG, "Cloud PIN lookup transient ${primaryResult.errorCode}; retrying once after bounded network reconnect...")
+            delay(600L)
+            withTimeoutOrNull(2_000L) {
+                suspendCancellableCoroutine<Unit> { cont ->
+                    try {
+                        db.enableNetwork()
+                            .addOnCompleteListener {
+                                if (cont.isActive) cont.resume(Unit)
+                            }
+                    } catch (_: Exception) {
+                        if (cont.isActive) cont.resume(Unit)
+                    }
+                }
+            }
+            primaryResult = fetchSingleCredentialDocFromServer(db, trimmedNip)
+        }
         if (primaryResult !is CloudCredentialLookupResult.NotFound) {
             return primaryResult
         }
@@ -1669,64 +1699,66 @@ object FirestoreHelper {
     }
 
     suspend fun fetchAllCredentialsFromCloudSuspend(): Result<List<OfficerCredentialEntity>> =
-        suspendCancellableCoroutine { cont ->
-            val uid = currentUid()
-            if (uid == null) {
-                if (cont.isActive) {
-                    cont.resume(Result.failure(SecurityException("Autentikasi Google diperlukan untuk sinkronisasi cloud.")))
-                }
-                return@suspendCancellableCoroutine
-            }
-            val dbResult = getFirestoreOrThrow()
-            val db = dbResult.getOrNull()
-            if (db == null) {
-                val initErr = dbResult.exceptionOrNull()
-                if (cont.isActive) {
-                    cont.resume(
-                        Result.failure(
-                            IllegalStateException(
-                                "Gagal sinkronisasi: ${initErr?.localizedMessage ?: "FirebaseFirestore instance null"}",
-                                initErr
-                            )
-                        )
-                    )
-                }
-                return@suspendCancellableCoroutine
-            }
-            try {
-                db.collection(COLLECTION_OFFICER_CREDENTIALS)
-                    .whereEqualTo("ownerUid", uid)
-                    .get(Source.SERVER)
-                    .addOnSuccessListener { snapshot ->
-                        if (!cont.isActive) return@addOnSuccessListener
-                        val list = mutableListOf<OfficerCredentialEntity>()
-                        if (snapshot != null) {
-                            for (doc in snapshot.documents) {
-                                parseCredentialDocument(doc)?.let { list.add(it) }
-                            }
-                        }
-                        cont.resume(Result.success(list))
+        withTimeoutOrNull(8_000L) {
+            suspendCancellableCoroutine { cont ->
+                val uid = currentUid()
+                if (uid == null) {
+                    if (cont.isActive) {
+                        cont.resume(Result.failure(SecurityException("Autentikasi Google diperlukan untuk sinkronisasi cloud.")))
                     }
-                    .addOnFailureListener { e ->
-                        Log.w(TAG, "Failed to fetch all credentials from Firestore server", e)
-                        if (cont.isActive) {
-                            cont.resume(
-                                Result.failure(
-                                    IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
+                    return@suspendCancellableCoroutine
+                }
+                val dbResult = getFirestoreOrThrow()
+                val db = dbResult.getOrNull()
+                if (db == null) {
+                    val initErr = dbResult.exceptionOrNull()
+                    if (cont.isActive) {
+                        cont.resume(
+                            Result.failure(
+                                IllegalStateException(
+                                    "Gagal sinkronisasi: ${initErr?.localizedMessage ?: "FirebaseFirestore instance null"}",
+                                    initErr
                                 )
                             )
-                        }
-                    }
-            } catch (e: Exception) {
-                if (cont.isActive) {
-                    cont.resume(
-                        Result.failure(
-                            IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
                         )
-                    )
+                    }
+                    return@suspendCancellableCoroutine
+                }
+                try {
+                    db.collection(COLLECTION_OFFICER_CREDENTIALS)
+                        .whereEqualTo("ownerUid", uid)
+                        .get(Source.SERVER)
+                        .addOnSuccessListener { snapshot ->
+                            if (!cont.isActive) return@addOnSuccessListener
+                            val list = mutableListOf<OfficerCredentialEntity>()
+                            if (snapshot != null) {
+                                for (doc in snapshot.documents) {
+                                    parseCredentialDocument(doc)?.let { list.add(it) }
+                                }
+                            }
+                            cont.resume(Result.success(list))
+                        }
+                        .addOnFailureListener { e ->
+                            Log.w(TAG, "Failed to fetch all credentials from Firestore server", e)
+                            if (cont.isActive) {
+                                cont.resume(
+                                    Result.failure(
+                                        IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
+                                    )
+                                )
+                            }
+                        }
+                } catch (e: Exception) {
+                    if (cont.isActive) {
+                        cont.resume(
+                            Result.failure(
+                                IllegalStateException("Gagal sinkronisasi: ${e.localizedMessage}", e)
+                            )
+                        )
+                    }
                 }
             }
-        }
+        } ?: Result.failure(IllegalStateException("Waktu sinkronisasi kredensial dari server Firebase habis (timeout 8 detik)."))
 
     fun fetchAllCredentialsFromCloud(onResult: (List<OfficerCredentialEntity>) -> Unit) {
         val uid = currentUid()
@@ -1808,51 +1840,53 @@ object FirestoreHelper {
         if (overrideCloudCredentialFetcherForTesting != null && overrideFirestoreForTesting == null) {
             return Result.success(emptyList())
         }
-        return suspendCancellableCoroutine { cont ->
-            val dbResult = getFirestoreOrThrow(context)
-            val db = dbResult.getOrNull()
-            if (db == null) {
-                val err = dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia")
-                if (cont.isActive) cont.resume(Result.failure(err))
-                return@suspendCancellableCoroutine
-            }
-            ensureAppCheckTokenAttached()
-            try {
-                db.collection(COLLECTION_OFFICERS)
-                    .get(Source.SERVER)
-                    .addOnSuccessListener { snapshot ->
-                        if (!cont.isActive) return@addOnSuccessListener
-                        val list = mutableListOf<OfficerProfile>()
-                        if (snapshot != null) {
-                            for (doc in snapshot.documents) {
-                                val id = doc.getString("id") ?: doc.id
-                                val fullName = doc.getString("fullName")?.trim() ?: continue
-                                if (fullName.isBlank()) continue
-                                val nip = (doc.getString("nip") ?: doc.id).trim()
-                                list.add(
-                                    OfficerProfile(
-                                        id = id,
-                                        fullName = fullName,
-                                        nip = nip,
-                                        role = doc.getString("role") ?: OfficerRoles.PETUGAS_JAGA,
-                                        unit = doc.getString("unit") ?: "Pusdalops BPBD Kab. Mukomuko",
-                                        shift = doc.getString("shift") ?: "Shift Siaga 24 Jam",
-                                        phone = doc.getString("phone") ?: ""
+        return withTimeoutOrNull(8_000L) {
+            suspendCancellableCoroutine { cont ->
+                val dbResult = getFirestoreOrThrow(context)
+                val db = dbResult.getOrNull()
+                if (db == null) {
+                    val err = dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia")
+                    if (cont.isActive) cont.resume(Result.failure(err))
+                    return@suspendCancellableCoroutine
+                }
+                ensureAppCheckTokenAttached()
+                try {
+                    db.collection(COLLECTION_OFFICERS)
+                        .get(Source.SERVER)
+                        .addOnSuccessListener { snapshot ->
+                            if (!cont.isActive) return@addOnSuccessListener
+                            val list = mutableListOf<OfficerProfile>()
+                            if (snapshot != null) {
+                                for (doc in snapshot.documents) {
+                                    val id = doc.getString("id") ?: doc.id
+                                    val fullName = doc.getString("fullName")?.trim() ?: continue
+                                    if (fullName.isBlank()) continue
+                                    val nip = (doc.getString("nip") ?: doc.id).trim()
+                                    list.add(
+                                        OfficerProfile(
+                                            id = id,
+                                            fullName = fullName,
+                                            nip = nip,
+                                            role = doc.getString("role") ?: OfficerRoles.PETUGAS_JAGA,
+                                            unit = doc.getString("unit") ?: "Pusdalops BPBD Kab. Mukomuko",
+                                            shift = doc.getString("shift") ?: "Shift Siaga 24 Jam",
+                                            phone = doc.getString("phone") ?: ""
+                                        )
                                     )
-                                )
+                                }
                             }
+                            cont.resume(Result.success(list))
                         }
-                        cont.resume(Result.success(list))
-                    }
-                    .addOnFailureListener { e ->
-                        logFirestoreError("fetchOfficersDirectoryFromCloudSuspend", e)
-                        if (cont.isActive) cont.resume(Result.failure(e))
-                    }
-            } catch (e: Exception) {
-                logFirestoreError("fetchOfficersDirectoryFromCloudSuspend(exception)", e)
-                if (cont.isActive) cont.resume(Result.failure(e))
+                        .addOnFailureListener { e ->
+                            logFirestoreError("fetchOfficersDirectoryFromCloudSuspend", e)
+                            if (cont.isActive) cont.resume(Result.failure(e))
+                        }
+                } catch (e: Exception) {
+                    logFirestoreError("fetchOfficersDirectoryFromCloudSuspend(exception)", e)
+                    if (cont.isActive) cont.resume(Result.failure(e))
+                }
             }
-        }
+        } ?: Result.failure(IllegalStateException("Waktu memuat direktori petugas dari server Firebase habis (timeout 8 detik)."))
     }
 
     /**

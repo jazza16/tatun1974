@@ -254,7 +254,7 @@ class SyncController(
             )
             // Perform write roundtrip test on ping document
             val task = db.collection("network_pings").document(deviceId).set(pingDoc)
-            com.google.android.gms.tasks.Tasks.await(task)
+            com.google.android.gms.tasks.Tasks.await(task, 5L, java.util.concurrent.TimeUnit.SECONDS)
             val duration = System.currentTimeMillis() - startTime
             _latencyMs.value = duration
 
@@ -274,6 +274,9 @@ class SyncController(
         }
     }
 
+    @Volatile
+    private var lastSessionSyncMs: Long = 0L
+
     private fun startHeartbeatAndLatencyMonitoring() {
         heartbeatJob?.cancel()
         heartbeatJob = scope.launch {
@@ -282,7 +285,7 @@ class SyncController(
                     sendHeartbeat()
                     measureLatency()
                 }
-                delay(30_000L) // every 30 seconds
+                delay(60_000L) // every 60 seconds for battery efficiency
             }
         }
     }
@@ -308,7 +311,8 @@ class SyncController(
         val now = System.currentTimeMillis()
         val currentStatus = if (_isSlowNetwork.value) "SLOW_NET" else "ONLINE"
 
-        if (isOfficerActive && officerNip.isNotBlank()) {
+        if (isOfficerActive && officerNip.isNotBlank() && (now - lastSessionSyncMs >= 5 * 60 * 1000L)) {
+            lastSessionSyncMs = now
             try {
                 com.example.security.SecurityManager.getInstance(context).syncPendingSessionToFirestore(
                     officerNip = officerNip,
@@ -348,7 +352,7 @@ class SyncController(
             val task = db.collection("device_heartbeats")
                 .document(deviceId)
                 .set(heartbeat, SetOptions.merge())
-            com.google.android.gms.tasks.Tasks.await(task)
+            com.google.android.gms.tasks.Tasks.await(task, 5L, java.util.concurrent.TimeUnit.SECONDS)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to send heartbeat: ${e.message}")
         }

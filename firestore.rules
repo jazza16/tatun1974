@@ -437,11 +437,11 @@ service cloud.firestore {
                               incoming().ownerUid == existing().ownerUid
                               && incoming().pinHash == existing().pinHash
                               && incoming().salt == existing().salt
-                              && incoming().isCustomPinSet == existing().isCustomPinSet
-                              && incoming().isPinChanged == existing().isPinChanged
+                              && incoming().isCustomPinSet == (('isCustomPinSet' in existing()) ? existing().isCustomPinSet : false)
+                              && incoming().isPinChanged == (('isPinChanged' in existing()) ? existing().isPinChanged : (('isCustomPinSet' in existing()) ? existing().isCustomPinSet : false))
                               && incoming().diff(existing()).affectedKeys().hasOnly([
                                    'fullName', 'role', 'unit', 'shift', 'phone',
-                                   'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
+                                   'isPinChanged', 'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
                                  ])
                             )
                        );

@@ -179,12 +179,16 @@ object SupabaseClient {
                         "bucketName" to BUCKET_REPORTS,
                         "updatedAt" to System.currentTimeMillis()
                     )
-                    FirebaseFirestore.getInstance()
-                        .collection(FIRESTORE_SETTINGS_COLLECTION)
-                        .document(FIRESTORE_SUPABASE_DOC)
-                        .set(payload, SetOptions.merge())
-                        .await()
-                    Log.i(TAG, "Synced valid BuildConfig Supabase configuration to Firestore app_settings.")
+                    val db = com.example.data.local.FirestoreHelper.getFirestoreOrThrow(context).getOrNull()
+                    if (db != null) {
+                        withTimeoutOrNull(4500L) {
+                            db.collection(FIRESTORE_SETTINGS_COLLECTION)
+                                .document(FIRESTORE_SUPABASE_DOC)
+                                .set(payload, SetOptions.merge())
+                                .await()
+                        }
+                        Log.i(TAG, "Synced valid BuildConfig Supabase configuration to Firestore app_settings.")
+                    }
                 }.onFailure { e ->
                     Log.w(TAG, "Skipped syncing Supabase config to Firestore: ${e.message}")
                 }
@@ -215,12 +219,16 @@ object SupabaseClient {
             }
         }
         try {
-            val snap = withTimeoutOrNull(4500L) {
-                FirebaseFirestore.getInstance()
-                    .collection(FIRESTORE_SETTINGS_COLLECTION)
-                    .document(FIRESTORE_SUPABASE_DOC)
-                    .get()
-                    .await()
+            val db = com.example.data.local.FirestoreHelper.getFirestoreOrThrow(context).getOrNull()
+            val snap = if (db != null) {
+                withTimeoutOrNull(4500L) {
+                    db.collection(FIRESTORE_SETTINGS_COLLECTION)
+                        .document(FIRESTORE_SUPABASE_DOC)
+                        .get()
+                        .await()
+                }
+            } else {
+                null
             }
             if (snap != null && snap.exists()) {
                 val remoteUrl = cleanUrlValue(snap.getString("supabaseUrl"))

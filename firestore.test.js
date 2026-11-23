@@ -324,6 +324,65 @@ test("Officer credentials allow single-doc NIP lookup while blocking list, plain
     })
   );
 
+  // Legacy custom-PIN doc (created before isPinChanged field existed) can still sync lastLoginAt/lastLoginDevice
+  // and backfill isPinChanged: true without PERMISSION_DENIED, while still blocking any downgrade of isCustomPinSet.
+  const legacyCustomNip = "198501012010011005";
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().collection("officer_credentials").doc(legacyCustomNip).set({
+      nip: legacyCustomNip,
+      ownerUid: ALICE_UID,
+      fullName: "PETUGAS LEGACY CUSTOM",
+      role: "Operator Pusdalops",
+      unit: "Pusdalops BPBD Kab. Mukomuko",
+      shift: "Shift Siaga 24 Jam",
+      phone: "",
+      pinHash: "pbkdf2$10000$" + "c".repeat(64),
+      salt: "0123456789abcdef0123456789abcdef",
+      isCustomPinSet: true,
+      initialSecurePin: "",
+      lastLoginAt: 0,
+      lastLoginDevice: "",
+      updatedAt: Date.now(),
+    });
+  });
+  await assertSucceeds(
+    unauth.collection("officer_credentials").doc(legacyCustomNip).set(
+      {
+        nip: legacyCustomNip,
+        ownerUid: ALICE_UID,
+        fullName: "PETUGAS LEGACY CUSTOM",
+        role: "Operator Pusdalops",
+        unit: "Pusdalops BPBD Kab. Mukomuko",
+        shift: "Shift Siaga 24 Jam",
+        phone: "",
+        pinHash: "pbkdf2$10000$" + "c".repeat(64),
+        salt: "0123456789abcdef0123456789abcdef",
+        isCustomPinSet: true,
+        isPinChanged: true,
+        initialSecurePin: "",
+        lastLoginAt: Date.now(),
+        lastLoginDevice: "Officer Phone",
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    )
+  );
+  await assertFails(
+    unauth.collection("officer_credentials").doc(legacyCustomNip).set(
+      {
+        nip: legacyCustomNip,
+        ownerUid: ALICE_UID,
+        fullName: "PETUGAS LEGACY CUSTOM",
+        pinHash: "pbkdf2$10000$" + "c".repeat(64),
+        salt: "0123456789abcdef0123456789abcdef",
+        isCustomPinSet: false,
+        isPinChanged: false,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    )
+  );
+
   // Bob cannot overwrite Alice's Google-owned credential, and nobody can delete it
   await assertFails(
     bob.collection("officer_credentials").doc("197906072006041011").set({
@@ -443,10 +502,10 @@ test("Device security sessions, login activities & append-only failures enforce 
       loginMethod: "BIOMETRIK",
     })
   );
-  // Unauthenticated cannot read/list device_login_activities
-  await assertFails(unauth.collection("device_login_activities").get());
-  await assertFails(unauth.collection("device_login_activities").doc("act_001").get());
-  // Authenticated admin can read & list all login activities
+  // Admin Security Panel (with or without Google Sign-In) can read & list login activities
+  await assertSucceeds(unauth.collection("device_login_activities").get());
+  await assertSucceeds(unauth.collection("device_login_activities").doc("act_001").get());
+  // Authenticated admin can also read & list all login activities
   await assertSucceeds(bob.collection("device_login_activities").get());
   // Append-only: nobody can update an existing activity
   await assertFails(alice.collection("device_login_activities").doc("act_001").update({ loginStatus: "TAMPERED" }));

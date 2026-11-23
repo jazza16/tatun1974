@@ -447,7 +447,8 @@ class VolunteerRepository private constructor(
     private suspend fun pushSingleVolunteerToFirestore(entity: VolunteerEntity): Boolean {
         if (SandboxTrainingManager.isSandboxModeActive()) return false
         return try {
-            val firestore = FirebaseFirestore.getInstance()
+            val firestore = com.example.data.local.FirestoreHelper.getFirestoreOrThrow(appContext).getOrNull()
+                ?: return false
             val payload = mapOf(
                 "nik" to entity.nik,
                 "id" to entity.id,
@@ -490,7 +491,8 @@ class VolunteerRepository private constructor(
     private fun startRealtimeFirestoreListener() {
         if (firestoreListener != null || SandboxTrainingManager.isSandboxModeActive()) return
         try {
-            val firestore = FirebaseFirestore.getInstance()
+            val firestore = com.example.data.local.FirestoreHelper.getFirestoreOrThrow(appContext).getOrNull()
+                ?: return
             firestoreListener = firestore.collection(COLLECTION_VOLUNTEERS)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) return@addSnapshotListener

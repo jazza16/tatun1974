@@ -882,18 +882,20 @@ class SmartOfficerAuthRepository(private val context: Context) {
                     deviceInfo = "PIN default '$trimmedPin' ditolak pada perangkat $deviceModel"
                 )
             )
-            try {
-                com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
-                    officerNip = trimmedNip,
-                    officerName = "Percobaan Akses PIN Default",
-                    officerRole = "Tidak Sah",
-                    loginMethod = "PIN_CLOUD",
-                    loginStatus = "BLOCKED",
-                    action = "AUTH_BLOCKED_DEFAULT_PIN_REJECTED",
-                    detail = "PIN default '$trimmedPin' ditolak pada perangkat $deviceModel",
-                    accessGranted = false
-                )
-            } catch (_: Exception) {}
+            coroutineScope.launch {
+                try {
+                    com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
+                        officerNip = trimmedNip,
+                        officerName = "Percobaan Akses PIN Default",
+                        officerRole = "Tidak Sah",
+                        loginMethod = "PIN_CLOUD",
+                        loginStatus = "BLOCKED",
+                        action = "AUTH_BLOCKED_DEFAULT_PIN_REJECTED",
+                        detail = "PIN default '$trimmedPin' ditolak pada perangkat $deviceModel",
+                        accessGranted = false
+                    )
+                } catch (_: Exception) {}
+            }
             return@withContext Result.failure(
                 SecurityException(
                     "PIN default '$trimmedPin' dinonaktifkan oleh sistem keamanan. " +
@@ -1025,18 +1027,20 @@ class SmartOfficerAuthRepository(private val context: Context) {
                             deviceInfo = "NIP ${maskNip(cleanLookupNip)} belum teraktivasi di koleksi officer_credentials Firebase ($deviceModel)"
                         )
                     )
-                    try {
-                        com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
-                            officerNip = cleanLookupNip,
-                            officerName = registeredOfficer?.fullName ?: "Petugas Tidak Terdaftar",
-                            officerRole = registeredOfficer?.role ?: "-",
-                            loginMethod = "PIN_CLOUD",
-                            loginStatus = "FAILED",
-                            action = "AUTH_REJECTED_NOT_FOUND_IN_CLOUD",
-                            detail = "NIP ${maskNip(cleanLookupNip)} belum teraktivasi di koleksi officer_credentials Firebase ($deviceModel)",
-                            accessGranted = false
-                        )
-                    } catch (_: Exception) {}
+                    coroutineScope.launch {
+                        try {
+                            com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
+                                officerNip = cleanLookupNip,
+                                officerName = registeredOfficer?.fullName ?: "Petugas Tidak Terdaftar",
+                                officerRole = registeredOfficer?.role ?: "-",
+                                loginMethod = "PIN_CLOUD",
+                                loginStatus = "FAILED",
+                                action = "AUTH_REJECTED_NOT_FOUND_IN_CLOUD",
+                                detail = "NIP ${maskNip(cleanLookupNip)} belum teraktivasi di koleksi officer_credentials Firebase ($deviceModel)",
+                                accessGranted = false
+                            )
+                        } catch (_: Exception) {}
+                    }
                     val notFoundMsg = if (registeredOfficer != null) {
                         "Akun ${registeredOfficer.fullName} belum teraktivasi di server Firebase. Masukkan 6 digit terakhir NIP sebagai PIN aktivasi perdana (bukan 117), lalu ganti ke PIN pribadi Anda."
                     } else {
@@ -1085,18 +1089,20 @@ class SmartOfficerAuthRepository(private val context: Context) {
                     deviceInfo = "Percobaan login memakai 6 digit NIP setelah PIN diubah pada $deviceModel"
                 )
             )
-            try {
-                com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
-                    officerNip = trimmedNip,
-                    officerName = credential.fullName,
-                    officerRole = credential.role,
-                    loginMethod = "PIN_CLOUD",
-                    loginStatus = "BLOCKED",
-                    action = "AUTH_BLOCKED_INITIAL_NIP_AFTER_PIN_CHANGED",
-                    detail = "Percobaan login memakai 6 digit NIP setelah PIN diubah pada $deviceModel",
-                    accessGranted = false
-                )
-            } catch (_: Exception) {}
+            coroutineScope.launch {
+                try {
+                    com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
+                        officerNip = trimmedNip,
+                        officerName = credential.fullName,
+                        officerRole = credential.role,
+                        loginMethod = "PIN_CLOUD",
+                        loginStatus = "BLOCKED",
+                        action = "AUTH_BLOCKED_INITIAL_NIP_AFTER_PIN_CHANGED",
+                        detail = "Percobaan login memakai 6 digit NIP setelah PIN diubah pada $deviceModel",
+                        accessGranted = false
+                    )
+                } catch (_: Exception) {}
+            }
             return@withContext Result.failure(
                 SecurityException("PIN awal (6 digit terakhir NIP) sudah tidak berlaku karena Anda telah mengganti PIN di Firebase. Gunakan PIN pribadi terbaru Anda.")
             )
@@ -1123,18 +1129,20 @@ class SmartOfficerAuthRepository(private val context: Context) {
                     deviceInfo = failDetail
                 )
             )
-            try {
-                com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
-                    officerNip = trimmedNip,
-                    officerName = credential.fullName,
-                    officerRole = credential.role,
-                    loginMethod = "PIN_CLOUD",
-                    loginStatus = if (lockUntil > 0L) "BLOCKED" else "FAILED",
-                    action = failAction,
-                    detail = failDetail,
-                    accessGranted = false
-                )
-            } catch (_: Exception) {}
+            coroutineScope.launch {
+                try {
+                    com.example.security.SecurityManager.getInstance(context).recordLoginActivityEvent(
+                        officerNip = trimmedNip,
+                        officerName = credential.fullName,
+                        officerRole = credential.role,
+                        loginMethod = "PIN_CLOUD",
+                        loginStatus = if (lockUntil > 0L) "BLOCKED" else "FAILED",
+                        action = failAction,
+                        detail = failDetail,
+                        accessGranted = false
+                    )
+                } catch (_: Exception) {}
+            }
             val hintMessage = if (lockUntil > 0L) {
                 "Terlalu banyak percobaan gagal. Akun dikunci sementara selama 5 menit demi keamanan."
             } else {
@@ -1400,7 +1408,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
         currentPin: String,
         newPin: String
     ): Result<String> = withContext(Dispatchers.IO) {
-        val trimmedNip = nip.trim()
+        val trimmedNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
         val trimmedOld = currentPin.trim()
         val trimmedNew = newPin.trim()
 
@@ -1551,6 +1559,9 @@ class SmartOfficerAuthRepository(private val context: Context) {
         }
 
         // 3. Clear local Play Integrity device binding, SecurityManager session & login activities, and saved_nip if belonging to this officer
+        //    Suppress realtime revocation notifications during intentional PIN Reset so the officer's real device
+        //    never shows a false "session revoked" toast or gets blocked from relogin.
+        com.example.security.SecurityManager.markPinResetInProgress(cleanNip, durationMs = 20_000L)
         try {
             com.example.security.PlayIntegritySecurityManager.getInstance(context)
                 .clearDeviceBindingForOfficer(cleanNip)
@@ -1561,8 +1572,10 @@ class SmartOfficerAuthRepository(private val context: Context) {
         }
 
         val currentSavedNip = officerAuthManager.getSavedNip()
-        if (currentSavedNip.equals(cleanNip, ignoreCase = true)) {
+        val currentActiveBadge = officerAuthManager.getOfficerBadgeId()
+        if (currentSavedNip.equals(cleanNip, ignoreCase = true) || currentActiveBadge.equals(cleanNip, ignoreCase = true)) {
             officerAuthManager.clearSavedOfficerIdentity()
+            officerAuthManager.logoutOfficer()
             officerAuthManager.markCloudCustomPinStatus(false)
         }
 
@@ -1622,7 +1635,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
         }
 
         return@withContext Result.success(
-            "Akun $canonicalName (NIP: $cleanNip) berhasil dinormalkan seperti baru (belum pernah login), seluruh riwayat upaya login dihapus, dan PIN di-reset ke PIN awal resmi ($initialPin)."
+            "Reset PIN berhasil! PIN $canonicalName (NIP: $cleanNip) kembali ke 6 digit terakhir NIP ($initialPin). Perangkat Anda tetap diizinkan — silakan login kembali menggunakan PIN awal ($initialPin)."
         )
     }
 
@@ -1648,7 +1661,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
      * a login session or storing any PIN locally. Used for self-service authorization (e.g., PIN reset).
      */
     suspend fun verifyOfficerPinAgainstCloud(nip: String, inputPin: String): Boolean = withContext(Dispatchers.IO) {
-        val trimmedNip = nip.trim()
+        val trimmedNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
         val trimmedPin = inputPin.trim()
         if (trimmedNip.isBlank() || trimmedPin.isBlank()) return@withContext false
         if (FORBIDDEN_DEFAULT_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) return@withContext false

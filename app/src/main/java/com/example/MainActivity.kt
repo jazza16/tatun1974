@@ -183,9 +183,9 @@ fun configureAppCheck(context: Context, intent: Intent?) {
         if (FirebaseApp.getApps(context).isEmpty()) {
             FirebaseApp.initializeApp(context)
         }
-        // Aktifkan Firestore Offline Cache (persistenceEnabled = true / PersistentCacheSettings) saat inisialisasi Firebase
-        com.example.data.local.FirestoreHelper.ensureOfflinePersistenceEnabled(context)
 
+        // CRITICAL: Firebase App Check provider MUST be installed BEFORE any FirebaseFirestore.getInstance(...)
+        // call, otherwise Firestore caches an unauthenticated token provider and Cloud PIN lookups fail/timeout.
         if (BuildConfig.DEBUG) {
             val debugToken = intent?.getStringExtra(DEBUG_TOKEN_EXTRA)
             if (!debugToken.isNullOrEmpty()) {
@@ -208,23 +208,32 @@ fun configureAppCheck(context: Context, intent: Intent?) {
             )
             Log.d(APP_CHECK_TAG, "DebugAppCheckProviderFactory installed.")
         } else {
-            val resId = context.resources.getIdentifier(RECAPTCHA_SITE_KEY_RES, "string", context.packageName)
-            if (resId != 0) {
-                val siteKey = context.getString(resId)
-                if (siteKey.isNotBlank()) {
-                    FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
-                        RecaptchaAppCheckProviderFactory.getInstance(siteKey)
-                    )
-                    Log.d(APP_CHECK_TAG, "RecaptchaAppCheckProviderFactory installed.")
-                } else {
-                    Log.e(APP_CHECK_TAG, "recaptcha_site_key resource string is blank.")
-                }
+            val staticSiteKey = runCatching { context.getString(R.string.recaptcha_site_key).trim() }.getOrNull()
+            val dynamicSiteKey = if (staticSiteKey.isNullOrBlank()) {
+                val resId = context.resources.getIdentifier(RECAPTCHA_SITE_KEY_RES, "string", context.packageName)
+                if (resId != 0) runCatching { context.getString(resId).trim() }.getOrNull() else null
             } else {
-                Log.e(APP_CHECK_TAG, "recaptcha_site_key string resource not found in package.")
+                null
+            }
+            val siteKey = staticSiteKey?.takeIf { it.isNotBlank() } ?: dynamicSiteKey.orEmpty()
+            if (siteKey.isNotBlank()) {
+                FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                    RecaptchaAppCheckProviderFactory.getInstance(siteKey)
+                )
+                Log.d(APP_CHECK_TAG, "RecaptchaAppCheckProviderFactory installed.")
+            } else {
+                Log.e(APP_CHECK_TAG, "recaptcha_site_key string resource is missing or blank.")
             }
         }
+
+        // Aktifkan Firestore Offline Cache (persistenceEnabled = true / PersistentCacheSettings) SETELAH App Check siap
+        com.example.data.local.FirestoreHelper.ensureOfflinePersistenceEnabled(context)
     } catch (e: Exception) {
         Log.e(APP_CHECK_TAG, "Failed to initialize Firebase App Check", e)
+        try {
+            com.example.data.local.FirestoreHelper.ensureOfflinePersistenceEnabled(context)
+        } catch (_: Exception) {
+        }
     }
 }
 
@@ -540,8 +549,8 @@ fun WeatherAppScreen(
     var isEmergencyPopupDismissed by remember { mutableStateOf(false) }
     var isSipagarKitaDismissed by remember { mutableStateOf(false) }
     var isPanduanEvakuasiOpen by remember { mutableStateOf(false) }
-    var pendingOfficerLoginPrompt by remember { mutableStateOf(false) }
-    var pendingOpenRuangKerja by remember { mutableStateOf(false) }
+    var officerLoginRequestId by remember { mutableStateOf(0) }
+    var openRuangKerjaRequestId by remember { mutableStateOf(0) }
 
     val currentDistrict = uiState.selectedDistrict
     val isFavorite = favorites.contains(currentDistrict.id)
@@ -1026,11 +1035,18 @@ fun WeatherAppScreen(
                                 onSyncReports = { onComplete ->
                                     viewModel.syncCitizenDisasterReportsOnline(onComplete)
                                 },
-                                initialShowOfficerLogin = pendingOfficerLoginPrompt,
-                                initialOpenRuangKerja = pendingOpenRuangKerja,
+                                initialShowOfficerLogin = officerLoginRequestId > 0,
+                                initialOpenRuangKerja = openRuangKerjaRequestId > 0,
+                                officerLoginRequestId = officerLoginRequestId,
+                                openRuangKerjaRequestId = openRuangKerjaRequestId,
                                 onOfficerLoginDismissed = {
-                                    pendingOfficerLoginPrompt = false
-                                    pendingOpenRuangKerja = false
+                                    officerLoginRequestId = 0
+                                    openRuangKerjaRequestId = 0
+                                },
+                                onOfficerLogoutToLanding = {
+                                    officerLoginRequestId = 0
+                                    openRuangKerjaRequestId = 0
+                                    viewModel.showStartupWallpaper()
                                 },
                                 onBackClick = {
                                     viewModel.selectTab(0)
@@ -1574,24 +1590,42 @@ fun WeatherAppScreen(
     }
 
     // High-Resolution Wallpaper & Mukomuko Disaster Mitigation Screen (Dual Entry Portal)
+    val enterCitizenGuestMode: () -> Unit = {
+        // Strict Role Isolation: Masuk Sebagai Tamu / Warga MUST terminate any lingering officer session,
+        // clear Ruang Kerja navigation flags, and always open Citizen Home (Tab 0: Hari Ini).
+        com.example.security.SecurityManager.getInstance(context).clearLocalSession()
+        com.example.data.auth.AuthManager.getInstance(context).signOut()
+        com.example.data.local.OfficerAuthManager(context).logoutOfficer()
+        officerLoginRequestId = 0
+        openRuangKerjaRequestId = 0
+        viewModel.selectTab(0)
+        viewModel.dismissStartupWallpaper()
+    }
     StartupSplashWallpaperScreen(
         isVisible = uiState.isStartupWallpaperVisible,
-        onDismiss = { viewModel.dismissStartupWallpaper() },
-        onEnterAsGuest = { viewModel.dismissStartupWallpaper() },
+        onDismiss = enterCitizenGuestMode,
+        onEnterAsGuest = enterCitizenGuestMode,
         onOpenEvacuationGuide = {
-            viewModel.dismissStartupWallpaper()
+            enterCitizenGuestMode()
             isPanduanEvakuasiOpen = true
         },
         onLoginAsOfficer = {
-            viewModel.dismissStartupWallpaper()
-            pendingOfficerLoginPrompt = true
+            openRuangKerjaRequestId = 0
+            officerLoginRequestId += 1
             viewModel.selectTab(1) // Jump directly to Laporan Warga & Portal Konsol Petugas Pusdalops
+            viewModel.dismissStartupWallpaper()
         },
         onBiometricLoginSuccess = {
-            viewModel.dismissStartupWallpaper()
-            pendingOfficerLoginPrompt = false
-            pendingOpenRuangKerja = true
+            val officerAuth = com.example.data.local.OfficerAuthManager(context)
+            if (officerAuth.isOfficerLoggedIn()) {
+                officerLoginRequestId = 0
+                openRuangKerjaRequestId += 1
+            } else {
+                openRuangKerjaRequestId = 0
+                officerLoginRequestId += 1
+            }
             viewModel.selectTab(1)
+            viewModel.dismissStartupWallpaper()
         }
     )
 }

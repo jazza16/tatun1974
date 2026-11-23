@@ -157,11 +157,12 @@ object AppUpgradeSanitizer {
         } catch (_: Exception) {
         }
 
-        // D. Validasi bpbd_officer_auth_prefs agar tidak terjadi ClassCastException atau kegagalan dekripsi KeyStore
+        // D. Validasi bpbd_officer_auth_prefs tanpa menghapus roster personil, status PIN custom Cloud, atau identitas petugas
         try {
             val authPrefs = context.getSharedPreferences("bpbd_officer_auth_prefs", Context.MODE_PRIVATE)
             val savedNip = try {
                 SecureStorageHelper.getDecrypted(authPrefs, "saved_nip")?.trim().orEmpty()
+                    .ifBlank { SecureStorageHelper.getDecrypted(authPrefs, "officer_badge_id")?.trim().orEmpty() }
             } catch (_: Exception) {
                 ""
             }
@@ -185,11 +186,23 @@ object AppUpgradeSanitizer {
             } catch (_: Exception) {
                 false
             }
+            val hasCloudCustomPin = try {
+                authPrefs.getBoolean("has_cloud_custom_pin", false)
+            } catch (_: Exception) {
+                false
+            }
 
-            // Tulis ulang dengan tipe data yang terjamin konsisten
-            val editor = authPrefs.edit().clear()
-            editor.putBoolean("is_officer_logged_in", isLoggedIn)
-            editor.putInt("officer_storage_schema_version", 3)
+            // Hapus HANYA key PIN lokal usang/plaintext (JANGAN clear() seluruh prefs agar roster & status PIN custom Cloud tetap utuh)
+            val editor = authPrefs.edit()
+                .remove("officer_pin")
+                .remove("officer_pin_hash")
+                .remove("officer_pin_salt")
+                .remove("hitatun_arazak_normalized_v1_clean")
+                .remove("hitatun_arazak_normalized_v1_cloud")
+                .putBoolean("is_officer_logged_in", isLoggedIn)
+                .putBoolean("has_cloud_custom_pin", hasCloudCustomPin)
+                .putInt("officer_storage_schema_version", 3)
+
             if (savedNip.isNotBlank()) {
                 SecureStorageHelper.putEncrypted(editor, "saved_nip", savedNip)
                 SecureStorageHelper.putEncrypted(editor, "officer_badge_id", savedNip)

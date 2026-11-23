@@ -244,7 +244,7 @@ class OfficerAuthManager(private val context: Context) {
         if (cleanShift.isNotBlank()) {
             SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_SHIFT, cleanShift)
         }
-        editor.apply()
+        editor.commit()
     }
 
     /**
@@ -503,6 +503,53 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
+     * Synchronizes Room personnel roster into local SharedPreferences cache in a single batch
+     * without triggering Firestore writes or blocking the Main Thread with synchronous commit().
+     */
+    fun syncRosterLocallyWithoutCloudWrite(profiles: List<OfficerProfile>) {
+        if (profiles.isEmpty()) return
+        val existingByNip = getOfficerRoster().associateBy {
+            it.nip.trim().replace(Regex("[\\s\\-]+"), "").lowercase()
+        }.toMutableMap()
+        var changed = false
+        for (profile in profiles) {
+            val cleanNip = profile.nip.trim().replace(Regex("[\\s\\-]+"), "")
+            val cleanName = profile.fullName.trim()
+            if (cleanNip.length < 4 || cleanName.length < 3) continue
+            val key = cleanNip.lowercase()
+            val prev = existingByNip[key]
+            val normalized = OfficerProfile(
+                id = prev?.id ?: "officer_$cleanNip",
+                fullName = cleanName,
+                nip = cleanNip,
+                role = profile.role.ifBlank { OfficerRoles.PETUGAS_JAGA },
+                unit = profile.unit.ifBlank { "Pusdalops BPBD Kab. Mukomuko" },
+                shift = profile.shift.ifBlank { "Shift Siaga 24 Jam" },
+                phone = profile.phone.trim()
+            )
+            if (prev != normalized) {
+                existingByNip[key] = normalized
+                changed = true
+            }
+        }
+        if (!changed) return
+        val array = JSONArray()
+        for (officer in existingByNip.values) {
+            val obj = JSONObject().apply {
+                put("id", officer.id)
+                put("fullName", officer.fullName)
+                put("nip", officer.nip)
+                put("role", officer.role)
+                put("unit", officer.unit)
+                put("shift", officer.shift)
+                put("phone", officer.phone)
+            }
+            array.put(obj)
+        }
+        sharedPrefs.edit().putString(PREF_OFFICER_ROSTER_JSON, array.toString()).apply()
+    }
+
+    /**
      * Adds a new officer with ASN/TRC format into the system roster.
      */
     fun addOfficer(
@@ -668,7 +715,7 @@ class OfficerAuthManager(private val context: Context) {
         SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_BADGE_ID, cleanNip)
         SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_ROLE, resolvedRole)
         SecureStorageHelper.putEncrypted(editor, PREF_OFFICER_SHIFT, resolvedShift)
-        editor.apply()
+        editor.commit()
         com.example.util.SessionManager(context).setPetugasLogin(resolvedName, cleanNip, resolvedRole)
         com.example.data.sync.OfficerPushNotificationHelper.syncOfficerTopicSubscription(
             context = context,
@@ -760,7 +807,7 @@ class OfficerAuthManager(private val context: Context) {
             .remove(PREF_OFFICER_BADGE_ID)
             .remove(PREF_OFFICER_ROLE)
             .remove(PREF_OFFICER_SHIFT)
-            .apply()
+            .commit()
         com.example.util.SessionManager(context).clearSession()
         SecurityManager.getInstance(context).clearLocalSession()
         com.example.data.sync.OfficerPushNotificationHelper.syncOfficerTopicSubscription(
@@ -772,7 +819,7 @@ class OfficerAuthManager(private val context: Context) {
     fun logoutOfficer() {
         sharedPrefs.edit()
             .putBoolean(PREF_IS_OFFICER_LOGGED_IN, false)
-            .apply()
+            .commit()
         com.example.util.SessionManager(context).clearSession()
         SecurityManager.getInstance(context).clearLocalSession()
         com.example.security.AdminAccessSecurityManager.revokeToken()

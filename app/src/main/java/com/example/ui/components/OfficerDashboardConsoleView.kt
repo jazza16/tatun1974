@@ -300,14 +300,12 @@ fun OfficerDashboardConsoleView(
                     realtimeCloudReports = existingById.values.sortedByDescending { it.timestamp }
                 }
                 handleIncomingPendingReportsStream(pendingReports)
-                onSyncReports?.invoke { _ -> }
             }
         )
         val allReportsListener = com.example.data.local.FirestoreHelper.listenCitizenReportsRealtime(
             onUpdate = { allRemote ->
                 realtimeCloudReports = allRemote
                 handleIncomingPendingReportsStream(allRemote)
-                onSyncReports?.invoke { _ -> }
             }
         )
         onDispose {
@@ -317,12 +315,12 @@ fun OfficerDashboardConsoleView(
         }
     }
 
-    // Active Officer Session Fast Heartbeat Sync (every 4 seconds while Ruang Kerja is open)
+    // Gentle fallback sync (every 60 seconds; real-time Firestore listeners already push updates instantly)
     LaunchedEffect(isOfficerLoggedIn) {
         if (isOfficerLoggedIn) {
             while (isActive) {
+                delay(60_000L)
                 onSyncReports?.invoke { _ -> }
-                delay(4_000L)
             }
         }
     }
@@ -422,6 +420,8 @@ fun OfficerDashboardConsoleView(
     var isSyncingSecurityActivities by remember { mutableStateOf(false) }
     var showSecuritySessionsDialog by remember { mutableStateOf(false) }
     var revokedNipsInSession by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var isResettingOwnPin by remember { mutableStateOf(false) }
+    val lastSecuritySyncMs = remember { java.util.concurrent.atomic.AtomicLong(0L) }
     var currentFirebaseUid by remember {
         mutableStateOf(
             try { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid } catch (_: Exception) { null }
@@ -481,7 +481,7 @@ fun OfficerDashboardConsoleView(
             officerNipFilter = "",
             activeOfficerNipForRevocation = officerBadgeId,
             onActiveSessionRevoked = {
-                if (isOfficerLoggedIn) {
+                if (isOfficerLoggedIn && !isResettingOwnPin && !SecurityManager.isPinResetSuppressed(officerBadgeId)) {
                     Toast.makeText(
                         context,
                         "Akses sesi perangkat Anda telah dicabut dari server. Logout paksa dijalankan.",
@@ -494,11 +494,19 @@ fun OfficerDashboardConsoleView(
                 }
             }
         ) { list ->
-            securitySessionsList = securityManager.reconcileWithActiveHeartbeats(
-                sessions = list,
-                heartbeats = activeDevices
-            ).filterNot {
-                revokedNipsInSession.contains(it.officerNip.trim().lowercase())
+            val currentHeartbeats = activeDevices
+            val currentRevoked = revokedNipsInSession
+            coroutineScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                val reconciled = securityManager.reconcileWithActiveHeartbeats(
+                    sessions = list,
+                    heartbeats = currentHeartbeats,
+                    persistToCache = false
+                ).filterNot {
+                    currentRevoked.contains(it.officerNip.trim().lowercase())
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    securitySessionsList = reconciled
+                }
             }
         }
         val activityListener = securityManager.listenLoginActivitiesRealtime { activities ->
@@ -512,37 +520,57 @@ fun OfficerDashboardConsoleView(
 
     LaunchedEffect(activeDevices) {
         if (activeDevices.isNotEmpty()) {
-            securitySessionsList = securityManager.reconcileWithActiveHeartbeats(
-                sessions = securitySessionsList,
-                heartbeats = activeDevices
-            ).filterNot {
-                revokedNipsInSession.contains(it.officerNip.trim().lowercase())
+            val currentSessions = securitySessionsList
+            val currentRevoked = revokedNipsInSession
+            val reconciled = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                securityManager.reconcileWithActiveHeartbeats(
+                    sessions = currentSessions,
+                    heartbeats = activeDevices,
+                    persistToCache = false
+                ).filterNot {
+                    currentRevoked.contains(it.officerNip.trim().lowercase())
+                }
             }
+            securitySessionsList = reconciled
         }
     }
 
-    LaunchedEffect(currentFirebaseUid, isOfficerLoggedIn, officerBadgeId, dashboardSubTab) {
+    // Initial sync on Ruang Kerja entry (does NOT re-run heavy Firestore queries on every sub-tab tap)
+    LaunchedEffect(currentFirebaseUid, isOfficerLoggedIn, officerBadgeId) {
         onSyncReports?.invoke { _ -> }
         if (isOfficerLoggedIn && officerBadgeId.isNotBlank()) {
             syncController.sendHeartbeatNow()
         }
-        runFullSecurityActivitySync()
+    }
+
+    // Only run full security activity sync when Admin explicitly opens Pengaturan Sistem tab (with 30s cooldown)
+    LaunchedEffect(dashboardSubTab, currentFirebaseUid, isOfficerLoggedIn) {
+        if (dashboardSubTab == 3 && isOfficerLoggedIn) {
+            val now = System.currentTimeMillis()
+            if (now - lastSecuritySyncMs.get() >= 30_000L) {
+                lastSecuritySyncMs.set(now)
+                runFullSecurityActivitySync()
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
-        personnelRepository.seedDefaultAsnPersonnelIfNeeded()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            personnelRepository.seedDefaultAsnPersonnelIfNeeded()
+        }
         personnelRepository.startAutoSyncFromCloud(this)
     }
 
     // 30-Minute Inactivity Auto-Logout Timer for Officer Security
-    var lastActiveTimeMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    // Uses AtomicLong instead of Compose MutableState so pointer events NEVER trigger full-screen recompositions
+    val lastActiveTimeMs = remember { java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis()) }
     val autoLogoutThresholdMs = 30 * 60 * 1000L // 30 minutes
 
     LaunchedEffect(isOfficerLoggedIn) {
         if (isOfficerLoggedIn) {
             while (isActive) {
                 delay(15_000L) // Poll every 15 seconds
-                val idleDuration = System.currentTimeMillis() - lastActiveTimeMs
+                val idleDuration = System.currentTimeMillis() - lastActiveTimeMs.get()
                 if (idleDuration >= autoLogoutThresholdMs) {
                     Toast.makeText(
                         context,
@@ -558,7 +586,7 @@ fun OfficerDashboardConsoleView(
 
     // Pusdalops Officer Roster Management State backed directly by Room Database & Session Manager
     var showRosterDialog by remember { mutableStateOf(false) }
-    var rosterList by remember { mutableStateOf(officerAuthManager.getOfficerRoster()) }
+    var rosterList by remember { mutableStateOf<List<OfficerProfile>>(emptyList()) }
     val activeRosterList = remember(dbPersonnelList) {
         dbPersonnelList.map { p ->
             OfficerProfile(
@@ -573,75 +601,101 @@ fun OfficerDashboardConsoleView(
         }
     }
 
-    LaunchedEffect(dbPersonnelList) {
-        if (dbPersonnelList.isNotEmpty()) {
-            dbPersonnelList.forEach { p ->
-                officerAuthManager.addOfficer(p.name, p.nip, p.role, p.shift, p.unit, p.phone)
+    // Sync Room personnel into local cache on Dispatchers.IO WITHOUT writing back to Firestore (breaks infinite loop)
+    LaunchedEffect(activeRosterList) {
+        if (activeRosterList.isNotEmpty()) {
+            rosterList = activeRosterList
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                officerAuthManager.syncRosterLocallyWithoutCloudWrite(activeRosterList)
+            }
+        } else {
+            rosterList = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                officerAuthManager.getOfficerRoster()
             }
         }
-        rosterList = officerAuthManager.getOfficerRoster()
     }
 
-    // Quick Stats Calculation (Canonical Normalized Status)
+    // Quick Stats Calculation (Canonical Normalized Status) — memoized to avoid recomputing on every recomposition
     val totalCount = liveReports.size
-    val pendingCount = liveReports.count { com.example.model.CitizenReportStatusHelper.isPending(it.status) }
-    val validatedCount = liveReports.count { com.example.model.CitizenReportStatusHelper.isValidated(it.status) }
-    val resolvedCount = liveReports.count { com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
-    val totalDead = liveReports.sumOf { it.casualtiesDead }
-    val totalInjured = liveReports.sumOf { it.casualtiesInjured }
-    val totalMissing = liveReports.sumOf { it.casualtiesMissing }
+    val pendingCount = remember(liveReports) {
+        liveReports.count { com.example.model.CitizenReportStatusHelper.isPending(it.status) }
+    }
+    val validatedCount = remember(liveReports) {
+        liveReports.count { com.example.model.CitizenReportStatusHelper.isValidated(it.status) }
+    }
+    val resolvedCount = remember(liveReports) {
+        liveReports.count { com.example.model.CitizenReportStatusHelper.isResolved(it.status) }
+    }
+    val totalDead = remember(liveReports) { liveReports.sumOf { it.casualtiesDead } }
+    val totalInjured = remember(liveReports) { liveReports.sumOf { it.casualtiesInjured } }
+    val totalMissing = remember(liveReports) { liveReports.sumOf { it.casualtiesMissing } }
 
-    val categoryOptions = listOf(
-        "Semua Kategori",
-        "Banjir",
-        "Cuaca Ekstrem",
-        "Keamanan Pesisir",
-        "Gempa Bumi",
-        "Tanah Longsor",
-        "Pohon Tumbang",
-        "Kebakaran Hutan/Lahan",
-        "Lainnya"
-    )
-
-    val districtOptions = listOf("Semua Kecamatan") + listOf(
-        "Kota Mukomuko", "Ipuh", "Teramang Jaya", "Penarik", "Lubuk Pinang",
-        "Pondok Suguh", "Air Dikit", "Selagan Raya", "XIV Koto", "Malin Deman",
-        "V Koto", "Teras Terunjam", "Sungai Rumbai", "Air Rami", "Air Manjunto"
-    )
-
-    // Filtered Reports
-    val baseReports = when (dashboardSubTab) {
-        1 -> liveReports.filter { com.example.model.CitizenReportStatusHelper.isResolved(it.status) } // Modul Arsip
-        else -> liveReports.filter { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) } // Antrean Aktif
+    val categoryOptions = remember {
+        listOf(
+            "Semua Kategori",
+            "Banjir",
+            "Cuaca Ekstrem",
+            "Keamanan Pesisir",
+            "Gempa Bumi",
+            "Tanah Longsor",
+            "Pohon Tumbang",
+            "Kebakaran Hutan/Lahan",
+            "Lainnya"
+        )
     }
 
-    val filteredReports = baseReports.filter { rep ->
-        val matchesStatus = com.example.model.CitizenReportStatusHelper.matchesFilter(rep.status, selectedStatusFilter)
+    val districtOptions = remember {
+        listOf("Semua Kecamatan") + listOf(
+            "Kota Mukomuko", "Ipuh", "Teramang Jaya", "Penarik", "Lubuk Pinang",
+            "Pondok Suguh", "Air Dikit", "Selagan Raya", "XIV Koto", "Malin Deman",
+            "V Koto", "Teras Terunjam", "Sungai Rumbai", "Air Rami", "Air Manjunto"
+        )
+    }
 
-        val matchesCategory = if (selectedCategoryFilter == "Semua Kategori") true else {
-            rep.disasterType.contains(selectedCategoryFilter, ignoreCase = true) ||
-            (selectedCategoryFilter == "Keamanan Pesisir" && (rep.disasterType.contains("Abrasi", ignoreCase = true) || rep.disasterType.contains("Gelombang", ignoreCase = true))) ||
-            (selectedCategoryFilter == "Cuaca Ekstrem" && (rep.disasterType.contains("Angin", ignoreCase = true) || rep.disasterType.contains("Badai", ignoreCase = true)))
+    // Filtered Reports — memoized by actual filter keys
+    val baseReports = remember(liveReports, dashboardSubTab) {
+        when (dashboardSubTab) {
+            1 -> liveReports.filter { com.example.model.CitizenReportStatusHelper.isResolved(it.status) } // Modul Arsip
+            else -> liveReports.filter { !com.example.model.CitizenReportStatusHelper.isResolved(it.status) } // Antrean Aktif
         }
+    }
 
-        val matchesDistrict = if (selectedDistrictFilter == "Semua Kecamatan") true else rep.district.equals(selectedDistrictFilter, ignoreCase = true)
+    val filteredReports = remember(
+        baseReports,
+        selectedStatusFilter,
+        selectedCategoryFilter,
+        selectedDistrictFilter,
+        onlyWithCasualties,
+        searchQuery
+    ) {
+        baseReports.filter { rep ->
+            val matchesStatus = com.example.model.CitizenReportStatusHelper.matchesFilter(rep.status, selectedStatusFilter)
 
-        val matchesCasualties = if (onlyWithCasualties) {
-            (rep.casualtiesDead > 0 || rep.casualtiesInjured > 0 || rep.casualtiesMissing > 0)
-        } else true
+            val matchesCategory = if (selectedCategoryFilter == "Semua Kategori") true else {
+                rep.disasterType.contains(selectedCategoryFilter, ignoreCase = true) ||
+                (selectedCategoryFilter == "Keamanan Pesisir" && (rep.disasterType.contains("Abrasi", ignoreCase = true) || rep.disasterType.contains("Gelombang", ignoreCase = true))) ||
+                (selectedCategoryFilter == "Cuaca Ekstrem" && (rep.disasterType.contains("Angin", ignoreCase = true) || rep.disasterType.contains("Badai", ignoreCase = true)))
+            }
 
-        val matchesSearch = if (searchQuery.isBlank()) true else {
-            val q = searchQuery.trim().lowercase()
-            rep.id.lowercase().contains(q) ||
-            rep.disasterType.lowercase().contains(q) ||
-            rep.district.lowercase().contains(q) ||
-            rep.village.lowercase().contains(q) ||
-            rep.incidentLocation.lowercase().contains(q) ||
-            rep.reporterName.lowercase().contains(q) ||
-            rep.additionalNotes.lowercase().contains(q)
+            val matchesDistrict = if (selectedDistrictFilter == "Semua Kecamatan") true else rep.district.equals(selectedDistrictFilter, ignoreCase = true)
+
+            val matchesCasualties = if (onlyWithCasualties) {
+                (rep.casualtiesDead > 0 || rep.casualtiesInjured > 0 || rep.casualtiesMissing > 0)
+            } else true
+
+            val matchesSearch = if (searchQuery.isBlank()) true else {
+                val q = searchQuery.trim().lowercase()
+                rep.id.lowercase().contains(q) ||
+                rep.disasterType.lowercase().contains(q) ||
+                rep.district.lowercase().contains(q) ||
+                rep.village.lowercase().contains(q) ||
+                rep.incidentLocation.lowercase().contains(q) ||
+                rep.reporterName.lowercase().contains(q) ||
+                rep.additionalNotes.lowercase().contains(q)
+            }
+
+            matchesStatus && matchesCategory && matchesDistrict && matchesCasualties && matchesSearch
         }
-
-        matchesStatus && matchesCategory && matchesDistrict && matchesCasualties && matchesSearch
     }
 
     LazyColumn(
@@ -651,7 +705,7 @@ fun OfficerDashboardConsoleView(
                 awaitPointerEventScope {
                     while (true) {
                         awaitPointerEvent()
-                        lastActiveTimeMs = System.currentTimeMillis()
+                        lastActiveTimeMs.set(System.currentTimeMillis())
                     }
                 }
             }
@@ -2335,18 +2389,30 @@ fun OfficerDashboardConsoleView(
                             }
                             isProcessingSecurity = true
                             coroutineScope.launch {
-                                val integrityResult = PlayIntegritySecurityManager.getInstance(context)
-                                    .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "CHANGE_PIN")
-                                val smartRepo = SmartOfficerAuthRepository.getInstance(context)
-                                val result = smartRepo.changePersonalPin(officerBadgeId, oldPinInput, newPinInput)
-                                isProcessingSecurity = false
-                                result.onSuccess { msg ->
-                                    officerAuthManager.markCloudCustomPinStatus(true)
-                                    hasCustomPin = true
-                                    showChangePinDialog = false
-                                    Toast.makeText(context, "$msg (${integrityResult.verdict})", Toast.LENGTH_LONG).show()
-                                }.onFailure { err ->
-                                    errorMessage = err.message ?: "Gagal memperbarui PIN."
+                                try {
+                                    val (integrityResult, result) = kotlinx.coroutines.withTimeout(25_000L) {
+                                        val integrity = PlayIntegritySecurityManager.getInstance(context)
+                                            .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "CHANGE_PIN")
+                                        val smartRepo = SmartOfficerAuthRepository.getInstance(context)
+                                        val res = smartRepo.changePersonalPin(officerBadgeId, oldPinInput, newPinInput)
+                                        integrity to res
+                                    }
+                                    result.onSuccess { msg ->
+                                        officerAuthManager.markCloudCustomPinStatus(true)
+                                        hasCustomPin = true
+                                        showChangePinDialog = false
+                                        Toast.makeText(context, "$msg (${integrityResult.verdict})", Toast.LENGTH_LONG).show()
+                                    }.onFailure { err ->
+                                        errorMessage = err.message ?: "Gagal memperbarui PIN."
+                                    }
+                                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                                    errorMessage = "Waktu koneksi ke server Firebase habis. Periksa sinyal internet lalu coba lagi."
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    errorMessage = e.localizedMessage ?: "Gagal memperbarui PIN."
+                                } finally {
+                                    isProcessingSecurity = false
                                 }
                             }
                         } else {
@@ -2356,36 +2422,56 @@ fun OfficerDashboardConsoleView(
                                 return@Button
                             }
                             isProcessingSecurity = true
+                            isResettingOwnPin = true
+                            SecurityManager.markPinResetInProgress(officerBadgeId, durationMs = 25_000L)
                             coroutineScope.launch {
-                                val integrityResult = PlayIntegritySecurityManager.getInstance(context)
-                                    .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "RESET_PIN")
-                                val smartRepo = SmartOfficerAuthRepository.getInstance(context)
-                                val isAdminAuthorized = securityManager.verifyMasterAdminPin(
-                                    inputPin = trimmedResetInput,
-                                    officerNip = officerBadgeId,
-                                    officerName = officerName,
-                                    officerRole = officerRole,
-                                    actionTitle = "Reset PIN Petugas ($officerBadgeId)"
-                                ).getOrDefault(false)
-                                val isSelfPinAuthorized = if (!isAdminAuthorized) {
-                                    smartRepo.verifyOfficerPinAgainstCloud(officerBadgeId, trimmedResetInput)
-                                } else {
-                                    false
-                                }
-                                if (!isAdminAuthorized && !isSelfPinAuthorized) {
+                                try {
+                                    val result = kotlinx.coroutines.withTimeout(25_000L) {
+                                        PlayIntegritySecurityManager.getInstance(context)
+                                            .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "RESET_PIN")
+                                        val smartRepo = SmartOfficerAuthRepository.getInstance(context)
+                                        val isAdminAuthorized = securityManager.verifyMasterAdminPin(
+                                            inputPin = trimmedResetInput,
+                                            officerNip = officerBadgeId,
+                                            officerName = officerName,
+                                            officerRole = officerRole,
+                                            actionTitle = "Reset PIN Petugas ($officerBadgeId)"
+                                        ).getOrDefault(false)
+                                        val isSelfPinAuthorized = if (!isAdminAuthorized) {
+                                            smartRepo.verifyOfficerPinAgainstCloud(officerBadgeId, trimmedResetInput)
+                                        } else {
+                                            false
+                                        }
+                                        if (!isAdminAuthorized && !isSelfPinAuthorized) {
+                                            Result.failure(
+                                                SecurityException("Verifikasi Sandi Administrator ke server atau PIN pribadi lama ditolak. Percobaan dicatat di Audit Log.")
+                                            )
+                                        } else {
+                                            smartRepo.resetToInitialNipSecret(officerBadgeId)
+                                        }
+                                    }
+                                    result.onSuccess { msg ->
+                                        officerAuthManager.markCloudCustomPinStatus(false)
+                                        hasCustomPin = false
+                                        showChangePinDialog = false
+                                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                        // Cleanly return officer to Landing Page so they can immediately login with 6-digit NIP PIN
+                                        onLogoutClick()
+                                    }.onFailure { err ->
+                                        SecurityManager.clearPinResetInProgress(officerBadgeId)
+                                        errorMessage = err.message ?: "Otorisasi reset PIN gagal."
+                                    }
+                                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                                    SecurityManager.clearPinResetInProgress(officerBadgeId)
+                                    errorMessage = "Waktu proses Reset PIN ke server habis. Periksa koneksi internet lalu coba lagi."
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    SecurityManager.clearPinResetInProgress(officerBadgeId)
+                                    errorMessage = e.localizedMessage ?: "Otorisasi reset PIN gagal."
+                                } finally {
                                     isProcessingSecurity = false
-                                    errorMessage = "Verifikasi Sandi Administrator ke server atau PIN pribadi lama ditolak. Percobaan dicatat di Audit Log."
-                                    return@launch
-                                }
-                                val result = smartRepo.resetToInitialNipSecret(officerBadgeId)
-                                isProcessingSecurity = false
-                                result.onSuccess { msg ->
-                                    officerAuthManager.markCloudCustomPinStatus(false)
-                                    hasCustomPin = false
-                                    showChangePinDialog = false
-                                    Toast.makeText(context, "$msg (${integrityResult.verdict})", Toast.LENGTH_LONG).show()
-                                }.onFailure { err ->
-                                    errorMessage = err.message ?: "Otorisasi reset PIN gagal."
+                                    isResettingOwnPin = false
                                 }
                             }
                         }

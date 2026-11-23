@@ -209,9 +209,9 @@ class WeatherViewModel(
                 android.util.Log.w("WeatherViewModel", "Firestore listener init warning: ${e.message}")
             }
 
-            // Continuous real-time listener polling so citizen reports & officer updates appear rapidly across devices
+            // Periodic fallback reconciliation (real-time Firestore listener above already pushes updates immediately)
             while (true) {
-                kotlinx.coroutines.delay(5000)
+                kotlinx.coroutines.delay(60_000L)
                 try {
                     ensureCitizenReportsRealtimeListenerAttached()
                     repository.syncCitizenDisasterReportsOnline()
@@ -1139,6 +1139,13 @@ class WeatherViewModel(
     // --- Startup Splash Portal & Disaster Wallpaper Controls ---
     fun dismissStartupWallpaper() {
         _uiState.value = _uiState.value.copy(isStartupWallpaperVisible = false)
+    }
+
+    fun showStartupWallpaper() {
+        _uiState.value = _uiState.value.copy(
+            isStartupWallpaperVisible = true,
+            selectedTab = 0
+        )
     }
 
     fun setDisasterWallpaperDialogOpen(isOpen: Boolean) {

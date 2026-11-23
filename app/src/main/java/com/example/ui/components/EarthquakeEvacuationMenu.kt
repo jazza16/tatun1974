@@ -1,8 +1,8 @@
 package com.example.ui.components
 
 import android.content.Context
-import android.media.AudioManager
-import android.media.ToneGenerator
+import android.media.AudioAttributes
+import com.example.util.EmergencyTonePlayer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
@@ -120,6 +120,7 @@ fun EarthquakeEvacuationMenu(
         onDispose {
             whistleJob?.cancel()
             whistleJob = null
+            EmergencyTonePlayer.stop()
         }
     }
 
@@ -128,26 +129,33 @@ fun EarthquakeEvacuationMenu(
             whistleJob?.cancel()
             whistleJob = null
             isWhistleActive = false
+            EmergencyTonePlayer.stop()
         } else {
             isWhistleActive = true
-            whistleJob = coroutineScope.launch {
-                var toneGen: ToneGenerator? = null
+            whistleJob = coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {
-                    toneGen = ToneGenerator(AudioManager.STREAM_ALARM, 100)
                     while (isActive && isWhistleActive) {
-                        toneGen.startTone(ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE, 400)
-                        delay(500)
-                        toneGen.startTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 400)
-                        delay(600)
+                        EmergencyTonePlayer.playToneSuspend(
+                            freqHz1 = 2600.0,
+                            freqHz2 = 3100.0,
+                            durationMs = 400,
+                            usage = AudioAttributes.USAGE_ALARM,
+                            volume = 0.90f
+                        )
+                        delay(150)
+                        EmergencyTonePlayer.playToneSuspend(
+                            freqHz1 = 2200.0,
+                            freqHz2 = 2850.0,
+                            durationMs = 400,
+                            usage = AudioAttributes.USAGE_ALARM,
+                            volume = 0.90f
+                        )
+                        delay(250)
                     }
-                } catch (e: Exception) {
+                } catch (_: Throwable) {
                     // Ignore sound output failures
                 } finally {
-                    try {
-                        toneGen?.release()
-                    } catch (e: Exception) {
-                        // Ignore release error
-                    }
+                    EmergencyTonePlayer.stop()
                 }
             }
         }
