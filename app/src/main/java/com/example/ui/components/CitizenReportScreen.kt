@@ -381,7 +381,6 @@ fun CitizenReportScreen(
 
     // Officer Login & Status Gating Modal State
     var showOfficerLoginDialog by remember { mutableStateOf(initialShowOfficerLogin) }
-    var showDisasterWallpaperDialog by remember { mutableStateOf(false) }
     var showVolunteerCoordinationDialog by remember { mutableStateOf(false) }
     LaunchedEffect(initialShowOfficerLogin) {
         if (initialShowOfficerLogin) {
@@ -708,17 +707,6 @@ fun CitizenReportScreen(
                     color = Color.White,
                     modifier = Modifier.weight(1f)
                 )
-
-                IconButton(
-                    onClick = { showDisasterWallpaperDialog = true },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Info Lanskap & Wallpaper HD",
-                        tint = Color.White
-                    )
-                }
             }
         }
 
@@ -3538,13 +3526,6 @@ fun CitizenReportScreen(
                 }
             }
         }
-    }
-
-    // Dialog Info Lanskap & Wallpaper HD (diakses dari info aplikasi setelah login)
-    if (showDisasterWallpaperDialog) {
-        MukomukoDisasterWallpaperDialog(
-            onDismiss = { showDisasterWallpaperDialog = false }
-        )
     }
 
     // Full-Screen Dialog Modul Pendataan & Koordinasi Relawan

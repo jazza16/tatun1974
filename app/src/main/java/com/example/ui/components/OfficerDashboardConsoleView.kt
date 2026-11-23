@@ -1539,13 +1539,19 @@ fun OfficerDashboardConsoleView(
                         text = "Metrik Triage & Validasi Laporan",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = Color(0xFF1E293B),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "$totalCount Total Aduan",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF64748B)
+                        color = Color(0xFF64748B),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1680,6 +1686,7 @@ fun OfficerDashboardConsoleView(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Surface(
+                                        modifier = Modifier.weight(1f, fill = false),
                                         shape = RoundedCornerShape(6.dp),
                                         color = Color.Black.copy(alpha = 0.65f)
                                     ) {
@@ -1687,9 +1694,12 @@ fun OfficerDashboardConsoleView(
                                             text = "GPS: %.4f, %.4f (±%.0fm)".format(rep.latitude, rep.longitude, rep.gpsAccuracyMeters ?: 5f),
                                             fontSize = 11.sp,
                                             color = Color(0xFF86EFAC),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                         )
                                     }
+                                    Spacer(modifier = Modifier.width(8.dp))
 
                                     Button(
                                         onClick = {
@@ -1919,12 +1929,18 @@ fun OfficerDashboardConsoleView(
                     text = if (dashboardSubTab == 1) "Daftar Arsip Laporan Selesai" else "Antrean Penanganan Bencana Aktif",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A)
+                    color = Color(0xFF0F172A),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "${filteredReports.size} laporan",
                     fontSize = 11.sp,
-                    color = Color(0xFF64748B)
+                    color = Color(0xFF64748B),
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }

@@ -415,7 +415,7 @@ fun FormLaporanHarianScreen(
                         .fillMaxWidth()
                         .navigationBarsPadding()
                         .imePadding()
-                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
+                        .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 22.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {

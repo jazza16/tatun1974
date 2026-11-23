@@ -671,8 +671,7 @@ fun WeatherAppScreen(
                     onOpenAppMenu = { viewModel.setAppUpdateSheetOpen(true) },
                     onEvacuationGuideClick = { isPanduanEvakuasiOpen = true },
                     onCallCenter117Click = { isCallCenter117SheetOpen = true },
-                    onDetectLocationClick = triggerLocationDetection,
-                    onWallpaperClick = { viewModel.showStartupWallpaper() }
+                    onDetectLocationClick = triggerLocationDetection
                 )
                 if (!isExpandedWindow) {
                     WeatherTabs(
@@ -1422,7 +1421,14 @@ fun WeatherAppScreen(
             onOpenOnboarding = { viewModel.setOnboardingOpen(true) },
             onOpenCompass = { viewModel.setCompassSheetOpen(true) },
             onOpenEvacuationGuide = { isPanduanEvakuasiOpen = true },
-            onShowStartupWallpaper = { viewModel.showStartupWallpaper() }
+            onOpenDisasterWallpaper = { viewModel.setDisasterWallpaperDialogOpen(true) }
+        )
+    }
+
+    // Dialog Info Lanskap & Wallpaper HD (diakses dari menu Info Aplikasi)
+    if (uiState.isDisasterWallpaperDialogOpen) {
+        com.example.ui.components.MukomukoDisasterWallpaperDialog(
+            onDismiss = { viewModel.setDisasterWallpaperDialogOpen(false) }
         )
     }
 

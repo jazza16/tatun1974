@@ -513,56 +513,70 @@ fun DariWargaHeaderCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         text = "Petugas Jaga:",
-                        fontSize = 12.sp,
-                        color = Color(0xFF757575)
+                        fontSize = 11.5.sp,
+                        color = Color(0xFF64748B),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = officerName.ifBlank { "Petugas Pusdalops Aktif" },
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1976D2)
-                    )
-                }
 
-                if (unreadCitizenCount > 0) {
-                    Surface(
-                        color = Color(0xFFFEF2F2),
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, Color(0xFFFECACA)),
-                        modifier = Modifier.clickable { onOpenDariWargaSheet() }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    if (unreadCitizenCount > 0) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = Color(0xFFFEF2F2),
+                            shape = RoundedCornerShape(20.dp),
+                            border = BorderStroke(1.dp, Color(0xFFFECACA)),
+                            modifier = Modifier.clickable { onOpenDariWargaSheet() }
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFDC2626))
-                            )
-                            Text(
-                                text = "$unreadCitizenCount Laporan Warga Baru",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFB91C1C)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFDC2626))
+                                )
+                                Text(
+                                    text = "$unreadCitizenCount Laporan Baru",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFB91C1C),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
                         }
                     }
                 }
+
+                Text(
+                    text = officerName.ifBlank { "Petugas Pusdalops Aktif" },
+                    fontSize = 14.5.sp,
+                    lineHeight = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1976D2),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             // Baris Tombol Sejajar: DARI WARGA (Hijau + Badge Angka Merah) & UPDATE KEJADIAN (Oranye)
@@ -674,6 +688,7 @@ fun DariWargaHeaderCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
@@ -687,7 +702,9 @@ fun DariWargaHeaderCard(
                                         text = "Autofill Aktif dari Laporan Warga",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF166534)
+                                        color = Color(0xFF166534),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
 
@@ -1061,12 +1078,13 @@ private fun CitizenReportListItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
+                    modifier = Modifier.weight(1f, fill = false),
                     color = Color(0xFFFEF3C7),
                     shape = RoundedCornerShape(8.dp),
                     border = BorderStroke(1.dp, Color(0xFFFDE68A))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
@@ -1080,10 +1098,14 @@ private fun CitizenReportListItemCard(
                             text = item.disasterType,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF92400E)
+                            color = Color(0xFF92400E),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 if (item.isUnreadOrUnprocessed) {
                     Surface(
@@ -1095,6 +1117,8 @@ private fun CitizenReportListItemCard(
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
@@ -1108,6 +1132,8 @@ private fun CitizenReportListItemCard(
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF475569),
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }

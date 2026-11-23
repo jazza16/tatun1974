@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Refresh
@@ -46,8 +47,6 @@ import androidx.compose.material.icons.filled.SettingsBrightness
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.VerifiedUser
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -108,7 +107,7 @@ fun AppUpdateBottomSheet(
     onOpenOnboarding: () -> Unit = {},
     onOpenCompass: () -> Unit = {},
     onOpenEvacuationGuide: () -> Unit = {},
-    onShowStartupWallpaper: () -> Unit = {}
+    onOpenDisasterWallpaper: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val systemInDark = isSystemInDarkTheme()
@@ -279,108 +278,32 @@ fun AppUpdateBottomSheet(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("SOP Evakuasi (Panduan Offline)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Preserved Wallpaper HD Badges (migrated from Login Screen)
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    color = OrangePrimary.copy(alpha = 0.18f),
-                                    shape = RoundedCornerShape(6.dp),
-                                    border = androidx.compose.foundation.BorderStroke(0.8.dp, OrangePrimary)
-                                ) {
-                                    Text(
-                                        text = "WALLPAPER HD 9:16",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = OrangePrimary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Lanskap Alam & Mitigasi",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                    modifier = Modifier.weight(1f, fill = false)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            @OptIn(ExperimentalLayoutApi::class)
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = {
-                                        onDismiss()
-                                        onShowStartupWallpaper()
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .heightIn(min = 44.dp)
-                                        .testTag("btn_view_full_photo_info"),
-                                    colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Visibility,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = OrangeOnPrimary
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Lihat Foto Penuh", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = OrangeOnPrimary)
-                                }
-
-                                val context = androidx.compose.ui.platform.LocalContext.current
-                                OutlinedButton(
-                                    onClick = {
-                                        try {
-                                            val wm = android.app.WallpaperManager.getInstance(context)
-                                            val bmp = android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.img_mukomuko_wallpaper)
-                                            if (bmp != null) {
-                                                wm.setBitmap(bmp)
-                                                android.widget.Toast.makeText(context, "Wallpaper HD berhasil dipasang di layar HP!", android.widget.Toast.LENGTH_SHORT).show()
-                                            }
-                                        } catch (e: Exception) {
-                                            android.widget.Toast.makeText(context, "Gagal memasang: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .heightIn(min = 44.dp)
-                                        .testTag("btn_set_wallpaper_info"),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Wallpaper,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = OrangePrimary
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Pasang di HP", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = OrangePrimary)
-                                }
-                            }
+                        OutlinedButton(
+                            onClick = {
+                                onDismiss()
+                                onOpenDisasterWallpaper()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .testTag("btn_open_disaster_wallpaper_from_info"),
+                            border = androidx.compose.foundation.BorderStroke(1.2.dp, OrangePrimary),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Landscape,
+                                contentDescription = "Info Lanskap & Wallpaper HD",
+                                modifier = Modifier.size(18.dp),
+                                tint = OrangePrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Info Lanskap & Wallpaper HD",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = OrangePrimary
+                            )
                         }
                     }
                 }
@@ -416,11 +339,7 @@ fun AppUpdateBottomSheet(
                 organization = updateState.organization,
                 developerEmail = updateState.developerEmail,
                 developerTelegram = updateState.developerTelegram,
-                isDark = isActuallyDark,
-                onOpenWallpaper = {
-                    onDismiss()
-                    onShowStartupWallpaper()
-                }
+                isDark = isActuallyDark
             )
 
             Spacer(modifier = Modifier.height(16.dp))

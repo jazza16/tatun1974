@@ -65,7 +65,7 @@ data class WeatherUiState(
     // Onboarding & Digital Compass Interactive Guide
     val isOnboardingOpen: Boolean = false,
     val isCompassSheetOpen: Boolean = false,
-    // Startup Splash Wallpaper & High-Resolution Disaster Infographic
+    // Startup Splash Portal & Disaster Landscape Wallpaper Dialog
     val isStartupWallpaperVisible: Boolean = true,
     val isDisasterWallpaperDialogOpen: Boolean = false,
     // GPS Location Auto-Detection
@@ -1136,13 +1136,9 @@ class WeatherViewModel(
         _uiState.value = _uiState.value.copy(isCompassSheetOpen = isOpen)
     }
 
-    // --- Startup Splash Wallpaper Controls ---
+    // --- Startup Splash Portal & Disaster Wallpaper Controls ---
     fun dismissStartupWallpaper() {
         _uiState.value = _uiState.value.copy(isStartupWallpaperVisible = false)
-    }
-
-    fun showStartupWallpaper() {
-        _uiState.value = _uiState.value.copy(isStartupWallpaperVisible = true)
     }
 
     fun setDisasterWallpaperDialogOpen(isOpen: Boolean) {

@@ -76,8 +76,7 @@ fun WeatherTopBar(
     onOpenAppMenu: () -> Unit,
     onEvacuationGuideClick: () -> Unit = {},
     onCallCenter117Click: () -> Unit = {},
-    onDetectLocationClick: () -> Unit = {},
-    onWallpaperClick: () -> Unit = {}
+    onDetectLocationClick: () -> Unit = {}
 ) {
     val barContainerColor = if (isDarkMode) Color(0xFF1E1712) else OrangePrimary
     val barContentColor = if (isDarkMode) Color(0xFFFFEDD5) else OrangeOnPrimary

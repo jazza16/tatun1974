@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,6 +59,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.training.SandboxTrainingManager
@@ -183,13 +187,14 @@ fun SandboxTrainingControlCard(
             }
 
             // Body Content
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Surface(
+                        modifier = Modifier.weight(1f),
                         color = if (isSandboxEnabled) Color(0xFFFEF3C7) else Color(0xFFEFF6FF),
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(
@@ -198,7 +203,7 @@ fun SandboxTrainingControlCard(
                         )
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -210,24 +215,36 @@ fun SandboxTrainingControlCard(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = if (isSandboxEnabled) {
-                                    "ISOLASI AKTIF: Zero Write ke Firestore & Room Produksi"
+                                    "ISOLASI AKTIF: Zero Write Firestore & Room"
                                 } else {
                                     "Lingkungan Orientasi Internal Pusdalops & TRC BPBD"
                                 },
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
+                                lineHeight = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isSandboxEnabled) Color(0xFF92400E) else Color(0xFF1E40AF)
+                                color = if (isSandboxEnabled) Color(0xFF92400E) else Color(0xFF1E40AF),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
                     if (isSandboxEnabled) {
-                        Text(
-                            text = "${completedSteps.size}/4 Modul",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFFB45309)
-                        )
+                        Surface(
+                            color = Color(0xFFFDE68A),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFFD97706))
+                        ) {
+                            Text(
+                                text = "${completedSteps.size}/4 Modul",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF92400E),
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                            )
+                        }
                     }
                 }
 
@@ -541,19 +558,25 @@ private fun SandboxMetricChip(
         border = BorderStroke(1.dp, Color(0xFFFDE68A))
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = value,
-                fontSize = 13.sp,
+                fontSize = 12.5.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF78350F)
+                color = Color(0xFF78350F),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
             )
             Text(
                 text = label,
-                fontSize = 10.sp,
-                color = Color(0xFF92400E)
+                fontSize = 9.5.sp,
+                color = Color(0xFF92400E),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -612,73 +635,89 @@ fun SandboxTrainingCompactNoticeBanner(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.School,
-                            contentDescription = "Mode Latihan Aktif",
-                            tint = Color(0xFFB45309),
-                            modifier = Modifier.size(20.dp)
+                    Icon(
+                        imageVector = Icons.Default.School,
+                        contentDescription = "Mode Latihan Aktif",
+                        tint = Color(0xFFB45309),
+                        modifier = Modifier
+                            .padding(top = 1.dp)
+                            .size(18.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "SANDBOX LATIHAN PETUGAS AKTIF ($screenContextLabel)",
+                            fontSize = 11.5.sp,
+                            lineHeight = 15.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF78350F),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = "SANDBOX LATIHAN PETUGAS AKTIF ($screenContextLabel)",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF78350F)
+                        Text(
+                            text = "Seluruh input, validasi & cetak PDF terisolasi 100% — Tidak masuk database produksi.",
+                            fontSize = 10.5.sp,
+                            lineHeight = 14.sp,
+                            color = Color(0xFF92400E)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                ) {
+                    if (onInjectDrillClick != null) {
+                        OutlinedButton(
+                            onClick = onInjectDrillClick,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFFB45309)),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.heightIn(min = 34.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFF92400E)
                             )
+                        ) {
                             Text(
-                                text = "Seluruh input, validasi & cetak PDF terisolasi 100% — Tidak masuk ke database produksi.",
+                                text = "+ Simulasi",
                                 fontSize = 11.sp,
-                                color = Color(0xFF92400E)
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    OutlinedButton(
+                        onClick = {
+                            SandboxTrainingManager.setSandboxModeEnabled(context, false)
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .heightIn(min = 34.dp)
+                            .testTag("btn_exit_sandbox_compact"),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color(0xFFFEF2F2),
+                            contentColor = Color(0xFFB91C1C)
+                        )
                     ) {
-                        if (onInjectDrillClick != null) {
-                            OutlinedButton(
-                                onClick = onInjectDrillClick,
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, Color(0xFFB45309)),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = Color(0xFF92400E)
-                                )
-                            ) {
-                                Text(
-                                    text = "+ Simulasi",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        TextButton(
-                            onClick = {
-                                SandboxTrainingManager.setSandboxModeEnabled(context, false)
-                            },
-                            modifier = Modifier.testTag("btn_exit_sandbox_compact")
-                        ) {
-                            Text(
-                                text = "Keluar Latihan",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFB91C1C)
-                            )
-                        }
+                        Text(
+                            text = "Keluar Latihan",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
             }
