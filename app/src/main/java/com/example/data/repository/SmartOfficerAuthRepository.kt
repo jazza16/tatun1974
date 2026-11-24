@@ -247,10 +247,13 @@ class SmartOfficerAuthRepository(private val context: Context) {
         shift: String = "Shift Siaga 24 Jam",
         phone: String = "",
         customInitialPin: String? = null,
-        existingId: String? = null
+        existingId: String? = null,
+        previousNip: String? = null,
+        existingRoomId: Long? = null
     ): Result<ManualOfficerRegistrationResult> = withContext(Dispatchers.IO) {
         val trimmedName = fullName.trim()
         val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
+        val cleanPrevNip = previousNip?.trim()?.replace(Regex("[\\s\\-]+"), "")?.takeIf { it.isNotBlank() }
 
         if (trimmedName.length < 3) {
             return@withContext Result.failure(IllegalArgumentException("Nama petugas minimal 3 karakter."))
@@ -291,16 +294,20 @@ class SmartOfficerAuthRepository(private val context: Context) {
             }
         }
 
-        // 1. Update OfficerAuthManager roster
-        val rosterResult = if (!existingId.isNullOrBlank()) {
+        val isEditingExisting = !existingId.isNullOrBlank() || cleanPrevNip != null || (existingRoomId != null && existingRoomId > 0L)
+        val nipWasChanged = cleanPrevNip != null && !cleanPrevNip.equals(cleanNip, ignoreCase = true)
+
+        // 1. Update OfficerAuthManager roster (also un-tombstones target NIP & tombstones old typo NIP)
+        val rosterResult = if (isEditingExisting) {
             officerAuthManager.updateOfficer(
-                id = existingId,
+                id = existingId.orEmpty(),
                 fullName = trimmedName,
                 nip = cleanNip,
                 role = resolvedRole,
                 shift = resolvedShift,
                 unit = resolvedUnit,
-                phone = resolvedPhone
+                phone = resolvedPhone,
+                previousNip = cleanPrevNip
             )
         } else {
             officerAuthManager.addOfficer(
@@ -316,21 +323,38 @@ class SmartOfficerAuthRepository(private val context: Context) {
             return@withContext Result.failure(err)
         }
 
-        // 2. Upsert into local Room `personnel` directory
+        // 2. Upsert into local Room `personnel` directory (ALL fields including unit & shift, zero duplicates on NIP edit)
         try {
             val allRoomPersonnel = personnelDao.getAllPersonnelList()
-            val existingRoom = allRoomPersonnel.firstOrNull {
-                it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true)
+            val primaryRow = allRoomPersonnel.firstOrNull { row ->
+                (existingRoomId != null && existingRoomId > 0L && row.id == existingRoomId)
+            } ?: allRoomPersonnel.firstOrNull { row ->
+                val rowCleanNip = row.nip.trim().replace(Regex("[\\s\\-]+"), "")
+                (cleanPrevNip != null && rowCleanNip.equals(cleanPrevNip, ignoreCase = true)) ||
+                    rowCleanNip.equals(cleanNip, ignoreCase = true)
             }
-            if (existingRoom != null) {
+
+            if (primaryRow != null) {
                 personnelDao.updatePersonnel(
-                    existingRoom.copy(
+                    primaryRow.copy(
                         name = trimmedName,
                         nip = cleanNip,
                         role = resolvedRole,
+                        unit = resolvedUnit,
+                        shift = resolvedShift,
                         phone = resolvedPhone
                     )
                 )
+                // Hapus baris duplikat (misal saat koreksi typo NIP atau pernah ada spasi/strip)
+                for (row in allRoomPersonnel) {
+                    if (row.id == primaryRow.id) continue
+                    val rowCleanNip = row.nip.trim().replace(Regex("[\\s\\-]+"), "")
+                    if (rowCleanNip.equals(cleanNip, ignoreCase = true) ||
+                        (cleanPrevNip != null && rowCleanNip.equals(cleanPrevNip, ignoreCase = true))
+                    ) {
+                        personnelDao.deletePersonnelById(row.id)
+                    }
+                }
             } else {
                 personnelDao.insertPersonnel(
                     Personnel(
@@ -343,16 +367,45 @@ class SmartOfficerAuthRepository(private val context: Context) {
                     )
                 )
             }
+
+            if (nipWasChanged && cleanPrevNip != null) {
+                try {
+                    credentialDao.deleteByNip(cleanPrevNip)
+                } catch (_: Exception) {}
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Gagal menyimpan personil manual ke tabel Room personnel: ${e.message}")
         }
 
-        // 3. Sync officer profile to Cloud Firestore `officers/{cleanNip}`
-        FirestoreHelper.syncOfficerToCloudSuspend(savedProfile, context)
+        // 3. Sync officer profile to Cloud Firestore `officers/{cleanNip}` (and tombstone old typo NIP if changed)
+        val cloudOfficerSync = try {
+            if (nipWasChanged && cleanPrevNip != null) {
+                FirestoreHelper.markOfficerDeletedInCloudSuspend(
+                    nip = cleanPrevNip,
+                    legacyId = existingId,
+                    fullName = trimmedName,
+                    role = resolvedRole,
+                    reason = "Koreksi NIP ke $cleanNip oleh Admin",
+                    context = context
+                )
+            }
+            FirestoreHelper.syncOfficerToCloudSuspend(savedProfile, context)
+        } catch (e: Exception) {
+            Log.w(TAG, "Sinkronisasi profil petugas ke Cloud ditunda (lokal tersimpan): ${e.message}")
+            Result.failure(e)
+        }
 
         // 4. Provision or update Cloud Firestore `officer_credentials/{cleanNip}`
         val now = System.currentTimeMillis()
-        val existingCloudLookup = FirestoreHelper.fetchOfficerCredentialStrictFromServer(cleanNip, context)
+        val existingCloudLookup = try {
+            FirestoreHelper.fetchOfficerCredentialStrictFromServer(cleanNip, context)
+        } catch (e: Exception) {
+            CloudCredentialLookupResult.Error(
+                errorCode = "CLOUD_UNAVAILABLE",
+                userMessage = e.message ?: "Server tidak terjangkau",
+                cause = e
+            )
+        }
         var preservedExistingCustomPin = false
         var existingOwnerUid: String? = null
 
@@ -420,12 +473,21 @@ class SmartOfficerAuthRepository(private val context: Context) {
             }
         }
 
-        val cloudCredSyncResult = FirestoreHelper.syncCredentialToCloudSuspend(
-            credential = credentialToSync,
-            context = context,
-            preserveOwnerUid = existingOwnerUid,
-            overwriteFullDocument = !customInitialPin.isNullOrBlank()
-        )
+        val cloudCredSyncResult = if (existingCloudLookup is CloudCredentialLookupResult.Error && cloudOfficerSync.isFailure) {
+            // Perangkat sedang offline / server tidak terjangkau: langsung kembalikan sukses lokal tanpa menunggu timeout berulang
+            Result.failure(existingCloudLookup.cause ?: IllegalStateException(existingCloudLookup.userMessage))
+        } else {
+            try {
+                FirestoreHelper.syncCredentialToCloudSuspend(
+                    credential = credentialToSync,
+                    context = context,
+                    preserveOwnerUid = existingOwnerUid,
+                    overwriteFullDocument = !customInitialPin.isNullOrBlank()
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
 
         // 5. Cache sanitized metadata into local Room `officer_credentials`
         try {
@@ -444,12 +506,17 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 name = trimmedName,
                 role = resolvedRole,
                 shift = resolvedShift,
-                action = if (cloudCredSyncResult.isSuccess) {
-                    "OFFICER_REGISTERED_AND_SYNCED_TO_CLOUD"
-                } else {
-                    "OFFICER_REGISTERED_LOCAL_PENDING_CLOUD"
+                action = when {
+                    isEditingExisting && cloudCredSyncResult.isSuccess -> "OFFICER_UPDATED_AND_SYNCED_TO_CLOUD"
+                    isEditingExisting -> "OFFICER_UPDATED_LOCAL_PENDING_CLOUD"
+                    cloudCredSyncResult.isSuccess -> "OFFICER_REGISTERED_AND_SYNCED_TO_CLOUD"
+                    else -> "OFFICER_REGISTERED_LOCAL_PENDING_CLOUD"
                 },
-                deviceInfo = "Didaftarkan melalui Kelola Petugas pada ${Build.MANUFACTURER} ${Build.MODEL}"
+                deviceInfo = if (nipWasChanged) {
+                    "Diperbarui (koreksi NIP $cleanPrevNip -> $cleanNip) via Kelola Petugas pada ${Build.MANUFACTURER} ${Build.MODEL}"
+                } else {
+                    "Disimpan melalui Kelola Petugas pada ${Build.MANUFACTURER} ${Build.MODEL}"
+                }
             )
         )
 
@@ -461,6 +528,99 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 preservedExistingCustomPin = preservedExistingCustomPin
             )
         )
+    }
+
+    /**
+     * Menghapus personil secara permanen oleh Admin (untuk ASN pindah tugas/mutasi, pensiun,
+     * penghapusan entri typo, atau maintenance aplikasi).
+     *
+     * Menghapus dari:
+     * 1. Cache & Direktori `OfficerAuthManager` + mencatat NIP ke daftar tombstone agar ASN bawaan tidak hidup kembali.
+     * 2. Tabel lokal Room `personnel` (berdasarkan Room ID dan seluruh variasi NIP yang dinormalisasi).
+     * 3. Metadata lokal Room `officer_credentials`.
+     * 4. Cloud Firestore `officers/{cleanNip}` (soft-delete tombstone `isDeleted = true` agar sinkron lintas perangkat).
+     */
+    suspend fun deleteOfficerPermanently(
+        nip: String,
+        officerId: String = "",
+        roomId: Long? = null,
+        fullName: String = "",
+        role: String = "",
+        shift: String = "",
+        reason: String = "Dihapus oleh Admin"
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
+        if (cleanNip.isBlank() && officerId.isBlank() && (roomId == null || roomId <= 0L)) {
+            return@withContext Result.failure(IllegalArgumentException("Identitas personil tidak valid."))
+        }
+
+        // 1. Hapus & tombstone di OfficerAuthManager (SharedPreferences)
+        officerAuthManager.deleteOfficerByNip(
+            nip = cleanNip,
+            legacyId = officerId,
+            syncCloud = false
+        )
+
+        // 2. Hapus dari Room `personnel` (berdasarkan ID dan NIP ter-normalisasi)
+        try {
+            if (roomId != null && roomId > 0L) {
+                personnelDao.deletePersonnelById(roomId)
+            }
+            if (cleanNip.isNotBlank()) {
+                personnelDao.deletePersonnelByNip(cleanNip)
+            }
+            // Bersihkan sisa baris dengan format NIP berbeda (spasi/strip)
+            val remaining = personnelDao.getAllPersonnelList()
+            for (row in remaining) {
+                val rowClean = row.nip.trim().replace(Regex("[\\s\\-]+"), "")
+                if (cleanNip.isNotBlank() && rowClean.equals(cleanNip, ignoreCase = true)) {
+                    personnelDao.deletePersonnelById(row.id)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Gagal menghapus baris Room personnel untuk $cleanNip: ${e.message}")
+        }
+
+        // 3. Hapus metadata kredensial lokal dari Room `officer_credentials`
+        if (cleanNip.isNotBlank()) {
+            try {
+                credentialDao.deleteByNip(cleanNip)
+            } catch (e: Exception) {
+                Log.w(TAG, "Gagal menghapus metadata kredensial Room untuk $cleanNip: ${e.message}")
+            }
+        }
+
+        // 4. Catat jejak audit penghapusan oleh Admin
+        safeInsertAuditLog(
+            PersonnelAuditLogEntity(
+                nip = cleanNip.ifBlank { officerId },
+                name = fullName.trim().ifBlank { "Personil ($cleanNip)" },
+                role = role.trim().ifBlank { "-" },
+                shift = shift.trim().ifBlank { "-" },
+                action = "OFFICER_DELETED_BY_ADMIN",
+                deviceInfo = "Alasan: ${reason.trim().ifBlank { "Maintenance" }} (${Build.MANUFACTURER} ${Build.MODEL})"
+            )
+        )
+
+        // 5. Propagasi soft-delete tombstone ke Cloud Firestore (best-effort; penghapusan lokal tetap berhasil walau offline)
+        val cloudSynced = if (cleanNip.isNotBlank()) {
+            try {
+                FirestoreHelper.markOfficerDeletedInCloudSuspend(
+                    nip = cleanNip,
+                    legacyId = officerId,
+                    fullName = fullName,
+                    role = role,
+                    reason = reason,
+                    context = context
+                ).isSuccess
+            } catch (_: Exception) {
+                false
+            }
+        } else {
+            false
+        }
+
+        return@withContext Result.success(cloudSynced)
     }
 
     /**
@@ -501,15 +661,15 @@ class SmartOfficerAuthRepository(private val context: Context) {
             return false
         }
 
-        // 1. Check Official ASN BPBD directory
-        OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.firstOrNull { asn ->
-            matchesOfficer(asn.nip, asn.name)
-        }?.let { return@withContext it.nip.trim().replace(Regex("[\\s\\-]+"), "") }
-
-        // 2. Check OfficerAuthManager roster (non-secret profile directory)
+        // 1. Check OfficerAuthManager roster first (respects Admin edits and deletions)
         val rosterList = officerAuthManager.getOfficerRoster()
         rosterList.firstOrNull { r ->
             matchesOfficer(r.nip, r.fullName)
+        }?.let { return@withContext it.nip.trim().replace(Regex("[\\s\\-]+"), "") }
+
+        // 2. Check Official ASN BPBD directory (skip any NIP deleted/archived by Admin)
+        OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.firstOrNull { asn ->
+            !officerAuthManager.isNipDeleted(asn.nip) && matchesOfficer(asn.nip, asn.name)
         }?.let { return@withContext it.nip.trim().replace(Regex("[\\s\\-]+"), "") }
 
         // 3. Check local Room Personnel directory (non-secret)
@@ -633,23 +793,24 @@ class SmartOfficerAuthRepository(private val context: Context) {
         val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
         if (cleanNip.isBlank()) return@withContext null
 
-        OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.firstOrNull {
+        officerAuthManager.getOfficerRoster().firstOrNull {
             it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true)
+        }?.let { return@withContext it }
+
+        OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.firstOrNull {
+            !officerAuthManager.isNipDeleted(it.nip) &&
+                it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true)
         }?.let { asn ->
             return@withContext OfficerProfile(
                 id = "asn-${asn.nip.trim()}",
                 fullName = asn.name,
                 nip = asn.nip.trim(),
                 role = asn.role,
-                unit = "BPBD Kab. Mukomuko",
-                shift = "Shift Siaga 24 Jam",
-                phone = ""
+                unit = asn.unit,
+                shift = asn.shift,
+                phone = asn.phone
             )
         }
-
-        officerAuthManager.getOfficerRoster().firstOrNull {
-            it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true)
-        }?.let { return@withContext it }
 
         personnelDao.getAllPersonnelList().firstOrNull {
             it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanNip, ignoreCase = true)

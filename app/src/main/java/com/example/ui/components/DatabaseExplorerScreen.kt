@@ -1,7 +1,9 @@
 package com.example.ui.components
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,18 +26,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.SyncProblem
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -43,9 +49,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -60,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -71,10 +80,12 @@ import com.example.data.local.CitizenDisasterReportEntity
 import com.example.data.local.LaporanHarian
 import com.example.data.local.LaporanHarianWithLogKomunikasi
 import com.example.data.local.LogKomunikasi
+import com.example.data.local.OfficerRoles
 import com.example.data.local.OfficialAsnBpbdPersonnel
 import com.example.data.local.Personnel
 import com.example.data.local.PersonnelAuditLogEntity
 import com.example.data.local.SyncConflictLogEntity
+import com.example.data.repository.SmartOfficerAuthRepository
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +109,8 @@ fun DatabaseExplorerScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val smartOfficerAuthRepo = remember(context) { SmartOfficerAuthRepository(context) }
     var selectedTable by remember { mutableStateOf(RoomTable.PERSONNEL) }
     var searchQuery by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -108,6 +121,11 @@ fun DatabaseExplorerScreen(
     var auditLogsList by remember { mutableStateOf<List<PersonnelAuditLogEntity>>(emptyList()) }
     var conflictLogsList by remember { mutableStateOf<List<SyncConflictLogEntity>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
+
+    // Maintenance CRUD states untuk tabel Personil ASN
+    var showAddOrEditPersonnelDialog by remember { mutableStateOf(false) }
+    var editingDbPersonnel by remember { mutableStateOf<Personnel?>(null) }
+    var deletingDbPersonnel by remember { mutableStateOf<Personnel?>(null) }
 
     fun refreshData() {
         isLoading = true
@@ -224,7 +242,31 @@ fun DatabaseExplorerScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (selectedTable == RoomTable.LAPORAN_HARIAN) {
+                    if (selectedTable == RoomTable.PERSONNEL) {
+                        Button(
+                            onClick = {
+                                editingDbPersonnel = null
+                                showAddOrEditPersonnelDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .padding(end = 4.dp)
+                                .testTag("btn_db_add_personnel")
+                        ) {
+                            Icon(Icons.Default.PersonAdd, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "+ Personil",
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    } else if (selectedTable == RoomTable.LAPORAN_HARIAN) {
                         Button(
                             onClick = { showFormLaporanHarian = true },
                             colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
@@ -404,6 +446,39 @@ fun DatabaseExplorerScreen(
                                                 fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                             )
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                                            ) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        editingDbPersonnel = p
+                                                        showAddOrEditPersonnelDialog = true
+                                                    },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                    modifier = Modifier
+                                                        .heightIn(min = 34.dp)
+                                                        .testTag("btn_db_edit_personnel_${p.id}")
+                                                ) {
+                                                    Icon(Icons.Default.Edit, contentDescription = "Edit Personil", tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Edit", fontSize = 11.sp, color = Color(0xFF0284C7), fontWeight = FontWeight.SemiBold)
+                                                }
+                                                OutlinedButton(
+                                                    onClick = { deletingDbPersonnel = p },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                    modifier = Modifier
+                                                        .heightIn(min = 34.dp)
+                                                        .testTag("btn_db_delete_personnel_${p.id}")
+                                                ) {
+                                                    Icon(Icons.Default.Delete, contentDescription = "Hapus Personil", tint = Color(0xFFDC2626), modifier = Modifier.size(14.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Hapus", fontSize = 11.sp, color = Color(0xFFDC2626), fontWeight = FontWeight.SemiBold)
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -795,6 +870,243 @@ fun DatabaseExplorerScreen(
                 }
             }
         }
+    }
+
+    // Modal Input / Edit Personil langsung dari Database Explorer (Maintenance Admin)
+    if (showAddOrEditPersonnelDialog) {
+        val target = editingDbPersonnel
+        val isEdit = target != null
+        var fName by remember(target) { mutableStateOf(target?.name ?: "") }
+        var fNip by remember(target) { mutableStateOf(target?.nip ?: "") }
+        var fRole by remember(target) { mutableStateOf(target?.role ?: OfficerRoles.PETUGAS_JAGA) }
+        var fUnit by remember(target) { mutableStateOf(target?.unit ?: "Pusdalops BPBD Kab. Mukomuko") }
+        var fShift by remember(target) { mutableStateOf(target?.shift ?: "Shift Siaga 24 Jam") }
+        var fPhone by remember(target) { mutableStateOf(target?.phone ?: "") }
+        var fPin by remember(target) { mutableStateOf("") }
+        var fError by remember(target) { mutableStateOf<String?>(null) }
+        var isSaving by remember(target) { mutableStateOf(false) }
+
+        BalancedModalDialog(
+            onDismissRequest = { if (!isSaving) showAddOrEditPersonnelDialog = false },
+            horizontalMargin = 16.dp,
+            extraVerticalMargin = 16.dp
+        ) {
+            val kbActions = rememberFormKeyboardActions()
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                ) {
+                    Text(
+                        text = if (isEdit) "Edit Personil (Maintenance DB)" else "Input Personil Baru (Maintenance DB)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        OutlinedTextField(
+                            value = fName,
+                            onValueChange = { fName = it; fError = null },
+                            label = { Text("Nama Lengkap & Gelar *", fontSize = 11.sp) },
+                            singleLine = true,
+                            keyboardOptions = formNextKeyboardOptions(),
+                            keyboardActions = kbActions,
+                            modifier = Modifier.fillMaxWidth().formScrollPadding()
+                        )
+                        OutlinedTextField(
+                            value = fNip,
+                            onValueChange = { fNip = it; fError = null },
+                            label = { Text("NIP ASN / No. Reg TRC *", fontSize = 11.sp) },
+                            singleLine = true,
+                            keyboardOptions = formNextKeyboardOptions(),
+                            keyboardActions = kbActions,
+                            modifier = Modifier.fillMaxWidth().formScrollPadding()
+                        )
+                        OutlinedTextField(
+                            value = fRole,
+                            onValueChange = { fRole = it },
+                            label = { Text("Jabatan / Peran", fontSize = 11.sp) },
+                            singleLine = true,
+                            keyboardOptions = formNextKeyboardOptions(),
+                            keyboardActions = kbActions,
+                            modifier = Modifier.fillMaxWidth().formScrollPadding()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = fShift,
+                                onValueChange = { fShift = it },
+                                label = { Text("Regu / Shift", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = kbActions,
+                                modifier = Modifier.weight(1f).formScrollPadding()
+                            )
+                            OutlinedTextField(
+                                value = fUnit,
+                                onValueChange = { fUnit = it },
+                                label = { Text("Unit / Satuan", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = kbActions,
+                                modifier = Modifier.weight(1f).formScrollPadding()
+                            )
+                        }
+                        OutlinedTextField(
+                            value = fPhone,
+                            onValueChange = { fPhone = it },
+                            label = { Text("No. HP / WhatsApp (Opsional)", fontSize = 11.sp) },
+                            singleLine = true,
+                            keyboardOptions = formNextKeyboardOptions(),
+                            keyboardActions = kbActions,
+                            modifier = Modifier.fillMaxWidth().formScrollPadding()
+                        )
+                        OutlinedTextField(
+                            value = fPin,
+                            onValueChange = { fPin = it; fError = null },
+                            label = { Text("PIN Login Awal / Reset (Opsional)", fontSize = 11.sp) },
+                            placeholder = { Text("Kosongkan untuk otomatis / pertahankan PIN", fontSize = 11.sp) },
+                            singleLine = true,
+                            keyboardOptions = formDoneKeyboardOptions(),
+                            keyboardActions = kbActions,
+                            modifier = Modifier.fillMaxWidth().formScrollPadding()
+                        )
+                        if (fError != null) {
+                            Text(text = fError!!, color = Color(0xFFDC2626), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAddOrEditPersonnelDialog = false },
+                            enabled = !isSaving,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f).heightIn(min = 44.dp)
+                        ) {
+                            Text("Batal", fontSize = 12.sp)
+                        }
+                        Button(
+                            onClick = {
+                                if (!isSaving) {
+                                    isSaving = true
+                                    scope.launch {
+                                        val res = smartOfficerAuthRepo.registerOrUpdateManualOfficer(
+                                            fullName = fName.trim(),
+                                            nip = fNip.trim(),
+                                            role = fRole.trim(),
+                                            unit = fUnit.trim(),
+                                            shift = fShift.trim(),
+                                            phone = fPhone.trim(),
+                                            customInitialPin = fPin.trim().ifBlank { null },
+                                            existingId = target?.let { "officer_${it.nip.trim()}" },
+                                            previousNip = target?.nip,
+                                            existingRoomId = target?.id
+                                        )
+                                        isSaving = false
+                                        res.fold(
+                                            onSuccess = { saved ->
+                                                showAddOrEditPersonnelDialog = false
+                                                refreshData()
+                                                Toast.makeText(
+                                                    context,
+                                                    "Data personil '${saved.profile.fullName}' berhasil disimpan.",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            },
+                                            onFailure = { err ->
+                                                fError = err.message ?: "Gagal menyimpan data personil."
+                                            }
+                                        )
+                                    }
+                                }
+                            },
+                            enabled = !isSaving,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (isEdit) OrangePrimary else Color(0xFF0F766E)),
+                            modifier = Modifier.weight(1.2f).heightIn(min = 44.dp)
+                        ) {
+                            Text(if (isSaving) "Menyimpan..." else if (isEdit) "Simpan Perubahan" else "Simpan Personil", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Konfirmasi Hapus Personil Permanen dari Database Explorer
+    if (deletingDbPersonnel != null) {
+        val p = deletingDbPersonnel!!
+        var isDeleting by remember(p) { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { if (!isDeleting) deletingDbPersonnel = null },
+            title = { Text("Hapus Personil Permanen?", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+            text = {
+                Text(
+                    text = "Personil '${p.name}' (NIP: ${p.nip}) akan dihapus permanen dari database lokal & Cloud (tidak akan muncul kembali).",
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (!isDeleting) {
+                            isDeleting = true
+                            scope.launch {
+                                smartOfficerAuthRepo.deleteOfficerPermanently(
+                                    nip = p.nip,
+                                    officerId = "officer_${p.nip.trim()}",
+                                    roomId = p.id,
+                                    fullName = p.name,
+                                    role = p.role,
+                                    shift = p.shift,
+                                    reason = "Maintenance Database Explorer"
+                                )
+                                isDeleting = false
+                                deletingDbPersonnel = null
+                                refreshData()
+                                Toast.makeText(context, "Personil '${p.name}' berhasil dihapus permanen.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    enabled = !isDeleting,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+                ) {
+                    Text(if (isDeleting) "Menghapus..." else "Hapus Permanen")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { deletingDbPersonnel = null }, enabled = !isDeleting) {
+                    Text("Batal")
+                }
+            }
+        )
     }
 }
 

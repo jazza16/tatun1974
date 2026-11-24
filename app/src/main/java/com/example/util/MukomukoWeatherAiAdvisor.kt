@@ -117,7 +117,7 @@ object MukomukoWeatherAiAdvisor {
         ⚓ **Himbauan PUSDALOPS BPBD Mukomuko:**
         1. Waspadai fenomena alun (*swell*) Samudra Hindia yang kerap meningkat pada siang menjelang sore.
         2. Periksa kelayakan mesin perahu katir, pasokan bahan bakar cadangan, serta alat komunikasi radio/ponsel dalam kantong kedap air.
-        3. Jika terjadi insiden mati mesin atau cuaca buruk di laut, segera hubungi **Call Center 117 (Bebas Pulsa)** atau Posko Darurat BPBD Mukomuko di **0737-71112**.
+        3. Jika terjadi insiden mati mesin atau cuaca buruk di laut, segera hubungi **Call Center 117 (Bebas Pulsa)** atau **Call Center Darurat 112**.
         """.trimIndent()
     }
 
@@ -274,8 +274,8 @@ object MukomukoWeatherAiAdvisor {
         return """
         📞 **Kontak Layanan Darurat BPBD Kabupaten Mukomuko:**
 
-        • **Call Center Darurat:** **117** (Bebas Pulsa / Gratis 24 Jam)
-        • **Posko PUSDALOPS-PB Mukomuko:** **(0737) 71112**
+        • **Call Center Bencana BPBD / BNPB:** **117** (Bebas Pulsa / Gratis 24 Jam)
+        • **Nomor Tunggal Panggilan Darurat:** **112** (Dikelola Dinas Kominfo Kab. Mukomuko • Bebas Pulsa 24 Jam)
         • **Alamat Kantor:** Jl. Danau Nibung, Kompleks Perkantoran Pemerintah Daerah Kabupaten Mukomuko, Bengkulu.
         • **Layanan Siaga:** Tim Reaksi Cepat (TRC), Evakuasi Medis Darurat, Penanganan Pohon Tumbang, Banjir, dan Mitigasi Gempa.
         """.trimIndent()

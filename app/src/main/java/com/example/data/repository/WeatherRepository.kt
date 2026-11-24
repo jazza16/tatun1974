@@ -1110,7 +1110,7 @@ class WeatherRepository(
                     "Kapal Tongkang (kecepatan angin >16 knot & tinggi gelombang >1.5 m) agar meningkatkan kewaspadaan.",
                     "Masyarakat dan wisatawan di Pantai Abrasi, Pantai Muara Sebakul, dan Pantai Air Rami dilarang berenang di bibir pantai."
                 ),
-                bpbdContact = "Pusdalops BPBD Mukomuko: 0737-71112 / Call Center Darurat 112"
+                bpbdContact = "Pusdalops BPBD Mukomuko: Call Center 117 / Call Center Darurat 112"
             ),
             DetailedEarlyWarning(
                 id = "warn_rain_2",

@@ -233,10 +233,13 @@ object FirestoreHelper {
 
     /**
      * Real-time listener for BPBD Officer / Personnel roster across Pusdalops & TRC devices.
+     * Filters out soft-deleted (`isDeleted == true`) documents and reports their NIPs via [onDeletedNips].
      */
     fun listenOfficersRealtime(
         onUpdate: (List<OfficerProfile>) -> Unit,
-        onError: ((Exception) -> Unit)? = null
+        onError: ((Exception) -> Unit)? = null,
+        onDeletedNips: ((Map<String, Long>) -> Unit)? = null,
+        onUpdatedAtByNip: ((Map<String, Long>) -> Unit)? = null
     ): ListenerRegistration? {
         val db = firestore ?: return null
         ensureAppCheckTokenAttached()
@@ -248,17 +251,33 @@ object FirestoreHelper {
                         onError?.invoke(error)
                         return@addSnapshotListener
                     }
-                    if (snapshot != null && !snapshot.isEmpty) {
+                    if (snapshot != null) {
                         val list = mutableListOf<OfficerProfile>()
+                        val deletedMap = mutableMapOf<String, Long>()
+                        val updatedAtMap = mutableMapOf<String, Long>()
                         for (doc in snapshot.documents) {
+                            val rawNip = (doc.getString("nip") ?: doc.id).trim()
+                            val cleanNip = rawNip.replace(Regex("[\\s\\-]+"), "")
+                            if (doc.getBoolean("isDeleted") == true) {
+                                if (cleanNip.isNotBlank()) {
+                                    val delTs = doc.getLong("deletedAt")
+                                        ?: doc.getLong("updatedAt")
+                                        ?: System.currentTimeMillis()
+                                    deletedMap[cleanNip.lowercase()] = delTs
+                                }
+                                continue
+                            }
                             val id = doc.getString("id") ?: doc.id
                             val fullName = doc.getString("fullName")?.trim() ?: continue
                             if (fullName.isBlank()) continue
-                            val nip = (doc.getString("nip") ?: doc.id).trim()
+                            val nip = cleanNip.ifBlank { rawNip }
                             val role = doc.getString("role") ?: OfficerRoles.PETUGAS_JAGA
                             val unit = doc.getString("unit") ?: "Pusdalops BPBD Kab. Mukomuko"
                             val shift = doc.getString("shift") ?: "Shift Siaga 24 Jam"
                             val phone = doc.getString("phone") ?: ""
+                            doc.getLong("updatedAt")?.let { ts ->
+                                if (nip.isNotBlank()) updatedAtMap[nip.lowercase()] = ts
+                            }
                             list.add(
                                 OfficerProfile(
                                     id = id,
@@ -271,7 +290,15 @@ object FirestoreHelper {
                                 )
                             )
                         }
-                        onUpdate(list)
+                        if (deletedMap.isNotEmpty()) {
+                            onDeletedNips?.invoke(deletedMap)
+                        }
+                        if (updatedAtMap.isNotEmpty()) {
+                            onUpdatedAtByNip?.invoke(updatedAtMap)
+                        }
+                        if (list.isNotEmpty() || deletedMap.isNotEmpty()) {
+                            onUpdate(list)
+                        }
                     }
                 }
         } catch (e: Exception) {
@@ -302,6 +329,7 @@ object FirestoreHelper {
                 "unit" to officer.unit.ifBlank { "Pusdalops BPBD Kab. Mukomuko" },
                 "shift" to officer.shift.ifBlank { "Shift Siaga 24 Jam" },
                 "phone" to officer.phone.trim(),
+                "isDeleted" to false,
                 "updatedAt" to System.currentTimeMillis()
             )
             db.collection(COLLECTION_OFFICERS)
@@ -347,9 +375,10 @@ object FirestoreHelper {
             "unit" to officer.unit.ifBlank { "Pusdalops BPBD Kab. Mukomuko" },
             "shift" to officer.shift.ifBlank { "Shift Siaga 24 Jam" },
             "phone" to officer.phone.trim(),
+            "isDeleted" to false,
             "updatedAt" to System.currentTimeMillis()
         )
-        return withTimeoutOrNull(8_000L) {
+        return withTimeoutOrNull(4_500L) {
             suspendCancellableCoroutine { cont ->
                 try {
                     db.collection(COLLECTION_OFFICERS)
@@ -367,11 +396,89 @@ object FirestoreHelper {
                     if (cont.isActive) cont.resume(Result.failure(e))
                 }
             }
-        } ?: Result.failure(IllegalStateException("Waktu sinkronisasi profil petugas ke server Firebase habis (timeout 8 detik)."))
+        } ?: Result.failure(IllegalStateException("Waktu sinkronisasi profil petugas ke server Firebase habis."))
     }
 
     /**
-     * Removes officer profile from Firestore.
+     * Marks an officer as soft-deleted (tombstone) in Firestore `officers/{cleanNip}` so all synced
+     * devices remove the retired/transferred/typo officer and never resurrect hardcoded default ASNs.
+     */
+    suspend fun markOfficerDeletedInCloudSuspend(
+        nip: String,
+        legacyId: String? = null,
+        fullName: String = "",
+        role: String = "",
+        reason: String = "Dihapus oleh Admin",
+        context: Context? = null
+    ): Result<Unit> {
+        if (overrideCloudCredentialWriterForTesting != null && overrideFirestoreForTesting == null) {
+            return Result.success(Unit)
+        }
+        val dbResult = getFirestoreOrThrow(context)
+        val db = dbResult.getOrNull()
+            ?: return Result.failure(dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia"))
+        ensureAppCheckTokenAttached()
+        val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
+        if (cleanNip.isBlank()) {
+            return Result.failure(IllegalArgumentException("NIP petugas tidak boleh kosong"))
+        }
+        val now = System.currentTimeMillis()
+        val effectiveOwnerUid = currentUid() ?: "officer_nip_$cleanNip"
+        val tombstonePayload = mapOf(
+            "id" to "officer_$cleanNip",
+            "ownerUid" to effectiveOwnerUid,
+            "fullName" to fullName.trim().ifBlank { "Arsip Personil ($cleanNip)" }.take(150),
+            "nip" to cleanNip,
+            "role" to role.trim().ifBlank { OfficerRoles.PETUGAS_JAGA }.take(80),
+            "isDeleted" to true,
+            "deletedAt" to now,
+            "deletedReason" to reason.trim().ifBlank { "Dihapus oleh Admin" }.take(200),
+            "updatedAt" to now
+        )
+        // Also clean up any legacy document keyed by non-NIP ID (best-effort)
+        val cleanLegacy = legacyId?.trim().orEmpty()
+        if (cleanLegacy.isNotBlank() &&
+            !cleanLegacy.equals(cleanNip, ignoreCase = true) &&
+            !cleanLegacy.all { it.isDigit() } &&
+            cleanLegacy.matches(Regex("^[a-zA-Z0-9_\\-]+$"))
+        ) {
+            try {
+                db.collection(COLLECTION_OFFICERS).document(cleanLegacy).delete()
+            } catch (_: Exception) {}
+        }
+        return withTimeoutOrNull(4_500L) {
+            suspendCancellableCoroutine { cont ->
+                try {
+                    db.collection(COLLECTION_OFFICERS)
+                        .document(cleanNip)
+                        .set(tombstonePayload, SetOptions.merge())
+                        .addOnSuccessListener {
+                            Log.d(TAG, "Officer $cleanNip tombstoned (isDeleted=true) in Firestore")
+                            if (cont.isActive) cont.resume(Result.success(Unit))
+                        }
+                        .addOnFailureListener { e ->
+                            logFirestoreError("markOfficerDeletedInCloudSuspend($cleanNip)", e)
+                            // Fallback to hard delete if server rules haven't propagated isDeleted yet
+                            db.collection(COLLECTION_OFFICERS)
+                                .document(cleanNip)
+                                .delete()
+                                .addOnSuccessListener {
+                                    if (cont.isActive) cont.resume(Result.success(Unit))
+                                }
+                                .addOnFailureListener { delErr ->
+                                    if (cont.isActive) cont.resume(Result.failure(delErr))
+                                }
+                        }
+                } catch (e: Exception) {
+                    logFirestoreError("markOfficerDeletedInCloudSuspend(exception)", e)
+                    if (cont.isActive) cont.resume(Result.failure(e))
+                }
+            }
+        } ?: Result.failure(IllegalStateException("Waktu penghapusan petugas di server Firebase habis."))
+    }
+
+    /**
+     * Removes officer profile from Firestore using normalized NIP (and optional raw ID).
      */
     fun deleteOfficerFromCloud(officerId: String) {
         val db = firestore ?: return
@@ -379,15 +486,30 @@ object FirestoreHelper {
         try {
             val cleanId = officerId.trim()
             if (cleanId.isBlank()) return
-            db.collection(COLLECTION_OFFICERS)
-                .document(cleanId)
-                .delete()
-                .addOnSuccessListener {
-                    Log.d(TAG, "Officer $cleanId deleted from Firestore")
-                }
-                .addOnFailureListener { e ->
-                    Log.w(TAG, "Failed to delete officer from Firestore", e)
-                }
+            val extractedNip = when {
+                cleanId.startsWith("asn-", ignoreCase = true) -> cleanId.removePrefix("asn-")
+                cleanId.startsWith("officer_", ignoreCase = true) -> cleanId.removePrefix("officer_")
+                else -> cleanId
+            }.trim().replace(Regex("[\\s\\-]+"), "")
+
+            val targets = linkedSetOf<String>()
+            if (extractedNip.isNotBlank() && extractedNip.matches(Regex("^[a-zA-Z0-9_\\-]+$"))) {
+                targets.add(extractedNip)
+            }
+            if (cleanId.matches(Regex("^[a-zA-Z0-9_\\-]+$"))) {
+                targets.add(cleanId)
+            }
+            for (docId in targets) {
+                db.collection(COLLECTION_OFFICERS)
+                    .document(docId)
+                    .delete()
+                    .addOnSuccessListener {
+                        Log.d(TAG, "Officer $docId deleted from Firestore")
+                    }
+                    .addOnFailureListener { e ->
+                        Log.w(TAG, "Failed to delete officer $docId from Firestore", e)
+                    }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Exception during officer cloud delete", e)
         }
@@ -1858,6 +1980,7 @@ object FirestoreHelper {
                             val list = mutableListOf<OfficerProfile>()
                             if (snapshot != null) {
                                 for (doc in snapshot.documents) {
+                                    if (doc.getBoolean("isDeleted") == true) continue
                                     val id = doc.getString("id") ?: doc.id
                                     val fullName = doc.getString("fullName")?.trim() ?: continue
                                     if (fullName.isBlank()) continue
@@ -1919,7 +2042,7 @@ object FirestoreHelper {
                         .get(Source.SERVER)
                         .addOnSuccessListener { doc ->
                             if (!cont.isActive) return@addOnSuccessListener
-                            if (doc != null && doc.exists()) {
+                            if (doc != null && doc.exists() && doc.getBoolean("isDeleted") != true) {
                                 val fullName = doc.getString("fullName")?.trim().orEmpty()
                                 if (fullName.isNotBlank()) {
                                     cont.resume(

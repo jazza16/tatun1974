@@ -93,6 +93,7 @@ class OfficerAuthManager(private val context: Context) {
         private const val PREF_LEGACY_SIM_CLEAN_LOCAL = "hitatun_arazak_normalized_v1_clean"
         private const val PREF_LEGACY_SIM_CLEAN_CLOUD = "hitatun_arazak_normalized_v1_cloud"
         private const val PREF_OFFICER_ROSTER_JSON = "officer_roster_json"
+        private const val PREF_DELETED_OFFICER_NIPS_JSON = "deleted_officer_nips_json"
 
         private const val PREF_IS_ADMIN_LOGGED_IN = "is_admin_logged_in"
         private const val PREF_ADMIN_PASSWORD = "admin_password"
@@ -437,49 +438,131 @@ class OfficerAuthManager(private val context: Context) {
         )
     }
 
+    private fun normalizeNip(nip: String): String =
+        nip.trim().replace(Regex("[\\s\\-]+"), "")
+
+    /**
+     * Returns map of deleted/archived officer NIPs (lowercase normalized NIP -> deleted timestamp ms).
+     * Ensures retired/transferred/typo-corrected official ASN records never resurrect automatically.
+     */
+    fun getDeletedOfficerNips(): Map<String, Long> {
+        val raw = sharedPrefs.getString(PREF_DELETED_OFFICER_NIPS_JSON, null)
+        if (raw.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = JSONObject(raw)
+            val result = mutableMapOf<String, Long>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val clean = normalizeNip(k).lowercase()
+                if (clean.isNotBlank()) {
+                    result[clean] = obj.optLong(k, 1L).coerceAtLeast(1L)
+                }
+            }
+            result
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun saveDeletedOfficerNips(map: Map<String, Long>) {
+        val obj = JSONObject()
+        for ((k, ts) in map) {
+            val clean = normalizeNip(k).lowercase()
+            if (clean.isNotBlank()) {
+                obj.put(clean, ts)
+            }
+        }
+        sharedPrefs.edit().putString(PREF_DELETED_OFFICER_NIPS_JSON, obj.toString()).commit()
+    }
+
+    fun isNipDeleted(nip: String): Boolean {
+        val clean = normalizeNip(nip).lowercase()
+        if (clean.isBlank()) return false
+        return getDeletedOfficerNips().containsKey(clean)
+    }
+
+    fun getDeletedTimestamp(nip: String): Long? {
+        val clean = normalizeNip(nip).lowercase()
+        if (clean.isBlank()) return null
+        return getDeletedOfficerNips()[clean]
+    }
+
+    fun markNipDeleted(nip: String, deletedAtMs: Long = System.currentTimeMillis()) {
+        val clean = normalizeNip(nip).lowercase()
+        if (clean.isBlank()) return
+        val current = getDeletedOfficerNips().toMutableMap()
+        val prev = current[clean] ?: 0L
+        current[clean] = maxOf(prev, deletedAtMs)
+        saveDeletedOfficerNips(current)
+    }
+
+    fun unmarkNipDeleted(nip: String) {
+        val clean = normalizeNip(nip).lowercase()
+        if (clean.isBlank()) return
+        val current = getDeletedOfficerNips().toMutableMap()
+        if (current.remove(clean) != null) {
+            saveDeletedOfficerNips(current)
+        }
+    }
+
+    fun clearAllDeletedNips() {
+        sharedPrefs.edit().remove(PREF_DELETED_OFFICER_NIPS_JSON).commit()
+    }
+
     /**
      * Gets the full roster of officers, operators, and field responders.
-     * Guarantees all official ASN BPBD Pusdalops personnel are present while preserving
-     * any manually added or edited officer profiles without overwriting their custom name or NIP.
+     * Preserves manually added/edited profiles and strictly respects Admin deletions
+     * (tombstoned NIPs for retired/transferred/typo-corrected ASN are never resurrected).
      */
     fun getOfficerRoster(): List<OfficerProfile> {
+        val deletedMap = getDeletedOfficerNips()
         val jsonString = sharedPrefs.getString(PREF_OFFICER_ROSTER_JSON, null)
-        val defaultList = OfficialAsnBpbdPersonnel.toOfficerProfiles()
-        if (jsonString.isNullOrBlank()) {
+        val defaultList = OfficialAsnBpbdPersonnel.toOfficerProfiles().filterNot {
+            deletedMap.containsKey(normalizeNip(it.nip).lowercase())
+        }
+        if (jsonString == null) {
             return defaultList
+        }
+        if (jsonString.isBlank()) {
+            return if (deletedMap.isEmpty()) defaultList else emptyList()
         }
         return try {
             val array = JSONArray(jsonString)
             val list = mutableListOf<OfficerProfile>()
+            val seenNips = mutableSetOf<String>()
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
                 val rawFullName = obj.optString("fullName", "").trim()
-                val rawNip = obj.optString("nip", "").trim().replace(Regex("[\\s\\-]+"), "")
+                val rawNip = normalizeNip(obj.optString("nip", ""))
                 if (rawFullName.isBlank() && rawNip.isBlank()) continue
                 val exactOfficial = OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL.firstOrNull {
-                    it.nip.equals(rawNip, ignoreCase = true)
+                    normalizeNip(it.nip).equals(rawNip, ignoreCase = true)
                 }
                 val resolvedName = rawFullName.ifBlank { exactOfficial?.name ?: "" }
-                val resolvedNip = rawNip.ifBlank { exactOfficial?.nip ?: "" }
+                val resolvedNip = rawNip.ifBlank { exactOfficial?.nip?.let { normalizeNip(it) } ?: "" }
                 if (resolvedName.isBlank() || resolvedNip.isBlank()) continue
+                val nipKey = resolvedNip.lowercase()
+                if (deletedMap.containsKey(nipKey) || !seenNips.add(nipKey)) continue
                 list.add(
                     OfficerProfile(
-                        id = obj.optString("id", UUID.randomUUID().toString()),
+                        id = obj.optString("id", "").ifBlank { "officer_$resolvedNip" },
                         fullName = resolvedName,
                         nip = resolvedNip,
                         role = obj.optString("role", "").ifBlank { exactOfficial?.role ?: OfficerRoles.OPERATOR },
-                        unit = obj.optString("unit", exactOfficial?.unit ?: "Pusdalops BPBD Kab. Mukomuko"),
-                        shift = obj.optString("shift", exactOfficial?.shift ?: "Shift Siaga 24 Jam"),
+                        unit = obj.optString("unit", "").ifBlank { exactOfficial?.unit ?: "Pusdalops BPBD Kab. Mukomuko" },
+                        shift = obj.optString("shift", "").ifBlank { exactOfficial?.shift ?: "Shift Siaga 24 Jam" },
                         phone = obj.optString("phone", "")
                     )
                 )
             }
             for (asn in defaultList) {
-                if (list.none { it.nip.equals(asn.nip, ignoreCase = true) }) {
+                val asnKey = normalizeNip(asn.nip).lowercase()
+                if (!deletedMap.containsKey(asnKey) && seenNips.add(asnKey)) {
                     list.add(asn)
                 }
             }
-            if (list.isEmpty()) defaultList else list
+            list
         } catch (e: Exception) {
             defaultList
         }
@@ -504,22 +587,27 @@ class OfficerAuthManager(private val context: Context) {
 
     /**
      * Synchronizes Room personnel roster into local SharedPreferences cache in a single batch
-     * without triggering Firestore writes or blocking the Main Thread with synchronous commit().
+     * without triggering Firestore writes or resurrecting Admin-deleted NIPs.
      */
     fun syncRosterLocallyWithoutCloudWrite(profiles: List<OfficerProfile>) {
         if (profiles.isEmpty()) return
+        val deletedMap = getDeletedOfficerNips()
         val existingByNip = getOfficerRoster().associateBy {
-            it.nip.trim().replace(Regex("[\\s\\-]+"), "").lowercase()
+            normalizeNip(it.nip).lowercase()
         }.toMutableMap()
         var changed = false
         for (profile in profiles) {
-            val cleanNip = profile.nip.trim().replace(Regex("[\\s\\-]+"), "")
+            val cleanNip = normalizeNip(profile.nip)
             val cleanName = profile.fullName.trim()
             if (cleanNip.length < 4 || cleanName.length < 3) continue
             val key = cleanNip.lowercase()
+            if (deletedMap.containsKey(key)) continue
             val prev = existingByNip[key]
+            val stableId = prev?.id?.takeIf { it.isNotBlank() && !it.all { ch -> ch.isDigit() } }
+                ?: profile.id.takeIf { it.isNotBlank() && !it.all { ch -> ch.isDigit() } }
+                ?: "officer_$cleanNip"
             val normalized = OfficerProfile(
-                id = prev?.id ?: "officer_$cleanNip",
+                id = stableId,
                 fullName = cleanName,
                 nip = cleanNip,
                 role = profile.role.ifBlank { OfficerRoles.PETUGAS_JAGA },
@@ -551,6 +639,7 @@ class OfficerAuthManager(private val context: Context) {
 
     /**
      * Adds a new officer with ASN/TRC format into the system roster.
+     * Automatically clears any prior deletion tombstone for this NIP so re-onboarding works seamlessly.
      */
     fun addOfficer(
         fullName: String,
@@ -561,7 +650,7 @@ class OfficerAuthManager(private val context: Context) {
         phone: String = ""
     ): Result<OfficerProfile> {
         val trimmedName = fullName.trim()
-        val trimmedNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
+        val trimmedNip = normalizeNip(nip)
 
         if (trimmedName.length < 3) {
             return Result.failure(IllegalArgumentException("Nama petugas minimal 3 karakter."))
@@ -570,12 +659,17 @@ class OfficerAuthManager(private val context: Context) {
             return Result.failure(IllegalArgumentException("NIP / No. Registrasi TRC minimal 4 karakter."))
         }
 
+        unmarkNipDeleted(trimmedNip)
+
         val currentRoster = getOfficerRoster().toMutableList()
         val existingIndex = currentRoster.indexOfFirst {
-            it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(trimmedNip, ignoreCase = true)
+            normalizeNip(it.nip).equals(trimmedNip, ignoreCase = true)
         }
+        val existingStableId = if (existingIndex >= 0) {
+            currentRoster[existingIndex].id.takeIf { it.isNotBlank() && !it.all { ch -> ch.isDigit() } }
+        } else null
         val newOfficer = OfficerProfile(
-            id = if (existingIndex >= 0) currentRoster[existingIndex].id else "officer_$trimmedNip",
+            id = existingStableId ?: "officer_$trimmedNip",
             fullName = trimmedName,
             nip = trimmedNip,
             role = role.ifBlank { OfficerRoles.PETUGAS_JAGA },
@@ -595,7 +689,7 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Updates an existing officer profile (name, nip, role/classification, shift, etc.)
+     * Updates an existing officer profile (name, nip, role/classification, shift, unit, phone)
      * and synchronizes to Firestore in real-time.
      */
     fun updateOfficer(profile: OfficerProfile): Result<OfficerProfile> {
@@ -617,10 +711,12 @@ class OfficerAuthManager(private val context: Context) {
         role: String,
         shift: String,
         unit: String = "Pusdalops BPBD Kab. Mukomuko",
-        phone: String = ""
+        phone: String = "",
+        previousNip: String? = null
     ): Result<OfficerProfile> {
         val trimmedName = fullName.trim()
-        val trimmedNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
+        val trimmedNip = normalizeNip(nip)
+        val cleanPrevNip = previousNip?.let { normalizeNip(it) }?.takeIf { it.isNotBlank() }
 
         if (trimmedName.length < 3) {
             return Result.failure(IllegalArgumentException("Nama petugas minimal 3 karakter."))
@@ -629,12 +725,34 @@ class OfficerAuthManager(private val context: Context) {
             return Result.failure(IllegalArgumentException("NIP / No. Registrasi TRC minimal 4 karakter."))
         }
 
+        // Un-tombstone target NIP if it was previously deleted
+        unmarkNipDeleted(trimmedNip)
+
         val currentRoster = getOfficerRoster().toMutableList()
-        val existingIndex = currentRoster.indexOfFirst {
-            it.id == id || it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(trimmedNip, ignoreCase = true)
+
+        val nipChanged = cleanPrevNip != null && !cleanPrevNip.equals(trimmedNip, ignoreCase = true)
+        if (nipChanged && cleanPrevNip != null) {
+            // Tombstone the old typo NIP so a hardcoded default ASN with the old NIP never resurrects
+            markNipDeleted(cleanPrevNip)
         }
+
+        val existingIndex = currentRoster.indexOfFirst { entry ->
+            val entryNip = normalizeNip(entry.nip)
+            (id.isNotBlank() && entry.id == id) ||
+                (cleanPrevNip != null && entryNip.equals(cleanPrevNip, ignoreCase = true)) ||
+                entryNip.equals(trimmedNip, ignoreCase = true)
+        }
+
+        val resolvedId = when {
+            nipChanged -> "officer_$trimmedNip"
+            existingIndex >= 0 && currentRoster[existingIndex].id.isNotBlank() &&
+                !currentRoster[existingIndex].id.all { it.isDigit() } -> currentRoster[existingIndex].id
+            id.isNotBlank() && !id.all { it.isDigit() } -> id
+            else -> "officer_$trimmedNip"
+        }
+
         val updated = OfficerProfile(
-            id = if (existingIndex >= 0) currentRoster[existingIndex].id else id.ifBlank { "officer_$trimmedNip" },
+            id = resolvedId,
             fullName = trimmedName,
             nip = trimmedNip,
             role = role.ifBlank { OfficerRoles.PETUGAS_JAGA },
@@ -648,30 +766,90 @@ class OfficerAuthManager(private val context: Context) {
         } else {
             currentRoster.add(0, updated)
         }
-        saveOfficerRoster(currentRoster)
+
+        // Deduplicate: remove any extra entries matching either old typo NIP or new NIP (keep first occurrence)
+        val deduped = mutableListOf<OfficerProfile>()
+        val seen = mutableSetOf<String>()
+        for (entry in currentRoster) {
+            val eNip = normalizeNip(entry.nip).lowercase()
+            if (nipChanged && cleanPrevNip != null && eNip == cleanPrevNip.lowercase()) continue
+            if (seen.add(eNip)) {
+                deduped.add(entry)
+            }
+        }
+
+        saveOfficerRoster(deduped)
         FirestoreHelper.syncOfficerToCloud(updated, context)
         return Result.success(updated)
     }
 
     /**
-     * Deletes an officer by ID from the roster and removes from Firestore.
+     * Permanently removes an officer by NIP (and optional legacy ID) from the local roster,
+     * tombstones the NIP so hardcoded default ASN entries never resurrect, and propagates deletion to Cloud.
      */
-    fun deleteOfficer(id: String): Boolean {
+    fun deleteOfficerByNip(nip: String, legacyId: String? = null, syncCloud: Boolean = true): Boolean {
+        val cleanNip = normalizeNip(nip)
+        val cleanLegacy = legacyId?.trim().orEmpty()
+        if (cleanNip.isBlank() && cleanLegacy.isBlank()) return false
+
         val currentRoster = getOfficerRoster().toMutableList()
-        val removed = currentRoster.removeAll { it.id == id || it.nip.equals(id, ignoreCase = true) }
-        if (removed) {
-            saveOfficerRoster(currentRoster)
-            FirestoreHelper.deleteOfficerFromCloud(id)
-            return true
+        val matched = currentRoster.firstOrNull { entry ->
+            (cleanNip.isNotBlank() && normalizeNip(entry.nip).equals(cleanNip, ignoreCase = true)) ||
+                (cleanLegacy.isNotBlank() && (entry.id == cleanLegacy || normalizeNip(entry.nip).equals(normalizeNip(cleanLegacy), ignoreCase = true)))
         }
-        return false
+        val effectiveNip = cleanNip.ifBlank { matched?.let { normalizeNip(it.nip) } ?: "" }
+
+        if (effectiveNip.isNotBlank()) {
+            markNipDeleted(effectiveNip)
+        }
+
+        val removed = currentRoster.removeAll { entry ->
+            (effectiveNip.isNotBlank() && normalizeNip(entry.nip).equals(effectiveNip, ignoreCase = true)) ||
+                (cleanLegacy.isNotBlank() && entry.id == cleanLegacy)
+        }
+        saveOfficerRoster(currentRoster)
+
+        if (syncCloud) {
+            if (effectiveNip.isNotBlank()) {
+                FirestoreHelper.deleteOfficerFromCloud(effectiveNip)
+            }
+            if (cleanLegacy.isNotBlank() && !cleanLegacy.equals(effectiveNip, ignoreCase = true) && !cleanLegacy.all { it.isDigit() }) {
+                FirestoreHelper.deleteOfficerFromCloud(cleanLegacy)
+            }
+        }
+        return removed || effectiveNip.isNotBlank()
     }
 
     /**
-     * Resets the roster back to the standard official BPBD personnel.
+     * Deletes an officer by ID or NIP from the roster, tombstones their NIP, and removes from Firestore.
+     */
+    fun deleteOfficer(id: String): Boolean {
+        val raw = id.trim()
+        if (raw.isBlank()) return false
+        val extractedNip = when {
+            raw.startsWith("asn-", ignoreCase = true) -> normalizeNip(raw.removePrefix("asn-"))
+            raw.startsWith("officer_", ignoreCase = true) -> normalizeNip(raw.removePrefix("officer_"))
+            else -> ""
+        }
+        val currentRoster = getOfficerRoster()
+        val matched = currentRoster.firstOrNull {
+            it.id == raw ||
+                normalizeNip(it.nip).equals(normalizeNip(raw), ignoreCase = true) ||
+                (extractedNip.isNotBlank() && normalizeNip(it.nip).equals(extractedNip, ignoreCase = true))
+        }
+        val targetNip = matched?.let { normalizeNip(it.nip) }
+            ?: extractedNip.ifBlank { normalizeNip(raw).takeIf { it.length >= 4 } ?: "" }
+        return deleteOfficerByNip(nip = targetNip, legacyId = raw, syncCloud = true)
+    }
+
+    /**
+     * Resets the roster back to the standard official BPBD personnel and clears deleted tombstones.
      */
     fun resetRosterToDefault() {
-        sharedPrefs.edit().remove(PREF_OFFICER_ROSTER_JSON).apply()
+        sharedPrefs.edit()
+            .remove(PREF_OFFICER_ROSTER_JSON)
+            .remove(PREF_DELETED_OFFICER_NIPS_JSON)
+            .commit()
     }
 
     /**
@@ -1019,19 +1197,58 @@ class OfficerAuthManager(private val context: Context) {
     }
 
     /**
-     * Merges officers received from Firestore real-time listener into the local roster.
+     * Merges officers received from Firestore real-time listener into the local roster,
+     * respecting deleted tombstones and propagating cloud soft-deletes.
      */
-    fun syncRosterFromCloud(cloudOfficers: List<OfficerProfile>) {
-        if (cloudOfficers.isEmpty()) return
-        val currentRoster = getOfficerRoster().toMutableList()
+    fun syncRosterFromCloud(
+        cloudOfficers: List<OfficerProfile>,
+        deletedCloudNips: Map<String, Long> = emptyMap(),
+        cloudUpdatedAtByNip: Map<String, Long> = emptyMap()
+    ) {
         var changed = false
+        if (deletedCloudNips.isNotEmpty()) {
+            for ((delNip, delTs) in deletedCloudNips) {
+                markNipDeleted(delNip, delTs)
+            }
+        }
+
+        val currentRoster = getOfficerRoster().toMutableList()
+        val deletedMap = getDeletedOfficerNips()
+
+        if (currentRoster.removeAll { deletedMap.containsKey(normalizeNip(it.nip).lowercase()) }) {
+            changed = true
+        }
+
         for (cloud in cloudOfficers) {
-            val idx = currentRoster.indexOfFirst { it.id == cloud.id || it.nip.equals(cloud.nip, ignoreCase = true) }
+            val cleanNip = normalizeNip(cloud.nip)
+            if (cleanNip.isBlank()) continue
+            val key = cleanNip.lowercase()
+            val localDeletedAt = deletedMap[key]
+            val cloudUpdatedAt = cloudUpdatedAtByNip[key] ?: 0L
+            if (localDeletedAt != null) {
+                if (cloudUpdatedAt > localDeletedAt) {
+                    // Re-added on another device AFTER local deletion -> restore
+                    unmarkNipDeleted(cleanNip)
+                } else {
+                    // Keep deleted locally
+                    continue
+                }
+            }
+            val idx = currentRoster.indexOfFirst {
+                normalizeNip(it.nip).equals(cleanNip, ignoreCase = true) ||
+                    (cloud.id.isNotBlank() && it.id == cloud.id)
+            }
+            val normalizedCloud = cloud.copy(
+                id = cloud.id.ifBlank { "officer_$cleanNip" },
+                nip = cleanNip
+            )
             if (idx >= 0) {
-                currentRoster[idx] = cloud
-                changed = true
+                if (currentRoster[idx] != normalizedCloud) {
+                    currentRoster[idx] = normalizedCloud
+                    changed = true
+                }
             } else {
-                currentRoster.add(cloud)
+                currentRoster.add(normalizedCloud)
                 changed = true
             }
         }

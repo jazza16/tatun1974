@@ -412,7 +412,9 @@ fun OfficerDashboardConsoleView(
     var showSandboxPanel by remember { mutableStateOf(false) }
     var integrityCheckResult by remember { mutableStateOf<com.example.data.sync.IntegrityCheckResult?>(null) }
     var isCheckingIntegrity by remember { mutableStateOf(false) }
-    var editingPersonnel by remember { mutableStateOf<com.example.data.local.Personnel?>(null) }
+    // State untuk manajemen penghapusan dan edit personil di kelola direktori
+    var officerPendingDeletion by remember { mutableStateOf<OfficerProfile?>(null) }
+    var showResetRosterConfirm by remember { mutableStateOf(false) }
     var restoringPersonnel by remember { mutableStateOf<com.example.data.local.OfficerProfile?>(null) }
 
     // Enterprise Play Integrity SecurityManager & Backend Firestore Sessions + Login Activities
@@ -558,9 +560,9 @@ fun OfficerDashboardConsoleView(
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            personnelRepository.seedDefaultAsnPersonnelIfNeeded()
+            personnelRepository.seedDefaultAsnPersonnelIfNeeded(context)
         }
-        personnelRepository.startAutoSyncFromCloud(this)
+        personnelRepository.startAutoSyncFromCloud(this, context)
     }
 
     // Pusdalops Officer Roster Management State backed directly by Room Database & Session Manager
@@ -568,10 +570,11 @@ fun OfficerDashboardConsoleView(
     var rosterList by remember { mutableStateOf<List<OfficerProfile>>(emptyList()) }
     val activeRosterList = remember(dbPersonnelList) {
         dbPersonnelList.map { p ->
+            val cleanNip = p.nip.trim().replace(Regex("[\\s\\-]+"), "")
             OfficerProfile(
-                id = p.id.toString(),
+                id = "officer_$cleanNip",
                 fullName = p.name,
-                nip = p.nip,
+                nip = cleanNip.ifBlank { p.nip.trim() },
                 role = p.role,
                 unit = p.unit,
                 shift = p.shift,
@@ -580,18 +583,20 @@ fun OfficerDashboardConsoleView(
         }
     }
 
-    // Sync Room personnel into local cache on Dispatchers.IO WITHOUT writing back to Firestore (breaks infinite loop)
+    // Sync Room personnel into local cache on Dispatchers.IO WITHOUT writing back to Firestore or resurrecting deleted NIPs
     LaunchedEffect(activeRosterList) {
-        if (activeRosterList.isNotEmpty()) {
-            rosterList = activeRosterList
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                officerAuthManager.syncRosterLocallyWithoutCloudWrite(activeRosterList)
-            }
-        } else {
-            rosterList = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val synced = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            if (activeRosterList.isNotEmpty()) {
+                val filteredActive = activeRosterList.filterNot { officerAuthManager.isNipDeleted(it.nip) }
+                if (filteredActive.isNotEmpty()) {
+                    officerAuthManager.syncRosterLocallyWithoutCloudWrite(filteredActive)
+                }
+                filteredActive
+            } else {
                 officerAuthManager.getOfficerRoster()
             }
         }
+        rosterList = synced
     }
 
     // Quick Stats Calculation (Canonical Normalized Status) — memoized to avoid recomputing on every recomposition
@@ -2506,7 +2511,7 @@ fun OfficerDashboardConsoleView(
                 ).show()
             }
         }
-        var rosterMode by remember { mutableStateOf(0) } // 0 = Daftar Personil, 1 = Form Input Personil Baru
+        var rosterMode by remember { mutableStateOf(0) } // 0 = Daftar Personil, 1 = Form Input Personil Baru, 2 = Form Edit Personil
         var selectedRoleTab by remember { mutableStateOf("Semua") }
         var rosterSearchQuery by remember { mutableStateOf("") }
 
@@ -2520,6 +2525,20 @@ fun OfficerDashboardConsoleView(
         var inputPhone by remember { mutableStateOf("") }
         var formError by remember { mutableStateOf<String?>(null) }
         var isSavingPersonnel by remember { mutableStateOf(false) }
+
+        // Form Edit Personil State (inline di dalam modal yang sama agar bebas bug double-dialog & tanpa celah keyboard)
+        var editOriginalNip by remember { mutableStateOf("") }
+        var editOfficerId by remember { mutableStateOf("") }
+        var editRoomId by remember { mutableStateOf<Long?>(null) }
+        var editFullName by remember { mutableStateOf("") }
+        var editNip by remember { mutableStateOf("") }
+        var editCustomPin by remember { mutableStateOf("") }
+        var editRole by remember { mutableStateOf(OfficerRoles.PETUGAS_JAGA) }
+        var editShift by remember { mutableStateOf("Shift Siaga 24 Jam") }
+        var editUnit by remember { mutableStateOf("Pusdalops BPBD Kab. Mukomuko") }
+        var editPhone by remember { mutableStateOf("") }
+        var editError by remember { mutableStateOf<String?>(null) }
+        var isSavingEdit by remember { mutableStateOf(false) }
 
         val cleanPreviewNip = inputNip.trim().replace(Regex("[\\s\\-]+"), "")
         val autoGeneratedPinPreview = remember(cleanPreviewNip) {
@@ -2555,7 +2574,9 @@ fun OfficerDashboardConsoleView(
                         isSavingPersonnel = false
                         regRes.fold(
                             onSuccess = { regInfo ->
-                                rosterList = officerAuthManager.getOfficerRoster()
+                                rosterList = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    officerAuthManager.getOfficerRoster()
+                                }
                                 rosterMode = 0
                                 formError = null
                                 val savedName = regInfo.profile.fullName
@@ -2565,14 +2586,59 @@ fun OfficerDashboardConsoleView(
                                 inputNip = ""
                                 inputInitialPin = ""
                                 inputPhone = ""
+                                val syncLabel = if (regInfo.isCloudCredentialSynced) "tersinkron Cloud" else "tersimpan lokal"
                                 Toast.makeText(
                                     context,
-                                    "Petugas '$savedName' (NIP: $savedNip) berhasil didaftarkan & siap login! PIN Login: $effectivePin",
+                                    "Petugas '$savedName' (NIP: $savedNip) berhasil didaftarkan ($syncLabel)! PIN Login: $effectivePin",
                                     Toast.LENGTH_LONG
                                 ).show()
                             },
                             onFailure = { err ->
                                 formError = err.message ?: "Gagal mendaftarkan personil."
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        val submitEditPersonnel: () -> Unit = {
+            if (!isSavingEdit) {
+                val validationError = personnelRepository.validatePersonnelInput(editFullName, editNip)
+                if (validationError != null) {
+                    editError = validationError
+                } else {
+                    isSavingEdit = true
+                    coroutineScope.launch {
+                        val regRes = smartOfficerAuthRepo.registerOrUpdateManualOfficer(
+                            fullName = editFullName.trim(),
+                            nip = editNip.trim(),
+                            role = editRole.trim(),
+                            unit = editUnit.trim(),
+                            shift = editShift.trim(),
+                            phone = editPhone.trim(),
+                            customInitialPin = editCustomPin.trim().ifBlank { null },
+                            existingId = editOfficerId.ifBlank { "officer_${editOriginalNip.trim()}" },
+                            previousNip = editOriginalNip.trim().ifBlank { null },
+                            existingRoomId = editRoomId
+                        )
+                        isSavingEdit = false
+                        regRes.fold(
+                            onSuccess = { regInfo ->
+                                rosterList = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    officerAuthManager.getOfficerRoster()
+                                }
+                                rosterMode = 0
+                                editError = null
+                                val syncLabel = if (regInfo.isCloudCredentialSynced) "tersinkron Cloud" else "tersimpan lokal"
+                                Toast.makeText(
+                                    context,
+                                    "Data personil '${regInfo.profile.fullName}' berhasil diperbarui ($syncLabel).",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            onFailure = { err ->
+                                editError = err.message ?: "Gagal memperbarui data personil."
                             }
                         )
                     }
@@ -2605,7 +2671,15 @@ fun OfficerDashboardConsoleView(
         )
 
         BalancedModalDialog(
-            onDismissRequest = { showRosterDialog = false },
+            onDismissRequest = {
+                if (rosterMode != 0) {
+                    rosterMode = 0
+                    formError = null
+                    editError = null
+                } else {
+                    showRosterDialog = false
+                }
+            },
             horizontalMargin = 14.dp,
             extraVerticalMargin = 14.dp
         ) {
@@ -2630,20 +2704,36 @@ fun OfficerDashboardConsoleView(
                     ) {
                         Surface(
                             shape = CircleShape,
-                            color = Color(0xFFEFF6FF),
+                            color = when (rosterMode) {
+                                1 -> Color(0xFFCCFBF1)
+                                2 -> Color(0xFFFFEDD5)
+                                else -> Color(0xFFEFF6FF)
+                            },
                             modifier = Modifier.size(40.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = if (rosterMode == 1) Icons.Default.PersonAdd else Icons.Default.Badge,
+                                    imageVector = when (rosterMode) {
+                                        1 -> Icons.Default.PersonAdd
+                                        2 -> Icons.Default.Edit
+                                        else -> Icons.Default.Badge
+                                    },
                                     contentDescription = null,
-                                    tint = Color(0xFF2563EB),
+                                    tint = when (rosterMode) {
+                                        1 -> Color(0xFF0F766E)
+                                        2 -> OrangePrimary
+                                        else -> Color(0xFF2563EB)
+                                    },
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
                         Text(
-                            text = if (rosterMode == 1) "Input Personil Pusdalops Baru" else "Direktori Personil Pusdalops & TRC",
+                            text = when (rosterMode) {
+                                1 -> "Input Personil Pusdalops Baru"
+                                2 -> "Edit Data Personil BPBD"
+                                else -> "Direktori Personil Pusdalops & TRC"
+                            },
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -3009,57 +3099,52 @@ fun OfficerDashboardConsoleView(
                                                         }
                                                     }
 
-                                                    // Edit button for Admin: allows editing personnel details
+                                                    // Edit button for Admin: membuka form Edit inline (mode 2) tanpa double-dialog
                                                     IconButton(
                                                         onClick = {
-                                                            val matchInDb = dbPersonnelList.firstOrNull { it.nip.equals(off.nip, ignoreCase = true) }
-                                                            editingPersonnel = matchInDb ?: com.example.data.local.Personnel(
-                                                                name = off.fullName,
-                                                                nip = off.nip,
-                                                                role = off.role,
-                                                                unit = off.unit,
-                                                                shift = off.shift,
-                                                                phone = off.phone
-                                                            )
+                                                            val cleanOffNip = off.nip.trim().replace(Regex("[\\s\\-]+"), "")
+                                                            val matchInDb = dbPersonnelList.firstOrNull {
+                                                                it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanOffNip, ignoreCase = true)
+                                                            }
+                                                            editOriginalNip = cleanOffNip
+                                                            editOfficerId = off.id
+                                                            editRoomId = matchInDb?.id
+                                                            editFullName = matchInDb?.name ?: off.fullName
+                                                            editNip = matchInDb?.nip ?: off.nip
+                                                            editRole = matchInDb?.role ?: off.role
+                                                            editUnit = matchInDb?.unit ?: off.unit
+                                                            editShift = matchInDb?.shift ?: off.shift
+                                                            editPhone = matchInDb?.phone ?: off.phone
+                                                            editCustomPin = ""
+                                                            editError = null
+                                                            rosterMode = 2
                                                         },
                                                         modifier = Modifier
-                                                            .size(36.dp)
+                                                            .size(40.dp)
                                                             .testTag("edit_officer_btn")
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Default.Edit,
                                                             contentDescription = "Edit Personil",
                                                             tint = Color(0xFF0284C7),
-                                                            modifier = Modifier.size(18.dp)
+                                                            modifier = Modifier.size(19.dp)
                                                         )
                                                     }
 
-                                                    // Delete button for Admin: allows removing any personnel from Room & session cache
+                                                    // Delete button for Admin: membuka konfirmasi hapus permanen (mutasi/pensiun/typo/maintenance)
                                                     IconButton(
                                                         onClick = {
-                                                            coroutineScope.launch {
-                                                                val matchInDb = dbPersonnelList.firstOrNull { it.nip.equals(off.nip, ignoreCase = true) }
-                                                                if (matchInDb != null) {
-                                                                    personnelRepository.deleteById(matchInDb.id)
-                                                                }
-                                                                officerAuthManager.deleteOfficer(off.id)
-                                                                rosterList = officerAuthManager.getOfficerRoster()
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Personil '${off.fullName}' berhasil dihapus dari direktori.",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
-                                                            }
+                                                            officerPendingDeletion = off
                                                         },
                                                         modifier = Modifier
-                                                            .size(36.dp)
+                                                            .size(40.dp)
                                                             .testTag("delete_officer_btn")
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Default.Delete,
                                                             contentDescription = "Hapus Personil",
                                                             tint = Color(0xFFDC2626),
-                                                            modifier = Modifier.size(18.dp)
+                                                            modifier = Modifier.size(19.dp)
                                                         )
                                                     }
                                                 }
@@ -3118,21 +3203,15 @@ fun OfficerDashboardConsoleView(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Reset / Bersihkan direktori personil
+                            // Maintenance: Pulihkan Daftar Default ASN BPBD (dengan dialog konfirmasi)
                             OutlinedButton(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        personnelRepository.clearAll()
-                                        officerAuthManager.resetRosterToDefault()
-                                        rosterList = officerAuthManager.getOfficerRoster()
-                                        Toast.makeText(context, "Direktori personil telah dibersihkan.", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
+                                onClick = { showResetRosterConfirm = true },
                                 shape = RoundedCornerShape(10.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 44.dp)
+                                    .testTag("btn_reset_default_roster")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
@@ -3141,15 +3220,15 @@ fun OfficerDashboardConsoleView(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Bersihkan Semua Data Direktori Personil",
+                                    text = "Pulihkan Daftar Default ASN BPBD (Maintenance)",
                                     fontSize = 11.5.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
 
-                        } else {
-                            // MODE 1: FORM INPUT PERSONIL BARU KE ROOM DATABASE
+                        } else if (rosterMode == 1) {
+                            // MODE 1: FORM INPUT PERSONIL BARU KE ROOM DATABASE & CLOUD
                             Text(
                                 text = "Input data personil baru Pusdalops BPBD Kabupaten Mukomuko ke Room Database lokal. Wajib mengisi Nama Lengkap dan NIP ASN atau No. Registrasi TRC.",
                                 fontSize = 11.5.sp,
@@ -3360,6 +3439,190 @@ fun OfficerDashboardConsoleView(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
+                        } else {
+                            // MODE 2: FORM EDIT DATA PERSONIL BPBD (KOREKSI TYPO NAMA/NIP, JABATAN, UNIT, SHIFT, PIN)
+                            Text(
+                                text = "Perbarui nama, NIP/No. Reg TRC, jabatan, unit, shift, kontak, atau reset PIN personil. Perubahan NIP otomatis memperbarui data lama tanpa duplikat.",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            OutlinedTextField(
+                                value = editFullName,
+                                onValueChange = {
+                                    editFullName = it
+                                    editError = null
+                                },
+                                label = { Text("Nama Lengkap & Gelar *", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .formScrollPadding()
+                                    .testTag("input_edit_personnel_name")
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = editNip,
+                                onValueChange = {
+                                    editNip = it
+                                    editError = null
+                                },
+                                label = { Text("NIP Pegawai ASN / No. Reg TRC *", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .formScrollPadding()
+                                    .testTag("input_edit_personnel_nip")
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = editCustomPin,
+                                onValueChange = {
+                                    editCustomPin = it
+                                    editError = null
+                                },
+                                label = { Text("Reset / Ubah PIN Login (Opsional)", fontSize = 11.sp) },
+                                placeholder = { Text("Kosongkan jika PIN tidak diubah", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .formScrollPadding()
+                                    .testTag("input_edit_personnel_pin")
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = "Jabatan / Penugasan Kedinasan:",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            val editRolePresets = listOf(
+                                OfficerRoles.PENGAWAS,
+                                OfficerRoles.MANAJER,
+                                OfficerRoles.SUPERVISOR,
+                                OfficerRoles.KOORD_ADMINISTRASI,
+                                OfficerRoles.OPERATOR,
+                                OfficerRoles.PETUGAS_JAGA,
+                                OfficerRoles.PETUGAS_LAPANGAN
+                            )
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(editRolePresets) { preset ->
+                                    val selected = editRole.equals(preset, ignoreCase = true)
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = if (selected) OrangePrimary else Color(0xFFF1F5F9),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (selected) OrangePrimary else Color(0xFFCBD5E1)
+                                        ),
+                                        modifier = Modifier.clickable {
+                                            editRole = preset
+                                            editError = null
+                                        }
+                                    ) {
+                                        Text(
+                                            text = preset,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (selected) Color.White else Color(0xFF334155),
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = editRole,
+                                onValueChange = { editRole = it },
+                                label = { Text("Jabatan / Peran", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .formScrollPadding()
+                                    .testTag("input_edit_personnel_role")
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = editShift,
+                                    onValueChange = { editShift = it },
+                                    label = { Text("Regu / Shift", fontSize = 11.sp) },
+                                    singleLine = true,
+                                    keyboardOptions = formNextKeyboardOptions(),
+                                    keyboardActions = rosterKeyboardActions,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .formScrollPadding()
+                                        .testTag("input_edit_personnel_shift")
+                                )
+                                OutlinedTextField(
+                                    value = editUnit,
+                                    onValueChange = { editUnit = it },
+                                    label = { Text("Unit / Satuan", fontSize = 11.sp) },
+                                    singleLine = true,
+                                    keyboardOptions = formNextKeyboardOptions(),
+                                    keyboardActions = rosterKeyboardActions,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .formScrollPadding()
+                                        .testTag("input_edit_personnel_unit")
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = editPhone,
+                                onValueChange = { editPhone = it },
+                                label = { Text("Nomor HP / WhatsApp / Radio HT", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = formDoneKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .formScrollPadding()
+                                    .testTag("input_edit_personnel_phone")
+                            )
+
+                            if (editError != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = editError!!,
+                                    color = Color(0xFFDC2626),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
 
@@ -3373,50 +3636,90 @@ fun OfficerDashboardConsoleView(
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (rosterMode == 1) {
-                            OutlinedButton(
-                                onClick = {
-                                    rosterMode = 0
-                                    formError = null
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 44.dp)
-                            ) {
-                                Text(
-                                    text = "Kembali ke Daftar",
-                                    fontSize = 12.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                        when (rosterMode) {
+                            1 -> {
+                                OutlinedButton(
+                                    onClick = {
+                                        rosterMode = 0
+                                        formError = null
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 44.dp)
+                                ) {
+                                    Text(
+                                        text = "Kembali ke Daftar",
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Button(
+                                    onClick = submitManualPersonnel,
+                                    enabled = !isSavingPersonnel,
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                                    modifier = Modifier
+                                        .weight(1.15f)
+                                        .heightIn(min = 44.dp)
+                                        .testTag("btn_save_manual_personnel")
+                                ) {
+                                    Text(
+                                        text = if (isSavingPersonnel) "Menyimpan..." else "Simpan Personil",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
-                            Button(
-                                onClick = submitManualPersonnel,
-                                enabled = !isSavingPersonnel,
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                                modifier = Modifier
-                                    .weight(1.15f)
-                                    .heightIn(min = 44.dp)
-                                    .testTag("btn_save_manual_personnel")
-                            ) {
-                                Text(
-                                    text = if (isSavingPersonnel) "Menyimpan..." else "Simpan Personil",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            2 -> {
+                                OutlinedButton(
+                                    onClick = {
+                                        rosterMode = 0
+                                        editError = null
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 44.dp)
+                                ) {
+                                    Text(
+                                        text = "Batal",
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Button(
+                                    onClick = submitEditPersonnel,
+                                    enabled = !isSavingEdit,
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                                    modifier = Modifier
+                                        .weight(1.25f)
+                                        .heightIn(min = 44.dp)
+                                        .testTag("btn_save_edit_personnel")
+                                ) {
+                                    Text(
+                                        text = if (isSavingEdit) "Menyimpan..." else "Simpan Perubahan",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
-                        } else {
-                            Button(
-                                onClick = { showRosterDialog = false },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                                modifier = Modifier.heightIn(min = 44.dp)
-                            ) {
-                                Text("Selesai", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            else -> {
+                                Button(
+                                    onClick = { showRosterDialog = false },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                    modifier = Modifier.heightIn(min = 44.dp)
+                                ) {
+                                    Text("Selesai", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                     }
@@ -3425,164 +3728,232 @@ fun OfficerDashboardConsoleView(
         }
     }
 
-    // DIALOG EDIT PERSONIL OLEH ADMIN
-    if (editingPersonnel != null) {
-        val p = editingPersonnel!!
-        var editName by remember(p) { mutableStateOf(p.name) }
-        var editNip by remember(p) { mutableStateOf(p.nip) }
-        var editRole by remember(p) { mutableStateOf(p.role) }
-        var editShift by remember(p) { mutableStateOf(p.shift) }
-        var editPhone by remember(p) { mutableStateOf(p.phone) }
-        var editCustomPin by remember(p) { mutableStateOf("") }
-        var editError by remember(p) { mutableStateOf<String?>(null) }
-        var isSavingEdit by remember(p) { mutableStateOf(false) }
+    // DIALOG KONFIRMASI HAPUS PERSONIL PERMANEN OLEH ADMIN (MUTASI / PENSIUN / TYPO / MAINTENANCE)
+    if (officerPendingDeletion != null) {
+        val targetOff = officerPendingDeletion!!
+        val deleteReasons = remember {
+            listOf(
+                "ASN Pindah Tugas / Mutasi",
+                "Pensiun Tugas BPBD",
+                "Koreksi Data / Typo",
+                "Maintenance Aplikasi"
+            )
+        }
+        var selectedDeleteReason by remember(targetOff) { mutableStateOf(deleteReasons.first()) }
+        var isDeletingNow by remember(targetOff) { mutableStateOf(false) }
 
         AlertDialog(
-            onDismissRequest = { editingPersonnel = null },
-            title = { Text("Edit Data Personil BPBD", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            onDismissRequest = { if (!isDeletingNow) officerPendingDeletion = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = Color(0xFFDC2626)
+                )
+            },
+            title = {
+                Text(
+                    text = "Hapus Personil Permanen?",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
             text = {
-                val editPersonnelKeyboardActions = rememberFormKeyboardActions()
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    OutlinedTextField(
-                        value = editName,
-                        onValueChange = {
-                            editName = it
-                            editError = null
-                        },
-                        label = { Text("Nama Lengkap") },
-                        singleLine = true,
-                        keyboardOptions = formNextKeyboardOptions(),
-                        keyboardActions = editPersonnelKeyboardActions,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .formScrollPadding()
-                            .testTag("input_edit_personnel_name")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Data personil berikut akan dihapus secara permanen dari direktori lokal & Cloud (tidak akan muncul kembali setelah sinkronisasi):",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 17.sp
                     )
-                    OutlinedTextField(
-                        value = editNip,
-                        onValueChange = {
-                            editNip = it
-                            editError = null
-                        },
-                        label = { Text("NIP / Reg TRC") },
-                        singleLine = true,
-                        keyboardOptions = formNextKeyboardOptions(),
-                        keyboardActions = editPersonnelKeyboardActions,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .formScrollPadding()
-                            .testTag("input_edit_personnel_nip")
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFFEF2F2),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = targetOff.fullName,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = Color(0xFF991B1B)
+                            )
+                            Text(
+                                text = "NIP: ${targetOff.nip} • ${targetOff.role}",
+                                fontSize = 11.5.sp,
+                                color = Color(0xFF7F1D1D)
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Alasan Penghapusan (Audit Log):",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold
                     )
-                    OutlinedTextField(
-                        value = editCustomPin,
-                        onValueChange = {
-                            editCustomPin = it
-                            editError = null
-                        },
-                        label = { Text("Reset / Ubah PIN Login (Opsional)") },
-                        placeholder = { Text("Kosongkan jika PIN tidak diubah") },
-                        singleLine = true,
-                        keyboardOptions = formNextKeyboardOptions(),
-                        keyboardActions = editPersonnelKeyboardActions,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .formScrollPadding()
-                            .testTag("input_edit_personnel_pin")
-                    )
-                    OutlinedTextField(
-                        value = editRole,
-                        onValueChange = { editRole = it },
-                        label = { Text("Jabatan / Peran") },
-                        singleLine = true,
-                        keyboardOptions = formNextKeyboardOptions(),
-                        keyboardActions = editPersonnelKeyboardActions,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .formScrollPadding()
-                            .testTag("input_edit_personnel_role")
-                    )
-                    OutlinedTextField(
-                        value = editShift,
-                        onValueChange = { editShift = it },
-                        label = { Text("Shift Penugasan") },
-                        singleLine = true,
-                        keyboardOptions = formNextKeyboardOptions(),
-                        keyboardActions = editPersonnelKeyboardActions,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .formScrollPadding()
-                            .testTag("input_edit_personnel_shift")
-                    )
-                    OutlinedTextField(
-                        value = editPhone,
-                        onValueChange = { editPhone = it },
-                        label = { Text("Nomor HP / WhatsApp") },
-                        singleLine = true,
-                        keyboardOptions = formDoneKeyboardOptions(),
-                        keyboardActions = editPersonnelKeyboardActions,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .formScrollPadding()
-                            .testTag("input_edit_personnel_phone")
-                    )
-                    if (editError != null) {
-                        Text(
-                            text = editError!!,
-                            color = Color(0xFFDC2626),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        deleteReasons.forEach { reason ->
+                            val isSelected = selectedDeleteReason == reason
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) Color(0xFFFEE2E2) else Color(0xFFF8FAFC),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) Color(0xFFDC2626) else Color(0xFFE2E8F0)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedDeleteReason = reason }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = reason,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) Color(0xFF991B1B) else Color(0xFF334155),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = Color(0xFFDC2626),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (!isSavingEdit) {
-                            isSavingEdit = true
+                        if (!isDeletingNow) {
+                            isDeletingNow = true
                             coroutineScope.launch {
-                                val regRes = smartOfficerAuthRepo.registerOrUpdateManualOfficer(
-                                    fullName = editName.trim(),
-                                    nip = editNip.trim(),
-                                    role = editRole.trim(),
-                                    unit = p.unit,
-                                    shift = editShift.trim(),
-                                    phone = editPhone.trim(),
-                                    customInitialPin = editCustomPin.trim().ifBlank { null },
-                                    existingId = "asn-${p.nip}"
+                                val cleanTargetNip = targetOff.nip.trim().replace(Regex("[\\s\\-]+"), "")
+                                val matchInDb = dbPersonnelList.firstOrNull {
+                                    it.nip.trim().replace(Regex("[\\s\\-]+"), "").equals(cleanTargetNip, ignoreCase = true)
+                                }
+                                val delRes = smartOfficerAuthRepo.deleteOfficerPermanently(
+                                    nip = cleanTargetNip,
+                                    officerId = targetOff.id,
+                                    roomId = matchInDb?.id,
+                                    fullName = targetOff.fullName,
+                                    role = targetOff.role,
+                                    shift = targetOff.shift,
+                                    reason = selectedDeleteReason
                                 )
-                                isSavingEdit = false
-                                regRes.fold(
-                                    onSuccess = { regInfo ->
-                                        rosterList = officerAuthManager.getOfficerRoster()
-                                        editingPersonnel = null
+                                isDeletingNow = false
+                                officerPendingDeletion = null
+                                delRes.fold(
+                                    onSuccess = { cloudSynced ->
+                                        rosterList = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            officerAuthManager.getOfficerRoster()
+                                        }
+                                        val syncSuffix = if (cloudSynced) " & Cloud Firestore" else " (lokal)"
                                         Toast.makeText(
                                             context,
-                                            "Data & kredensial login '${regInfo.profile.fullName}' berhasil diperbarui.",
+                                            "Personil '${targetOff.fullName}' berhasil dihapus permanen$syncSuffix.",
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     },
                                     onFailure = { err ->
-                                        editError = err.message ?: "Gagal memperbarui data personil."
+                                        Toast.makeText(
+                                            context,
+                                            err.message ?: "Gagal menghapus data personil.",
+                                            Toast.LENGTH_LONG
+                                        ).show()
                                     }
                                 )
                             }
                         }
                     },
-                    enabled = !isSavingEdit,
-                    colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
-                    modifier = Modifier.testTag("btn_save_edit_personnel")
+                    enabled = !isDeletingNow,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.testTag("btn_confirm_delete_officer")
                 ) {
-                    Text(if (isSavingEdit) "Menyimpan..." else "Simpan Perubahan")
+                    Text(if (isDeletingNow) "Menghapus..." else "Hapus Permanen")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { editingPersonnel = null }) {
+                OutlinedButton(
+                    onClick = { officerPendingDeletion = null },
+                    enabled = !isDeletingNow
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // DIALOG KONFIRMASI PULIHKAN DAFTAR DEFAULT ASN BPBD (MAINTENANCE)
+    if (showResetRosterConfirm) {
+        var isResettingRoster by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { if (!isResettingRoster) showResetRosterConfirm = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    tint = Color(0xFF2563EB)
+                )
+            },
+            title = {
+                Text(
+                    text = "Pulihkan Daftar Default ASN?",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "Tindakan maintenance ini akan memulihkan seluruh daftar resmi 37 ASN BPBD Kabupaten Mukomuko (termasuk ASN yang sebelumnya dihapus) ke direktori lokal.",
+                    fontSize = 12.5.sp,
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (!isResettingRoster) {
+                            isResettingRoster = true
+                            coroutineScope.launch {
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    officerAuthManager.resetRosterToDefault()
+                                    personnelRepository.clearAll()
+                                    personnelRepository.seedDefaultAsnPersonnelIfNeeded(context)
+                                }
+                                rosterList = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    officerAuthManager.getOfficerRoster()
+                                }
+                                isResettingRoster = false
+                                showResetRosterConfirm = false
+                                Toast.makeText(
+                                    context,
+                                    "Daftar default ASN BPBD berhasil dipulihkan (${rosterList.size} personil).",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    },
+                    enabled = !isResettingRoster,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    modifier = Modifier.testTag("btn_confirm_reset_default_roster")
+                ) {
+                    Text(if (isResettingRoster) "Memulihkan..." else "Pulihkan Default")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showResetRosterConfirm = false },
+                    enabled = !isResettingRoster
+                ) {
                     Text("Batal")
                 }
             }

@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NewReleases
@@ -107,7 +108,9 @@ fun AppUpdateBottomSheet(
     onOpenOnboarding: () -> Unit = {},
     onOpenCompass: () -> Unit = {},
     onOpenEvacuationGuide: () -> Unit = {},
-    onOpenDisasterWallpaper: () -> Unit = {}
+    onOpenDisasterWallpaper: () -> Unit = {},
+    onOpenDisclaimer: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val systemInDark = isSystemInDarkTheme()
@@ -303,6 +306,115 @@ fun AppUpdateBottomSheet(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = OrangePrimary
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- 2B. DISKLAIMER & KEBIJAKAN PRIVASI (UU PDP) ---
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("legal_disclaimer_privacy_card"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(Color(0xFF0F766E).copy(alpha = 0.14f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VerifiedUser,
+                                contentDescription = null,
+                                tint = Color(0xFF0F766E),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Disklaimer & Kebijakan Privasi",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Ketentuan penggunaan SIPAGAR KITA & pelindungan data pribadi (UU PDP).",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                onDismiss()
+                                onOpenDisclaimer()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag("btn_open_disclaimer_menu"),
+                            border = androidx.compose.foundation.BorderStroke(1.2.dp, OrangePrimary),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Gavel,
+                                contentDescription = null,
+                                tint = OrangePrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Disklaimer",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = OrangePrimary
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                onDismiss()
+                                onOpenPrivacyPolicy()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag("btn_open_privacy_policy_menu"),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Kebijakan Privasi",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
                         }
                     }

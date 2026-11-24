@@ -348,7 +348,7 @@ fun CallCenter117DetailBottomSheet(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Local Mukomuko Posko Card
+            // Call Center Darurat 112 Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -364,18 +364,18 @@ fun CallCenter117DetailBottomSheet(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Posko Pusdalops BPBD Mukomuko",
+                            text = "Nomor Tunggal Panggilan Darurat 112",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "Telepon: 0737-71112 / Call Center 112",
+                            text = "Dikelola Dinas Kominfo Kabupaten Mukomuko",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                         )
                         Text(
-                            text = "Kompleks Perkantoran Pemda Mukomuko",
+                            text = "Terintegrasi Layanan Darurat Pusdalops BPBD (Bebas Pulsa 24 Jam)",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
@@ -386,7 +386,7 @@ fun CallCenter117DetailBottomSheet(
                         colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("Panggil", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Hubungi 112", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

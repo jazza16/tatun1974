@@ -1,5 +1,7 @@
 package com.example.data.repository
 
+import android.content.Context
+import com.example.data.local.OfficerAuthManager
 import com.example.data.local.Personnel
 import com.example.data.local.PersonnelAuditLogDao
 import com.example.data.local.PersonnelAuditLogEntity
@@ -59,6 +61,13 @@ class PersonnelRepository(
 
     suspend fun deleteById(id: Long) = personnelDao.deletePersonnelById(id)
 
+    suspend fun deleteByNip(nip: String) {
+        val cleanNip = nip.trim().replace(Regex("[\\s\\-]+"), "")
+        if (cleanNip.isNotBlank()) {
+            personnelDao.deletePersonnelByNip(cleanNip)
+        }
+    }
+
     suspend fun getByNip(nip: String): Personnel? = personnelDao.getPersonnelByNip(nip)
 
     fun getByRole(role: String): Flow<List<Personnel>> = personnelDao.getPersonnelByRole(role)
@@ -101,13 +110,20 @@ class PersonnelRepository(
 
     /**
      * Pre-populates the official ASN BPBD Kabupaten Mukomuko personnel (leadership & operators) into Room database.
-     * Ensures each personnel's name and NIP are preserved in separate columns.
+     * Respects Admin-deleted NIP tombstones so retired, transferred, or typo-corrected ASN never resurrect.
      */
-    suspend fun seedDefaultAsnPersonnelIfNeeded() {
+    suspend fun seedDefaultAsnPersonnelIfNeeded(context: Context? = null) {
+        val authManager = context?.let { OfficerAuthManager(it.applicationContext) }
+        val existingCleanNips = personnelDao.getAllPersonnelList()
+            .map { it.nip.trim().replace(Regex("[\\s\\-]+"), "").lowercase() }
+            .toMutableSet()
+
         for (person in com.example.data.local.OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL) {
-            val existing = personnelDao.getPersonnelByNip(person.nip)
-            if (existing == null) {
-                personnelDao.insertPersonnel(person)
+            val cleanNip = person.nip.trim().replace(Regex("[\\s\\-]+"), "")
+            if (cleanNip.isBlank()) continue
+            if (authManager?.isNipDeleted(cleanNip) == true) continue
+            if (existingCleanNips.add(cleanNip.lowercase())) {
+                personnelDao.insertPersonnel(person.copy(nip = cleanNip))
             }
         }
     }
@@ -185,42 +201,85 @@ class PersonnelRepository(
 
     /**
      * Starts background real-time sync from Cloud Firestore into local Room database.
-     * Ensures newly installed devices or other devices instantly receive newly registered officers.
+     * Propagates cloud soft-deletes (tombstones) and respects local deletions so deleted ASN never resurrect.
      */
-    fun startAutoSyncFromCloud(scope: kotlinx.coroutines.CoroutineScope) {
+    fun startAutoSyncFromCloud(scope: CoroutineScope, context: Context? = null) {
+        val authManager = context?.let { OfficerAuthManager(it.applicationContext) }
+        var latestCloudUpdatedAt: Map<String, Long> = emptyMap()
         com.example.data.local.FirestoreHelper.listenOfficersRealtime(
+            onDeletedNips = { deletedMap ->
+                scope.launch(Dispatchers.IO) {
+                    for ((delNip, delTs) in deletedMap) {
+                        authManager?.markNipDeleted(delNip, delTs)
+                        personnelDao.deletePersonnelByNip(delNip)
+                    }
+                    authManager?.syncRosterFromCloud(emptyList(), deletedCloudNips = deletedMap)
+                }
+            },
+            onUpdatedAtByNip = { updatedMap ->
+                latestCloudUpdatedAt = updatedMap
+            },
             onUpdate = { remoteList ->
-                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                scope.launch(Dispatchers.IO) {
+                    val existingAll = personnelDao.getAllPersonnelList()
+                    val existingByCleanNip = existingAll.associateBy {
+                        it.nip.trim().replace(Regex("[\\s\\-]+"), "").lowercase()
+                    }.toMutableMap()
+
                     for (officer in remoteList) {
                         val cleanNip = officer.nip.trim().replace(Regex("[\\s\\-]+"), "")
                         val cleanName = officer.fullName.trim()
-                        if (cleanNip.isNotBlank() && cleanName.isNotBlank()) {
-                            val local = personnelDao.getPersonnelByNip(cleanNip)
-                            if (local == null) {
-                                personnelDao.insertPersonnel(
-                                    Personnel(
-                                        name = cleanName,
-                                        nip = cleanNip,
-                                        role = officer.role,
-                                        unit = officer.unit,
-                                        shift = officer.shift,
-                                        phone = officer.phone
-                                    )
-                                )
-                            } else if (local.name != cleanName || local.role != officer.role || local.phone != officer.phone) {
-                                personnelDao.updatePersonnel(
-                                    local.copy(
-                                        name = cleanName,
-                                        nip = cleanNip,
-                                        role = officer.role,
-                                        unit = officer.unit,
-                                        shift = officer.shift,
-                                        phone = officer.phone
-                                    )
-                                )
+                        if (cleanNip.isBlank() || cleanName.isBlank()) continue
+                        val key = cleanNip.lowercase()
+
+                        val localDeletedAt = authManager?.getDeletedTimestamp(cleanNip)
+                        if (localDeletedAt != null) {
+                            val cloudTs = latestCloudUpdatedAt[key] ?: 0L
+                            if (cloudTs > localDeletedAt) {
+                                authManager.unmarkNipDeleted(cleanNip)
+                            } else {
+                                // Tetap hormati penghapusan oleh Admin; jangan hidupkan kembali di Room
+                                personnelDao.deletePersonnelByNip(cleanNip)
+                                continue
                             }
                         }
+
+                        val local = existingByCleanNip[key] ?: personnelDao.getPersonnelByNip(cleanNip)
+                        if (local == null) {
+                            val inserted = Personnel(
+                                name = cleanName,
+                                nip = cleanNip,
+                                role = officer.role,
+                                unit = officer.unit,
+                                shift = officer.shift,
+                                phone = officer.phone
+                            )
+                            val newId = personnelDao.insertPersonnel(inserted)
+                            existingByCleanNip[key] = inserted.copy(id = newId)
+                        } else if (
+                            local.name != cleanName ||
+                            local.role != officer.role ||
+                            local.unit != officer.unit ||
+                            local.shift != officer.shift ||
+                            local.phone != officer.phone ||
+                            local.nip != cleanNip
+                        ) {
+                            val updated = local.copy(
+                                name = cleanName,
+                                nip = cleanNip,
+                                role = officer.role,
+                                unit = officer.unit,
+                                shift = officer.shift,
+                                phone = officer.phone
+                            )
+                            personnelDao.updatePersonnel(updated)
+                            existingByCleanNip[key] = updated
+                        }
                     }
+                    authManager?.syncRosterFromCloud(
+                        cloudOfficers = remoteList,
+                        cloudUpdatedAtByNip = latestCloudUpdatedAt
+                    )
                 }
             }
         )

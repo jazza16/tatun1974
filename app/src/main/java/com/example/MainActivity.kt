@@ -551,6 +551,11 @@ fun WeatherAppScreen(
     var isPanduanEvakuasiOpen by remember { mutableStateOf(false) }
     var officerLoginRequestId by remember { mutableStateOf(0) }
     var openRuangKerjaRequestId by remember { mutableStateOf(0) }
+    val disclaimerConsentManager = remember { com.example.data.local.DisclaimerConsentManager(context) }
+    var isDisclaimerAccepted by remember {
+        mutableStateOf(disclaimerConsentManager.hasAcceptedCurrentDisclaimer())
+    }
+    var legalDocumentsModalTab by remember { mutableStateOf<Int?>(null) }
 
     val currentDistrict = uiState.selectedDistrict
     val isFavorite = favorites.contains(currentDistrict.id)
@@ -1398,7 +1403,7 @@ fun WeatherAppScreen(
         CallCenter117DetailBottomSheet(
             onDismiss = { isCallCenter117SheetOpen = false },
             onCall117 = { EmergencyDialer.dial(context, "117") },
-            onCallPoskoMukomuko = { EmergencyDialer.dial(context, "073771112") }
+            onCallPoskoMukomuko = { EmergencyDialer.dial(context, "112") }
         )
     }
 
@@ -1437,7 +1442,9 @@ fun WeatherAppScreen(
             onOpenOnboarding = { viewModel.setOnboardingOpen(true) },
             onOpenCompass = { viewModel.setCompassSheetOpen(true) },
             onOpenEvacuationGuide = { isPanduanEvakuasiOpen = true },
-            onOpenDisasterWallpaper = { viewModel.setDisasterWallpaperDialogOpen(true) }
+            onOpenDisasterWallpaper = { viewModel.setDisasterWallpaperDialogOpen(true) },
+            onOpenDisclaimer = { legalDocumentsModalTab = 0 },
+            onOpenPrivacyPolicy = { legalDocumentsModalTab = 1 }
         )
     }
 
@@ -1628,6 +1635,28 @@ fun WeatherAppScreen(
             viewModel.dismissStartupWallpaper()
         }
     )
+
+    // Pop-up Disklaimer Singkat (Bagian B) sebelum memulai aplikasi (muncul sekali per versi)
+    if (!isDisclaimerAccepted) {
+        com.example.ui.components.SipagarFirstLaunchDisclaimerDialog(
+            onAcceptAndContinue = {
+                disclaimerConsentManager.recordConsentAccepted()
+                isDisclaimerAccepted = true
+            },
+            onCallEmergency = { number -> EmergencyDialer.dial(context, number) }
+        )
+    }
+
+    // Modal Baca Disklaimer Lengkap (Bagian A) & Kebijakan Privasi UU PDP (Bagian C) dari Menu
+    val activeLegalTab = legalDocumentsModalTab
+    if (activeLegalTab != null) {
+        com.example.ui.components.SipagarLegalDocumentsDialog(
+            initialTab = activeLegalTab,
+            consentDateLabel = disclaimerConsentManager.getFormattedAcceptedDate(),
+            onDismiss = { legalDocumentsModalTab = null },
+            onCallEmergency = { number -> EmergencyDialer.dial(context, number) }
+        )
+    }
 }
 
 @Composable

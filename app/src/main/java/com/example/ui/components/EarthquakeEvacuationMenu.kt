@@ -1212,8 +1212,8 @@ private fun EvacuationEmergencyContactsCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = "Posko 0737-71112",
-                        fontSize = 11.sp,
+                        text = "Call Center 112",
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFDC2626)
                     )

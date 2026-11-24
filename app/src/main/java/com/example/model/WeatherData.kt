@@ -150,5 +150,5 @@ data class DetailedEarlyWarning(
     val validUntil: String,
     val description: String,
     val safetyInstructions: List<String>,
-    val bpbdContact: String = "Posko BPBD Mukomuko: 0737-71112 / Call Center 112"
+    val bpbdContact: String = "Posko BPBD Mukomuko: Call Center 117 / Call Center 112"
 )

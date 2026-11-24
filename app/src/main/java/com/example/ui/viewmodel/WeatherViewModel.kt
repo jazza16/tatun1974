@@ -683,7 +683,7 @@ class WeatherViewModel(
                 "Waspadai potensi pohon tumbang dan genangan air di jalan lintas barat",
                 "Nelayan perahu katir dihimbau menunda aktivitas melaut"
             ),
-            bpbdContact = "Pusdalops BPBD: 0737-71112"
+            bpbdContact = "Pusdalops BPBD: Call Center 117 / 112"
         )
         WeatherNotificationHelper.postWeatherAlertNotification(context, sampleWarning, currentDistrict.name)
     }

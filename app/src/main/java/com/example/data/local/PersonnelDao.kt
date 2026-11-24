@@ -55,6 +55,9 @@ interface PersonnelDao {
     @Query("DELETE FROM personnel WHERE id = :id")
     suspend fun deletePersonnelById(id: Long)
 
+    @Query("DELETE FROM personnel WHERE LOWER(REPLACE(REPLACE(nip, ' ', ''), '-', '')) = LOWER(:cleanNip)")
+    suspend fun deletePersonnelByNip(cleanNip: String)
+
     @Query("DELETE FROM personnel")
     suspend fun clearAll()
 }

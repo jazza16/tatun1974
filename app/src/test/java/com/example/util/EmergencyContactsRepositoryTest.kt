@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
 import retrofit2.Response
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class EmergencyContactsRepositoryTest {
 
     private lateinit var context: Context
@@ -48,11 +48,14 @@ class EmergencyContactsRepositoryTest {
         val namesJoined = defaults.joinToString(" | ") { "${it.agencyName} ${it.category} ${it.subtitle}" }
 
         assertTrue(numbers.contains("117"))
+        assertTrue(numbers.contains("112"))
         assertTrue(numbers.contains("110"))
         assertTrue(numbers.contains("113"))
         assertTrue(numbers.contains("119"))
         assertTrue(numbers.contains("115"))
         assertTrue(namesJoined.contains("BPBD", ignoreCase = true))
+        assertTrue(namesJoined.contains("Nomor Tunggal Panggilan Darurat 112", ignoreCase = true))
+        assertTrue(namesJoined.contains("Kominfo", ignoreCase = true))
         assertTrue(namesJoined.contains("Kepolisian", ignoreCase = true))
         assertTrue(namesJoined.contains("Damkar", ignoreCase = true))
         assertTrue(namesJoined.contains("RSUD", ignoreCase = true))

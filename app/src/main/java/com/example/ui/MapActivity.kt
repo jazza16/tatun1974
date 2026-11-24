@@ -189,7 +189,7 @@ fun MukomukoInteractiveMapScreen(
                 normY = 0.20f,
                 description = "Stasiun Pengamatan Cuaca Otomatis & Radar Cuaca BMKG. Pemantauan curah hujan, arah angin, dan tekanan atmosfer.",
                 readinessStatus = "ONLINE TELEMETRI",
-                phoneContact = "(0737) 71117"
+                phoneContact = "117"
             ),
             MukomukoMapMarker(
                 id = "MK_03",

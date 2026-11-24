@@ -93,7 +93,10 @@ service cloud.firestore {
           && (!('unit' in data) || (data.unit is string && data.unit.size() <= 150))
           && (!('shift' in data) || (data.shift is string && data.shift.size() <= 80))
           && (!('phone' in data) || (data.phone is string && data.phone.size() <= 40))
-          && (!('updatedAt' in data) || data.updatedAt is int);
+          && (!('updatedAt' in data) || data.updatedAt is int)
+          && (!('isDeleted' in data) || data.isDeleted is bool)
+          && (!('deletedAt' in data) || data.deletedAt is int)
+          && (!('deletedReason' in data) || (data.deletedReason is string && data.deletedReason.size() <= 200));
     }
 
     function isValidOfficerCredential(data) {
@@ -354,7 +357,7 @@ service cloud.firestore {
       allow list: if true;
       allow create: if isValidId(officerId)
                     && incoming().keys().hasAll(['ownerUid', 'fullName', 'nip', 'role'])
-                    && incoming().keys().hasOnly(['id', 'ownerUid', 'fullName', 'nip', 'role', 'unit', 'shift', 'phone', 'updatedAt'])
+                    && incoming().keys().hasOnly(['id', 'ownerUid', 'fullName', 'nip', 'role', 'unit', 'shift', 'phone', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedReason'])
                     && isValidOfficerProfile(incoming())
                     && (
                       (isSignedIn() && incoming().ownerUid == request.auth.uid)
@@ -362,17 +365,12 @@ service cloud.firestore {
                     );
       allow update: if isValidId(officerId)
                     && isValidOfficerProfile(incoming())
-                    && incoming().diff(existing()).affectedKeys().hasOnly(['id', 'ownerUid', 'fullName', 'nip', 'role', 'unit', 'shift', 'phone', 'updatedAt'])
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['id', 'ownerUid', 'fullName', 'nip', 'role', 'unit', 'shift', 'phone', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedReason'])
                     && (
-                      (isSignedIn() && existing().ownerUid == request.auth.uid && incoming().ownerUid == existing().ownerUid)
-                      || (isSignedIn() && existing().ownerUid == ('officer_nip_' + existing().nip) && incoming().ownerUid == request.auth.uid)
-                      || (!isSignedIn() && incoming().ownerUid == ('officer_nip_' + incoming().nip) && (existing().ownerUid == incoming().ownerUid || existing().ownerUid is string))
+                      (isSignedIn() && incoming().ownerUid == request.auth.uid)
+                      || (!isSignedIn() && incoming().ownerUid == ('officer_nip_' + incoming().nip))
                     );
-      allow delete: if isValidId(officerId)
-                    && (
-                      (isSignedIn() && existing().ownerUid == request.auth.uid)
-                      || (!isSignedIn() && (existing().ownerUid == ('officer_nip_' + existing().nip) || existing().ownerUid == ('officer_nip_' + officerId)))
-                    );
+      allow delete: if isValidId(officerId);
     }
 
     // 5. Pusdalops & TRC Individual Officer Credentials & Custom PIN Sync (No plaintext initial PIN)

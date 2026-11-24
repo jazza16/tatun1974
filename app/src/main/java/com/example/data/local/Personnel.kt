@@ -356,15 +356,20 @@ fun seedDataAsnMukomuko2026(context: Context) {
         try {
             val db = AppDatabase.getInstance(appContext)
             val personnelDao = db.personnelDao()
+            val authManager = OfficerAuthManager(appContext)
+            val existingCleanNips = personnelDao.getAllPersonnelList()
+                .map { it.nip.trim().replace(Regex("[\\s\\-]+"), "").lowercase() }
+                .toMutableSet()
 
             for (official in OfficialAsnBpbdPersonnel.ALL_OFFICIAL_PERSONNEL) {
                 val name = official.name.trim()
-                val nip = official.nip.trim()
+                val nip = official.nip.trim().replace(Regex("[\\s\\-]+"), "")
                 if (name.isEmpty() || nip.isEmpty()) continue
+                // Jangan hidupkan kembali ASN yang sudah dihapus / pindah tugas / pensiun oleh Admin
+                if (authManager.isNipDeleted(nip)) continue
 
                 // Hanya masukkan data direktori non-rahasia ke tabel `personnel` jika NIP belum terdaftar
-                val existingPersonnel = personnelDao.getPersonnelByNip(nip)
-                if (existingPersonnel == null) {
+                if (existingCleanNips.add(nip.lowercase())) {
                     personnelDao.insertPersonnel(
                         Personnel(
                             name = name,

@@ -118,7 +118,8 @@ object EmergencyContactsRepository {
     }
 
     /**
-     * Daftar fallback standar 5 instansi darurat publik utama (tanpa nama/NIP personil ASN).
+     * Daftar fallback standar 6 instansi darurat publik utama (tanpa nama/NIP personil ASN),
+     * termasuk Call Center 117 (BPBD) dan Nomor Tunggal Panggilan Darurat 112 (Diskominfo Kab. Mukomuko).
      */
     fun getDefaultPublicContacts(): List<PublicEmergencyContact> = listOf(
         PublicEmergencyContact(
@@ -135,6 +136,19 @@ object EmergencyContactsRepository {
             priority = 1
         ),
         PublicEmergencyContact(
+            id = "kominfo_darurat_112",
+            agencyName = "Nomor Tunggal Panggilan Darurat 112",
+            category = "Darurat Terpadu",
+            phoneNumber = "112",
+            displayPhone = "112",
+            subtitle = "Layanan Nomor Tunggal Panggilan Darurat 24 Jam • Dikelola Dinas Kominfo Kabupaten Mukomuko",
+            address = "Dinas Komunikasi dan Informatika (Diskominfo) Kabupaten Mukomuko",
+            iconKey = "support",
+            accentHex = "#0284C7",
+            isTollFree = true,
+            priority = 2
+        ),
+        PublicEmergencyContact(
             id = "kepolisian_110",
             agencyName = "Kepolisian (Polres)",
             category = "Kepolisian",
@@ -145,7 +159,7 @@ object EmergencyContactsRepository {
             iconKey = "police",
             accentHex = "#1D4ED8",
             isTollFree = true,
-            priority = 2
+            priority = 3
         ),
         PublicEmergencyContact(
             id = "damkar_113",
@@ -158,7 +172,7 @@ object EmergencyContactsRepository {
             iconKey = "fire",
             accentHex = "#DC2626",
             isTollFree = true,
-            priority = 3
+            priority = 4
         ),
         PublicEmergencyContact(
             id = "ambulans_rsud_119",
@@ -171,7 +185,7 @@ object EmergencyContactsRepository {
             iconKey = "ambulance",
             accentHex = "#15803D",
             isTollFree = true,
-            priority = 4
+            priority = 5
         ),
         PublicEmergencyContact(
             id = "basarnas_115",
@@ -184,7 +198,7 @@ object EmergencyContactsRepository {
             iconKey = "sar",
             accentHex = "#D97706",
             isTollFree = true,
-            priority = 5
+            priority = 6
         )
     )
 
@@ -195,8 +209,14 @@ object EmergencyContactsRepository {
         if (!cachedJson.isNullOrBlank()) {
             val parsed = parseContactsPayload(cachedJson)
             if (parsed.isNotEmpty()) {
+                val enriched = if (overrideApiForTesting == null && parsed.none { it.phoneNumber == "112" }) {
+                    val default112 = getDefaultPublicContacts().first { it.phoneNumber == "112" }
+                    (parsed + default112).sortedBy { it.priority }
+                } else {
+                    parsed.sortedBy { it.priority }
+                }
                 return EmergencyContactsLoadResult(
-                    contacts = parsed.sortedBy { it.priority },
+                    contacts = enriched,
                     source = EmergencyContactsSource.LOCAL_CACHE,
                     lastSyncedAtMs = syncedAt
                 )

@@ -1716,10 +1716,10 @@ fun CitizenReportScreen(
                                             )
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
-                                                text = "Pilihan galeri dinonaktifkan. Demi integritas anti-palsu, hanya foto kamera langsung di tempat kejadian dengan stempel satelit GPS yang diterima sistem BPBD.",
+                                                text = "Foto hanya dari kamera langsung (galeri dinonaktifkan). Hindari memotret wajah korban atau pelat kendaraan—arahkan ke kondisi lokasi. Jika GPS/kamera terkendala, hubungi 117.",
                                                 fontSize = 11.sp,
                                                 color = Color(0xFF991B1B),
-                                                lineHeight = 12.sp
+                                                lineHeight = 14.sp
                                             )
                                         }
                                     }
@@ -1787,7 +1787,7 @@ fun CitizenReportScreen(
                                     Spacer(modifier = Modifier.height(4.dp))
 
                                     Text(
-                                        text = "Wajib diisi: Jelaskan kronologi kejadian, dampak kerusakan, kebutuhan mendesak, atau rincian jika jenis bencana tidak tercantum pada pilihan di atas.",
+                                        text = "Wajib diisi: Jelaskan kronologi, dampak kerusakan, dan kebutuhan mendesak. Mohon tidak menuliskan nama, NIK, atau nomor telepon korban maupun orang lain.",
                                         fontSize = 11.sp,
                                         color = Color(0xFF78350F),
                                         lineHeight = 14.sp
@@ -1832,7 +1832,7 @@ fun CitizenReportScreen(
                         item {
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    text = "Nama Pelapor (Opsional)",
+                                    text = "Nama Pelapor (Opsional — boleh inisial/sebutan; tidak dibagikan ke desa/kecamatan)",
                                     fontSize = 11.sp,
                                     color = Color(0xFF6B7280)
                                 )
@@ -1847,6 +1847,49 @@ fun CitizenReportScreen(
                                         .padding(top = 4.dp)
                                         .formScrollPadding(),
                                     singleLine = true
+                                )
+                            }
+                        }
+
+                        // Pemberitahuan Singkat Privasi & Peringatan Darurat 117 (Bagian D)
+                        item {
+                            var showReportPrivacyModal by remember { mutableStateOf(false) }
+                            Surface(
+                                color = Color(0xFFF0FDFA),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF99F6E4)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "Dengan menekan Kirim Laporan, Anda menyatakan isian benar dan menyetujui pengolahan koordinat GPS, foto lokasi, dan isian laporan untuk verifikasi serta penanganan bencana sesuai Kebijakan Privasi. Tombol ini bukan layanan penyelamatan seketika—jika nyawa terancam, segera hubungi Call Center 117 atau 112.",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF134E4A),
+                                        lineHeight = 15.sp
+                                    )
+                                    Text(
+                                        text = "Baca Kebijakan Privasi & Disklaimer Lengkap →",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF0F766E),
+                                        modifier = Modifier
+                                            .clickable { showReportPrivacyModal = true }
+                                            .padding(vertical = 2.dp)
+                                            .testTag("link_report_form_privacy_policy")
+                                    )
+                                }
+                            }
+                            if (showReportPrivacyModal) {
+                                SipagarLegalDocumentsDialog(
+                                    initialTab = 1,
+                                    consentDateLabel = com.example.data.local.DisclaimerConsentManager(context).getFormattedAcceptedDate(),
+                                    onDismiss = { showReportPrivacyModal = false },
+                                    onCallEmergency = { number ->
+                                        EmergencyDialer.dial(context, number)
+                                    }
                                 )
                             }
                         }
@@ -2269,14 +2312,20 @@ fun CitizenReportScreen(
                         }
 
                         // 2. Pelacakan Status Laporan (Tracking ID Laporan — Pending / Proses / Selesai)
+                        // Sesuai Pasal 3B Kebijakan Privasi (UU PDP): Lacak ID publik hanya menampilkan status,
+                        // jenis kejadian, & wilayah tanpa foto bukti (foto tetap dapat dilihat Petugas BPBD login).
                         item {
                             CitizenReportStatusTrackerCard(
                                 reports = reports,
                                 initialTrackingId = trackingReportIdQuery,
                                 onTrackingIdChange = { trackingReportIdQuery = it },
-                                onViewPhoto = { photoUri, rep ->
-                                    previewPhotoUri = photoUri
-                                    previewPhotoReport = rep
+                                onViewPhoto = if (isOfficerLoggedIn) {
+                                    { photoUri, rep ->
+                                        previewPhotoUri = photoUri
+                                        previewPhotoReport = rep
+                                    }
+                                } else {
+                                    null
                                 }
                             )
                         }

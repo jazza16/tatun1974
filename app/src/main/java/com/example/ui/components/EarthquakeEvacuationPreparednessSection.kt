@@ -1331,11 +1331,11 @@ fun EarthquakeEvacuationPreparednessSection(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 EmergencyContactItem(
-                    name = "Posko Darurat BPBD Kab. Mukomuko",
-                    number = "(0737) 71112",
-                    desc = "Pusat Komando Evakuasi Darat",
+                    name = "Nomor Tunggal Panggilan Darurat 112",
+                    number = "112",
+                    desc = "Dikelola Dinas Kominfo Kab. Mukomuko (Bebas Pulsa 24 Jam)",
                     onDial = {
-                        val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:073771112"))
+                        val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:112"))
                         dialIntent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
                         context.startActivity(dialIntent)
                     }
