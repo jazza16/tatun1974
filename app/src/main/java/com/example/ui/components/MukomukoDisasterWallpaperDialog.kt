@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -67,6 +69,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -91,9 +94,25 @@ fun MukomukoDisasterWallpaperDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     var isFullScreenZoom by remember { mutableStateOf(false) }
     var isSettingWallpaper by remember { mutableStateOf(false) }
+
+    val composeNavBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val activityNavBottom = remember(context, density) {
+        var c: Context? = context
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) {
+            c = c.baseContext
+        }
+        val act = c as? android.app.Activity
+        val bottomPx = act?.window?.decorView?.let {
+            androidx.core.view.ViewCompat.getRootWindowInsets(it)
+                ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars())?.bottom
+        } ?: 0
+        with(density) { bottomPx.toDp() }
+    }
+    val safeBottomInset = maxOf(composeNavBottom, activityNavBottom, 28.dp)
 
     Dialog(
         onDismissRequest = {
@@ -112,6 +131,7 @@ fun MukomukoDisasterWallpaperDialog(
             FullScreenZoomableWallpaperView(
                 onExitZoom = { isFullScreenZoom = false },
                 isSettingWallpaper = isSettingWallpaper,
+                safeBottomInset = safeBottomInset,
                 onApplyWallpaper = {
                     coroutineScope.launch {
                         isSettingWallpaper = true
@@ -131,7 +151,6 @@ fun MukomukoDisasterWallpaperDialog(
                     modifier = Modifier
                         .fillMaxSize()
                         .statusBarsPadding()
-                        .navigationBarsPadding()
                 ) {
                     // Header Bar
                     Surface(
@@ -199,7 +218,12 @@ fun MukomukoDisasterWallpaperDialog(
                         modifier = Modifier
                             .weight(1f)
                             .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                            .padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 14.dp,
+                                bottom = safeBottomInset + 24.dp
+                            ),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         // High-Resolution Wallpaper Preview Card
@@ -367,10 +391,13 @@ fun MukomukoDisasterWallpaperDialog(
                             }
                         }
 
+                        // Featured Cultural Heritage Card: Semboyan Daerah & Kearifan Lokal Mukomuko
+                        MukomukoCulturalHeritageCard()
+
                         // Educational Sections
                         LandscapeInfoSectionCard(
                             icon = Icons.Default.Terrain,
-                            title = "1. Profil Geografis & Lanskap Mukomuko",
+                            title = "2. Profil Geografis & Lanskap Mukomuko",
                             accentColor = Color(0xFF0284C7),
                             items = listOf(
                                 "Garis Pantai ±150–180 km: Membentang di pesisir barat Sumatra dan berhadapan langsung dengan Samudra Hindia.",
@@ -381,7 +408,7 @@ fun MukomukoDisasterWallpaperDialog(
 
                         LandscapeInfoSectionCard(
                             icon = Icons.Default.Warning,
-                            title = "2. Potensi Ancaman Bencana Wilayah",
+                            title = "3. Potensi Ancaman Bencana Wilayah",
                             accentColor = Color(0xFFDC2626),
                             items = listOf(
                                 "Gempa & Megathrust Mentawai: Zona subduksi aktif Indo-Australia dan Eurasia yang menuntut kesiapsiagaan gempa-tsunami 24 jam.",
@@ -393,7 +420,7 @@ fun MukomukoDisasterWallpaperDialog(
 
                         LandscapeInfoSectionCard(
                             icon = Icons.Default.Emergency,
-                            title = "3. Kesiapsiagaan & Mitigasi BPBD Mukomuko",
+                            title = "4. Kesiapsiagaan & Mitigasi BPBD Mukomuko",
                             accentColor = Color(0xFF16A34A),
                             items = listOf(
                                 "PUSDALOPS-PB 24 Jam & Call Center 117: Pemantauan real-time BMKG WRS-NTWC, radar cuaca, hotspot Karhutla, dan respon cepat TRC.",
@@ -414,6 +441,7 @@ fun MukomukoDisasterWallpaperDialog(
 private fun FullScreenZoomableWallpaperView(
     onExitZoom: () -> Unit,
     isSettingWallpaper: Boolean,
+    safeBottomInset: androidx.compose.ui.unit.Dp,
     onApplyWallpaper: () -> Unit
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
@@ -523,8 +551,7 @@ private fun FullScreenZoomableWallpaperView(
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 24.dp)
+                .padding(bottom = safeBottomInset + 16.dp)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
@@ -613,6 +640,109 @@ private fun LandscapeInfoSectionCard(
     }
 }
 
+@Composable
+private fun MukomukoCulturalHeritageCard() {
+    val isDark = MaterialTheme.colorScheme.background.red < 0.5f
+    val heritageGold = if (isDark) Color(0xFFF59E0B) else Color(0xFFB45309)
+    val heritageCardBg = if (isDark) Color(0xFF1F1A12) else Color(0xFFFFFBEB)
+    val heritageBorder = Color(0xFFF59E0B)
+    val titleColor = if (isDark) Color(0xFFFDE68A) else Color(0xFF78350F)
+    val bodyColor = if (isDark) Color(0xFFF5EFE6).copy(alpha = 0.90f) else Color(0xFF451A03).copy(alpha = 0.90f)
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = heritageCardBg),
+        border = BorderStroke(1.2.dp, heritageBorder.copy(alpha = if (isDark) 0.50f else 0.55f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("card_semboyan_kapuang_sakti_sirih_carano")
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White,
+                    border = BorderStroke(1.dp, heritageBorder.copy(alpha = 0.45f)),
+                    modifier = Modifier.size(54.dp)
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_mukomuko_logo),
+                        contentDescription = "Lambang Daerah Kabupaten Mukomuko Kapuang Sakti Ratau Batuah",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(5.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        color = Color(0xFFB45309),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = "1. SEMBOYAN & KEARIFAN LOKAL MUKOMUKO",
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "\"Kapuang Sakti Ratau Batuah\"",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = titleColor
+                    )
+                    Text(
+                        text = "Filosofi Adat Sirih Carano • Bumi Kabupaten Mukomuko",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = heritageGold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            val culturalItems = listOf(
+                "Kapuang Sakti: Bermakna kampung atau negeri asal yang memiliki kekuatan adat, keteguhan moral, persatuan jiwa, serta daya juang masyarakat dalam menjaga marwah dan keselamatan tanah kelahiran.",
+                "Ratau Batuah: Bermakna tanah rantau yang bertuah — wilayah yang ramah, terbuka, membawa keberkahan, kemakmuran, dan kedamaian bagi seluruh penduduk maupun perantau yang hidup dan mengabdi di Kabupaten Mukomuko.",
+                "Filosofi Sirih Carano: Carano berisi sirih pinang lengkap merupakan wadah adat luhur masyarakat Mukomuko yang melambangkan ketulusan hati, penghormatan tertinggi, musyawarah mufakat, keramahtamahan, serta eratnya tali silaturahmi antarwarga.",
+                "Kearifan Lokal dalam Mitigasi Bencana: Semangat Kapuang Sakti Ratau Batuah dan budaya Sirih Carano menjiwai gotong royong Desa Tangguh Bencana (Destana), solidaritas antar-15 kecamatan, serta prinsip \"Bencana Urusan Bersama\" dari pesisir Samudra Hindia hingga perbukitan Bukit Barisan."
+            )
+
+            culturalItems.forEach { item ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .size(6.dp)
+                            .background(heritageGold, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = item,
+                        fontSize = 12.sp,
+                        lineHeight = 17.5.sp,
+                        color = bodyColor
+                    )
+                }
+            }
+        }
+    }
+}
+
 private suspend fun applyDisasterWallpaper(context: Context) {
     withContext(Dispatchers.IO) {
         try {
@@ -649,9 +779,10 @@ private suspend fun applyDisasterWallpaper(context: Context) {
 
 private fun shareLandscapeInfo(context: Context) {
     val shareText = buildString {
-        appendLine("INFO LANSKAP & KESIAPSIAGAAN BENCANA KABUPATEN MUKOMUKO")
+        appendLine("INFO LANSKAP, KEARIFAN LOKAL & KESIAPSIAGAAN BENCANA KABUPATEN MUKOMUKO")
         appendLine("PUSDALOPS-PB BPBD Kabupaten Mukomuko • SIPAGAR KITA")
         appendLine()
+        appendLine("• Semboyan Daerah: \"Kapuang Sakti Ratau Batuah\" & Filosofi Adat Sirih Carano — simbol persatuan adat, ketulusan hati, musyawarah mufakat, dan gotong royong kebencanaan.")
         appendLine("• Garis Pantai ±150–180 km menghadap Samudra Hindia (15 Kecamatan).")
         appendLine("• Ancaman utama: Gempa Megathrust Mentawai, Tsunami, Abrasi Pesisir, Banjir, Longsor & Cuaca Maritim.")
         appendLine("• Posko Siaga 24 Jam & Call Center Darurat BPBD: 117.")

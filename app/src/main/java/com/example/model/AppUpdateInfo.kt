@@ -26,7 +26,7 @@ val INITIAL_RELEASE_CHANGELOG = VersionChangelog(
 )
 
 val LATEST_RELEASE_CHANGELOG = VersionChangelog(
-    version = "1.0.9",
+    version = "1.0.10",
     releaseDate = "23 November 2026",
     isCurrent = true,
     isLatest = true,
@@ -34,13 +34,23 @@ val LATEST_RELEASE_CHANGELOG = VersionChangelog(
         "Perbaikan Reset PIN & Login Cloud: Reset PIN kembali ke 6 digit terakhir NIP kini bebas notifikasi pencabutan sesi palsu dan langsung mengizinkan login ulang ke server tanpa logo loading menggantung.",
         "Optimalisasi Performa & Hemat Baterai Mode Administrator: Memutus siklus sinkronisasi berulang daftar personil, memindahkan pemrosesan keamanan ke latar belakang, dan meniadakan lag/freeze saat menggulir Ruang Kerja.",
         "Pemulihan Skema Login, Logout, Biometrik, & Isolasi Mode Warga: Relogin PIN pribadi Cloud dan Biometrik native Android kembali berfungsi optimal, serta Mode Warga selalu mengisolasi sesi agar Ruang Kerja tetap terkunci.",
-        "Presisi Tombol Alarm Sirene & Pemindahan Info Lanskap: Ukuran teks tombol alarm darurat dibuat presisi sesuai tombol, audio sirene bebas timeout, dan menu Info Lanskap & Wallpaper HD dipindahkan ke Info Aplikasi.",
-        "Sinkronisasi Catatan Rilis Bahasa Indonesia: Seluruh riwayat penambahan fitur, fungsi, peningkatan, dan perbaikan setiap rilis tercatat lengkap dalam bahasa Indonesia di aplikasi dan GitHub Releases."
+        "Kompatibilitas Upgrade Langsung & Catatan Rilis Bahasa Indonesia: Pembaruan langsung (in-place update) dari seluruh versi v1.0.0–v1.0.9 tanpa menghapus data atau PIN Cloud, lengkap dengan otomatisasi catatan rilis GitHub berbahasa Indonesia."
     )
 )
 
 val RELEASE_HISTORY_ACCORDION_CHANGELOGS: List<VersionChangelog> = listOf(
     LATEST_RELEASE_CHANGELOG,
+    VersionChangelog(
+        version = "1.0.9",
+        releaseDate = "23 November 2026",
+        isCurrent = false,
+        isLatest = false,
+        highlights = listOf(
+            "Presisi Tombol Alarm Sirene Darurat: Menyelaraskan ukuran huruf dan tata letak tombol \"SEGERA CEK & MATIKAN ALARM\" dan \"MATIKAN SIRENE\" agar proporsional dan tidak terpotong.",
+            "Pemindahan Info Lanskap & Wallpaper HD ke Info Aplikasi: Menyederhanakan tampilan utama dengan tetap mempertahankan akses penuh fitur wallpaper kebencanaan Mukomuko di menu Info Aplikasi.",
+            "Perbaikan Stabilitas Audio Sirene (ToneGenerator): Menangani batas waktu penghentian nada alarm agar sirene darurat bekerja stabil tanpa error sistem."
+        )
+    ),
     VersionChangelog(
         version = "1.0.8",
         releaseDate = "21 November 2026",
@@ -132,8 +142,8 @@ val DEFAULT_RELEASE_CHANGELOGS: List<VersionChangelog> = RELEASE_HISTORY_ACCORDI
 
 @Keep
 data class AppUpdateState(
-    val currentVersion: String = "1.0.9",
-    val latestVersion: String = "1.0.9",
+    val currentVersion: String = "1.0.10",
+    val latestVersion: String = "1.0.10",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -145,9 +155,9 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "1.0.9",
+    val lastCheckedVersion: String = "1.0.10",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Production Release) v1.0.9 terbaru secara permanen.",
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Production Release) v1.0.10 terbaru secara permanen.",
     val packageSizeMb: Float = 20.4f,
     val downloadUrl: String = "https://github.com/jazza16/tatun1974/releases/latest",
     val isBannerDismissed: Boolean = false,

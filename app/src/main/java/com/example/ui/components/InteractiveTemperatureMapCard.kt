@@ -1008,25 +1008,33 @@ fun InteractiveTemperatureMapCard(
                         }
                     }
 
-                    // Key Weather Metrics of Inspected District
-                    Row(
+                    // Key Weather Metrics of Inspected District (2-column compact row + full-width condition pill)
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        MetricPill(
-                            icon = Icons.Default.WaterDrop,
-                            label = "Kelembapan",
-                            value = "${inspectedData.humidity}%"
-                        )
-                        MetricPill(
-                            icon = Icons.Default.Air,
-                            label = "Angin",
-                            value = "${inspectedData.windSpeed.roundToInt()} km/j"
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            MetricPill(
+                                icon = Icons.Default.WaterDrop,
+                                label = "Kelembapan",
+                                value = "${inspectedData.humidity}%",
+                                modifier = Modifier.weight(1f)
+                            )
+                            MetricPill(
+                                icon = Icons.Default.Air,
+                                label = "Angin",
+                                value = "${inspectedData.windSpeed.roundToInt()} km/j",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                         MetricPill(
                             icon = Icons.Default.WbSunny,
                             label = "Kondisi",
-                            value = inspectedData.weatherDesc
+                            value = inspectedData.weatherDesc,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
 
@@ -1067,33 +1075,35 @@ fun InteractiveTemperatureMapCard(
 private fun MetricPill(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    value: String
+    value: String,
+    modifier: Modifier = Modifier
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = modifier
             .background(
                 MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                RoundedCornerShape(8.dp)
+                RoundedCornerShape(10.dp)
             )
-            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = OrangePrimary,
-            modifier = Modifier.size(13.dp)
+            modifier = Modifier.size(15.dp)
         )
-        Spacer(modifier = Modifier.width(4.dp))
-        Column {
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
                 fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
             Text(
                 text = value,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )

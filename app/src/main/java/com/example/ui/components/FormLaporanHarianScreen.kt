@@ -323,7 +323,9 @@ fun FormLaporanHarianScreen(
             tanggalTerima = tanggalTerima,
             operatorName = verifiedUser.name,
             stationId = verifiedUser.stationId
-        )
+        ).also {
+            it.fotoDokumentasiUri = attachedCitizenReport?.photoUrl.orEmpty()
+        }
     }
 
     fun savePdfToDevice() {
@@ -492,7 +494,9 @@ fun FormLaporanHarianScreen(
                                         tanggalTerima = tanggalTerima,
                                         operatorName = namaOperator,
                                         stationId = idStasiun
-                                    )
+                                    ).also {
+                                        it.fotoDokumentasiUri = attachedCitizenReport?.photoUrl.orEmpty()
+                                    }
                                     val insertedLaporanId = if (com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
                                         com.example.training.SandboxTrainingManager.recordSandboxDailyReportSaved(newLaporan)
                                     } else {
@@ -625,7 +629,10 @@ fun FormLaporanHarianScreen(
                         officerName = "${operatorName.ifBlank { "HITATUN ARAZAK" }} (NIP. ${operatorNip.ifBlank { "197401282006041006" }})",
                         unreadCitizenCount = unreadCitizenCount,
                         attachedCitizenReport = attachedCitizenReport,
-                        onClearAttachedCitizenReport = { attachedCitizenReport = null },
+                        onClearAttachedCitizenReport = {
+                            attachedCitizenReport = null
+                            com.example.util.ImageUtils.lastSelectedCitizenReportPhotoUri = null
+                        },
                         onOpenDariWargaModal = {
                             showDariWargaModalSheet = true
                             scope.launch {
@@ -803,6 +810,7 @@ fun FormLaporanHarianScreen(
                     isUnreadOrUnprocessed = false,
                     status = "Sudah Dipakai"
                 )
+                com.example.util.ImageUtils.lastSelectedCitizenReportPhotoUri = selectedItem.photoUrl
 
                 // Autofill Kolom-kolom di "Informasi Dasar Kejadian" & Dampak
                 jenisBencana = selectedItem.disasterType

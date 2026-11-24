@@ -46,7 +46,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
 import coil.compose.AsyncImage
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.BarChart
@@ -83,6 +82,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -412,6 +412,7 @@ fun OfficerDashboardConsoleView(
     var integrityCheckResult by remember { mutableStateOf<com.example.data.sync.IntegrityCheckResult?>(null) }
     var isCheckingIntegrity by remember { mutableStateOf(false) }
     var editingPersonnel by remember { mutableStateOf<com.example.data.local.Personnel?>(null) }
+    var restoringPersonnel by remember { mutableStateOf<com.example.data.local.OfficerProfile?>(null) }
 
     // Enterprise Play Integrity SecurityManager & Backend Firestore Sessions + Login Activities
     val securityManager = remember { SecurityManager.getInstance(context) }
@@ -561,29 +562,6 @@ fun OfficerDashboardConsoleView(
         personnelRepository.startAutoSyncFromCloud(this)
     }
 
-    // 30-Minute Inactivity Auto-Logout Timer for Officer Security
-    // Uses AtomicLong instead of Compose MutableState so pointer events NEVER trigger full-screen recompositions
-    val lastActiveTimeMs = remember { java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis()) }
-    val autoLogoutThresholdMs = 30 * 60 * 1000L // 30 minutes
-
-    LaunchedEffect(isOfficerLoggedIn) {
-        if (isOfficerLoggedIn) {
-            while (isActive) {
-                delay(15_000L) // Poll every 15 seconds
-                val idleDuration = System.currentTimeMillis() - lastActiveTimeMs.get()
-                if (idleDuration >= autoLogoutThresholdMs) {
-                    Toast.makeText(
-                        context,
-                        "Sesi konsol petugas berakhir otomatis setelah 30 menit tidak aktif demi keamanan data.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    onLogoutClick()
-                    break
-                }
-            }
-        }
-    }
-
     // Pusdalops Officer Roster Management State backed directly by Room Database & Session Manager
     var showRosterDialog by remember { mutableStateOf(false) }
     var rosterList by remember { mutableStateOf<List<OfficerProfile>>(emptyList()) }
@@ -701,14 +679,6 @@ fun OfficerDashboardConsoleView(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        awaitPointerEvent()
-                        lastActiveTimeMs.set(System.currentTimeMillis())
-                    }
-                }
-            }
             .testTag("officer_dashboard_console_view"),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1443,7 +1413,6 @@ fun OfficerDashboardConsoleView(
                     isCheckingIntegrity = isCheckingIntegrity,
                     securitySessions = securitySessionsList,
                     loginActivities = loginActivitiesList,
-                    isCloudLinked = !currentFirebaseUid.isNullOrBlank(),
                     isSyncingSecurity = isSyncingSecurityActivities,
                     onSyncSecurityNow = {
                         coroutineScope.launch {
@@ -1453,26 +1422,6 @@ fun OfficerDashboardConsoleView(
                                 "Sinkronisasi ${securitySessionsList.size} sesi perangkat & ${loginActivitiesList.size} aktivitas login selesai.",
                                 Toast.LENGTH_SHORT
                             ).show()
-                        }
-                    },
-                    onLinkGoogleCloud = {
-                        coroutineScope.launch {
-                            val authRes = com.example.data.auth.AuthManager.getInstance(context).signInWithGoogle(context)
-                            if (authRes.isSuccess) {
-                                currentFirebaseUid = authRes.getOrNull()?.uid
-                                runFullSecurityActivitySync()
-                                Toast.makeText(
-                                    context,
-                                    "Google Cloud terhubung. Stream real-time seluruh aktivitas login petugas aktif.",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            } else {
-                                Toast.makeText(
-                                    context,
-                                    authRes.exceptionOrNull()?.message ?: "Gagal menghubungkan Google Cloud.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
                         }
                     },
                     onVerifySecuritySession = { session, approved, note ->
@@ -1831,6 +1780,9 @@ fun OfficerDashboardConsoleView(
                         keyboardActions = searchKeyboardActions,
                         shape = RoundedCornerShape(10.dp),
                         colors = TextFieldDefaults.colors(
+                            focusedTextColor = Color(0xFF0F172A),
+                            unfocusedTextColor = Color(0xFF0F172A),
+                            cursorColor = Color(0xFF15803D),
                             focusedContainerColor = Color.White,
                             unfocusedContainerColor = Color.White,
                             focusedIndicatorColor = Color(0xFF15803D),
@@ -2609,10 +2561,22 @@ fun OfficerDashboardConsoleView(
         }
 
         val filteredList = rosterList.filter { off ->
-            val matchesRole = if (selectedRoleTab == "Semua") true else off.role.contains(selectedRoleTab, ignoreCase = true)
+            val matchesRole = when (selectedRoleTab) {
+                "Semua" -> true
+                "Pengawas" -> off.role.contains("Pengawas", ignoreCase = true)
+                "Manajer" -> off.role.contains("Manajer", ignoreCase = true)
+                "Supervisor" -> off.role.contains("Supervisor", ignoreCase = true)
+                OfficerRoles.OPERATOR -> off.role.contains("Operator", ignoreCase = true)
+                OfficerRoles.PETUGAS_JAGA -> off.role.contains("Piket", ignoreCase = true) || off.role.contains("Jaga", ignoreCase = true)
+                OfficerRoles.PETUGAS_LAPANGAN -> off.role.contains("Lapangan", ignoreCase = true) || off.role.contains("Logistik", ignoreCase = true) || off.role.contains("TRC", ignoreCase = true)
+                else -> off.role.contains(selectedRoleTab, ignoreCase = true)
+            }
             val matchesSearch = if (rosterSearchQuery.isBlank()) true else {
                 val q = rosterSearchQuery.trim().lowercase()
-                off.fullName.lowercase().contains(q) || off.nip.lowercase().contains(q) || off.unit.lowercase().contains(q)
+                off.fullName.lowercase().contains(q) ||
+                    off.nip.lowercase().contains(q) ||
+                    off.unit.lowercase().contains(q) ||
+                    off.role.lowercase().contains(q)
             }
             matchesRole && matchesSearch
         }.sortedWith(
@@ -2620,672 +2584,843 @@ fun OfficerDashboardConsoleView(
                 .thenBy { it.fullName }
         )
 
-        AlertDialog(
+        Dialog(
             onDismissRequest = { showRosterDialog = false },
-            icon = {
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFFEFF6FF),
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (rosterMode == 1) Icons.Default.PersonAdd else Icons.Default.Badge,
-                            contentDescription = null,
-                            tint = Color(0xFF2563EB),
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                }
-            },
-            title = {
-                Text(
-                    text = if (rosterMode == 1) "Input Personil Pusdalops Baru" else "Direktori Personil Pusdalops & TRC",
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 15.sp,
-                    textAlign = TextAlign.Center
-                )
-            },
-            text = {
-                val rosterKeyboardActions = rememberFormKeyboardActions()
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            val rosterKeyboardActions = rememberFormKeyboardActions()
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 16.dp)
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 460.dp)
-                        .imePadding()
-                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
                 ) {
-                    if (rosterMode == 0) {
-                        val validTokenBanner = com.example.security.AdminAccessSecurityManager.getActiveTokenForOfficer(officerBadgeId)
-                        if (validTokenBanner != null) {
-                            val remMin = (validTokenBanner.remainingSeconds() / 60L).coerceAtLeast(0L)
-                            val remSec = validTokenBanner.remainingSeconds() % 60L
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = Color(0xFFF0FDF4),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp)
-                                    .testTag("banner_admin_temp_token")
-                            ) {
-                                Row(
+                    // Compact Dialog Header (selalu terlihat rapi meski keyboard terbuka)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFEFF6FF),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (rosterMode == 1) Icons.Default.PersonAdd else Icons.Default.Badge,
+                                    contentDescription = null,
+                                    tint = Color(0xFF2563EB),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = if (rosterMode == 1) "Input Personil Pusdalops Baru" else "Direktori Personil Pusdalops & TRC",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { showRosterDialog = false },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Tutup Direktori Personil",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Scrollable Body: menyesuaikan tinggi otomatis tanpa celah kosong saat keyboard tampil
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        if (rosterMode == 0) {
+                            val validTokenBanner = com.example.security.AdminAccessSecurityManager.getActiveTokenForOfficer(officerBadgeId)
+                            if (validTokenBanner != null) {
+                                val remMin = (validTokenBanner.remainingSeconds() / 60L).coerceAtLeast(0L)
+                                val remSec = validTokenBanner.remainingSeconds() % 60L
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0xFFF0FDF4),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .padding(bottom = 8.dp)
+                                        .testTag("banner_admin_temp_token")
                                 ) {
-                                    Text(
-                                        text = "Token Sementara Aktif • Sisa ${remMin}m ${remSec}d",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF15803D)
-                                    )
-                                    Text(
-                                        text = "Kunci Sesi",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFDC2626),
+                                    Row(
                                         modifier = Modifier
-                                            .clickable {
-                                                com.example.security.AdminAccessSecurityManager.revokeToken()
-                                                activeAdminToken = null
-                                                showRosterDialog = false
-                                                Toast.makeText(context, "Token akses sementara dikunci.", Toast.LENGTH_SHORT).show()
-                                            }
-                                            .testTag("btn_revoke_admin_token")
-                                    )
-                                }
-                            }
-                        }
-
-                        Text(
-                            text = "Daftar resmi nama personil ASN & TRC BPBD Kabupaten Mukomuko yang bertugas sebagai Operator, Petugas Jaga, dan Personil Lapangan di Pusdalops.",
-                            fontSize = 11.sp,
-                            color = Color(0xFF4B5563),
-                            lineHeight = 15.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Search and Add Button Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = rosterSearchQuery,
-                                onValueChange = { rosterSearchQuery = it },
-                                placeholder = { Text("Cari nama/NIP personil...", fontSize = 11.sp) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = null,
-                                        tint = Color.Gray,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                singleLine = true,
-                                keyboardOptions = formDoneKeyboardOptions(),
-                                keyboardActions = rosterKeyboardActions,
-                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 48.dp)
-                                    .formScrollPadding()
-                            )
-
-                            Button(
-                                onClick = {
-                                    rosterMode = 1
-                                    formError = null
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.heightIn(min = 48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PersonAdd,
-                                    contentDescription = "Tambah Petugas",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("+ Input", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Category Filter Chips
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            val roleTabs = listOf(
-                                "Semua" to "Semua (${rosterList.size})",
-                                "Pengawas" to "Pengawas (${rosterList.count { it.role.contains("Pengawas", ignoreCase = true) }})",
-                                "Manajer" to "Manajer Pusdalops (${rosterList.count { it.role.contains("Manajer", ignoreCase = true) }})",
-                                "Supervisor" to "Supervisor (${rosterList.count { it.role.contains("Supervisor", ignoreCase = true) }})",
-                                OfficerRoles.OPERATOR to "Operator (${rosterList.count { it.role.contains("Operator", ignoreCase = true) }})",
-                                OfficerRoles.PETUGAS_JAGA to "Piket (${rosterList.count { it.role.contains("Piket", ignoreCase = true) || it.role.contains("Jaga", ignoreCase = true) }})",
-                                OfficerRoles.PETUGAS_LAPANGAN to "Staff Logistik (${rosterList.count { it.role.contains("Lapangan", ignoreCase = true) || it.role.contains("Logistik", ignoreCase = true) || it.role.contains("TRC", ignoreCase = true) }})"
-                            )
-                            items(roleTabs) { (roleKey, label) ->
-                                val isSelected = selectedRoleTab == roleKey
-                                Surface(
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = if (isSelected) Color(0xFF2563EB) else Color(0xFFF1F5F9),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        if (isSelected) Color(0xFF1D4ED8) else Color(0xFFCBD5E1)
-                                    ),
-                                    modifier = Modifier.clickable { selectedRoleTab = roleKey }
-                                ) {
-                                    Text(
-                                        text = label,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) Color.White else Color(0xFF475569),
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Personil Cards
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            if (filteredList.isEmpty()) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFFF8FAFC),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(16.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "Belum Ada Personil Terdaftar",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp,
-                                            color = Color(0xFF334155)
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "Daftar personil Room Database masih bersih. Tekan tombol '+ Input' di atas untuk mendaftarkan Operator, Piket Siaga, Staff Logistik, atau Manajer Pusdalops PB.",
+                                            text = "Token Sementara Aktif • Sisa ${remMin}m ${remSec}d",
                                             fontSize = 11.sp,
-                                            color = Color(0xFF64748B),
-                                            textAlign = TextAlign.Center,
-                                            lineHeight = 15.sp
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF15803D),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = "Kunci Sesi",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFDC2626),
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            modifier = Modifier
+                                                .clickable {
+                                                    com.example.security.AdminAccessSecurityManager.revokeToken()
+                                                    activeAdminToken = null
+                                                    showRosterDialog = false
+                                                    Toast.makeText(context, "Token akses sementara dikunci.", Toast.LENGTH_SHORT).show()
+                                                }
+                                                .testTag("btn_revoke_admin_token")
                                         )
                                     }
                                 }
-                            } else {
-                                filteredList.forEach { off ->
-                                    val (roleBg, roleColor) = com.example.data.local.OfficialAsnBpbdPersonnel.getRoleBadgeColor(off.role)
-                                    val roleBorder = roleColor.copy(alpha = 0.35f)
-                                    val roleIcon = when {
-                                        off.role.contains("Pengawas", ignoreCase = true) || off.role.contains("Kalaksa", ignoreCase = true) -> Icons.Default.AdminPanelSettings
-                                        off.role.contains("Supervisor", ignoreCase = true) || off.role.contains("Kabid", ignoreCase = true) -> Icons.Default.Shield
-                                        off.role.contains("Koord", ignoreCase = true) || off.role.contains("Administrasi", ignoreCase = true) -> Icons.Default.Badge
-                                        off.role.contains("Manajer", ignoreCase = true) -> Icons.Default.AdminPanelSettings
-                                        off.role.contains("Operator", ignoreCase = true) -> Icons.Default.HeadsetMic
-                                        off.role.contains("Logistik", ignoreCase = true) || off.role.contains("TRC", ignoreCase = true) -> Icons.Default.DirectionsCar
-                                        else -> Icons.Default.Badge
-                                    }
-                                    val roleBadgeLabel = off.role
+                            }
 
+                            Text(
+                                text = "Daftar resmi nama personil ASN & TRC BPBD Kabupaten Mukomuko yang bertugas sebagai Operator, Petugas Jaga, dan Personil Lapangan di Pusdalops.",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Search and Add Button Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = rosterSearchQuery,
+                                    onValueChange = { rosterSearchQuery = it },
+                                    placeholder = {
+                                        Text(
+                                            text = "Cari nama/NIP personil...",
+                                            fontSize = 12.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Search,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    trailingIcon = if (rosterSearchQuery.isNotEmpty()) {
+                                        {
+                                            IconButton(
+                                                onClick = { rosterSearchQuery = "" },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Hapus Pencarian",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    } else null,
+                                    singleLine = true,
+                                    keyboardOptions = formDoneKeyboardOptions(),
+                                    keyboardActions = rosterKeyboardActions,
+                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 50.dp)
+                                )
+
+                                Button(
+                                    onClick = {
+                                        rosterMode = 1
+                                        formError = null
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier.heightIn(min = 50.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PersonAdd,
+                                        contentDescription = "Tambah Petugas",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "+ Input",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Category Filter Chips
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                val roleTabs = listOf(
+                                    "Semua" to "Semua (${rosterList.size})",
+                                    "Pengawas" to "Pengawas (${rosterList.count { it.role.contains("Pengawas", ignoreCase = true) }})",
+                                    "Manajer" to "Manajer Pusdalops (${rosterList.count { it.role.contains("Manajer", ignoreCase = true) }})",
+                                    "Supervisor" to "Supervisor (${rosterList.count { it.role.contains("Supervisor", ignoreCase = true) }})",
+                                    OfficerRoles.OPERATOR to "Operator (${rosterList.count { it.role.contains("Operator", ignoreCase = true) }})",
+                                    OfficerRoles.PETUGAS_JAGA to "Piket (${rosterList.count { it.role.contains("Piket", ignoreCase = true) || it.role.contains("Jaga", ignoreCase = true) }})",
+                                    OfficerRoles.PETUGAS_LAPANGAN to "Staff Logistik (${rosterList.count { it.role.contains("Lapangan", ignoreCase = true) || it.role.contains("Logistik", ignoreCase = true) || it.role.contains("TRC", ignoreCase = true) }})"
+                                )
+                                items(roleTabs) { (roleKey, label) ->
+                                    val isSelected = selectedRoleTab == roleKey
                                     Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = Color.White,
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = if (isSelected) Color(0xFF2563EB) else Color(0xFFF1F5F9),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (isSelected) Color(0xFF1D4ED8) else Color(0xFFCBD5E1)
+                                        ),
+                                        modifier = Modifier.clickable { selectedRoleTab = roleKey }
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelected) Color.White else Color(0xFF475569),
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Personil Cards
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (filteredList.isEmpty()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color(0xFFF8FAFC),
                                         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(10.dp),
-                                            verticalAlignment = Alignment.CenterVertically
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = roleBg,
-                                                border = androidx.compose.foundation.BorderStroke(1.dp, roleBorder),
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(
-                                                        imageVector = roleIcon,
-                                                        contentDescription = null,
-                                                        tint = roleColor,
-                                                        modifier = Modifier.size(19.dp)
+                                            if (rosterList.isEmpty()) {
+                                                Text(
+                                                    text = "Belum Ada Personil Terdaftar",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.5.sp,
+                                                    color = Color(0xFF334155)
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Daftar personil Room Database masih bersih. Tekan tombol '+ Input' di atas untuk mendaftarkan Operator, Piket Siaga, Staff Logistik, atau Manajer Pusdalops PB.",
+                                                    fontSize = 11.5.sp,
+                                                    color = Color(0xFF64748B),
+                                                    textAlign = TextAlign.Center,
+                                                    lineHeight = 16.sp
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = "Tidak Ada Personil yang Cocok",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.5.sp,
+                                                    color = Color(0xFF334155)
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Tidak ditemukan personil pada filter/pencarian ini dari total ${rosterList.size} personil terdaftar.",
+                                                    fontSize = 11.5.sp,
+                                                    color = Color(0xFF64748B),
+                                                    textAlign = TextAlign.Center,
+                                                    lineHeight = 16.sp
+                                                )
+                                                Spacer(modifier = Modifier.height(10.dp))
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        selectedRoleTab = "Semua"
+                                                        rosterSearchQuery = ""
+                                                    },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "Tampilkan Semua (${rosterList.size})",
+                                                        fontSize = 11.5.sp,
+                                                        fontWeight = FontWeight.SemiBold
                                                     )
                                                 }
                                             }
+                                        }
+                                    }
+                                } else {
+                                    filteredList.forEach { off ->
+                                        val (roleBg, roleColor) = com.example.data.local.OfficialAsnBpbdPersonnel.getRoleBadgeColor(off.role)
+                                        val roleBorder = roleColor.copy(alpha = 0.35f)
+                                        val roleIcon = when {
+                                            off.role.contains("Pengawas", ignoreCase = true) || off.role.contains("Kalaksa", ignoreCase = true) -> Icons.Default.AdminPanelSettings
+                                            off.role.contains("Supervisor", ignoreCase = true) || off.role.contains("Kabid", ignoreCase = true) -> Icons.Default.Shield
+                                            off.role.contains("Koord", ignoreCase = true) || off.role.contains("Administrasi", ignoreCase = true) -> Icons.Default.Badge
+                                            off.role.contains("Manajer", ignoreCase = true) -> Icons.Default.AdminPanelSettings
+                                            off.role.contains("Operator", ignoreCase = true) -> Icons.Default.HeadsetMic
+                                            off.role.contains("Logistik", ignoreCase = true) || off.role.contains("TRC", ignoreCase = true) -> Icons.Default.DirectionsCar
+                                            else -> Icons.Default.Badge
+                                        }
+                                        val roleBadgeLabel = off.role
 
-                                            Spacer(modifier = Modifier.width(10.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = Color.White,
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Surface(
+                                                        shape = CircleShape,
+                                                        color = roleBg,
+                                                        border = androidx.compose.foundation.BorderStroke(1.dp, roleBorder),
+                                                        modifier = Modifier.size(36.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Icon(
+                                                                imageVector = roleIcon,
+                                                                contentDescription = null,
+                                                                tint = roleColor,
+                                                                modifier = Modifier.size(19.dp)
+                                                            )
+                                                        }
+                                                    }
 
+                                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = off.fullName,
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFF0F172A)
+                                                        )
+                                                        val nipLabel = if (off.nip.startsWith("TRC", ignoreCase = true)) "Reg TRC" else "NIP"
+                                                        Text(
+                                                            text = "$nipLabel: ${off.nip}",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = Color(0xFF334155)
+                                                        )
+                                                        Text(
+                                                            text = "${off.unit} • ${off.shift}",
+                                                            fontSize = 11.sp,
+                                                            color = Color(0xFF64748B)
+                                                        )
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            modifier = Modifier.padding(top = 3.dp)
+                                                        ) {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(20.dp),
+                                                                color = roleBg,
+                                                                border = androidx.compose.foundation.BorderStroke(0.8.dp, roleBorder)
+                                                            ) {
+                                                                Text(
+                                                                    text = roleBadgeLabel.uppercase(),
+                                                                    fontSize = 10.sp,
+                                                                    fontWeight = FontWeight.ExtraBold,
+                                                                    color = roleColor,
+                                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp),
+                                                                    maxLines = 1,
+                                                                    overflow = TextOverflow.Ellipsis,
+                                                                    softWrap = false
+                                                                )
+                                                            }
+                                                            if (off.phone.isNotBlank()) {
+                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                Text(
+                                                                    text = "📞 ${off.phone}",
+                                                                    fontSize = 11.sp,
+                                                                    color = Color(0xFF475569)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // Edit button for Admin: allows editing personnel details
+                                                    IconButton(
+                                                        onClick = {
+                                                            val matchInDb = dbPersonnelList.firstOrNull { it.nip.equals(off.nip, ignoreCase = true) }
+                                                            editingPersonnel = matchInDb ?: com.example.data.local.Personnel(
+                                                                name = off.fullName,
+                                                                nip = off.nip,
+                                                                role = off.role,
+                                                                unit = off.unit,
+                                                                shift = off.shift,
+                                                                phone = off.phone
+                                                            )
+                                                        },
+                                                        modifier = Modifier
+                                                            .size(36.dp)
+                                                            .testTag("edit_officer_btn")
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Edit,
+                                                            contentDescription = "Edit Personil",
+                                                            tint = Color(0xFF0284C7),
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+
+                                                    // Delete button for Admin: allows removing any personnel from Room & session cache
+                                                    IconButton(
+                                                        onClick = {
+                                                            coroutineScope.launch {
+                                                                val matchInDb = dbPersonnelList.firstOrNull { it.nip.equals(off.nip, ignoreCase = true) }
+                                                                if (matchInDb != null) {
+                                                                    personnelRepository.deleteById(matchInDb.id)
+                                                                }
+                                                                officerAuthManager.deleteOfficer(off.id)
+                                                                rosterList = officerAuthManager.getOfficerRoster()
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    "Personil '${off.fullName}' berhasil dihapus dari direktori.",
+                                                                    Toast.LENGTH_SHORT
+                                                                ).show()
+                                                            }
+                                                        },
+                                                        modifier = Modifier
+                                                            .size(36.dp)
+                                                            .testTag("delete_officer_btn")
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Delete,
+                                                            contentDescription = "Hapus Personil",
+                                                            tint = Color(0xFFDC2626),
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                }
+
+                                                Spacer(modifier = Modifier.height(8.dp))
+
+                                                // One-Click Admin Recovery Button: "Pulihkan Akses & Reset Sesi"
+                                                val isCurrentlyRevokedOrBlocked = remember(off.nip, revokedNipsInSession, securitySessionsList) {
+                                                    val cleanTarget = off.nip.trim().lowercase()
+                                                    revokedNipsInSession.contains(cleanTarget) ||
+                                                        securitySessionsList.any {
+                                                            it.officerNip.trim().equals(cleanTarget, ignoreCase = true) && !it.accessGranted
+                                                        }
+                                                }
+                                                OutlinedButton(
+                                                    onClick = { restoringPersonnel = off },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    colors = ButtonDefaults.outlinedButtonColors(
+                                                        containerColor = if (isCurrentlyRevokedOrBlocked) Color(0xFFFEF2F2) else Color(0xFFF0FDF4),
+                                                        contentColor = if (isCurrentlyRevokedOrBlocked) Color(0xFFDC2626) else Color(0xFF15803D)
+                                                    ),
+                                                    border = androidx.compose.foundation.BorderStroke(
+                                                        1.dp,
+                                                        if (isCurrentlyRevokedOrBlocked) Color(0xFFFCA5A5) else Color(0xFF86EFAC)
+                                                    ),
+                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .heightIn(min = 36.dp)
+                                                        .testTag("restore_access_officer_btn_${off.nip}")
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.VerifiedUser,
+                                                        contentDescription = "Pulihkan Akses & Reset Sesi",
+                                                        tint = if (isCurrentlyRevokedOrBlocked) Color(0xFFDC2626) else Color(0xFF15803D),
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = if (isCurrentlyRevokedOrBlocked) {
+                                                            "Akses Dicabut/Diblokir • Pulihkan Akses & Reset Sesi"
+                                                        } else {
+                                                            "Pulihkan Akses & Reset Sesi"
+                                                        },
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Reset / Bersihkan direktori personil
+                            OutlinedButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        personnelRepository.clearAll()
+                                        officerAuthManager.resetRosterToDefault()
+                                        rosterList = officerAuthManager.getOfficerRoster()
+                                        Toast.makeText(context, "Direktori personil telah dibersihkan.", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Bersihkan Semua Data Direktori Personil",
+                                    fontSize = 11.5.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                        } else {
+                            // MODE 1: FORM INPUT PERSONIL BARU KE ROOM DATABASE
+                            Text(
+                                text = "Input data personil baru Pusdalops BPBD Kabupaten Mukomuko ke Room Database lokal. Wajib mengisi Nama Lengkap dan NIP ASN atau No. Registrasi TRC.",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            OutlinedTextField(
+                                value = inputFullName,
+                                onValueChange = {
+                                    inputFullName = it
+                                    formError = null
+                                },
+                                label = { Text("Nama Petugas & Gelar *", fontSize = 11.sp) },
+                                placeholder = { Text("Contoh: Ramdani Pratama, S.T.", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .formScrollPadding()
+                                    .testTag("personnel_input_name")
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = inputNip,
+                                onValueChange = {
+                                    inputNip = it
+                                    formError = null
+                                },
+                                label = { Text("NIP Pegawai ASN / No. Reg TRC *", fontSize = 11.sp) },
+                                placeholder = { Text("Contoh: 19850101 201001 1 001 atau 123412", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .formScrollPadding()
+                                    .testTag("personnel_input_nip")
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = inputInitialPin,
+                                onValueChange = {
+                                    inputInitialPin = it
+                                    formError = null
+                                },
+                                label = { Text("PIN Login Awal (Opsional - Otomatis 6 Digit Terakhir NIP)", fontSize = 11.sp) },
+                                placeholder = {
+                                    Text(
+                                        text = if (autoGeneratedPinPreview != "-") {
+                                            "Otomatis: $autoGeneratedPinPreview (atau ketik PIN khusus min. 4 digit)"
+                                        } else {
+                                            "Kosongkan agar otomatis 6 digit terakhir NIP"
+                                        },
+                                        fontSize = 11.sp
+                                    )
+                                },
+                                singleLine = true,
+                                keyboardOptions = formNextKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .formScrollPadding()
+                                    .testTag("personnel_input_initial_pin")
+                            )
+
+                            if (cleanPreviewNip.length >= 4) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFFF0FDF4),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "🔑 Kredensial Login Petugas: Nama '${inputFullName.trim().ifBlank { "..." }}' atau NIP '$cleanPreviewNip' • PIN Login: ${inputInitialPin.trim().ifBlank { autoGeneratedPinPreview }}",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF166534),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = "Penugasan Kedinasan di Pusdalops:",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val roleChoices = listOf(
+                                    Triple(OfficerRoles.PENGAWAS, "🏛️ Pengawas BPBD", "Pimpinan pengawasan siaga & koordinasi komando kebijakan bencana"),
+                                    Triple(OfficerRoles.MANAJER, "⭐ Manajer Pusdalops PB", "Penanggung jawab koordinasi operasional komando penanggulangan bencana"),
+                                    Triple(OfficerRoles.SUPERVISOR, "🛡️ Supervisor BPBD", "Supervisi kesiapsiagaan posko darurat dan pemantauan personil"),
+                                    Triple(OfficerRoles.KOORD_ADMINISTRASI, "📋 Koord. Administrasi", "Pengelolaan administrasi data posko dan logistik kebencanaan"),
+                                    Triple(OfficerRoles.OPERATOR, "🎧 Operator Pusdalops", "Pusat panggilan darurat 117, radio komunikasi, & data spasial"),
+                                    Triple(OfficerRoles.PETUGAS_JAGA, "🛡️ Petugas Jaga Siaga / Piket", "Piket Posko Tanggap Darurat Bencana 24 Jam"),
+                                    Triple(OfficerRoles.PETUGAS_LAPANGAN, "🚜 Staff Logistik / TRC", "Tim Reaksi Cepat evakuasi, penanganan lapangan & logistik")
+                                )
+
+                                roleChoices.forEach { (roleVal, roleTitle, roleDesc) ->
+                                    val isSelected = inputRole == roleVal
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) Color(0xFFEFF6FF) else Color(0xFFF8FAFC),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            width = if (isSelected) 1.5.dp else 1.dp,
+                                            color = if (isSelected) Color(0xFF2563EB) else Color(0xFFE2E8F0)
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { inputRole = roleVal }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = off.fullName,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color(0xFF0F172A)
-                                                )
-                                                val nipLabel = if (off.nip.startsWith("TRC", ignoreCase = true)) "Reg TRC" else "NIP"
-                                                Text(
-                                                    text = "$nipLabel: ${off.nip}",
+                                                    text = roleTitle,
                                                     fontSize = 11.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = Color(0xFF334155)
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isSelected) Color(0xFF1D4ED8) else Color(0xFF1E293B)
                                                 )
                                                 Text(
-                                                    text = "${off.unit} • ${off.shift}",
+                                                    text = roleDesc,
                                                     fontSize = 11.sp,
                                                     color = Color(0xFF64748B)
                                                 )
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier.padding(top = 3.dp)
-                                                ) {
-                                                    Surface(
-                                                        shape = RoundedCornerShape(20.dp),
-                                                        color = roleBg,
-                                                        border = androidx.compose.foundation.BorderStroke(0.8.dp, roleBorder)
-                                                    ) {
-                                                        Text(
-                                                            text = roleBadgeLabel.uppercase(),
-                                                            fontSize = 10.sp,
-                                                            fontWeight = FontWeight.ExtraBold,
-                                                            color = roleColor,
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp),
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                            softWrap = false
-                                                        )
-                                                    }
-                                                    if (off.phone.isNotBlank()) {
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Text(
-                                                            text = "📞 ${off.phone}",
-                                                            fontSize = 11.sp,
-                                                            color = Color(0xFF475569)
-                                                        )
-                                                    }
-                                                }
                                             }
-
-                                            // Edit button for Admin: allows editing personnel details
-                                            IconButton(
-                                                onClick = {
-                                                    val matchInDb = dbPersonnelList.firstOrNull { it.nip.equals(off.nip, ignoreCase = true) }
-                                                    editingPersonnel = matchInDb ?: com.example.data.local.Personnel(
-                                                        name = off.fullName,
-                                                        nip = off.nip,
-                                                        role = off.role,
-                                                        unit = off.unit,
-                                                        shift = off.shift,
-                                                        phone = off.phone
-                                                    )
-                                                },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .testTag("edit_officer_btn")
-                                            ) {
+                                            if (isSelected) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Edit,
-                                                    contentDescription = "Edit Personil",
-                                                    tint = Color(0xFF0284C7),
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-
-                                            // Delete button for Admin: allows removing any personnel from Room & session cache
-                                            IconButton(
-                                                onClick = {
-                                                    coroutineScope.launch {
-                                                        val matchInDb = dbPersonnelList.firstOrNull { it.nip.equals(off.nip, ignoreCase = true) }
-                                                        if (matchInDb != null) {
-                                                            personnelRepository.deleteById(matchInDb.id)
-                                                        }
-                                                        officerAuthManager.deleteOfficer(off.id)
-                                                        rosterList = officerAuthManager.getOfficerRoster()
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Personil '${off.fullName}' berhasil dihapus dari direktori.",
-                                                            Toast.LENGTH_SHORT
-                                                        ).show()
-                                                    }
-                                                },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .testTag("delete_officer_btn")
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Delete,
-                                                    contentDescription = "Hapus Personil",
-                                                    tint = Color(0xFFDC2626),
-                                                    modifier = Modifier.size(18.dp)
+                                                    imageVector = Icons.Default.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF2563EB),
+                                                    modifier = Modifier.size(16.dp)
                                                 )
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                        // Reset / Bersihkan direktori personil
-                        OutlinedButton(
-                            onClick = {
-                                coroutineScope.launch {
-                                    personnelRepository.clearAll()
-                                    officerAuthManager.resetRosterToDefault()
-                                    rosterList = officerAuthManager.getOfficerRoster()
-                                    Toast.makeText(context, "Direktori personil telah dibersihkan.", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Bersihkan Semua Data Direktori Personil", fontSize = 11.sp)
-                        }
-
-                    } else {
-                        // MODE 1: FORM INPUT PERSONIL BARU KE ROOM DATABASE
-                        Text(
-                            text = "Input data personil baru Pusdalops BPBD Kabupaten Mukomuko ke Room Database lokal. Wajib mengisi Nama Lengkap dan NIP ASN atau No. Registrasi TRC.",
-                            fontSize = 11.sp,
-                            color = Color(0xFF4B5563),
-                            lineHeight = 15.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = inputFullName,
-                            onValueChange = {
-                                inputFullName = it
-                                formError = null
-                            },
-                            label = { Text("Nama Petugas & Gelar *", fontSize = 11.sp) },
-                            placeholder = { Text("Contoh: Ramdani Pratama, S.T.", fontSize = 11.sp) },
-                            singleLine = true,
-                            keyboardOptions = formNextKeyboardOptions(),
-                            keyboardActions = rosterKeyboardActions,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .formScrollPadding()
-                                .testTag("personnel_input_name")
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = inputNip,
-                            onValueChange = {
-                                inputNip = it
-                                formError = null
-                            },
-                            label = { Text("NIP Pegawai ASN / No. Reg TRC *", fontSize = 11.sp) },
-                            placeholder = { Text("Contoh: 19850101 201001 1 001 atau 123412", fontSize = 11.sp) },
-                            singleLine = true,
-                            keyboardOptions = formNextKeyboardOptions(),
-                            keyboardActions = rosterKeyboardActions,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .formScrollPadding()
-                                .testTag("personnel_input_nip")
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = inputInitialPin,
-                            onValueChange = {
-                                inputInitialPin = it
-                                formError = null
-                            },
-                            label = { Text("PIN Login Awal (Opsional - Otomatis 6 Digit Terakhir NIP)", fontSize = 11.sp) },
-                            placeholder = {
-                                Text(
-                                    text = if (autoGeneratedPinPreview != "-") {
-                                        "Otomatis: $autoGeneratedPinPreview (atau ketik PIN khusus min. 4 digit)"
-                                    } else {
-                                        "Kosongkan agar otomatis 6 digit terakhir NIP"
-                                    },
-                                    fontSize = 11.sp
-                                )
-                            },
-                            singleLine = true,
-                            keyboardOptions = formNextKeyboardOptions(),
-                            keyboardActions = rosterKeyboardActions,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .formScrollPadding()
-                                .testTag("personnel_input_initial_pin")
-                        )
-
-                        if (cleanPreviewNip.length >= 4) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFF0FDF4),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
-                                modifier = Modifier.fillMaxWidth()
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
-                                    text = "🔑 Kredensial Login Petugas: Nama '${inputFullName.trim().ifBlank { "..." }}' atau NIP '$cleanPreviewNip' • PIN Login: ${inputInitialPin.trim().ifBlank { autoGeneratedPinPreview }}",
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF166534),
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                OutlinedTextField(
+                                    value = inputShift,
+                                    onValueChange = { inputShift = it },
+                                    label = { Text("Regu / Shift", fontSize = 11.sp) },
+                                    singleLine = true,
+                                    keyboardOptions = formNextKeyboardOptions(),
+                                    keyboardActions = rosterKeyboardActions,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .formScrollPadding()
+                                )
+                                OutlinedTextField(
+                                    value = inputUnit,
+                                    onValueChange = { inputUnit = it },
+                                    label = { Text("Unit / Satuan", fontSize = 11.sp) },
+                                    singleLine = true,
+                                    keyboardOptions = formNextKeyboardOptions(),
+                                    keyboardActions = rosterKeyboardActions,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .formScrollPadding()
                                 )
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                        Text(
-                            text = "Penugasan Kedinasan di Pusdalops:",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF334155)
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            val roleChoices = listOf(
-                                Triple(OfficerRoles.PENGAWAS, "🏛️ Pengawas BPBD", "Pimpinan pengawasan siaga & koordinasi komando kebijakan bencana"),
-                                Triple(OfficerRoles.MANAJER, "⭐ Manajer Pusdalops PB", "Penanggung jawab koordinasi operasional komando penanggulangan bencana"),
-                                Triple(OfficerRoles.SUPERVISOR, "🛡️ Supervisor BPBD", "Supervisi kesiapsiagaan posko darurat dan pemantauan personil"),
-                                Triple(OfficerRoles.KOORD_ADMINISTRASI, "📋 Koord. Administrasi", "Pengelolaan administrasi data posko dan logistik kebencanaan"),
-                                Triple(OfficerRoles.OPERATOR, "🎧 Operator Pusdalops", "Pusat panggilan darurat 117, radio komunikasi, & data spasial"),
-                                Triple(OfficerRoles.PETUGAS_JAGA, "🛡️ Petugas Jaga Siaga / Piket", "Piket Posko Tanggap Darurat Bencana 24 Jam"),
-                                Triple(OfficerRoles.PETUGAS_LAPANGAN, "🚜 Staff Logistik / TRC", "Tim Reaksi Cepat evakuasi, penanganan lapangan & logistik")
+                            OutlinedTextField(
+                                value = inputPhone,
+                                onValueChange = { inputPhone = it },
+                                label = { Text("No. Kontak / Radio HT (Opsional)", fontSize = 11.sp) },
+                                placeholder = { Text("Contoh: 0812-3456-7890 / Ch-117", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = formDoneKeyboardOptions(),
+                                keyboardActions = rosterKeyboardActions,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .formScrollPadding()
                             )
 
-                            roleChoices.forEach { (roleVal, roleTitle, roleDesc) ->
-                                val isSelected = inputRole == roleVal
-                                Surface(
+                            if (formError != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = formError!!,
+                                    color = Color(0xFFDC2626),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        rosterMode = 0
+                                        formError = null
+                                    },
                                     shape = RoundedCornerShape(8.dp),
-                                    color = if (isSelected) Color(0xFFEFF6FF) else Color(0xFFF8FAFC),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        width = if (isSelected) 1.5.dp else 1.dp,
-                                        color = if (isSelected) Color(0xFF2563EB) else Color(0xFFE2E8F0)
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { inputRole = roleVal }
+                                    modifier = Modifier.weight(1f)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = roleTitle,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isSelected) Color(0xFF1D4ED8) else Color(0xFF1E293B)
-                                            )
-                                            Text(
-                                                text = roleDesc,
-                                                fontSize = 11.sp,
-                                                color = Color(0xFF64748B)
-                                            )
-                                        }
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.CheckCircle,
-                                                contentDescription = null,
-                                                tint = Color(0xFF2563EB),
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
+                                    Text("Batal", fontSize = 11.sp)
+                                }
+
+                                Button(
+                                    onClick = submitManualPersonnel,
+                                    enabled = !isSavingPersonnel,
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                                    modifier = Modifier
+                                        .weight(1.3f)
+                                        .testTag("btn_save_manual_personnel")
+                                ) {
+                                    Text(
+                                        text = if (isSavingPersonnel) "Menyimpan..." else "Simpan Personil",
+                                        fontSize = 11.sp
+                                    )
                                 }
                             }
                         }
+                    }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = inputShift,
-                                onValueChange = { inputShift = it },
-                                label = { Text("Regu / Shift", fontSize = 11.sp) },
-                                singleLine = true,
-                                keyboardOptions = formNextKeyboardOptions(),
-                                keyboardActions = rosterKeyboardActions,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .formScrollPadding()
-                            )
-                            OutlinedTextField(
-                                value = inputUnit,
-                                onValueChange = { inputUnit = it },
-                                label = { Text("Unit / Satuan", fontSize = 11.sp) },
-                                singleLine = true,
-                                keyboardOptions = formNextKeyboardOptions(),
-                                keyboardActions = rosterKeyboardActions,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .formScrollPadding()
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = inputPhone,
-                            onValueChange = { inputPhone = it },
-                            label = { Text("No. Kontak / Radio HT (Opsional)", fontSize = 11.sp) },
-                            placeholder = { Text("Contoh: 0812-3456-7890 / Ch-117", fontSize = 11.sp) },
-                            singleLine = true,
-                            keyboardOptions = formDoneKeyboardOptions(),
-                            keyboardActions = rosterKeyboardActions,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .formScrollPadding()
-                        )
-
-                        if (formError != null) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = formError!!,
-                                color = Color(0xFFDC2626),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                    // Pinned Footer Actions (selalu tampil utuh dan tidak terpotong)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (rosterMode == 1) {
                             OutlinedButton(
                                 onClick = {
                                     rosterMode = 0
                                     formError = null
                                 },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
+                                shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("Batal", fontSize = 11.sp)
+                                Text("Kembali ke Daftar", fontSize = 12.sp)
                             }
-
                             Button(
                                 onClick = submitManualPersonnel,
                                 enabled = !isSavingPersonnel,
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                                modifier = Modifier
-                                    .weight(1.3f)
-                                    .testTag("btn_save_manual_personnel")
+                                modifier = Modifier.testTag("btn_dialog_confirm_save_personnel")
                             ) {
                                 Text(
-                                    text = if (isSavingPersonnel) "Menyimpan..." else "Simpan Personil",
-                                    fontSize = 11.sp
+                                    text = if (isSavingPersonnel) "Menyimpan..." else "Simpan Petugas Baru",
+                                    fontSize = 12.sp
                                 )
+                            }
+                        } else {
+                            Button(
+                                onClick = { showRosterDialog = false },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                            ) {
+                                Text("Selesai", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
                 }
-            },
-            confirmButton = {
-                if (rosterMode == 1) {
-                    Button(
-                        onClick = submitManualPersonnel,
-                        enabled = !isSavingPersonnel,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                        modifier = Modifier.testTag("btn_dialog_confirm_save_personnel")
-                    ) {
-                        Text(if (isSavingPersonnel) "Menyimpan..." else "Simpan Petugas Baru")
-                    }
-                } else {
-                    Button(
-                        onClick = { showRosterDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                    ) {
-                        Text("Selesai")
-                    }
-                }
-            },
-            dismissButton = {
-                if (rosterMode == 1) {
-                    OutlinedButton(
-                        onClick = {
-                            rosterMode = 0
-                            formError = null
-                        }
-                    ) {
-                        Text("Kembali ke Daftar")
-                    }
-                }
             }
-        )
+        }
     }
 
     // DIALOG EDIT PERSONIL OLEH ADMIN
@@ -3447,6 +3582,260 @@ fun OfficerDashboardConsoleView(
             },
             dismissButton = {
                 OutlinedButton(onClick = { editingPersonnel = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // DIALOG PULIHKAN AKSES & RESET SESI SATU KLIK DARI DIREKTORI PERSONIL
+    if (restoringPersonnel != null) {
+        val targetOfficer = restoringPersonnel!!
+        val cleanTargetNip = targetOfficer.nip.trim().replace(Regex("[\\s\\-]+"), "")
+        val initialSixDigitPin = remember(cleanTargetNip) {
+            val rawLastSix = cleanTargetNip.takeLast(6)
+            if (rawLastSix.length in 4..6 && rawLastSix.all { it.isDigit() }) {
+                rawLastSix
+            } else {
+                com.example.data.local.OfficerCredentialEntity.generateInitialPinForNip(cleanTargetNip)
+            }
+        }
+        var isRestoringSession by remember(targetOfficer) { mutableStateOf(false) }
+        var restoreError by remember(targetOfficer) { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!isRestoringSession) {
+                    restoringPersonnel = null
+                }
+            },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.VerifiedUser,
+                    contentDescription = "Pulihkan Akses & Reset Sesi",
+                    tint = Color(0xFF15803D),
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Pulihkan Akses & Reset Sesi Petugas",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFF0FDF4),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = targetOfficer.fullName,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = Color(0xFF0F172A)
+                            )
+                            Text(
+                                text = "NIP: ${targetOfficer.nip} • ${targetOfficer.role}",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF166534)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Pilih tindakan pemulihan satu klik untuk petugas di atas:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    // Opsi 1: Pulihkan Akses Sesi Saja (Tetap Gunakan PIN Pribadi)
+                    Button(
+                        onClick = {
+                            if (isRestoringSession) return@Button
+                            isRestoringSession = true
+                            restoreError = null
+                            coroutineScope.launch {
+                                try {
+                                    val normalizedTarget = cleanTargetNip.lowercase()
+                                    revokedNipsInSession = revokedNipsInSession - normalizedTarget
+                                    val res = securityManager.restoreAndVerifyOfficerSessionByAdmin(
+                                        officerNip = cleanTargetNip,
+                                        officerName = targetOfficer.fullName,
+                                        officerRole = targetOfficer.role,
+                                        adminName = officerName.ifBlank { "Admin Pusdalops" }
+                                    )
+                                    res.fold(
+                                        onSuccess = { restoredSess ->
+                                            securitySessionsList = listOf(restoredSess) + securitySessionsList.filterNot {
+                                                it.officerNip.trim().equals(cleanTargetNip, ignoreCase = true)
+                                            }
+                                            loginActivitiesList = securityManager.fetchLoginActivities()
+                                            isRestoringSession = false
+                                            restoringPersonnel = null
+                                            Toast.makeText(
+                                                context,
+                                                "Akses & sesi ${targetOfficer.fullName} (NIP: $cleanTargetNip) berhasil dipulihkan (AKSES DIIZINKAN). Petugas dapat langsung login kembali.",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        },
+                                        onFailure = { err ->
+                                            isRestoringSession = false
+                                            restoreError = err.message ?: "Gagal memulihkan akses sesi petugas."
+                                        }
+                                    )
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    isRestoringSession = false
+                                    restoreError = e.localizedMessage ?: "Gagal memulihkan akses sesi."
+                                }
+                            }
+                        },
+                        enabled = !isRestoringSession,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 46.dp)
+                            .testTag("btn_confirm_restore_session_only")
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "1. Pulihkan Akses Sesi (PIN Tetap)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Aktifkan kembali sesi yang tercabut/diblokir tanpa mengubah PIN",
+                                fontSize = 10.sp,
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+                        }
+                    }
+
+                    // Opsi 2: Pulihkan Akses Sesi + Reset PIN ke 6 Digit Terakhir NIP
+                    Button(
+                        onClick = {
+                            if (isRestoringSession) return@Button
+                            isRestoringSession = true
+                            restoreError = null
+                            coroutineScope.launch {
+                                try {
+                                    val normalizedTarget = cleanTargetNip.lowercase()
+                                    revokedNipsInSession = revokedNipsInSession - normalizedTarget
+                                    val resetRes = smartOfficerAuthRepo.resetToInitialNipSecret(cleanTargetNip)
+                                    val sessionRes = securityManager.restoreAndVerifyOfficerSessionByAdmin(
+                                        officerNip = cleanTargetNip,
+                                        officerName = targetOfficer.fullName,
+                                        officerRole = targetOfficer.role,
+                                        adminName = officerName.ifBlank { "Admin Pusdalops" }
+                                    )
+                                    if (resetRes.isSuccess) {
+                                        sessionRes.getOrNull()?.let { restoredSess ->
+                                            securitySessionsList = listOf(restoredSess) + securitySessionsList.filterNot {
+                                                it.officerNip.trim().equals(cleanTargetNip, ignoreCase = true)
+                                            }
+                                        }
+                                        loginActivitiesList = securityManager.fetchLoginActivities()
+                                        isRestoringSession = false
+                                        restoringPersonnel = null
+                                        Toast.makeText(
+                                            context,
+                                            "Akses dipulihkan & PIN ${targetOfficer.fullName} berhasil di-reset ke 6 digit terakhir NIP ($initialSixDigitPin).",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    } else {
+                                        isRestoringSession = false
+                                        restoreError = resetRes.exceptionOrNull()?.message
+                                            ?: "Gagal mereset PIN ke server Firebase. Periksa koneksi internet."
+                                    }
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    isRestoringSession = false
+                                    restoreError = e.localizedMessage ?: "Gagal memulihkan akses & reset PIN."
+                                }
+                            }
+                        },
+                        enabled = !isRestoringSession,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 46.dp)
+                            .testTag("btn_confirm_restore_and_reset_pin")
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "2. Pulihkan Akses + Reset PIN ke $initialSixDigitPin",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Buka blokir sesi & kembalikan PIN ke 6 digit terakhir NIP ($initialSixDigitPin)",
+                                fontSize = 10.sp,
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+                        }
+                    }
+
+                    if (isRestoringSession) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = Color(0xFF15803D)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Menyinkronkan pemulihan akses ke Cloud Firestore...",
+                                fontSize = 11.sp,
+                                color = Color(0xFF15803D),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    if (restoreError != null) {
+                        Text(
+                            text = restoreError!!,
+                            color = Color(0xFFDC2626),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { restoringPersonnel = null },
+                    enabled = !isRestoringSession
+                ) {
                     Text("Batal")
                 }
             }
@@ -3686,6 +4075,9 @@ fun OfficerDashboardConsoleView(
                             )
                         },
                         colors = TextFieldDefaults.colors(
+                            focusedTextColor = Color(0xFF0F172A),
+                            unfocusedTextColor = Color(0xFF0F172A),
+                            cursorColor = Color(0xFF15803D),
                             focusedContainerColor = Color.White,
                             unfocusedContainerColor = Color.White
                         ),
@@ -4599,10 +4991,8 @@ private fun SyncDiagnosticsSection(
     isCheckingIntegrity: Boolean,
     securitySessions: List<DeviceSecuritySession> = emptyList(),
     loginActivities: List<OfficerLoginActivity> = emptyList(),
-    isCloudLinked: Boolean = false,
     isSyncingSecurity: Boolean = false,
     onSyncSecurityNow: () -> Unit = {},
-    onLinkGoogleCloud: () -> Unit = {},
     onVerifySecuritySession: (DeviceSecuritySession, Boolean, String) -> Unit = { _, _, _ -> },
     onRevokeSecuritySession: (DeviceSecuritySession) -> Unit = {},
     onRunIntegrityCheck: () -> Unit,
@@ -4621,10 +5011,8 @@ private fun SyncDiagnosticsSection(
         PlayIntegritySecuritySessionsCard(
             securitySessions = securitySessions,
             loginActivities = loginActivities,
-            isCloudLinked = isCloudLinked,
             isSyncing = isSyncingSecurity,
             onSyncNow = onSyncSecurityNow,
-            onLinkGoogleCloud = onLinkGoogleCloud,
             onVerifySecuritySession = onVerifySecuritySession,
             onRevokeSecuritySession = onRevokeSecuritySession
         )
@@ -4792,29 +5180,61 @@ private fun SyncDiagnosticsSection(
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         activeDevices.forEach { dev ->
-                            val isMe = dev.deviceId.length > 5 && dev.status == "ONLINE"
+                            val isGuest = dev.isGuestMode()
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = Color(0xFFF8FAFC),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                color = if (isGuest) Color(0xFFFFFBEB) else Color(0xFFF8FAFC),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isGuest) Color(0xFFFDE68A) else Color(0xFFE2E8F0)
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
                                     modifier = Modifier.padding(10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = dev.deviceModel,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF0F172A),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = if (isGuest) Color(0xFFFEF3C7) else Color(0xFFDBEAFE)
+                                            ) {
+                                                Text(
+                                                    text = if (isGuest) "MODE WARGA" else "PETUGAS",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = if (isGuest) Color(0xFFB45309) else Color(0xFF1D4ED8),
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = dev.deviceModel,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF0F172A)
-                                        )
-                                        Text(
-                                            text = "Petugas: ${dev.officerName} • ID: ${dev.deviceId.take(8)}",
+                                            text = if (isGuest) {
+                                                "Pengunjung / Warga • ID: ${dev.deviceId.take(8)}"
+                                            } else {
+                                                "Petugas: ${dev.officerName} • ID: ${dev.deviceId.take(8)}"
+                                            },
                                             fontSize = 11.sp,
-                                            color = Color(0xFF64748B)
+                                            color = if (isGuest) Color(0xFF92400E) else Color(0xFF64748B),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
 

@@ -446,7 +446,16 @@ object VolunteerAssignmentPdfGenerator {
                 canvas.drawText("VERIFIED ID: ${volunteer.id}", signCenterX, y + 41f, stampTextPaint)
 
                 y += 66f
-                canvas.drawText(officerName.ifBlank { "HITATUN ARAZAK" }.uppercase(), signCenterX, y, signBoldPaint)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = officerName.ifBlank { "HITATUN ARAZAK" }.uppercase(),
+                    x = signCenterX,
+                    y = y,
+                    maxWidth = 220f,
+                    basePaint = signBoldPaint,
+                    initialFontSize = signBoldPaint.textSize,
+                    minFontSize = 6.5f
+                )
                 y += 14f
                 canvas.drawText("Pusdalops-PB BPBD Kabupaten Mukomuko", signCenterX, y, signPaint)
 

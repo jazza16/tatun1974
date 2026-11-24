@@ -54,7 +54,24 @@ data class DeviceHeartbeat(
     val lastSeen: Long = System.currentTimeMillis(),
     val latencyMs: Long = 0L,
     val status: String = "ONLINE"
-)
+) {
+    fun isGuestMode(): Boolean {
+        val normalized = officerName.trim()
+        return normalized.isBlank() ||
+            normalized.equals(GUEST_VISITOR_LABEL, ignoreCase = true) ||
+            normalized.equals("Pengunjung", ignoreCase = true) ||
+            normalized.equals("Warga", ignoreCase = true) ||
+            normalized.equals("Mode Warga", ignoreCase = true) ||
+            normalized.equals("Tamu", ignoreCase = true) ||
+            normalized.equals("Tamu / Warga", ignoreCase = true) ||
+            normalized.equals("Piket Siaga", ignoreCase = true) ||
+            normalized.equals("Petugas", ignoreCase = true)
+    }
+
+    companion object {
+        const val GUEST_VISITOR_LABEL = "Pengunjung / Warga"
+    }
+}
 
 /**
  * Central orchestrator for real-time multi-device database synchronization,
@@ -305,7 +322,11 @@ class SyncController(
     private suspend fun sendHeartbeat() = withContext(Dispatchers.IO) {
         val officerAuth = OfficerAuthManager(context)
         val isOfficerActive = officerAuth.isOfficerLoggedIn()
-        val officerName = if (isOfficerActive) officerAuth.getOfficerName().ifBlank { "Petugas Pusdalops" } else "Piket Siaga"
+        val officerName = if (isOfficerActive) {
+            officerAuth.getOfficerName().ifBlank { "Petugas Pusdalops" }
+        } else {
+            DeviceHeartbeat.GUEST_VISITOR_LABEL
+        }
         val officerNip = if (isOfficerActive) officerAuth.getOfficerBadgeId().ifBlank { officerAuth.getSavedNip() } else ""
         val officerRole = if (isOfficerActive) officerAuth.getOfficerRole().ifBlank { "Operator Pusdalops" } else ""
         val now = System.currentTimeMillis()
@@ -374,7 +395,8 @@ class SyncController(
                             DeviceHeartbeat(
                                 deviceId = doc.getString("deviceId") ?: doc.id,
                                 deviceModel = doc.getString("deviceModel") ?: "Perangkat Android",
-                                officerName = doc.getString("officerName") ?: "Petugas",
+                                officerName = doc.getString("officerName")?.ifBlank { DeviceHeartbeat.GUEST_VISITOR_LABEL }
+                                    ?: DeviceHeartbeat.GUEST_VISITOR_LABEL,
                                 lastSeen = lastSeen,
                                 latencyMs = doc.getLong("latencyMs") ?: 0L,
                                 status = doc.getString("status") ?: "ONLINE"

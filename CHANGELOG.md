@@ -6,11 +6,11 @@ Dokumen ini mencatat seluruh **penambahan fitur**, **fungsi baru**, **peningkata
 
 ---
 
-## [1.0.9] - 23 November 2026
+## [1.0.10] - 23 November 2026
 
 ### ✨ Penambahan Fitur & Fungsi Baru
-- **Integrasi Info Lanskap & Wallpaper HD ke Info Aplikasi**: Memindahkan akses dialog *"Info Lanskap & Wallpaper HD Kabupaten Mukomuko"* ke dalam menu **Info Aplikasi** agar tampilan utama lebih ringkas namun tetap mudah diakses kapan saja.
 - **Perlindungan Sesi Reset PIN Cerdas**: Menambahkan mekanisme peredam pencabutan sesi palsu (*PIN Reset suppression*) saat petugas melakukan Reset PIN ke 6 digit terakhir NIP sehingga perangkat asli tetap diizinkan login kembali tanpa kendala.
+- **Otomatisasi Catatan Rilis GitHub (Bahasa Indonesia)**: Menambahkan `CHANGELOG.md`, konfigurasi kategori rilis GitHub berbahasa Indonesia, serta alur kerja GitHub Actions otomatis yang menerbitkan catatan rilis berbahasa Indonesia setiap kali tag versi dirilis.
 
 ### ⚡ Peningkatan & Optimalisasi
 - **Optimalisasi Performa & Hemat Baterai Mode Administrator (Ruang Kerja)**:
@@ -19,8 +19,8 @@ Dokumen ini mencatat seluruh **penambahan fitur**, **fungsi baru**, **peningkata
   - Memindahkan pemrosesan data sesi keamanan, aktivitas login, dan rekonsiliasi detak jantung perangkat (*Device Heartbeat*) ke *background thread*.
   - Melonggarkan jadwal sinkronisasi cadangan menjadi setiap 60 detik (karena pembaruan laporan sudah mengalir secara *real-time*), serta membatasi waktu tunggu ping/heartbeat maksimal 5 detik untuk menghemat baterai.
   - Membatasi pemuatan awal kartu sesi keamanan dan menggunakan cache perhitungan statistik laporan agar transisi tab Administrator berjalan mulus.
-- **Presisi Tata Letak Tombol Alarm Sirene**: Menyelaraskan ukuran huruf dan ruang dalam tombol **"SEGERA CEK & MATIKAN ALARM"** dan **"MATIKAN SIRENE"** agar proporsional, rapi, dan tidak terpotong di berbagai ukuran layar.
 - **Batas Waktu Terukur pada Proses Login & Reset PIN**: Menambahkan *timeout* terukur serta jaminan penutupan indikator *loading* pada proses login PIN Cloud, login Biometrik, Reset PIN, dan verifikasi sesi Ruang Kerja agar logo *spin* tidak pernah menggantung.
+- **Kompatibilitas Pembaruan Langsung (*In-Place Update*)**: Menaikkan versi ke `v1.0.10` (`versionCode 11`) agar seluruh perangkat pengguna versi `v1.0.0` hingga `v1.0.9` otomatis menerima notifikasi pembaruan dan dapat langsung memperbarui tanpa *uninstall* serta tanpa mengubah PIN Cloud.
 
 ### 🐛 Perbaikan Bug & Keamanan
 - **Perbaikan Notifikasi "Sesi Dicabut" Palsu saat Reset PIN**: Menghapus penulisan status `REVOKED` / `is_active = false` ketika petugas menjalankan Reset PIN, lalu mengarahkan petugas secara bersih ke halaman awal untuk langsung login kembali dengan 6 digit terakhir NIP.
@@ -28,6 +28,18 @@ Dokumen ini mencatat seluruh **penambahan fitur**, **fungsi baru**, **peningkata
   - Memulihkan alur login petugas pasca-logout resmi menggunakan PIN pribadi yang tersimpan di Cloud Firestore.
   - Mengembalikan dukungan **Biometrik Native Android (`BiometricPrompt`)** pada halaman awal (*Landing Page*) dan dialog login petugas.
   - Menutup celah keamanan **Mode Warga** agar pemilihan masuk sebagai warga selalu mengisolasi dan menghapus sesi petugas yang tersisa sehingga tidak pernah langsung membuka Ruang Kerja tanpa input PIN.
+
+---
+
+## [1.0.9] - 23 November 2026
+
+### ✨ Penambahan Fitur & Fungsi Baru
+- **Integrasi Info Lanskap & Wallpaper HD ke Info Aplikasi**: Memindahkan akses dialog *"Info Lanskap & Wallpaper HD Kabupaten Mukomuko"* ke dalam menu **Info Aplikasi** agar tampilan utama lebih ringkas namun tetap mudah diakses kapan saja.
+
+### ⚡ Peningkatan & Optimalisasi
+- **Presisi Tata Letak Tombol Alarm Sirene**: Menyelaraskan ukuran huruf dan ruang dalam tombol **"SEGERA CEK & MATIKAN ALARM"** dan **"MATIKAN SIRENE"** agar proporsional, rapi, dan tidak terpotong di berbagai ukuran layar.
+
+### 🐛 Perbaikan Bug & Keamanan
 - **Perbaikan Audio Sirene (`ToneGenerator`)**: Menangani potensi *timeout* saat menghentikan nada alarm agar pemutaran dan pematian sirene darurat berlangsung stabil tanpa error sistem.
 
 ---

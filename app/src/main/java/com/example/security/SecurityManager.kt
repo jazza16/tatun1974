@@ -944,16 +944,6 @@ class SecurityManager private constructor(private val context: Context) {
                     )
                 }
 
-                // 4. Session Validity Threshold (24 hours expiry)
-                val elapsed = System.currentTimeMillis() - session.timestamp
-                if (elapsed > ACTIVE_SESSION_MAX_AGE_MS) {
-                    return@withContext SecurityAccessResult(
-                        isAuthorized = false,
-                        message = "Sesi perangkat telah kedaluwarsa. Silakan login kembali.",
-                        session = session
-                    )
-                }
-
                 saveLocalSession(session)
                 Log.i(TAG, "[FIRESTORE_SESSION_VERIFIED] Officer session validated against Firestore for NIP: ${maskNip(officerNip)} (Verdict: ${session.verdict})")
 
@@ -1199,7 +1189,7 @@ class SecurityManager private constructor(private val context: Context) {
         val newlySynthesized = mutableListOf<DeviceSecuritySession>()
         for (hb in heartbeats) {
             val rawName = hb.officerName.trim()
-            if (rawName.isBlank() || rawName.equals("Piket Siaga", ignoreCase = true) || rawName.equals("Petugas", ignoreCase = true)) {
+            if (hb.isGuestMode()) {
                 continue
             }
             val matchedPersonnel = com.example.data.local.OfficialAsnBpbdPersonnel.findByNipOrName(rawName)
@@ -1730,6 +1720,110 @@ class SecurityManager private constructor(private val context: Context) {
     }
 
     /**
+     * One-click Admin recovery: Restores an officer's session access (`accessGranted = true`, `is_active = true`,
+     * `adminVerified = true`) in Firestore `officer_sessions`, preserving or recreating their device session
+     * and recording an explicit `ADMIN_RESTORED_ACCESS_SESSION` activity so any prior `REVOKED` / `BLOCKED`
+     * status is immediately cleared across all devices.
+     */
+    suspend fun restoreAndVerifyOfficerSessionByAdmin(
+        officerNip: String,
+        officerName: String,
+        officerRole: String,
+        adminName: String
+    ): Result<DeviceSecuritySession> = withContext(Dispatchers.IO) {
+        val cleanNip = officerNip.trim().replace(Regex("[\\s\\-]+"), "")
+        if (cleanNip.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("NIP petugas tidak boleh kosong."))
+        }
+        val nowMs = System.currentTimeMillis()
+        val hw = collectHardwareTelemetry()
+        val existingSession = getLocalCachedSessions().firstOrNull {
+            it.officerNip.trim().equals(cleanNip, ignoreCase = true)
+        }
+        val existingActivity = getLocalCachedLoginActivities().firstOrNull {
+            it.officerNip.trim().equals(cleanNip, ignoreCase = true)
+        }
+        val nonce = generateClassicNonce(cleanNip, "ADMIN_RESTORE_ACCESS")
+        val token = computeSandboxIntegrityToken(cleanNip, nonce)
+        val tokenHash = sha256HexPrefix(token, 32).ifBlank { token.take(32) }
+        val resolvedAdmin = adminName.ifBlank { "Administrator Pusdalops" }
+        val restoreNote = "Akses & sesi perangkat dipulihkan oleh $resolvedAdmin melalui Direktori Personil"
+
+        val restoredSession = DeviceSecuritySession(
+            sessionId = existingSession?.sessionId?.takeIf { it.isNotBlank() }
+                ?: existingActivity?.sessionId?.takeIf { it.isNotBlank() }
+                ?: "sess_${sanitizeDocumentId(cleanNip)}",
+            officerNip = cleanNip,
+            officerName = officerName.ifBlank { existingSession?.officerName ?: "Petugas ($cleanNip)" },
+            officerRole = officerRole.ifBlank { existingSession?.officerRole ?: "Petugas Pusdalops" },
+            integrityToken = existingSession?.integrityToken?.takeIf { it.isNotBlank() } ?: token,
+            tokenHash = existingSession?.tokenHash?.takeIf { it.isNotBlank() } ?: existingActivity?.tokenHash?.takeIf { it.isNotBlank() } ?: tokenHash,
+            classicNonce = existingSession?.classicNonce?.takeIf { it.isNotBlank() } ?: existingActivity?.classicNonce?.takeIf { it.isNotBlank() } ?: nonce,
+            verdict = VERDICT_SERVER_VERIFIED,
+            deviceVerdict = existingSession?.deviceVerdict?.takeIf { it.isNotBlank() } ?: "FIRESTORE_SESSION_VERIFIED",
+            deviceId = existingSession?.deviceId?.takeIf { it.isNotBlank() } ?: existingActivity?.deviceId?.takeIf { it.isNotBlank() } ?: "",
+            deviceModel = existingSession?.deviceModel?.takeIf { it.isNotBlank() } ?: existingActivity?.deviceModel?.takeIf { it.isNotBlank() } ?: "Perangkat Terotorisasi Admin",
+            osVersion = existingSession?.osVersion?.takeIf { it.isNotBlank() } ?: existingActivity?.osVersion?.takeIf { it.isNotBlank() } ?: hw.osVersion,
+            sdkInt = existingSession?.sdkInt?.takeIf { it > 0 } ?: existingActivity?.sdkInt?.takeIf { it > 0 } ?: hw.sdkInt,
+            isVerified = true,
+            accessGranted = true,
+            targetModule = "RUANG_KERJA",
+            timestamp = nowMs,
+            tokenLength = existingSession?.tokenLength?.takeIf { it > 0 } ?: token.length,
+            tokenSource = "FIRESTORE_SESSION",
+            deviceBrand = existingSession?.deviceBrand?.takeIf { it.isNotBlank() } ?: existingActivity?.deviceBrand?.takeIf { it.isNotBlank() } ?: hw.deviceBrand,
+            deviceManufacturer = existingSession?.deviceManufacturer?.takeIf { it.isNotBlank() } ?: existingActivity?.deviceBrand?.takeIf { it.isNotBlank() } ?: hw.deviceManufacturer,
+            deviceHardware = existingSession?.deviceHardware?.takeIf { it.isNotBlank() } ?: existingActivity?.deviceHardware?.takeIf { it.isNotBlank() } ?: hw.deviceHardware,
+            deviceFingerprintHash = existingSession?.deviceFingerprintHash?.takeIf { it.isNotBlank() } ?: existingActivity?.deviceFingerprintHash?.takeIf { it.isNotBlank() } ?: "",
+            isEmulator = existingSession?.isEmulator ?: existingActivity?.isEmulator ?: false,
+            appVersion = existingSession?.appVersion?.takeIf { it.isNotBlank() } ?: existingActivity?.appVersion?.takeIf { it.isNotBlank() } ?: hw.appVersion,
+            loginMethod = "VERIFIKASI_ADMIN",
+            loginStatus = "SUCCESS",
+            loginAction = "ADMIN_RESTORED_ACCESS_SESSION",
+            loginCount = ((existingSession?.loginCount ?: 0) + 1).coerceAtLeast(1),
+            lastActivityDetail = restoreNote,
+            adminVerified = true,
+            adminVerifiedBy = resolvedAdmin,
+            adminVerifiedAt = nowMs,
+            adminVerificationNote = restoreNote
+        )
+
+        cacheRemoteSessionInLocalList(restoredSession)
+        transmitSessionToFirestore(restoredSession)
+        appendLoginActivity(
+            OfficerLoginActivity(
+                activityId = "act_${nowMs}_${sanitizeDocumentId(cleanNip).take(24)}_${UUID.randomUUID().toString().take(6)}",
+                sessionId = restoredSession.sessionId,
+                officerNip = cleanNip,
+                officerName = restoredSession.officerName,
+                officerRole = restoredSession.officerRole,
+                loginMethod = "VERIFIKASI_ADMIN",
+                loginStatus = "SUCCESS",
+                action = "ADMIN_RESTORED_ACCESS_SESSION",
+                verdict = restoredSession.verdict,
+                deviceVerdict = restoredSession.deviceVerdict,
+                tokenSource = restoredSession.tokenSource,
+                tokenHash = restoredSession.tokenHash,
+                tokenLength = restoredSession.tokenLength,
+                classicNonce = restoredSession.classicNonce,
+                deviceId = restoredSession.deviceId,
+                deviceModel = restoredSession.deviceModel,
+                deviceBrand = restoredSession.deviceBrand,
+                deviceHardware = restoredSession.deviceHardware,
+                deviceFingerprintHash = restoredSession.deviceFingerprintHash,
+                osVersion = restoredSession.osVersion,
+                sdkInt = restoredSession.sdkInt,
+                isEmulator = restoredSession.isEmulator,
+                appVersion = restoredSession.appVersion,
+                accessGranted = true,
+                detail = restoreNote,
+                timestamp = nowMs
+            )
+        )
+        Result.success(restoredSession)
+    }
+
+    /**
      * Revokes an officer's session in Firestore collection 'officer_sessions'
      * by setting `is_active` to `false` (and `accessGranted` to `false`) and deleting the session document,
      * as well as clearing local cached session state.
@@ -2103,7 +2197,6 @@ class SecurityManager private constructor(private val context: Context) {
             return false
         }
         val timestamp = prefs.getLong(KEY_VERIFICATION_TIMESTAMP, 0L)
-        val elapsed = System.currentTimeMillis() - timestamp
-        return savedNip.equals(officerNip, ignoreCase = true) && accessGranted && elapsed in 0 until ACTIVE_SESSION_MAX_AGE_MS
+        return savedNip.equals(officerNip, ignoreCase = true) && accessGranted && timestamp > 0L
     }
 }

@@ -370,40 +370,169 @@ object PdfGenerator {
         laporan: LaporanHarianEntity
     ): Bitmap? = withContext(Dispatchers.IO) {
         try {
-            var candidateUri = laporan.fotoDokumentasiUri.trim()
-                .ifBlank { ImageUtils.lastSelectedCitizenReportPhotoUri?.trim().orEmpty() }
-            if (candidateUri.isBlank() && com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
+            val candidates = LinkedHashSet<String>()
+
+            laporan.fotoDokumentasiUri.trim().takeIf { it.isNotBlank() }?.let { candidates.add(it) }
+            ImageUtils.lastSelectedCitizenReportPhotoUri?.trim()?.takeIf { it.isNotBlank() }?.let { candidates.add(it) }
+
+            val sumberLower = laporan.sumberInformasi.trim().lowercase()
+            val lokasiLower = laporan.lokasiBencana.trim().lowercase()
+            val jenisLower = laporan.jenisBencana.trim().lowercase()
+            val coordClean = laporan.koordinat.trim()
+
+            if (com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
                 val sandboxList = com.example.training.SandboxTrainingManager.sandboxReports.value
-                val matchedSandbox = sandboxList.firstOrNull { r ->
+                sandboxList.filter { r ->
                     !r.photoUri.isNullOrBlank() && (
-                        (laporan.sumberInformasi.isNotBlank() && laporan.sumberInformasi.contains(r.reporterName, ignoreCase = true)) ||
-                            (laporan.lokasiBencana.isNotBlank() && r.village.isNotBlank() && laporan.lokasiBencana.contains(r.village, ignoreCase = true)) ||
-                            (laporan.jenisBencana.isNotBlank() && r.disasterType.equals(laporan.jenisBencana, ignoreCase = true))
+                        (sumberLower.isNotBlank() && r.reporterName.isNotBlank() && sumberLower.contains(r.reporterName.lowercase())) ||
+                            (lokasiLower.isNotBlank() && r.village.isNotBlank() && lokasiLower.contains(r.village.lowercase())) ||
+                            (jenisLower.isNotBlank() && r.disasterType.equals(laporan.jenisBencana, ignoreCase = true))
                         )
-                } ?: sandboxList.firstOrNull { !it.photoUri.isNullOrBlank() }
-                candidateUri = matchedSandbox?.photoUri?.trim().orEmpty()
-            }
-            if (candidateUri.isBlank()) {
-                val allReports = runCatching {
-                    com.example.data.local.AppDatabase.getInstance(context)
-                        .weatherDao()
-                        .getAllCitizenDisasterReportsSync()
-                }.getOrDefault(emptyList())
-                val matched = allReports.firstOrNull { r ->
-                    !r.photoUri.isNullOrBlank() && (
-                        (laporan.sumberInformasi.isNotBlank() && laporan.sumberInformasi.contains(r.reporterName, ignoreCase = true)) ||
-                            (laporan.lokasiBencana.isNotBlank() && r.village.isNotBlank() && laporan.lokasiBencana.contains(r.village, ignoreCase = true)) ||
-                            (laporan.jenisBencana.isNotBlank() && r.disasterType.equals(laporan.jenisBencana, ignoreCase = true))
-                        )
+                }.forEach { r ->
+                    r.photoUri?.trim()?.takeIf { it.isNotBlank() }?.let { candidates.add(it) }
                 }
-                candidateUri = matched?.photoUri?.trim().orEmpty()
+                if (candidates.isEmpty()) {
+                    sandboxList.firstOrNull { !it.photoUri.isNullOrBlank() }
+                        ?.photoUri?.trim()?.takeIf { it.isNotBlank() }?.let { candidates.add(it) }
+                }
             }
-            if (candidateUri.isBlank()) return@withContext null
-            com.example.data.api.SupabaseClient.downloadReportPhotoBitmap(candidateUri)
-                ?: ImageUtils.decodePhotoSourceToBitmap(candidateUri, context)
+
+            val db = runCatching { com.example.data.local.AppDatabase.getInstance(context) }.getOrNull()
+
+            // Cari kecocokan dari tabel citizen_disaster_reports (termasuk inline data URI cache)
+            val allCitizenReports = runCatching {
+                db?.weatherDao()?.getAllCitizenDisasterReportsSync().orEmpty()
+            }.getOrDefault(emptyList())
+
+            fun matchesCitizenReport(r: com.example.data.local.CitizenDisasterReportEntity): Boolean {
+                val reporterMatch = sumberLower.isNotBlank() && r.reporterName.isNotBlank() &&
+                    sumberLower.contains(r.reporterName.trim().lowercase())
+                val phoneMatch = sumberLower.isNotBlank() && r.reporterPhone.isNotBlank() &&
+                    sumberLower.contains(r.reporterPhone.trim().lowercase())
+                val villageMatch = lokasiLower.isNotBlank() && r.village.isNotBlank() &&
+                    lokasiLower.contains(r.village.trim().lowercase())
+                val districtMatch = lokasiLower.isNotBlank() && r.district.isNotBlank() &&
+                    lokasiLower.contains(r.district.trim().lowercase())
+                val typeMatch = jenisLower.isNotBlank() && r.disasterType.isNotBlank() &&
+                    (r.disasterType.equals(laporan.jenisBencana, ignoreCase = true) ||
+                        jenisLower.contains(r.disasterType.trim().lowercase()) ||
+                        r.disasterType.trim().lowercase().contains(jenisLower))
+                return reporterMatch || phoneMatch || villageMatch || (districtMatch && typeMatch) || typeMatch
+            }
+
+            allCitizenReports.filter { matchesCitizenReport(it) }.forEach { r ->
+                r.photoUri?.trim()?.takeIf { it.isNotBlank() }?.let { candidates.add(it) }
+                ImageUtils.getInlineDataUriForReport(r.id)?.trim()?.takeIf { it.isNotBlank() }?.let { candidates.add(it) }
+            }
+
+            // Cari kecocokan dari tabel laporan_warga
+            val allLaporanWarga = runCatching {
+                db?.laporanWargaDao()?.getAllLaporanWargaSync().orEmpty()
+            }.getOrDefault(emptyList())
+
+            allLaporanWarga.filter { r ->
+                !r.fotoUri.isNullOrBlank() && (
+                    (sumberLower.isNotBlank() && r.namaPelapor.isNotBlank() && sumberLower.contains(r.namaPelapor.trim().lowercase())) ||
+                        (lokasiLower.isNotBlank() && r.desa.isNotBlank() && lokasiLower.contains(r.desa.trim().lowercase())) ||
+                        (coordClean.isNotBlank() && r.koordinat.trim() == coordClean) ||
+                        (jenisLower.isNotBlank() && r.jenisBencana.isNotBlank() &&
+                            (r.jenisBencana.equals(laporan.jenisBencana, ignoreCase = true) ||
+                                jenisLower.contains(r.jenisBencana.trim().lowercase())))
+                    )
+            }.forEach { r ->
+                r.fotoUri?.trim()?.takeIf { it.isNotBlank() }?.let { candidates.add(it) }
+            }
+
+            // Fallback tambahan jika laporan berasal dari warga tetapi pencarian teks berbeda tipis
+            if (candidates.isEmpty() && sumberLower.contains("warga")) {
+                allCitizenReports.firstOrNull { !it.photoUri.isNullOrBlank() }
+                    ?.photoUri?.trim()?.let { candidates.add(it) }
+                allLaporanWarga.firstOrNull { !it.fotoUri.isNullOrBlank() }
+                    ?.fotoUri?.trim()?.let { candidates.add(it) }
+            }
+
+            for (candidateUri in candidates) {
+                val decoded = loadPhotoBitmapFromAnySource(context, candidateUri)
+                if (decoded != null && !decoded.isRecycled && decoded.width > 1 && decoded.height > 1) {
+                    return@withContext decoded
+                }
+            }
+            null
         } catch (_: Exception) {
             null
         }
+    }
+
+    private suspend fun loadPhotoBitmapFromAnySource(context: Context, uri: String): Bitmap? {
+        val trimmed = uri.trim()
+        if (trimmed.isBlank()) return null
+
+        // 1. Jalur utama Supabase / Cache / Data URI
+        com.example.data.api.SupabaseClient.downloadReportPhotoBitmap(trimmed)?.let { return it }
+
+        // 2. Jalur lokal (Data URI, file://, content://, android.resource://, base64)
+        ImageUtils.decodePhotoSourceToBitmap(trimmed, context)?.let { return it }
+
+        // 3. Fallback HTTP/HTTPS langsung (Firebase Storage / public image URL)
+        if (trimmed.startsWith("https://", ignoreCase = true) || trimmed.startsWith("http://", ignoreCase = true)) {
+            return withTimeoutOrNull(4500L) {
+                var conn: HttpURLConnection? = null
+                try {
+                    conn = (URL(trimmed).openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        connectTimeout = 3500
+                        readTimeout = 3500
+                        instanceFollowRedirects = true
+                        doInput = true
+                    }
+                    conn.connect()
+                    if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                        val bytes = conn.inputStream.use { it.readBytes() }
+                        if (bytes.isNotEmpty()) {
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        } else null
+                    } else null
+                } catch (_: Exception) {
+                    null
+                } finally {
+                    try {
+                        conn?.disconnect()
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Menggambar foto dokumentasi ke dalam kotak tujuan secara proporsional (fit-center)
+     * agar gambar tidak tertarik/distorsi dan watermark GPS di bagian bawah tetap terbaca utuh.
+     */
+    private fun drawBitmapFitCenter(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        targetRect: RectF,
+        bitmapPaint: Paint
+    ) {
+        val bgMattePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(15, 23, 42)
+            style = Paint.Style.FILL
+        }
+        canvas.drawRect(targetRect, bgMattePaint)
+
+        val srcW = bitmap.width.toFloat().coerceAtLeast(1f)
+        val srcH = bitmap.height.toFloat().coerceAtLeast(1f)
+        val dstW = targetRect.width().coerceAtLeast(1f)
+        val dstH = targetRect.height().coerceAtLeast(1f)
+
+        val scale = minOf(dstW / srcW, dstH / srcH)
+        val drawW = srcW * scale
+        val drawH = srcH * scale
+        val left = targetRect.left + (dstW - drawW) / 2f
+        val top = targetRect.top + (dstH - drawH) / 2f
+        val destRect = RectF(left, top, left + drawW, top + drawH)
+        canvas.drawBitmap(bitmap, null, destRect, bitmapPaint)
     }
 
     /**
@@ -731,19 +860,19 @@ object PdfGenerator {
             y += rowHeight
         }
 
-        // 4. Bagian II: Layer Gambar Citra Satelit / Peta Lokasi & Foto Bukti Kejadian
+        // 4. Bagian II: Peta Lokasi Kejadian & Foto Bukti GPS Laporan Warga (Selalu 2 Kolom Bersebelahan)
         val hasEvidencePhoto = evidencePhotoBitmap != null && !evidencePhotoBitmap.isRecycled &&
             evidencePhotoBitmap.width > 1 && evidencePhotoBitmap.height > 1
-        y += 8f
-        val section2Title = if (hasEvidencePhoto) {
-            "II. Layer Gambar Citra Satelit / Peta Lokasi & Foto Bukti Dokumentasi Lapangan"
-        } else {
-            "II. Layer Gambar Citra Satelit / Peta Lokasi Kejadian"
-        }
-        canvas.drawText(section2Title, margin, y + 8f, sectionTitlePaint)
-        y += 12f
+        y += 6f
+        canvas.drawText(
+            "II. Peta Lokasi Kejadian & Foto Bukti Dokumentasi Lapangan (GPS)",
+            margin,
+            y + 8f,
+            sectionTitlePaint
+        )
+        y += 11f
 
-        val mapContainerHeight = 148f
+        val mapContainerHeight = 140f
         val mapContainerRect = RectF(margin, y, margin + contentWidth, y + mapContainerHeight)
         val mapContainerBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(248, 250, 252)
@@ -769,7 +898,7 @@ object PdfGenerator {
         val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         val captionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(51, 65, 85)
-            textSize = 7.6f
+            textSize = 7.5f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
@@ -786,62 +915,98 @@ object PdfGenerator {
             )
         }
 
-        val mapFrameWidth = 240f
-        val mapFrameHeight = 120f
-        val mapFrameTop = y + 6f
+        val colGap = 12f
+        val innerPadH = 8f
+        val pairColWidth = (contentWidth - (innerPadH * 2f) - colGap) / 2f
+        val frameHeight = 114f
+        val frameTop = y + 6f
 
+        val leftMapRect = RectF(
+            margin + innerPadH,
+            frameTop,
+            margin + innerPadH + pairColWidth,
+            frameTop + frameHeight
+        )
+        val rightPhotoLeft = leftMapRect.right + colGap
+        val rightPhotoRect = RectF(
+            rightPhotoLeft,
+            frameTop,
+            rightPhotoLeft + pairColWidth,
+            frameTop + frameHeight
+        )
+
+        // Kolom Kiri: Peta Lokasi Kejadian (Citra Satelit & GIS)
+        canvas.drawRect(leftMapRect, whiteFillPaint)
+        val innerMapRect = RectF(
+            leftMapRect.left + 1.5f,
+            leftMapRect.top + 1.5f,
+            leftMapRect.right - 1.5f,
+            leftMapRect.bottom - 1.5f
+        )
+        canvas.drawBitmap(resolvedMapBitmap, null, innerMapRect, bitmapPaint)
+        canvas.drawRect(leftMapRect, thinFramePaint)
+        canvas.drawText(
+            "Peta Lokasi Kejadian (Citra Satelit & GIS)",
+            leftMapRect.centerX(),
+            leftMapRect.bottom + 12f,
+            captionPaint
+        )
+
+        // Kolom Kanan: Foto GPS Bukti Laporan dari Warga (bersebelahan dengan Peta)
+        canvas.drawRect(rightPhotoRect, whiteFillPaint)
+        val innerPhotoRect = RectF(
+            rightPhotoRect.left + 1.5f,
+            rightPhotoRect.top + 1.5f,
+            rightPhotoRect.right - 1.5f,
+            rightPhotoRect.bottom - 1.5f
+        )
         if (hasEvidencePhoto && evidencePhotoBitmap != null) {
-            val gap = 14f
-            val totalPairW = mapFrameWidth * 2f + gap
-            val leftStart = margin + (contentWidth - totalPairW) / 2f
-            val leftMapRect = RectF(leftStart, mapFrameTop, leftStart + mapFrameWidth, mapFrameTop + mapFrameHeight)
-            val rightPhotoLeft = leftStart + mapFrameWidth + gap
-            val rightPhotoRect = RectF(rightPhotoLeft, mapFrameTop, rightPhotoLeft + mapFrameWidth, mapFrameTop + mapFrameHeight)
-
-            // Kiri: Peta Satelit GIS
-            canvas.drawRect(leftMapRect, whiteFillPaint)
-            val innerMapRect = RectF(leftMapRect.left + 1.5f, leftMapRect.top + 1.5f, leftMapRect.right - 1.5f, leftMapRect.bottom - 1.5f)
-            canvas.drawBitmap(resolvedMapBitmap, null, innerMapRect, bitmapPaint)
-            canvas.drawRect(leftMapRect, thinFramePaint)
-            canvas.drawText(
-                "Peta Lokasi Kejadian (Citra Satelit & GIS)",
-                leftMapRect.centerX(),
-                leftMapRect.bottom + 13f,
-                captionPaint
-            )
-
-            // Kanan: Foto Bukti Dokumentasi Warga
-            canvas.drawRect(rightPhotoRect, whiteFillPaint)
-            val innerPhotoRect = RectF(rightPhotoRect.left + 1.5f, rightPhotoRect.top + 1.5f, rightPhotoRect.right - 1.5f, rightPhotoRect.bottom - 1.5f)
-            canvas.drawBitmap(evidencePhotoBitmap, null, innerPhotoRect, bitmapPaint)
-            canvas.drawRect(rightPhotoRect, thinFramePaint)
-            canvas.drawText(
-                "Bukti Foto Dokumentasi Lapangan (Terverifikasi GPS)",
-                rightPhotoRect.centerX(),
-                rightPhotoRect.bottom + 13f,
-                captionPaint
-            )
+            drawBitmapFitCenter(canvas, evidencePhotoBitmap, innerPhotoRect, bitmapPaint)
         } else {
-            val mapFrameLeft = margin + (contentWidth - mapFrameWidth) / 2f
-            val mapFrameRect = RectF(mapFrameLeft, mapFrameTop, mapFrameLeft + mapFrameWidth, mapFrameTop + mapFrameHeight)
-            canvas.drawRect(mapFrameRect, whiteFillPaint)
-            val innerImageRect = RectF(
-                mapFrameRect.left + 1.5f,
-                mapFrameRect.top + 1.5f,
-                mapFrameRect.right - 1.5f,
-                mapFrameRect.bottom - 1.5f
-            )
-            canvas.drawBitmap(resolvedMapBitmap, null, innerImageRect, bitmapPaint)
-            canvas.drawRect(mapFrameRect, thinFramePaint)
+            val placeholderBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(241, 245, 249)
+                style = Paint.Style.FILL
+            }
+            val placeholderTitle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(51, 65, 85)
+                textSize = 8.2f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
+            }
+            val placeholderSub = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(100, 116, 139)
+                textSize = 7.2f
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawRect(innerPhotoRect, placeholderBg)
             canvas.drawText(
-                "Peta Lokasi Kejadian (Radius 100m) - Citra Satelit & GIS Pusdalops",
-                PAGE_WIDTH / 2f,
-                mapFrameRect.bottom + 13f,
-                captionPaint
+                "FOTO BUKTI GPS LAPORAN WARGA",
+                innerPhotoRect.centerX(),
+                innerPhotoRect.centerY() - 6f,
+                placeholderTitle
+            )
+            canvas.drawText(
+                "Belum ada foto bukti GPS warga terlampir",
+                innerPhotoRect.centerX(),
+                innerPhotoRect.centerY() + 7f,
+                placeholderSub
+            )
+            canvas.drawText(
+                "Koordinat: $koordinatTampil",
+                innerPhotoRect.centerX(),
+                innerPhotoRect.centerY() + 19f,
+                placeholderSub
             )
         }
+        canvas.drawRect(rightPhotoRect, thinFramePaint)
+        canvas.drawText(
+            "Foto Bukti Laporan Warga (Terverifikasi GPS)",
+            rightPhotoRect.centerX(),
+            rightPhotoRect.bottom + 12f,
+            captionPaint
+        )
 
-        y += mapContainerHeight + 6f
+        y += mapContainerHeight + 5f
 
         // 5. Bagian III: Komunikasi Pelaporan ke BPBD / BNPB
         canvas.drawText("III. Komunikasi Pelaporan ke BPBD / BNPB", margin, y + 8f, sectionTitlePaint)
@@ -870,6 +1035,9 @@ object PdfGenerator {
             colX += colW
         }
         y += logHeaderHeight
+
+        val desiredOperatorRowH = 78f
+        val maxLogBottomY = PAGE_HEIGHT - 32f - desiredOperatorRowH - 2f
 
         if (listLog.isEmpty()) {
             val emptyRowH = 18f
@@ -901,7 +1069,7 @@ object PdfGenerator {
                         .build()
                 }
                 val rowH = max(15.5f, (cellLayouts.maxOfOrNull { it.height } ?: 10) + 5f)
-                if (y + rowH > PAGE_HEIGHT - 80f) break
+                if (y + rowH > maxLogBottomY) break
                 var cellX = margin
                 for (i in cells.indices) {
                     val colW = contentWidth * logColWeights[i]
@@ -916,10 +1084,12 @@ object PdfGenerator {
             }
         }
 
-        // Baris Paling Bawah Bagian III: Kolom Identitas & Tanda Tangan Operator Pusdalops (Data-Driven + Auto-Shrink)
-        val operatorRowH = 48f
-        if (y + operatorRowH <= PAGE_HEIGHT - 28f) {
-            val leftInfoW = contentWidth * 0.60f
+        // Baris Paling Bawah Bagian III: Kolom Identitas & Tanda Tangan Operator Pusdalops
+        // Diperlebar (48% lebar tabel) dan ditinggikan (78 pt) agar menyediakan ruang tanda tangan presisi & proporsional
+        val availableSigH = PAGE_HEIGHT - 30f - y
+        val operatorRowH = minOf(desiredOperatorRowH, availableSigH).coerceAtLeast(56f)
+        if (y + operatorRowH <= PAGE_HEIGHT - 26f) {
+            val leftInfoW = contentWidth * 0.52f
             val rightSigW = contentWidth - leftInfoW
             canvas.drawRect(margin, y, margin + leftInfoW, y + operatorRowH, borderPaint)
             canvas.drawRect(margin + leftInfoW, y, margin + contentWidth, y + operatorRowH, borderPaint)
@@ -931,11 +1101,17 @@ object PdfGenerator {
             )
             val resolvedStation = laporan.stationId.ifBlank { "PUSDALOPS-MM-01" }
 
+            val infoLineStep = (operatorRowH - 16f) / 3f
+            val line1Y = y + 15f
+            val line2Y = line1Y + infoLineStep
+            val line3Y = line2Y + infoLineStep
+            val line4Y = y + operatorRowH - 9f
+
             PdfTextAutoShrinkHelper.drawAutoShrinkText(
                 canvas = canvas,
                 text = "Stasiun Pelapor : $resolvedStation",
                 x = margin + 6f,
-                y = y + 12f,
+                y = line1Y,
                 maxWidth = leftInfoW - 12f,
                 basePaint = labelPaint,
                 initialFontSize = settings.bodyFontSize,
@@ -945,18 +1121,17 @@ object PdfGenerator {
                 canvas = canvas,
                 text = "Petugas / Operator : ${resolvedOperator.formattedName} (${resolvedOperator.nipLine})",
                 x = margin + 6f,
-                y = y + 24f,
+                y = line2Y,
                 maxWidth = leftInfoW - 12f,
                 basePaint = valuePaint,
                 initialFontSize = settings.bodyFontSize,
-                minFontSize = settings.minFontSize,
-                maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+                minFontSize = settings.minFontSize
             )
             PdfTextAutoShrinkHelper.drawAutoShrinkText(
                 canvas = canvas,
                 text = "Tanggal Surat / Terima : ${laporan.tanggalSurat.ifBlank { "-" }} / ${laporan.tanggalTerima.ifBlank { "-" }}",
                 x = margin + 6f,
-                y = y + 35f,
+                y = line3Y,
                 maxWidth = leftInfoW - 12f,
                 basePaint = valuePaint,
                 initialFontSize = settings.bodyFontSize,
@@ -966,7 +1141,7 @@ object PdfGenerator {
                 canvas = canvas,
                 text = "Status Berita : Terverifikasi Pusdalops-PB BPBD Kab. Mukomuko",
                 x = margin + 6f,
-                y = y + 44f,
+                y = line4Y,
                 maxWidth = leftInfoW - 12f,
                 basePaint = valuePaint,
                 initialFontSize = settings.bodyFontSize,
@@ -974,7 +1149,7 @@ object PdfGenerator {
             )
 
             val sigCenterX = margin + leftInfoW + (rightSigW / 2f)
-            val sigMaxTextW = (rightSigW - 10f).coerceAtLeast(48f)
+            val sigMaxTextW = (rightSigW - 14f).coerceAtLeast(60f)
             val opHeaderPaint = Paint(labelPaint).apply { textAlign = Paint.Align.CENTER }
             val opNamePaint = Paint(labelPaint).apply {
                 textAlign = Paint.Align.CENTER
@@ -988,28 +1163,28 @@ object PdfGenerator {
                 canvas = canvas,
                 text = "Operator Pusdalops",
                 x = sigCenterX,
-                y = y + 11f,
+                y = y + 13f,
                 maxWidth = sigMaxTextW,
                 basePaint = opHeaderPaint,
                 initialFontSize = settings.bodyFontSize,
                 minFontSize = settings.minFontSize
             )
+            // Ruang kosong presisi (~44 pt) di tengah kotak untuk tanda tangan basah/digital Operator Pusdalops
             PdfTextAutoShrinkHelper.drawAutoShrinkText(
                 canvas = canvas,
                 text = resolvedOperator.formattedName,
                 x = sigCenterX,
-                y = y + 34f,
+                y = y + operatorRowH - 18f,
                 maxWidth = sigMaxTextW,
                 basePaint = opNamePaint,
                 initialFontSize = settings.fontSize,
-                minFontSize = settings.minFontSize,
-                maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+                minFontSize = settings.minFontSize
             )
             PdfTextAutoShrinkHelper.drawAutoShrinkText(
                 canvas = canvas,
                 text = resolvedOperator.nipLine,
                 x = sigCenterX,
-                y = y + 44f,
+                y = y + operatorRowH - 7f,
                 maxWidth = sigMaxTextW,
                 basePaint = opNipPaint,
                 initialFontSize = (settings.fontSize - 0.8f).coerceAtLeast(settings.minFontSize),
@@ -1268,8 +1443,7 @@ object PdfGenerator {
                 maxWidth = maxWidth,
                 basePaint = namePaint,
                 initialFontSize = nameFontSize,
-                minFontSize = settings.minFontSize,
-                maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+                minFontSize = settings.minFontSize
             )
             PdfTextAutoShrinkHelper.drawAutoShrinkText(
                 canvas = canvas,

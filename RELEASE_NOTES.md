@@ -1,19 +1,19 @@
-# Catatan Rilis Resmi SIPAGAR KITA (v1.0.9)
+# Catatan Rilis Resmi SIPAGAR KITA (v1.0.10)
 
 **Pusdalops-PB Badan Penanggulangan Bencana Daerah (BPBD) Kabupaten Mukomuko**  
-*Versi Rilis: **v1.0.9** (Build 10) | Tanggal Rilis: **23 November 2026***
+*Versi Rilis: **v1.0.10** (Build 11) | Tanggal Rilis: **23 November 2026***
 
 ---
 
 ## Ringkasan Rilis
-Rilis **SIPAGAR KITA v1.0.9** berfokus pada keandalan penuh alur autentikasi petugas (Login PIN Cloud, Biometrik Native, Logout Resmi, & Reset PIN), penutupan celah keamanan Mode Warga, perbaikan presisi tampilan tombol alarm darurat, serta optimalisasi performa besar-besaran pada **Ruang Kerja Mode Administrator** agar ringan, responsif, dan hemat baterai di perangkat fisik.
+Rilis **SIPAGAR KITA v1.0.10** merupakan pembaruan langsung (*in-place upgrade*) yang kompatibel penuh dengan seluruh versi sebelumnya (`v1.0.0` – `v1.0.9`) tanpa perlu mencopot aplikasi (*uninstall*) dan tanpa mengubah PIN Cloud petugas. Rilis ini menuntaskan permasalahan Reset PIN, login menggantung, celah keamanan Mode Warga, pemulihan biometrik, serta optimalisasi performa dan hemat baterai pada **Ruang Kerja Mode Administrator**.
 
 ---
 
 ## ✨ Penambahan Fitur & Fungsi Baru
-- **Integrasi Info Lanskap & Wallpaper HD di Menu Info Aplikasi**: Akses dialog *Info Lanskap & Wallpaper HD Kabupaten Mukomuko* dipindahkan secara rapi ke menu **Info Aplikasi** agar layar utama tetap bersih namun fitur tetap tersedia penuh.
 - **Mekanisme Perlindungan Sesi Reset PIN**: Sistem kini membedakan secara tegas antara pencabutan akses oleh Administrator dengan proses **Reset PIN** oleh petugas, sehingga perangkat asli tetap diizinkan login kembali tanpa kendala.
 - **Otomatisasi Catatan Rilis GitHub (Bahasa Indonesia)**: Seluruh catatan penambahan fitur, fungsi, peningkatan, dan perbaikan kini terdokumentasi terstruktur dalam bahasa Indonesia di `CHANGELOG.md`, `RELEASE_NOTES.md`, halaman **Info Aplikasi**, serta otomatis diterbitkan pada setiap **GitHub Release**.
+- **Integrasi Info Lanskap & Wallpaper HD di Menu Info Aplikasi**: Akses dialog *Info Lanskap & Wallpaper HD Kabupaten Mukomuko* tersusun rapi di dalam menu **Info Aplikasi**.
 
 ---
 
@@ -26,6 +26,7 @@ Rilis **SIPAGAR KITA v1.0.9** berfokus pada keandalan penuh alur autentikasi pet
   - Menambahkan cache statistik laporan serta pembatasan muat awal kartu sesi keamanan agar perpindahan tab Administrator mulus.
 - **Presisi Teks Tombol Alarm Sirene**: Ukuran huruf dan jarak padding pada tombol **"SEGERA CEK & MATIKAN ALARM"** dan **"MATIKAN SIRENE"** disesuaikan agar presisi, jelas dibaca, dan tidak terpotong.
 - **Jaminan Bebas Spinner Menggantung**: Seluruh proses verifikasi Login PIN Cloud, Login Biometrik, Reset PIN, dan pemeriksaan sesi Ruang Kerja dilengkapi *timeout* terukur dan penutupan status *loading* yang aman.
+- **Notifikasi Pembaruan Otomatis**: Penaikan versi ke **v1.0.10 (Build 11)** memastikan perangkat yang sudah memakai `v1.0.9` sekalipun otomatis mendeteksi pembaruan terbaru dari GitHub Releases.
 
 ---
 
@@ -39,6 +40,6 @@ Rilis **SIPAGAR KITA v1.0.9** berfokus pada keandalan penuh alur autentikasi pet
 
 ---
 
-> 📄 **Riwayat lengkap seluruh versi (v1.0.0 – v1.0.9)** tersedia di berkas [`CHANGELOG.md`](./CHANGELOG.md) serta pada menu **Info Aplikasi → Riwayat Catatan Rilis Versi** di dalam aplikasi.
+> 📄 **Riwayat lengkap seluruh versi (v1.0.0 – v1.0.10)** tersedia di berkas [`CHANGELOG.md`](./CHANGELOG.md) serta pada menu **Info Aplikasi → Riwayat Catatan Rilis Versi** di dalam aplikasi.
 
 *Pusdalops-PB BPBD Kabupaten Mukomuko — Siaga, Tanggap, Tangguh Menghadapi Bencana.*

@@ -24,10 +24,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -115,12 +117,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -173,6 +177,23 @@ fun VolunteerCoordinationScreen(
     BackHandler { onClose() }
 
     val context = LocalContext.current
+    val density = LocalDensity.current
+    val composeNavBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val activityNavBottom = remember(context, density) {
+        var ctx: Context? = context
+        while (ctx is android.content.ContextWrapper) {
+            if (ctx is android.app.Activity) break
+            ctx = ctx.baseContext
+        }
+        val act = ctx as? android.app.Activity
+        val bottomPx = act?.window?.decorView?.let { decor ->
+            androidx.core.view.ViewCompat.getRootWindowInsets(decor)
+                ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                ?.bottom
+        } ?: 0
+        with(density) { bottomPx.toDp() }
+    }
+    val safeBottomContentPadding = maxOf(composeNavBottom, activityNavBottom, 28.dp) + 32.dp
     val coroutineScope = rememberCoroutineScope()
     val repository = remember { VolunteerRepository.getInstance(context) }
 
@@ -576,7 +597,8 @@ fun VolunteerCoordinationScreen(
                     },
                     onCheckInPosko = handleCheckInPosko,
                     onCheckOutPosko = handleCheckOutPosko,
-                    onDownloadSuratTugas = handleDownloadSuratTugas
+                    onDownloadSuratTugas = handleDownloadSuratTugas,
+                    bottomContentPadding = safeBottomContentPadding
                 )
 
                 1 -> VolunteerRegistrationTabContent(
@@ -617,7 +639,8 @@ fun VolunteerCoordinationScreen(
                                 }
                             }
                         }
-                    }
+                    },
+                    bottomContentPadding = safeBottomContentPadding
                 )
 
                 2 -> VolunteerVerificationTabContent(
@@ -685,7 +708,8 @@ fun VolunteerCoordinationScreen(
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
-                    }
+                    },
+                    bottomContentPadding = safeBottomContentPadding
                 )
             }
         }
@@ -816,7 +840,8 @@ private fun VolunteerDashboardTabContent(
     onOpenDetailVolunteer: (VolunteerEntity) -> Unit,
     onCheckInPosko: (VolunteerEntity) -> Unit,
     onCheckOutPosko: (VolunteerEntity) -> Unit,
-    onDownloadSuratTugas: (VolunteerEntity) -> Unit
+    onDownloadSuratTugas: (VolunteerEntity) -> Unit,
+    bottomContentPadding: Dp = 64.dp
 ) {
     var selectedSkillFilter by rememberSaveable { mutableStateOf("Semua") }
     var selectedStatusFilter by rememberSaveable { mutableStateOf("Semua") }
@@ -854,7 +879,7 @@ private fun VolunteerDashboardTabContent(
         modifier = Modifier
             .fillMaxSize()
             .testTag("volunteer_dashboard_list"),
-        contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 28.dp),
+        contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // 1. 4 Kartu Statistik Utama (KPI Cards - Ringkas & Proporsional)
@@ -2396,7 +2421,8 @@ private fun VolunteerRegistrationTabContent(
         district: String,
         selfieUri: String?,
         certUri: String?
-    ) -> Unit
+    ) -> Unit,
+    bottomContentPadding: Dp = 64.dp
 ) {
     var fullName by rememberSaveable { mutableStateOf("") }
     var nik by rememberSaveable { mutableStateOf("") }
@@ -2439,7 +2465,7 @@ private fun VolunteerRegistrationTabContent(
         modifier = Modifier
             .fillMaxSize()
             .testTag("volunteer_registration_form"),
-        contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 28.dp),
+        contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // Banner Jaminan Offline-First SQLite & Primary Key NIK
@@ -3049,13 +3075,14 @@ private fun VolunteerVerificationTabContent(
     onCheckInPosko: (VolunteerEntity) -> Unit,
     onCheckOutPosko: (VolunteerEntity) -> Unit,
     onMarkAssignmentDone: (VolunteerEntity) -> Unit,
-    onToggleNeedsAssistance: (VolunteerEntity) -> Unit
+    onToggleNeedsAssistance: (VolunteerEntity) -> Unit,
+    bottomContentPadding: Dp = 64.dp
 ) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .testTag("volunteer_verification_list"),
-        contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 28.dp),
+        contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // Banner Status Otorisasi Admin Pusdalops

@@ -478,6 +478,9 @@ private fun NotesListView(
                 keyboardActions = searchKeyboardActions,
                 shape = RoundedCornerShape(12.dp),
                 colors = TextFieldDefaults.colors(
+                    focusedTextColor = Color(0xFF0F172A),
+                    unfocusedTextColor = Color(0xFF0F172A),
+                    cursorColor = OrangePrimary,
                     focusedContainerColor = Color(0xFFF8FAFC),
                     unfocusedContainerColor = Color(0xFFF8FAFC),
                     focusedIndicatorColor = OrangePrimary,

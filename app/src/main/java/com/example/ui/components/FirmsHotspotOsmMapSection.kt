@@ -1542,7 +1542,10 @@ fun KarhutlaHotspotLegendComponent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Layers,
                         contentDescription = null,
@@ -1554,11 +1557,13 @@ fun KarhutlaHotspotLegendComponent(
                         text = "Legenda Ikon Titik Panas (Satelit FIRMS vs Darat BMKG)",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 16.sp
                     )
                 }
 
                 if (selectedFilterCategory != HotspotFilterCategory.ALL) {
+                    Spacer(modifier = Modifier.width(8.dp))
                     Surface(
                         color = OrangePrimary.copy(alpha = 0.14f),
                         shape = RoundedCornerShape(6.dp),
@@ -1571,7 +1576,9 @@ fun KarhutlaHotspotLegendComponent(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = OrangePrimary,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }

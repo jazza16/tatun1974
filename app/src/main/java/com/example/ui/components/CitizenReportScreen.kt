@@ -271,6 +271,13 @@ fun maskNipLast6(nip: String): String {
     }
 }
 
+private const val TAB_FORMULIR = 0
+private const val TAB_RIWAYAT_LACAK = 1
+private const val TAB_KONTAK_PENTING = 2
+private const val TAB_RUANG_KERJA = 3
+private const val TAB_PETA_SEBARAN = 4
+private const val TAB_TREN_BULANAN = 5
+
 /**
  * Tab 9: Layanan Terpadu Laporan Warga Bencana Kabupaten Mukomuko
  * Reproduces the official incident reporting form + GIS Spatial Map + Status Tracking + Emergency Contacts
@@ -307,9 +314,9 @@ fun CitizenReportScreen(
     var isOfficerLoggedIn by remember { mutableStateOf(officerAuthManager.isOfficerLoggedIn()) }
     var selectedTab by rememberSaveable {
         mutableIntStateOf(
-            if ((initialOpenRuangKerja || openRuangKerjaRequestId > 0) && officerAuthManager.isOfficerLoggedIn()) 4 else 0
+            if ((initialOpenRuangKerja || openRuangKerjaRequestId > 0) && officerAuthManager.isOfficerLoggedIn()) TAB_RUANG_KERJA else TAB_FORMULIR
         )
-    } // 0 = Formulir, 1 = Peta Sebaran, 2 = Tabel Riwayat, 3 = Kontak Penting, 4 = Konsol Petugas
+    } // 0 = Formulir, 1 = Riwayat & Lacak, 2 = Kontak Penting, 3 = Ruang Kerja, 4 = Peta Sebaran, 5 = Tren Bulanan
     var officerName by remember { mutableStateOf(officerAuthManager.getOfficerName()) }
     var officerBadgeId by remember { mutableStateOf(officerAuthManager.getOfficerBadgeId()) }
     var officerShift by remember { mutableStateOf(officerAuthManager.getOfficerShift()) }
@@ -319,8 +326,8 @@ fun CitizenReportScreen(
     // RBAC Multi-Tier: Tier 3 (Operator/Logistik/TRC/null) hanya akses menu operasional (tanpa Statistik)
     val canShowStatisticsTab = !isOfficerLoggedIn || UserRole.canViewStatistics(officerRole)
     LaunchedEffect(canShowStatisticsTab, selectedTab) {
-        if (!canShowStatisticsTab && selectedTab == 5) {
-            selectedTab = 0
+        if (!canShowStatisticsTab && selectedTab == TAB_TREN_BULANAN) {
+            selectedTab = TAB_FORMULIR
         }
     }
 
@@ -353,7 +360,7 @@ fun CitizenReportScreen(
         showOfficerLoginDialog = false
         pendingStatusReportId = null
         pendingStatusTarget = null
-        selectedTab = 0
+        selectedTab = TAB_FORMULIR
         onOfficerLoginDismissed?.invoke()
         if (toastMessage.isNotBlank()) {
             Toast.makeText(context, toastMessage, Toast.LENGTH_SHORT).show()
@@ -363,7 +370,7 @@ fun CitizenReportScreen(
         }
     }
 
-    // Strict sync on screen entry so stale rememberSaveable tab 4 can never open Ruang Kerja after logout/Mode Warga
+    // Strict sync on screen entry so stale rememberSaveable Ruang Kerja tab can never open after logout/Mode Warga
     LaunchedEffect(Unit) {
         val actualLoggedIn = officerAuthManager.isOfficerLoggedIn()
         isOfficerLoggedIn = actualLoggedIn
@@ -374,8 +381,8 @@ fun CitizenReportScreen(
             officerRole = officerAuthManager.getOfficerRole()
         } else {
             securityAccessResult = null
-            if (selectedTab == 4 && !showOfficerLoginDialog && officerLoginRequestId == 0 && !initialShowOfficerLogin) {
-                selectedTab = 0
+            if (selectedTab == TAB_RUANG_KERJA && !showOfficerLoginDialog && officerLoginRequestId == 0 && !initialShowOfficerLogin) {
+                selectedTab = TAB_FORMULIR
             }
         }
     }
@@ -404,7 +411,7 @@ fun CitizenReportScreen(
     }
 
     LaunchedEffect(selectedTab, isOfficerLoggedIn, officerBadgeId) {
-        if (selectedTab == 4 && isOfficerLoggedIn && officerAuthManager.isOfficerLoggedIn()) {
+        if (selectedTab == TAB_RUANG_KERJA && isOfficerLoggedIn && officerAuthManager.isOfficerLoggedIn()) {
             val targetNip = officerBadgeId.ifBlank { officerAuthManager.getOfficerBadgeId() }.trim()
             if (targetNip.isNotBlank()) {
                 val localTs = securityManager.getLocalVerifiedSessionTimestamp(targetNip)
@@ -464,7 +471,7 @@ fun CitizenReportScreen(
                 officerBadgeId = officerAuthManager.getOfficerBadgeId()
                 officerShift = officerAuthManager.getOfficerShift()
                 officerRole = officerAuthManager.getOfficerRole()
-                selectedTab = 4
+                selectedTab = TAB_RUANG_KERJA
                 showOfficerLoginDialog = false
             } else {
                 securityAccessResult = null
@@ -491,11 +498,11 @@ fun CitizenReportScreen(
                     )
                 }
                 showOfficerLoginDialog = false
-                selectedTab = 4
+                selectedTab = TAB_RUANG_KERJA
             } else {
                 isOfficerLoggedIn = false
                 securityAccessResult = null
-                selectedTab = 0
+                selectedTab = TAB_FORMULIR
                 showOfficerLoginDialog = true
             }
             onOfficerLoginDismissed?.invoke()
@@ -812,12 +819,12 @@ fun CitizenReportScreen(
             }
         }
 
-        // Sub Navigation Tabs: 0: Formulir, 1: Peta Sebaran, 2: Tabel Riwayat, 3: Kontak Penting
+        // Sub Navigation Tabs: 0: Formulir, 1: Riwayat & Lacak, 2: Kontak Penting, 3: Ruang Kerja, 4: Peta Sebaran, 5: Tren Bulanan
         Surface(
             color = Color(0xFF15803D),
             modifier = Modifier.fillMaxWidth()
         ) {
-            val effectiveTabIndex = if (canShowStatisticsTab) selectedTab else selectedTab.coerceAtMost(4)
+            val effectiveTabIndex = if (canShowStatisticsTab) selectedTab else selectedTab.coerceAtMost(TAB_PETA_SEBARAN)
             ScrollableTabRow(
                 selectedTabIndex = effectiveTabIndex,
                 containerColor = Color(0xFF15803D),
@@ -836,52 +843,29 @@ fun CitizenReportScreen(
             ) {
                 // Tab 0: Formulir
                 Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    selected = selectedTab == TAB_FORMULIR,
+                    onClick = { selectedTab = TAB_FORMULIR },
                     text = {
                         Text(
                             text = "Formulir Laporan",
-                            fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
+                            fontWeight = if (selectedTab == TAB_FORMULIR) FontWeight.Bold else FontWeight.Normal,
                             fontSize = 12.sp,
-                            color = if (selectedTab == 0) Color.White else Color.White.copy(alpha = 0.7f)
+                            color = if (selectedTab == TAB_FORMULIR) Color.White else Color.White.copy(alpha = 0.7f)
                         )
                     }
                 )
 
-                // Tab 1: Peta Sebaran (Google Maps / GIS)
+                // Tab 1: Tabel Riwayat & Lacak Status
                 Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Map,
-                                contentDescription = null,
-                                tint = if (selectedTab == 1) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Peta Sebaran",
-                                fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 12.sp,
-                                color = if (selectedTab == 1) Color.White else Color.White.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                )
-
-                // Tab 2: Tabel Riwayat & Lacak Status
-                Tab(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    selected = selectedTab == TAB_RIWAYAT_LACAK,
+                    onClick = { selectedTab = TAB_RIWAYAT_LACAK },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "Riwayat & Lacak",
-                                fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (selectedTab == TAB_RIWAYAT_LACAK) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 12.sp,
-                                color = if (selectedTab == 2) Color.White else Color.White.copy(alpha = 0.7f)
+                                color = if (selectedTab == TAB_RIWAYAT_LACAK) Color.White else Color.White.copy(alpha = 0.7f)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Surface(
@@ -900,32 +884,32 @@ fun CitizenReportScreen(
                     }
                 )
 
-                // Tab 3: Kontak Penting
+                // Tab 2: Kontak Penting
                 Tab(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
+                    selected = selectedTab == TAB_KONTAK_PENTING,
+                    onClick = { selectedTab = TAB_KONTAK_PENTING },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.Phone,
                                 contentDescription = null,
-                                tint = if (selectedTab == 3) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
+                                tint = if (selectedTab == TAB_KONTAK_PENTING) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Kontak Penting",
-                                fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (selectedTab == TAB_KONTAK_PENTING) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 12.sp,
-                                color = if (selectedTab == 3) Color.White else Color.White.copy(alpha = 0.7f)
+                                color = if (selectedTab == TAB_KONTAK_PENTING) Color.White else Color.White.copy(alpha = 0.7f)
                             )
                         }
                     }
                 )
 
-                // Tab 4: Modul Khusus Petugas (Ruang Kerja Pusdalops & TRC)
+                // Tab 3: Modul Khusus Petugas (Ruang Kerja Pusdalops & TRC)
                 Tab(
-                    selected = selectedTab == 4,
+                    selected = selectedTab == TAB_RUANG_KERJA,
                     onClick = {
                         if (officerAuthManager.isOfficerLoggedIn()) {
                             isOfficerLoggedIn = true
@@ -933,11 +917,11 @@ fun CitizenReportScreen(
                             officerBadgeId = officerAuthManager.getOfficerBadgeId()
                             officerShift = officerAuthManager.getOfficerShift()
                             officerRole = officerAuthManager.getOfficerRole()
-                            selectedTab = 4
+                            selectedTab = TAB_RUANG_KERJA
                         } else {
                             isOfficerLoggedIn = false
                             securityAccessResult = null
-                            selectedTab = 4
+                            selectedTab = TAB_RUANG_KERJA
                             showOfficerLoginDialog = true
                         }
                     },
@@ -946,15 +930,15 @@ fun CitizenReportScreen(
                             Icon(
                                 imageVector = if (isOfficerLoggedIn) Icons.Default.Shield else Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = if (selectedTab == 4) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
+                                tint = if (selectedTab == TAB_RUANG_KERJA) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Ruang Kerja",
-                                fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (selectedTab == TAB_RUANG_KERJA) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 12.sp,
-                                color = if (selectedTab == 4) Color.White else Color.White.copy(alpha = 0.7f)
+                                color = if (selectedTab == TAB_RUANG_KERJA) Color.White else Color.White.copy(alpha = 0.7f)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Surface(
@@ -973,26 +957,50 @@ fun CitizenReportScreen(
                     }
                 )
 
+                // Tab 4: Peta Sebaran (digeser di sebelah Ruang Kerja berdampingan dengan Tren Bulanan)
+                Tab(
+                    selected = selectedTab == TAB_PETA_SEBARAN,
+                    onClick = { selectedTab = TAB_PETA_SEBARAN },
+                    modifier = Modifier.testTag("tab_peta_sebaran"),
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Map,
+                                contentDescription = null,
+                                tint = if (selectedTab == TAB_PETA_SEBARAN) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Peta Sebaran",
+                                fontWeight = if (selectedTab == TAB_PETA_SEBARAN) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 12.sp,
+                                color = if (selectedTab == TAB_PETA_SEBARAN) Color.White else Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                )
+
                 // Tab 5: Statistik & Tren Bulanan (RBAC: Disembunyikan untuk petugas Tier 3 Operator/Logistik/TRC)
                 if (canShowStatisticsTab) {
                     Tab(
-                        selected = selectedTab == 5,
-                        onClick = { selectedTab = 5 },
+                        selected = selectedTab == TAB_TREN_BULANAN,
+                        onClick = { selectedTab = TAB_TREN_BULANAN },
                         modifier = Modifier.testTag("tab_tren_bulanan_statistik"),
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Analytics,
                                     contentDescription = null,
-                                    tint = if (selectedTab == 5) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
+                                    tint = if (selectedTab == TAB_TREN_BULANAN) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.7f),
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Tren Bulanan",
-                                    fontWeight = if (selectedTab == 5) FontWeight.Bold else FontWeight.Normal,
+                                    fontWeight = if (selectedTab == TAB_TREN_BULANAN) FontWeight.Bold else FontWeight.Normal,
                                     fontSize = 12.sp,
-                                    color = if (selectedTab == 5) Color.White else Color.White.copy(alpha = 0.7f)
+                                    color = if (selectedTab == TAB_TREN_BULANAN) Color.White else Color.White.copy(alpha = 0.7f)
                                 )
                             }
                         }
@@ -1001,7 +1009,7 @@ fun CitizenReportScreen(
             }
         }
 
-        if (selectedTab != 4) {
+        if (selectedTab != TAB_RUANG_KERJA) {
             SandboxTrainingCompactNoticeBanner(
                 screenContextLabel = "Mode Warga / Simulasi",
                 onInjectDrillClick = {
@@ -1040,7 +1048,7 @@ fun CitizenReportScreen(
                     }
                 ) {
                     when (selectedTab) {
-                0 -> {
+                TAB_FORMULIR -> {
                     // TAB 0: FORMULIR INPUT (Matches Screenshot)
                     val citizenFormKeyboardActions = rememberFormKeyboardActions()
                     LazyColumn(
@@ -1151,7 +1159,7 @@ fun CitizenReportScreen(
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
                                         OutlinedButton(
-                                            onClick = { selectedTab = 4 },
+                                            onClick = { selectedTab = TAB_RUANG_KERJA },
                                             shape = RoundedCornerShape(12.dp),
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -1183,7 +1191,7 @@ fun CitizenReportScreen(
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF86EFAC)),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedTab = 2 }
+                                    .clickable { selectedTab = TAB_RIWAYAT_LACAK }
                                     .testTag("banner_open_status_tracker")
                             ) {
                                 Row(
@@ -1806,6 +1814,9 @@ fun CitizenReportScreen(
                                         maxLines = 6,
                                         shape = RoundedCornerShape(10.dp),
                                         colors = TextFieldDefaults.colors(
+                                            focusedTextColor = Color(0xFF0F172A),
+                                            unfocusedTextColor = Color(0xFF0F172A),
+                                            cursorColor = Color(0xFFD97706),
                                             focusedContainerColor = Color.White,
                                             unfocusedContainerColor = Color.White,
                                             focusedIndicatorColor = Color(0xFFD97706),
@@ -2072,16 +2083,16 @@ fun CitizenReportScreen(
                      }
                  }
 
-                1 -> {
-                    // TAB 1: PETA SEBARAN LAPORAN (Google Maps / GIS Spatial Map)
+                TAB_PETA_SEBARAN -> {
+                    // TAB 4: PETA SEBARAN LAPORAN (Google Maps / GIS Spatial Map — di sebelah Ruang Kerja berdampingan dengan Tren Bulanan)
                     CitizenReportMapView(
                         reports = reports,
                         onUpdateReportStatus = onUpdateReportStatus
                     )
                 }
 
-                2 -> {
-                    // TAB 2: TABEL RIWAYAT LAPORAN WARGA (With Status Filters, Cloud Sync, & Officer Role-Gating)
+                TAB_RIWAYAT_LACAK -> {
+                    // TAB 1: TABEL RIWAYAT LAPORAN WARGA (With Status Filters, Cloud Sync, & Officer Role-Gating)
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -2161,7 +2172,7 @@ fun CitizenReportScreen(
                                         Button(
                                             onClick = {
                                                 if (isOfficerLoggedIn) {
-                                                    selectedTab = 4
+                                                    selectedTab = TAB_RUANG_KERJA
                                                 } else {
                                                     showOfficerLoginDialog = true
                                                 }
@@ -2419,15 +2430,15 @@ fun CitizenReportScreen(
                     }
                 }
 
-                3 -> {
-                    // TAB 3: KONTAK PENTING DARURAT MUKOMUKO
+                TAB_KONTAK_PENTING -> {
+                    // TAB 2: KONTAK PENTING DARURAT MUKOMUKO
                     CitizenEmergencyContactsView(
                         onOpenVolunteerRegistration = { showVolunteerCoordinationDialog = true }
                     )
                 }
 
-                4 -> {
-                    // TAB 4: RUANG KERJA PETUGAS PUSDALOPS BPBD & TIM TRC
+                TAB_RUANG_KERJA -> {
+                    // TAB 3: RUANG KERJA PETUGAS PUSDALOPS BPBD & TIM TRC
                     val hasActiveSession = isOfficerLoggedIn && officerAuthManager.isOfficerLoggedIn()
                     if (hasActiveSession) {
                         if (isVerifyingSecurity) {
@@ -2605,7 +2616,7 @@ fun CitizenReportScreen(
                         }
                     }
                 }
-                5 -> {
+                TAB_TREN_BULANAN -> {
                     // TAB 5: TREN & STATISTIK BENCANA BULANAN (RBAC: Tier 1 & Tier 2, atau publik non-petugas)
                     if (canShowStatisticsTab) {
                         LazyColumn(
@@ -2805,7 +2816,7 @@ fun CitizenReportScreen(
                             onClick = {
                                 showSuccessDialog = false
                                 onSyncReports?.invoke { _ -> }
-                                selectedTab = 4
+                                selectedTab = TAB_RUANG_KERJA
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
                             modifier = Modifier
@@ -2839,7 +2850,7 @@ fun CitizenReportScreen(
                     onClick = {
                         showSuccessDialog = false
                         trackingReportIdQuery = submittedReportId
-                        selectedTab = 2 // Switch to tracking & history view
+                        selectedTab = TAB_RIWAYAT_LACAK // Switch to tracking & history view
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
                 ) {
@@ -2963,7 +2974,7 @@ fun CitizenReportScreen(
                         officerRole = cred.role
                         showOfficerLoginDialog = false
                         onOfficerLoginDismissed?.invoke()
-                        selectedTab = 4 // Masuk langsung ke Ruang Kerja Petugas
+                        selectedTab = TAB_RUANG_KERJA // Masuk langsung ke Ruang Kerja Petugas
 
                         val targetId = pendingStatusReportId
                         val targetStatus = pendingStatusTarget
@@ -3187,7 +3198,7 @@ fun CitizenReportScreen(
                         officerRole = profile.role
                         showOfficerLoginDialog = false
                         onOfficerLoginDismissed?.invoke()
-                        selectedTab = 4 // Arahkan ke halaman utama Ruang Kerja Petugas
+                        selectedTab = TAB_RUANG_KERJA // Arahkan ke halaman utama Ruang Kerja Petugas
 
                         val targetId = pendingStatusReportId
                         val targetStatus = pendingStatusTarget
@@ -3359,10 +3370,15 @@ fun CitizenReportScreen(
                                 },
                                 shape = RoundedCornerShape(14.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color(0xFF0F172A),
+                                    unfocusedTextColor = Color(0xFF0F172A),
+                                    errorTextColor = Color(0xFF0F172A),
+                                    cursorColor = Color(0xFF15803D),
                                     focusedBorderColor = Color(0xFF15803D),
                                     unfocusedBorderColor = Color(0xFFCBD5E1),
                                     focusedContainerColor = Color(0xFFF8FAFC),
-                                    unfocusedContainerColor = Color(0xFFF8FAFC)
+                                    unfocusedContainerColor = Color(0xFFF8FAFC),
+                                    errorContainerColor = Color(0xFFFEF2F2)
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -3417,10 +3433,15 @@ fun CitizenReportScreen(
                         },
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color(0xFF0F172A),
+                            unfocusedTextColor = Color(0xFF0F172A),
+                            errorTextColor = Color(0xFF0F172A),
+                            cursorColor = Color(0xFF15803D),
                             focusedBorderColor = Color(0xFF15803D),
                             unfocusedBorderColor = Color(0xFFCBD5E1),
                             focusedContainerColor = Color(0xFFF8FAFC),
-                            unfocusedContainerColor = Color(0xFFF8FAFC)
+                            unfocusedContainerColor = Color(0xFFF8FAFC),
+                            errorContainerColor = Color(0xFFFEF2F2)
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -3481,7 +3502,9 @@ fun CitizenReportScreen(
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF15803D),
-                            contentColor = Color.White
+                            contentColor = Color.White,
+                            disabledContainerColor = Color(0xFF15803D).copy(alpha = 0.72f),
+                            disabledContentColor = Color.White.copy(alpha = 0.90f)
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -3654,7 +3677,7 @@ fun CitizenReportScreen(
                 onClose = { showVolunteerCoordinationDialog = false },
                 onRequestOfficerLogin = {
                     showVolunteerCoordinationDialog = false
-                    selectedTab = 4
+                    selectedTab = TAB_RUANG_KERJA
                     showOfficerLoginDialog = true
                 }
             )

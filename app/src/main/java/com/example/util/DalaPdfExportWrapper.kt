@@ -190,7 +190,7 @@ object DalaPdfExportWrapper {
         y += 12f
         PdfTextAutoShrinkHelper.drawAutoShrinkText(
             canvas = canvas,
-            text = "ID: ${assessment.assessmentId} | Kejadian: ${assessment.disasterTitle.ifBlank { "-" }} | Wilayah: ${assessment.district} | Petugas: ${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})",
+            text = "ID: ${assessment.assessmentId}  |  Kejadian: ${assessment.disasterTitle.ifBlank { "-" }}  |  Wilayah: ${assessment.district}",
             x = A4_WIDTH / 2f,
             y = y,
             maxWidth = contentWidth,
@@ -198,7 +198,18 @@ object DalaPdfExportWrapper {
             initialFontSize = 7.8f,
             minFontSize = settings.minFontSize
         )
-        y += 14f
+        y += 10.5f
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Petugas: ${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})",
+            x = A4_WIDTH / 2f,
+            y = y,
+            maxWidth = contentWidth,
+            basePaint = metaPaint,
+            initialFontSize = 7.8f,
+            minFontSize = settings.minFontSize
+        )
+        y += 12f
 
         // BAGIAN I: KORBAN & PENGUNGSI
         canvas.drawText("I. KORBAN JIWA, PENGUNGSI & KELOMPOK RENTAN", MARGIN, y, sectionPaint)

@@ -400,7 +400,16 @@ object ImageUtils {
             return null
         }
         if (trimmed.startsWith("android.resource://", ignoreCase = true)) {
-            return null
+            if (context == null) return null
+            return try {
+                val parsed = Uri.parse(trimmed)
+                context.contentResolver.openInputStream(parsed)?.use { input ->
+                    val bytes = input.readBytes()
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { optimizeReportBitmap(it) }
+                }
+            } catch (_: Exception) {
+                null
+            }
         }
 
         return try {

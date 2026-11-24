@@ -464,15 +464,20 @@ fun StartupSplashWallpaperScreen(
                                     .testTag("btn_enter_guest"),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = OrangePrimary,
-                                    contentColor = OrangeOnPrimary
+                                    contentColor = OrangeOnPrimary,
+                                    disabledContainerColor = OrangePrimary.copy(alpha = 0.80f),
+                                    disabledContentColor = OrangeOnPrimary.copy(alpha = 0.90f)
                                 ),
                                 shape = RoundedCornerShape(12.dp),
-                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                                elevation = ButtonDefaults.buttonElevation(
+                                    defaultElevation = 4.dp,
+                                    disabledElevation = 2.dp
+                                )
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.WbSunny,
                                     contentDescription = null,
-                                    tint = OrangeOnPrimary,
+                                    tint = OrangeOnPrimary.copy(alpha = if (isBiometricAuthenticating) 0.90f else 1f),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -485,7 +490,7 @@ fun StartupSplashWallpaperScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                     contentDescription = null,
-                                    tint = OrangeOnPrimary,
+                                    tint = OrangeOnPrimary.copy(alpha = if (isBiometricAuthenticating) 0.90f else 1f),
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
@@ -499,15 +504,20 @@ fun StartupSplashWallpaperScreen(
                                     .testTag("btn_enter_officer"),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF15803D),
-                                    contentColor = Color.White
+                                    contentColor = Color.White,
+                                    disabledContainerColor = Color(0xFF15803D).copy(alpha = 0.80f),
+                                    disabledContentColor = Color.White.copy(alpha = 0.90f)
                                 ),
                                 shape = RoundedCornerShape(12.dp),
-                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                                elevation = ButtonDefaults.buttonElevation(
+                                    defaultElevation = 4.dp,
+                                    disabledElevation = 2.dp
+                                )
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Shield,
                                     contentDescription = null,
-                                    tint = Color.White,
+                                    tint = Color.White.copy(alpha = if (isBiometricAuthenticating) 0.90f else 1f),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -520,7 +530,7 @@ fun StartupSplashWallpaperScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                     contentDescription = null,
-                                    tint = Color.White,
+                                    tint = Color.White.copy(alpha = if (isBiometricAuthenticating) 0.90f else 1f),
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
@@ -537,8 +547,10 @@ fun StartupSplashWallpaperScreen(
                                     shape = RoundedCornerShape(12.dp),
                                     border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White.copy(alpha = 0.85f)),
                                     colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = Color.White.copy(alpha = 0.12f),
-                                        contentColor = Color.White
+                                        containerColor = Color.White.copy(alpha = 0.14f),
+                                        contentColor = Color.White,
+                                        disabledContainerColor = Color.White.copy(alpha = 0.16f),
+                                        disabledContentColor = Color.White
                                     )
                                 ) {
                                     if (isBiometricAuthenticating) {
@@ -563,7 +575,7 @@ fun StartupSplashWallpaperScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = if (savedOfficerName.isNotBlank()) "Login Biometrik" else "Login Biometrik",
+                                            text = "Login Biometrik",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White

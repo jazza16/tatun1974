@@ -559,10 +559,10 @@ object ReportExporter {
         // Ruang tanda tangan basah/stempel
         yRow1 += 38f
         koordSig?.let {
-            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.formattedName, leftColCenterX, yRow1, sideBoxMaxW, namePaint, nameFontSize, settings.minFontSize, settings.maxLengthBeforeTruncate)
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.formattedName, leftColCenterX, yRow1, sideBoxMaxW, namePaint, nameFontSize, settings.minFontSize)
         }
         manajerSig?.let {
-            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.formattedName, rightColCenterX, yRow1, sideBoxMaxW, namePaint, nameFontSize, settings.minFontSize, settings.maxLengthBeforeTruncate)
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.formattedName, rightColCenterX, yRow1, sideBoxMaxW, namePaint, nameFontSize, settings.minFontSize)
         }
 
         yRow1 += 11f
@@ -586,7 +586,7 @@ object ReportExporter {
         // Ruang tanda tangan Pengawas
         yRow2 += 38f
         pengawasSig?.let {
-            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.formattedName, centerColCenterX, yRow2, centerBoxMaxW, namePaint, nameFontSize, settings.minFontSize, settings.maxLengthBeforeTruncate)
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(canvas, it.formattedName, centerColCenterX, yRow2, centerBoxMaxW, namePaint, nameFontSize, settings.minFontSize)
         }
         yRow2 += 11f
         pengawasSig?.let {
@@ -754,16 +754,26 @@ object ReportExporter {
             textPaint.textAlign = Paint.Align.LEFT
             PdfTextAutoShrinkHelper.drawAutoShrinkText(
                 canvas = canvas,
-                text = "Waktu Cetak: $printDate  |  Petugas Validasi: ${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})",
+                text = "Waktu Cetak: $printDate",
                 x = 36f,
                 y = y,
                 maxWidth = (pageWidth - 72).toFloat(),
                 basePaint = textPaint,
                 initialFontSize = settings.bodyFontSize,
-                minFontSize = settings.minFontSize,
-                maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+                minFontSize = settings.minFontSize
             )
-            y += 12f
+            y += 10.5f
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Petugas Validasi: ${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})",
+                x = 36f,
+                y = y,
+                maxWidth = (pageWidth - 72).toFloat(),
+                basePaint = textPaint,
+                initialFontSize = settings.bodyFontSize,
+                minFontSize = settings.minFontSize
+            )
+            y += 10f
 
             // Summary KPI Box
             canvas.drawRect(36f, y, (pageWidth - 36).toFloat(), y + 26f, headerBoxPaint)
@@ -933,23 +943,36 @@ object ReportExporter {
                         val imgRect = RectF(leftX + 4f, y + 4f, leftX + cardWidth - 4f, y + 96f)
                         currentCanvas.drawBitmap(bmp, null, imgRect, photoBitmapPaint)
                         currentCanvas.drawRect(cardRect, framePaint)
-                        currentCanvas.drawText(
-                            "#${rep.id.takeLast(7)} • ${rep.disasterType}".take(42),
-                            leftX + 6f,
-                            y + 108f,
-                            boldPaint
+                        val captionMaxW = (cardWidth - 12f).coerceAtLeast(80f)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                            canvas = currentCanvas,
+                            text = "#${rep.id.takeLast(7)} • ${rep.disasterType}",
+                            x = leftX + 6f,
+                            y = y + 108f,
+                            maxWidth = captionMaxW,
+                            basePaint = boldPaint,
+                            initialFontSize = boldPaint.textSize,
+                            minFontSize = settings.minFontSize
                         )
-                        currentCanvas.drawText(
-                            "${rep.village}, ${rep.district} (GPS: %.4f, %.4f)".format(rep.latitude, rep.longitude).take(48),
-                            leftX + 6f,
-                            y + 119f,
-                            textPaint
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                            canvas = currentCanvas,
+                            text = "${rep.village}, ${rep.district} (GPS: %.4f, %.4f)".format(rep.latitude, rep.longitude),
+                            x = leftX + 6f,
+                            y = y + 119f,
+                            maxWidth = captionMaxW,
+                            basePaint = textPaint,
+                            initialFontSize = textPaint.textSize,
+                            minFontSize = settings.minFontSize
                         )
-                        currentCanvas.drawText(
-                            "Pelapor: ${rep.reporterName} • Status: ${rep.status}".take(48),
-                            leftX + 6f,
-                            y + 128f,
-                            textPaint
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                            canvas = currentCanvas,
+                            text = "Pelapor: ${rep.reporterName} • Status: ${rep.status}",
+                            x = leftX + 6f,
+                            y = y + 128f,
+                            maxWidth = captionMaxW,
+                            basePaint = textPaint,
+                            initialFontSize = textPaint.textSize,
+                            minFontSize = settings.minFontSize
                         )
                     }
                     y += photoCardHeight + 10f
@@ -1161,16 +1184,26 @@ object ReportExporter {
         }
         PdfTextAutoShrinkHelper.drawAutoShrinkText(
             canvas = canvas,
-            text = "Waktu Penerbitan: $currentTimeStr | Mode Overlay: $activeLayerName | Petugas: ${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})",
+            text = "Waktu Penerbitan: $currentTimeStr  |  Mode Overlay: $activeLayerName",
             x = pageWidth / 2f,
             y = y,
             maxWidth = pageWidth - (margin * 2f),
             basePaint = metaPaint,
             initialFontSize = settings.bodyFontSize,
-            minFontSize = settings.minFontSize,
-            maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+            minFontSize = settings.minFontSize
         )
-        y += 18f
+        y += 10.5f
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Petugas: ${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})",
+            x = pageWidth / 2f,
+            y = y,
+            maxWidth = pageWidth - (margin * 2f),
+            basePaint = metaPaint,
+            initialFontSize = settings.bodyFontSize,
+            minFontSize = settings.minFontSize
+        )
+        y += 14f
 
         // Kotak Ringkasan Ekstrem Cuaca (Presisi dalam batas margin halaman A4)
         val maxRain = items.maxByOrNull { it.precipitation }
@@ -1702,16 +1735,26 @@ object ReportExporter {
         }
         PdfTextAutoShrinkHelper.drawAutoShrinkText(
             canvas = canvas,
-            text = "Cakupan Wilayah: $scopeLabel  |  Waktu Unduh: $printDateStr  |  Petugas: $rawOfficerName",
+            text = "Cakupan Wilayah: $scopeLabel  |  Waktu Unduh: $printDateStr",
             x = pageWidth / 2f,
             y = y,
             maxWidth = pageWidth - (margin * 2f),
             basePaint = metaPaint,
             initialFontSize = 7.8f,
-            minFontSize = settings.minFontSize,
-            maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+            minFontSize = settings.minFontSize
         )
-        y += 22f
+        y += 10.5f
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Petugas: $rawOfficerName",
+            x = pageWidth / 2f,
+            y = y,
+            maxWidth = pageWidth - (margin * 2f),
+            basePaint = metaPaint,
+            initialFontSize = 7.8f,
+            minFontSize = settings.minFontSize
+        )
+        y += 15f
 
         // 3. Kotak Ringkasan Eksekutif (KPI hingga Bulan Berjalan)
         val totalAnnual = activeMonthlyData.sumOf { it.totalIncidents }
@@ -2422,16 +2465,26 @@ object ReportExporter {
         }
         PdfTextAutoShrinkHelper.drawAutoShrinkText(
             canvas = canvas,
-            text = "Waktu Penerbitan: $printDateStr  |  Sumber: Stasiun Meteorologi BMKG & Pusdalops BPBD  |  Petugas: $rawOfficerName",
+            text = "Waktu Penerbitan: $printDateStr  |  Sumber: Stasiun Meteorologi BMKG & Pusdalops BPBD",
             x = pageWidth / 2f,
             y = y,
             maxWidth = tableWidth,
             basePaint = metaPaint,
             initialFontSize = settings.bodyFontSize,
-            minFontSize = settings.minFontSize,
-            maxLengthBeforeTruncate = settings.maxLengthBeforeTruncate
+            minFontSize = settings.minFontSize
         )
-        y += 18f
+        y += 10.5f
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Petugas: $rawOfficerName",
+            x = pageWidth / 2f,
+            y = y,
+            maxWidth = tableWidth,
+            basePaint = metaPaint,
+            initialFontSize = settings.bodyFontSize,
+            minFontSize = settings.minFontSize
+        )
+        y += 14f
 
         // Pembagian 8 Kolom Presisi di dalam tableWidth (523pt):
         // 0: No (4.5%), 1: Kecamatan (21.5%), 2: Pagi (13%), 3: Siang (13%),

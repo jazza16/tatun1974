@@ -29,7 +29,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeveloperMode
@@ -122,10 +121,8 @@ private fun formatTokenSourceLabel(source: String): String = when (source.upperc
 fun PlayIntegritySecuritySessionsCard(
     securitySessions: List<DeviceSecuritySession>,
     loginActivities: List<OfficerLoginActivity>,
-    isCloudLinked: Boolean,
     isSyncing: Boolean,
     onSyncNow: () -> Unit,
-    onLinkGoogleCloud: () -> Unit,
     onVerifySecuritySession: (DeviceSecuritySession, Boolean, String) -> Unit,
     onRevokeSecuritySession: (DeviceSecuritySession) -> Unit
 ) {
@@ -278,72 +275,28 @@ fun PlayIntegritySecuritySessionsCard(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
+                val isFirestoreActive = securitySessions.isNotEmpty() || loginActivities.isNotEmpty()
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = if (isCloudLinked) Color(0xFFECFDF5) else Color(0xFFFFF7ED)
+                    color = if (isFirestoreActive) Color(0xFFECFDF5) else Color(0xFFF1F5F9)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Icon(
-                            imageVector = if (isCloudLinked) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                            imageVector = Icons.Default.CloudDone,
                             contentDescription = null,
-                            tint = if (isCloudLinked) Color(0xFF047857) else Color(0xFFC2410C),
+                            tint = if (isFirestoreActive) Color(0xFF047857) else Color(0xFF475569),
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (isCloudLinked) "Cloud Stream Aktif" else "Mode NIP Lokal",
+                            text = if (isFirestoreActive) "Cloud Firestore Aktif" else "Siap Sinkron Cloud",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isCloudLinked) Color(0xFF047857) else Color(0xFFC2410C)
+                            color = if (isFirestoreActive) Color(0xFF047857) else Color(0xFF475569)
                         )
-                    }
-                }
-            }
-
-            // Optional Google Cloud link banner for multi-device real-time activity feed
-            if (!isCloudLinked) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFFFFFBEB),
-                    border = BorderStroke(1.dp, Color(0xFFFDE68A)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Hubungkan Google Cloud untuk melihat stream real-time seluruh aktivitas login dari semua perangkat petugas.",
-                            fontSize = 11.sp,
-                            color = Color(0xFF92400E),
-                            lineHeight = 14.sp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(end = 8.dp)
-                        )
-                        Button(
-                            onClick = onLinkGoogleCloud,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier
-                                .heightIn(min = 34.dp)
-                                .testTag("btn_link_google_cloud_security")
-                        ) {
-                            Text(
-                                text = "Hubungkan",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
                     }
                 }
             }
