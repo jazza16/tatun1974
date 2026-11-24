@@ -107,18 +107,16 @@ fun EmergencyWarningPopupDialog(
 
     if (!hasActiveAlerts) return
 
-    Dialog(
+    BalancedModalDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false,
-            usePlatformDefaultWidth = false
-        )
+        dismissOnBackPress = true,
+        dismissOnClickOutside = false,
+        horizontalMargin = 14.dp,
+        extraVerticalMargin = 14.dp
     ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 20.dp)
+                .fillMaxWidth()
                 .testTag("emergency_warning_popup_dialog"),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(

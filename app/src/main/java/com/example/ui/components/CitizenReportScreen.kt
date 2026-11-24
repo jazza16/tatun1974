@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -3239,7 +3240,7 @@ fun CitizenReportScreen(
             }
         }
 
-        Dialog(
+        BalancedModalDialog(
             onDismissRequest = {
                 if (!isSubmitting && !isSyncingCloud) {
                     showOfficerLoginDialog = false
@@ -3247,7 +3248,9 @@ fun CitizenReportScreen(
                     pendingStatusReportId = null
                     pendingStatusTarget = null
                 }
-            }
+            },
+            horizontalMargin = 18.dp,
+            extraVerticalMargin = 14.dp
         ) {
             val loginKeyboardActions = rememberFormKeyboardActions(
                 onDoneCallback = {
@@ -3261,9 +3264,7 @@ fun CitizenReportScreen(
                 color = Color.White,
                 tonalElevation = 8.dp,
                 shadowElevation = 12.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
@@ -3693,7 +3694,10 @@ fun CitizenReportScreen(
                 previewPhotoUri = null
                 previewPhotoReport = null
             },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
         ) {
             Surface(
                 modifier = Modifier
@@ -3705,6 +3709,7 @@ fun CitizenReportScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .systemBarsPadding()
                         .padding(16.dp)
                 ) {
                     // Top Bar with Zoom Controls & Close Button (48dp touch target)

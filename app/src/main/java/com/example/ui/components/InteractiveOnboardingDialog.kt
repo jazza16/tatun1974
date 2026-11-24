@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
@@ -109,7 +110,10 @@ fun InteractiveOnboardingDialog(
 
     Dialog(
         onDismissRequest = onComplete,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         Surface(
             modifier = Modifier
@@ -121,7 +125,8 @@ fun InteractiveOnboardingDialog(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 24.dp)
+                    .systemBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 20.dp)
                     .widthIn(max = 600.dp)
             ) {
                 // Top Action Bar

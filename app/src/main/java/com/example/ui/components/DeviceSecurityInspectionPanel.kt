@@ -1042,21 +1042,23 @@ private fun DeviceSecurityInspectionDialog(
         }
     }
 
-    Dialog(
+    BalancedModalDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        horizontalMargin = 14.dp,
+        extraVerticalMargin = 14.dp
     ) {
         Surface(
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 8.dp,
+            shadowElevation = 8.dp,
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .heightIn(max = 680.dp)
+                .fillMaxWidth()
                 .testTag("dialog_device_security_inspection")
         ) {
             Column(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .padding(18.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)

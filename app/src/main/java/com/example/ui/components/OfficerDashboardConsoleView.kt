@@ -2604,18 +2604,18 @@ fun OfficerDashboardConsoleView(
                 .thenBy { it.fullName }
         )
 
-        Dialog(
+        BalancedModalDialog(
             onDismissRequest = { showRosterDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            horizontalMargin = 14.dp,
+            extraVerticalMargin = 14.dp
         ) {
             val rosterKeyboardActions = rememberFormKeyboardActions()
             Surface(
                 shape = RoundedCornerShape(22.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 16.dp)
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
@@ -3360,39 +3360,6 @@ fun OfficerDashboardConsoleView(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        rosterMode = 0
-                                        formError = null
-                                    },
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Batal", fontSize = 11.sp)
-                                }
-
-                                Button(
-                                    onClick = submitManualPersonnel,
-                                    enabled = !isSavingPersonnel,
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                                    modifier = Modifier
-                                        .weight(1.3f)
-                                        .testTag("btn_save_manual_personnel")
-                                ) {
-                                    Text(
-                                        text = if (isSavingPersonnel) "Menyimpan..." else "Simpan Personil",
-                                        fontSize = 11.sp
-                                    )
-                                }
-                            }
                         }
                     }
 
@@ -3400,7 +3367,7 @@ fun OfficerDashboardConsoleView(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Pinned Footer Actions (selalu tampil utuh dan tidak terpotong)
+                    // Pinned Footer Actions (selalu tampil utuh, tidak ganda, dan seimbang)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
@@ -3412,27 +3379,42 @@ fun OfficerDashboardConsoleView(
                                     rosterMode = 0
                                     formError = null
                                 },
-                                shape = RoundedCornerShape(10.dp)
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 44.dp)
                             ) {
-                                Text("Kembali ke Daftar", fontSize = 12.sp)
+                                Text(
+                                    text = "Kembali ke Daftar",
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                             Button(
                                 onClick = submitManualPersonnel,
                                 enabled = !isSavingPersonnel,
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                                modifier = Modifier.testTag("btn_dialog_confirm_save_personnel")
+                                modifier = Modifier
+                                    .weight(1.15f)
+                                    .heightIn(min = 44.dp)
+                                    .testTag("btn_save_manual_personnel")
                             ) {
                                 Text(
-                                    text = if (isSavingPersonnel) "Menyimpan..." else "Simpan Petugas Baru",
-                                    fontSize = 12.sp
+                                    text = if (isSavingPersonnel) "Menyimpan..." else "Simpan Personil",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         } else {
                             Button(
                                 onClick = { showRosterDialog = false },
                                 shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                modifier = Modifier.heightIn(min = 44.dp)
                             ) {
                                 Text("Selesai", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
@@ -3865,7 +3847,10 @@ fun OfficerDashboardConsoleView(
     if (showDatabaseExplorer && canAccessSystemSettings) {
         Dialog(
             onDismissRequest = { showDatabaseExplorer = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
         ) {
             DatabaseExplorerScreen(
                 database = database,
