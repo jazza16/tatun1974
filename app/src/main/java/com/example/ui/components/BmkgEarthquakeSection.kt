@@ -350,13 +350,12 @@ private fun WrsConsoleHeaderCard(
                                 color = Color(0xFF9A3412)
                             )
                         }
-                        Switch(
+                        Spacer(modifier = Modifier.width(8.dp))
+                        SipagarSliderSwitch(
                             checked = isNotificationEnabled,
                             onCheckedChange = onToggleNotification,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = OrangePrimary
-                            ),
+                            compactTouchTarget = true,
+                            checkedThumbColor = OrangePrimary,
                             modifier = Modifier.testTag("switch_earthquake_notifications")
                         )
                     }

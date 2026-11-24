@@ -513,7 +513,8 @@ private fun WeatherAlertNotificationSettingsCard(
                     }
                 }
 
-                Switch(
+                Spacer(modifier = Modifier.width(8.dp))
+                SipagarSliderSwitch(
                     checked = settings.isEnabled,
                     onCheckedChange = { checked ->
                         if (checked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -524,10 +525,7 @@ private fun WeatherAlertNotificationSettingsCard(
                             onUpdateSettings(settings.copy(isEnabled = checked))
                         }
                     },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = OrangePrimary
-                    ),
+                    checkedThumbColor = OrangePrimary,
                     modifier = Modifier.testTag("switch_weather_alert_master")
                 )
             }
@@ -662,15 +660,13 @@ private fun WeatherAlertNotificationSettingsCard(
                         }
                     }
 
-                    Switch(
+                    Spacer(modifier = Modifier.width(8.dp))
+                    SipagarSliderSwitch(
                         checked = settings.onlySelectedDistrict,
                         onCheckedChange = {
                             onUpdateSettings(settings.copy(onlySelectedDistrict = it))
                         },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = OrangePrimary
-                        ),
+                        checkedThumbColor = OrangePrimary,
                         modifier = Modifier.testTag("switch_district_relevance")
                     )
                 }

@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -317,9 +316,8 @@ fun DalaCasualtiesTab(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
             .testTag("dala_tab_casualties_list"),
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Identitas Kejadian (Collapsible agar tidak memenuhi layar)
@@ -755,9 +753,8 @@ fun DalaDamagesTab(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
             .testTag("dala_tab_damages_list"),
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Kategori 1: Rumah
@@ -959,9 +956,8 @@ fun DalaUrgentNeedsTab(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
             .testTag("dala_tab_urgent_needs_list"),
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Header Ringkasan + Tombol "+ Tambah Kebutuhan"
@@ -1266,7 +1262,6 @@ private fun AddUrgentNeedDialog(
         text = {
             Column(
                 modifier = Modifier
-                    .imePadding()
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {

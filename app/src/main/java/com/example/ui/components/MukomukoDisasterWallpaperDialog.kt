@@ -778,9 +778,10 @@ private suspend fun applyDisasterWallpaper(context: Context) {
 }
 
 private fun shareLandscapeInfo(context: Context) {
+    val settings = com.example.data.repository.DocumentSettingsRepository.getCachedOrDefaultSettings(context)
     val shareText = buildString {
+        append(com.example.util.ReportExporter.buildStandardKopPlainText(settings))
         appendLine("INFO LANSKAP, KEARIFAN LOKAL & KESIAPSIAGAAN BENCANA KABUPATEN MUKOMUKO")
-        appendLine("PUSDALOPS-PB BPBD Kabupaten Mukomuko • SIPAGAR KITA")
         appendLine()
         appendLine("• Semboyan Daerah: \"Kapuang Sakti Ratau Batuah\" & Filosofi Adat Sirih Carano — simbol persatuan adat, ketulusan hati, musyawarah mufakat, dan gotong royong kebencanaan.")
         appendLine("• Garis Pantai ±150–180 km menghadap Samudra Hindia (15 Kecamatan).")

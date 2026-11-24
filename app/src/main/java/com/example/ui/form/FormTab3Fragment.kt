@@ -156,9 +156,8 @@ fun FormTab3Content(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF5F5F5))
-            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // KARTU LOG KOMUNIKASI BPBD

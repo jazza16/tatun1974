@@ -462,10 +462,10 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
         
-        <!-- Spasi bawah agar tidak tertutup tombol & keyboard -->
+        <!-- Spasi bawah ringkas agar tidak menyisakan ruang kosong berlebihan di atas keyboard -->
         <View
             android:layout_width="match_parent"
-            android:layout_height="110dp"/>
+            android:layout_height="20dp"/>
 
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

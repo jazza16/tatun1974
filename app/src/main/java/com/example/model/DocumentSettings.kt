@@ -180,6 +180,20 @@ data class DocumentSettings(
         val safeMaxTruncate = maxLengthBeforeTruncate.coerceIn(32, 500)
         val safeMaxWords = maxWords.coerceIn(1, 6)
         val safeTimeout = remotePdfTimeoutMs.coerceIn(1_500L, 30_000L)
+        val normalizedKopLine2 = kopHeaderLine2.trim().let {
+            if (it.isBlank() || it.equals(LEGACY_DEFAULT_KOP_LINE_2, ignoreCase = true)) {
+                DEFAULT_KOP_LINE_2
+            } else {
+                it
+            }
+        }
+        val normalizedKopAddress = kopAddressLine.trim().let {
+            if (it.isBlank() || it.equals(LEGACY_DEFAULT_KOP_ADDRESS, ignoreCase = true)) {
+                DEFAULT_KOP_ADDRESS
+            } else {
+                it
+            }
+        }
         return copy(
             fontSize = safeFontSize,
             minFontSize = safeMinFontSize,
@@ -190,9 +204,9 @@ data class DocumentSettings(
             nipPrefix = nipPrefix.trim().ifBlank { DEFAULT_NIP_PREFIX },
             remotePdfTimeoutMs = safeTimeout,
             kopHeaderLine1 = kopHeaderLine1.trim().ifBlank { DEFAULT_KOP_LINE_1 },
-            kopHeaderLine2 = kopHeaderLine2.trim().ifBlank { DEFAULT_KOP_LINE_2 },
+            kopHeaderLine2 = normalizedKopLine2,
             kopHeaderLine3 = kopHeaderLine3.trim().ifBlank { DEFAULT_KOP_LINE_3 },
-            kopAddressLine = kopAddressLine.trim().ifBlank { DEFAULT_KOP_ADDRESS },
+            kopAddressLine = normalizedKopAddress,
             footerText = footerText.trim().ifBlank { DEFAULT_FOOTER_TEXT }
         )
     }
@@ -376,13 +390,18 @@ data class DocumentSettings(
         const val DEFAULT_NIP_PREFIX = "NIP."
         const val DEFAULT_REMOTE_PDF_TIMEOUT_MS = 8_000L
 
+        // Kop Surat Standar Resmi Aplikasi SIPAGAR KITA (mengacu pada standar Kop Surat Tugas Relawan)
         const val DEFAULT_KOP_LINE_1 = "PEMERINTAH KABUPATEN MUKOMUKO"
-        const val DEFAULT_KOP_LINE_2 = "BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)"
+        const val DEFAULT_KOP_LINE_2 = "BADAN PENANGGULANGAN BENCANA DAERAH"
         const val DEFAULT_KOP_LINE_3 = "PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)"
         const val DEFAULT_KOP_ADDRESS =
-            "Jl. Danau Nibung, Kompleks Perkantoran Pemkab Mukomuko • Call Center Darurat 117 • Sistem SIPAGAR KITA"
+            "Jl. Imam Bonjol Komplek Perkantoran Pemda Kab. Mukomuko, Prov. Bengkulu 38365"
         const val DEFAULT_FOOTER_TEXT =
             "Dicetak melalui Aplikasi SIPAGAR KITA - Pusdalops PB BPBD Kabupaten Mukomuko"
+
+        private const val LEGACY_DEFAULT_KOP_LINE_2 = "BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)"
+        private const val LEGACY_DEFAULT_KOP_ADDRESS =
+            "Jl. Danau Nibung, Kompleks Perkantoran Pemkab Mukomuko • Call Center Darurat 117 • Sistem SIPAGAR KITA"
 
         private val PREFIX_TITLE_TOKENS = setOf(
             "dr", "dr.", "drs", "drs.", "dra", "dra.", "ir", "ir.",

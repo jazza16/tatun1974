@@ -867,7 +867,7 @@ private fun NoteEditorView(
                 .fillMaxSize()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp)
+                .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp)
         ) {
             // Title Input
             OutlinedTextField(

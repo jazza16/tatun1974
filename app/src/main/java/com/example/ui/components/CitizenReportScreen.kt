@@ -1056,7 +1056,7 @@ fun CitizenReportScreen(
                             .fillMaxSize()
                             .imePadding()
                             .padding(horizontal = 20.dp),
-                        contentPadding = PaddingValues(top = 12.dp, bottom = 110.dp),
+                        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         if (isOfficerLoggedIn) {
@@ -3263,14 +3263,13 @@ fun CitizenReportScreen(
                 shadowElevation = 12.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .imePadding()
                     .padding(horizontal = 8.dp)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp, vertical = 28.dp),
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // 1. Logo

@@ -30,12 +30,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Equivalent to Flutter's `scrollPadding: const EdgeInsets.only(bottom: 100)`.
  * Automatically scrolls the enclosing ScrollView / LazyColumn when the TextField gains focus
- * so that the input sits at least [extraBottom] (default 110.dp) above the keyboard or bottom bar.
+ * so that the input sits cleanly above the keyboard with a tidy [extraBottom] margin (default 24.dp)
+ * without creating excessive empty space or clipping dialog headers.
  */
 @OptIn(ExperimentalFoundationApi::class)
-fun Modifier.formScrollPadding(extraBottom: Dp = 110.dp): Modifier = composed {
+fun Modifier.formScrollPadding(extraBottom: Dp = 24.dp): Modifier = composed {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current

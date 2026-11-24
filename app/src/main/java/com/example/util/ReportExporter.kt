@@ -237,43 +237,95 @@ object ReportExporter {
     }
 
     /**
-     * Menggambar Kop Surat Resmi Pemerintah Kabupaten Mukomuko secara terstandarisasi:
-     * - Sebelah KIRI  : Logo Kabupaten Mukomuko (tanpa background warna, proporsional perisai)
-     * - Bagian TENGAH : Teks Instansi Pemkab Mukomuko, BPBD, Pusdalops-PB & Alamat Resmi
-     * - Sebelah KANAN : Logo BPBD Kabupaten Mukomuko (tanpa background warna, proporsional lingkaran)
+     * Mengembalikan 4 baris teks Kop Surat Standar Resmi SIPAGAR KITA
+     * (mengacu pada format baku Kop Surat Tugas Relawan).
+     */
+    fun buildStandardKopLines(documentSettings: DocumentSettings? = null): List<String> {
+        val settings = (documentSettings ?: DocumentSettings()).clamped()
+        return listOf(
+            settings.kopHeaderLine1,
+            settings.kopHeaderLine2,
+            settings.kopHeaderLine3,
+            settings.kopAddressLine
+        )
+    }
+
+    /**
+     * Membentuk Kop Surat Standar dalam format teks biasa (untuk ekspor teks / berbagi dokumen non-PDF).
+     */
+    fun buildStandardKopPlainText(documentSettings: DocumentSettings? = null): String {
+        val lines = buildStandardKopLines(documentSettings)
+        return buildString {
+            lines.forEach { appendLine(it) }
+            appendLine("================================================================")
+        }
+    }
+
+    /**
+     * Menulis 4 baris Kop Surat Standar Resmi ke bagian paling atas berkas CSV/Excel.
+     */
+    fun writeStandardKopSuratCsvHeader(
+        writer: java.io.Writer,
+        documentSettings: DocumentSettings? = null
+    ) {
+        buildStandardKopLines(documentSettings).forEach { line ->
+            writer.write("${sanitizeCsvCell(line)}\n")
+        }
+    }
+
+    /**
+     * Menggambar **Kop Surat Standar Resmi Aplikasi SIPAGAR KITA** (mengacu pada format Kop Surat
+     * Tugas Relawan) secara terstandarisasi untuk seluruh dokumen cetak PDF:
+     * - Sebelah KIRI  : Logo Kabupaten Mukomuko (tinggi 44 pt proporsional perisai sesuai Laporan Harian Pusdalops, transparan & tajam)
+     * - Bagian TENGAH : 4 baris teks resmi seragam hitam (Serif Bold untuk instansi & Sans-Serif untuk alamat)
+     *                   dengan auto-shrink presisi dan batas aman 14 pt dari kedua logo
+     * - Sebelah KANAN : Logo BPBD Kabupaten Mukomuko (tinggi 44 pt proporsional lingkaran sejajar, transparan & tajam)
+     * - Bawah Kop     : Garis ganda resmi warna hitam pekat (2.2 pt tebal + 0.8 pt tipis)
      *
-     * @return Posisi koordinat Y berikutnya setelah garis ganda kop surat.
+     * @return Posisi koordinat Y berikutnya setelah garis ganda kop surat + `spacingAfterLine`.
      */
     fun drawKopSuratResmi(
         context: Context,
         canvas: Canvas,
         pageWidth: Int,
-        margin: Float = 30f,
+        margin: Float = 36f,
         pageNumber: Int = 1,
-        documentSettings: DocumentSettings? = null
+        documentSettings: DocumentSettings? = null,
+        spacingAfterLine: Float = 15f
     ): Float {
         // Kop surat hanya dicetak pada Halaman 1; halaman 2 dst langsung dimulai dari konten.
         if (pageNumber > 1) {
             return margin
         }
         val settings = (documentSettings ?: DocumentSettingsRepository.getCachedOrDefaultSettings(context)).clamped()
-        val targetLogoHeight = 44f
-        val logoTop = 50f
-        val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        val isSandbox = com.example.training.SandboxTrainingManager.isSandboxModeActive()
 
-        // 1. Logo KIRI: Kabupaten Mukomuko (Perisai proporsional, transparan tanpa background)
-        var leftLogoWidth = 42f
+        val centerX = pageWidth / 2f
+        // Gunakan ukuran (tinggi 44 pt) dan proporsi asli logo Laporan Harian Pusdalops
+        // agar bentuk perisai Kabupaten Mukomuko & lingkaran BPBD tajam, proporsional, dan tidak terdistorsi.
+        val targetLogoHeight = 44f
+        val topTextBaseY = if (isSandbox) 50f else 48f
+        val logoTop = topTextBaseY - 6f
+        val logoBottom = logoTop + targetLogoHeight
+
+        val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+            isDither = true
+        }
+
+        // 1. Logo KIRI: Kabupaten Mukomuko (Perisai proporsional sesuai Laporan Harian Pusdalops, transparan & tajam)
+        var leftLogoWidth = 36f
         try {
             val leftLogo = getCleanTransparentLogo(context, isMukomukoShield = true)
             if (leftLogo != null && leftLogo.height > 0) {
                 val aspect = leftLogo.width.toFloat() / leftLogo.height.toFloat()
                 leftLogoWidth = targetLogoHeight * aspect
-                val dstLeft = RectF(margin, logoTop, margin + leftLogoWidth, logoTop + targetLogoHeight)
+                val dstLeft = RectF(margin, logoTop, margin + leftLogoWidth, logoBottom)
                 canvas.drawBitmap(leftLogo, null, dstLeft, bitmapPaint)
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
 
-        // 2. Logo KANAN: BPBD Kabupaten Mukomuko (Lingkaran proporsional, sejajar & transparan tanpa background)
+        // 2. Logo KANAN: BPBD Kabupaten Mukomuko (Lingkaran proporsional sejajar tinggi dengan Logo Kab. Mukomuko)
         var rightLogoWidth = 44f
         try {
             val rightLogo = getCleanTransparentLogo(context, isMukomukoShield = false)
@@ -284,104 +336,95 @@ object ReportExporter {
                     pageWidth - margin - rightLogoWidth,
                     logoTop,
                     pageWidth - margin,
-                    logoTop + targetLogoHeight
+                    logoBottom
                 )
                 canvas.drawBitmap(rightLogo, null, dstRight, bitmapPaint)
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
 
-        // 3. Teks Instansi di Tengah (Data-Driven dari DocumentSettings + Auto-Shrink agar tidak menabrak logo)
-        val headerTitlePaint = Paint().apply {
-            color = Color.rgb(15, 23, 42)
-            textSize = 11.5f
-            isFakeBoldText = true
-            isAntiAlias = true
+        val logoTextClearance = 14f
+        val maxLogoReserve = max(leftLogoWidth, rightLogoWidth) + logoTextClearance
+        val maxKopTextWidth = (pageWidth - (margin + maxLogoReserve) * 2f).coerceAtLeast(180f)
+
+        // 2. Teks Kop Surat Seragam Hitam Resmi (Serif Bold untuk Instansi, Sans-Serif Normal untuk Alamat)
+        val kopTitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
-        val headerSubtitlePaint = Paint().apply {
-            color = Color.rgb(194, 65, 12)
-            textSize = 9f
-            isFakeBoldText = true
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
-        }
-        val headerAddressPaint = Paint().apply {
-            color = Color.rgb(51, 65, 85)
-            textSize = 7.4f
-            isAntiAlias = true
+        val kopAddressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
             textAlign = Paint.Align.CENTER
         }
 
-        val maxLogoReserve = max(leftLogoWidth, rightLogoWidth) + 10f
-        val centerTextMaxW = (pageWidth - (margin + maxLogoReserve) * 2f).coerceAtLeast(220f)
+        fun drawCenteredFitKopLine(
+            text: String,
+            yPos: Float,
+            basePaint: Paint,
+            defaultSize: Float,
+            minSize: Float = 6.8f
+        ) {
+            val workingPaint = Paint(basePaint).apply {
+                textSize = defaultSize
+            }
+            val measured = workingPaint.measureText(text)
+            if (measured > maxKopTextWidth && measured > 0f) {
+                workingPaint.textSize = (defaultSize * (maxKopTextWidth / measured)).coerceAtLeast(minSize)
+            }
+            canvas.drawText(text, centerX, yPos, workingPaint)
+        }
 
-        var y = 58f
-        val centerX = pageWidth / 2f
-        PdfTextAutoShrinkHelper.drawAutoShrinkText(
-            canvas = canvas,
+        var y = topTextBaseY
+        drawCenteredFitKopLine(
             text = settings.kopHeaderLine1,
-            x = centerX,
-            y = y,
-            maxWidth = centerTextMaxW,
-            basePaint = headerTitlePaint,
-            initialFontSize = 11.5f,
-            minFontSize = settings.minFontSize
+            yPos = y,
+            basePaint = kopTitlePaint,
+            defaultSize = 12.5f,
+            minSize = settings.minFontSize.coerceAtLeast(7.0f)
         )
-        y += 13f
-        PdfTextAutoShrinkHelper.drawAutoShrinkText(
-            canvas = canvas,
+        y += 16f
+        drawCenteredFitKopLine(
             text = settings.kopHeaderLine2,
-            x = centerX,
-            y = y,
-            maxWidth = centerTextMaxW,
-            basePaint = headerTitlePaint,
-            initialFontSize = 11.5f,
-            minFontSize = settings.minFontSize
+            yPos = y,
+            basePaint = kopTitlePaint,
+            defaultSize = 13.5f,
+            minSize = settings.minFontSize.coerceAtLeast(7.0f)
+        )
+        y += 14f
+        drawCenteredFitKopLine(
+            text = settings.kopHeaderLine3,
+            yPos = y,
+            basePaint = kopTitlePaint,
+            defaultSize = 9.2f,
+            minSize = settings.minFontSize.coerceAtLeast(6.5f)
         )
         y += 12f
-        PdfTextAutoShrinkHelper.drawAutoShrinkText(
-            canvas = canvas,
-            text = settings.kopHeaderLine3,
-            x = centerX,
-            y = y,
-            maxWidth = centerTextMaxW,
-            basePaint = headerSubtitlePaint,
-            initialFontSize = 9.0f,
-            minFontSize = settings.minFontSize
-        )
-        y += 11f
-        PdfTextAutoShrinkHelper.drawAutoShrinkText(
-            canvas = canvas,
+        drawCenteredFitKopLine(
             text = settings.kopAddressLine,
-            x = centerX,
-            y = y,
-            maxWidth = pageWidth - (margin * 2f),
-            basePaint = headerAddressPaint,
-            initialFontSize = 7.4f,
-            minFontSize = settings.minFontSize
+            yPos = y,
+            basePaint = kopAddressPaint,
+            defaultSize = 8.4f,
+            minSize = settings.minFontSize.coerceAtLeast(6.4f)
         )
 
-        // 4. Garis Penutup Kop Surat Ganda Resmi
-        y += 9f
-        val thickLinePaint = Paint().apply {
-            color = Color.rgb(15, 23, 42)
-            strokeWidth = 1.8f
-            isAntiAlias = true
+        // 3. Garis Penutup Kop Surat Ganda Resmi Warna Hitam (diletakkan aman di bawah batas bawah logo)
+        y = maxOf(y + 10f, logoBottom + 10f)
+        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            strokeWidth = 2.2f
         }
-        val thinLinePaint = Paint().apply {
-            color = Color.rgb(100, 116, 139)
-            strokeWidth = 0.7f
-            isAntiAlias = true
-        }
-        canvas.drawLine(margin, y, pageWidth - margin, y, thickLinePaint)
-        y += 2.5f
-        canvas.drawLine(margin, y, pageWidth - margin, y, thinLinePaint)
+        canvas.drawLine(margin, y, pageWidth - margin, y, linePaint)
+        y += 3f
+        linePaint.strokeWidth = 0.8f
+        canvas.drawLine(margin, y, pageWidth - margin, y, linePaint)
 
-        if (com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
+        if (isSandbox) {
             drawSandboxTrainingWatermark(canvas, pageWidth, A4_PAGE_HEIGHT, margin)
         }
 
-        return y + 15f
+        return y + spacingAfterLine
     }
 
     /**
@@ -1041,10 +1084,14 @@ object ReportExporter {
                 settings = settings
             )
             val csvFile = File(getExportCacheDir(context), "Laporan_Bencana_Pusdalops_Mukomuko.csv")
-            csvFile.bufferedWriter().use { writer ->
+            csvFile.bufferedWriter(Charsets.UTF_8).use { writer ->
+                writer.write("\uFEFF")
+                writeStandardKopSuratCsvHeader(writer, settings)
+                writer.write("\"DOKUMEN RESMI: REKAPITULASI LAPORAN BENCANA WARGA TERVALIDASI\"\n")
                 if (com.example.training.SandboxTrainingManager.isSandboxModeActive()) {
                     writer.write("\"# ${com.example.training.SandboxTrainingManager.WATERMARK_HEADER_TEXT}\"\n")
                 }
+                writer.write("\n")
                 // CSV Header (Dilengkapi Nama & NIP Petugas Validasi yang tersinkronisasi & Data-Driven)
                 writer.write("No,ID_Laporan,Jenis_Bencana,Waktu_Kejadian,Kecamatan,Desa,Detail_Lokasi,Latitude,Longitude,Akurasi_GPS_m,Korban_Meninggal,Korban_Luka,Korban_Hilang,Status,Catatan_Tindak_Lanjut_TRC,Nama_Pelapor,Nomor_Telepon,Petugas_Validasi,NIP_Petugas_Validasi\n")
 

@@ -212,105 +212,23 @@ object VolunteerAssignmentPdfGenerator {
                     strokeWidth = 2.2f
                 }
 
-                // Helper agar teks kop surat tidak pernah melebar melewati batas aman logo kiri/kanan
-                fun drawCenteredFitText(
-                    text: String,
-                    centerXPos: Float,
-                    yPos: Float,
-                    paint: Paint,
-                    maxWidth: Float,
-                    defaultSize: Float,
-                    minSize: Float = 7.2f
-                ) {
-                    paint.textSize = defaultSize
-                    val measured = paint.measureText(text)
-                    if (measured > maxWidth && measured > 0f) {
-                        paint.textSize = (defaultSize * (maxWidth / measured)).coerceAtLeast(minSize)
-                    }
-                    canvas.drawText(text, centerXPos, yPos, paint)
-                }
-
-                // 1. KOP SURAT BPBD KABUPATEN MUKOMUKO (Seragam Hitam & Bebas Tabrakan Logo)
+                // 1. KOP SURAT STANDAR RESMI SIPAGAR KITA (Seragam Hitam & Bebas Tabrakan Logo)
                 val centerX = A4_WIDTH / 2f
-                val logoSize = 48f
-                val logoTop = 36f
-                val logoBottom = logoTop + logoSize
-                val leftLogoRight = MARGIN + logoSize
-                val rightLogoLeft = A4_WIDTH - MARGIN - logoSize
-                val logoTextClearance = 14f
-                val maxKopTextWidth = (rightLogoLeft - logoTextClearance) - (leftLogoRight + logoTextClearance)
-
-                // Gambar Logo Kiri (Pemkab Mukomuko) & Kanan (BPBD) jika tersedia
-                try {
-                    val leftLogo = ReportExporter.getCleanTransparentLogo(context, isMukomukoShield = true)
-                    val rightLogo = ReportExporter.getCleanTransparentLogo(context, isMukomukoShield = false)
-                    if (leftLogo != null) {
-                        canvas.drawBitmap(leftLogo, null, RectF(MARGIN, logoTop, leftLogoRight, logoBottom), null)
-                    }
-                    if (rightLogo != null) {
-                        canvas.drawBitmap(rightLogo, null, RectF(rightLogoLeft, logoTop, A4_WIDTH - MARGIN, logoBottom), null)
-                    }
-                } catch (_: Exception) {
-                }
-
-                var y = 48f
-                titlePaint.color = Color.BLACK
-                drawCenteredFitText(
-                    text = "PEMERINTAH KABUPATEN MUKOMUKO",
-                    centerXPos = centerX,
-                    yPos = y,
-                    paint = titlePaint,
-                    maxWidth = maxKopTextWidth,
-                    defaultSize = 12.5f
+                var y = ReportExporter.drawKopSuratResmi(
+                    context = context,
+                    canvas = canvas,
+                    pageWidth = A4_WIDTH,
+                    margin = MARGIN,
+                    pageNumber = 1,
+                    spacingAfterLine = 30f
                 )
-                y += 16f
-                drawCenteredFitText(
-                    text = "BADAN PENANGGULANGAN BENCANA DAERAH",
-                    centerXPos = centerX,
-                    yPos = y,
-                    paint = titlePaint,
-                    maxWidth = maxKopTextWidth,
-                    defaultSize = 13.5f
-                )
-                y += 14f
-                drawCenteredFitText(
-                    text = "PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)",
-                    centerXPos = centerX,
-                    yPos = y,
-                    paint = titlePaint,
-                    maxWidth = maxKopTextWidth,
-                    defaultSize = 9.2f
-                )
-                y += 12f
-                val subKopPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.BLACK
-                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-                    textSize = 8.4f
-                    textAlign = Paint.Align.CENTER
-                }
-                drawCenteredFitText(
-                    text = "Jl. Imam Bonjol Komplek Perkantoran Pemda Kab. Mukomuko, Prov. Bengkulu 38365",
-                    centerXPos = centerX,
-                    yPos = y,
-                    paint = subKopPaint,
-                    maxWidth = maxKopTextWidth,
-                    defaultSize = 8.4f
-                )
-
-                // Garis pemisah Kop Surat diletakkan di bawah batas bawah logo agar bersih & proporsional
-                y = maxOf(y + 10f, logoBottom + 10f)
-                linePaint.color = Color.BLACK
-                linePaint.strokeWidth = 2.2f
-                canvas.drawLine(MARGIN, y, A4_WIDTH - MARGIN, y, linePaint)
-                y += 3f
-                linePaint.strokeWidth = 0.8f
-                canvas.drawLine(MARGIN, y, A4_WIDTH - MARGIN, y, linePaint)
 
                 // 2. JUDUL "SURAT TUGAS RELAWAN"
-                y += 30f
                 titlePaint.color = Color.BLACK
                 titlePaint.textSize = 15.5f
                 canvas.drawText("SURAT TUGAS RELAWAN", centerX, y, titlePaint)
+                linePaint.color = Color.BLACK
+                linePaint.strokeWidth = 0.8f
                 canvas.drawLine(centerX - 102f, y + 4f, centerX + 102f, y + 4f, linePaint)
 
                 y += 18f
@@ -529,7 +447,10 @@ object VolunteerAssignmentPdfGenerator {
             4 0 obj << /Length 320 >>
             stream
             BT
-            /F1 14 Tf 50 780 Td (PEMERINTAH KABUPATEN MUKOMUKO - BPBD) Tj
+            /F1 12 Tf 50 790 Td (${com.example.model.DocumentSettings.DEFAULT_KOP_LINE_1}) Tj
+            0 -15 Td (${com.example.model.DocumentSettings.DEFAULT_KOP_LINE_2}) Tj
+            0 -13 Td (${com.example.model.DocumentSettings.DEFAULT_KOP_LINE_3}) Tj
+            0 -12 Td (${com.example.model.DocumentSettings.DEFAULT_KOP_ADDRESS}) Tj
             0 -22 Td (SURAT TUGAS RELAWAN - Nomor: $letterNumber) Tj
             0 -20 Td (Nama: ${volunteer.fullName} | NIK: ${volunteer.nik}) Tj
             0 -18 Td (Keahlian: ${volunteer.skillsList().joinToString(", ")}) Tj

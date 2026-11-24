@@ -218,6 +218,11 @@ class SyncConflictHandler(
         val logs = conflictLogDao.getAllConflictLogsList()
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         val sb = StringBuilder()
+        val settings = com.example.data.repository.DocumentSettingsRepository.getCachedOrDefaultSettings(context)
+        com.example.util.ReportExporter.buildStandardKopLines(settings).forEach { line ->
+            sb.append("\"$line\"\n")
+        }
+        sb.append("\"DOKUMEN RESMI: LOG AUDIT KONFLIK SINKRONISASI DATA SIPAGAR KITA\"\n\n")
         sb.append("ID,Waktu Event,ID Laporan,Tipe Konflik,Resolusi,Status Lokal,Status Server,Petugas,Keterangan\n")
         for (log in logs) {
             val dateStr = sdf.format(Date(log.timestamp))

@@ -9,16 +9,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -126,24 +128,8 @@ fun DalaAssessmentScreen(
         onClose()
     }
 
-    val density = LocalDensity.current
-    val composeNavBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val activityNavBottom = remember(context, density) {
-        var c: android.content.Context? = context
-        while (c is android.content.ContextWrapper && c !is android.app.Activity) {
-            c = c.baseContext
-        }
-        val act = c as? android.app.Activity
-        val bottomPx = act?.window?.decorView?.let {
-            androidx.core.view.ViewCompat.getRootWindowInsets(it)
-                ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars())?.bottom
-        } ?: 0
-        with(density) { bottomPx.toDp() }
-    }
-    val safeBottomInset = maxOf(composeNavBottom, activityNavBottom, 24.dp)
-
     Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = WindowInsets.systemBars,
         modifier = Modifier.fillMaxSize(),
         topBar = {
             Column {
@@ -278,8 +264,8 @@ fun DalaAssessmentScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding()
-                        .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = safeBottomInset + 12.dp),
+                        .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -339,6 +325,7 @@ fun DalaAssessmentScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         ) {
             when (tabs[selectedTabIndex]) {
                 DalaTab.CASUALTIES -> DalaCasualtiesTab(

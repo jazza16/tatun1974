@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -56,6 +55,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.ImageNotSupported
@@ -408,6 +408,7 @@ fun OfficerDashboardConsoleView(
     var showFormLaporanHarian by remember { mutableStateOf(false) }
     var showDalaModule by remember { mutableStateOf(false) }
     var showVolunteerModule by remember { mutableStateOf(false) }
+    var showDownloadVolunteerArchiveDialog by remember { mutableStateOf(false) }
     var showSandboxPanel by remember { mutableStateOf(false) }
     var integrityCheckResult by remember { mutableStateOf<com.example.data.sync.IntegrityCheckResult?>(null) }
     var isCheckingIntegrity by remember { mutableStateOf(false) }
@@ -1180,6 +1181,26 @@ fun OfficerDashboardConsoleView(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(text = "Koordinasi Relawan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            // Tombol Unduh Daftar Data Seluruh Relawan (Khusus Sesi Aktif: Arsip, Pelaporan Berjenjang, & Pengakhiran Penanggulangan Bencana)
+                            Button(
+                                onClick = { showDownloadVolunteerArchiveDialog = true },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .heightIn(min = 40.dp)
+                                    .testTag("btn_command_bar_download_all_volunteers")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Unduh Daftar Data Seluruh Relawan",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "Unduh Data Relawan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
 
                             // Tombol Toggle Mode Latihan Petugas (Sandbox Simulasi Terisolasi)
@@ -2112,7 +2133,6 @@ fun OfficerDashboardConsoleView(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding()
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
@@ -3444,7 +3464,6 @@ fun OfficerDashboardConsoleView(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding()
                         .verticalScroll(rememberScrollState())
                 ) {
                     OutlinedTextField(
@@ -3959,6 +3978,194 @@ fun OfficerDashboardConsoleView(
         }
     }
 
+    // DIALOG UNDUH DAFTAR DATA SELURUH RELAWAN (SESI AKTIF: ARSIP, PELAPORAN BERJENJANG & PENGAKHIRAN PENANGGULANGAN BENCANA)
+    if (showDownloadVolunteerArchiveDialog) {
+        val archivePurposeOptions = remember {
+            listOf(
+                "Arsip & Pelaporan Berjenjang kepada Pihak Berkompeten",
+                "Dokumentasi Kegiatan Pengakhiran Waktu Penanggulangan Bencana",
+                "Arsip Gabungan Pelaporan Berjenjang & Dokumentasi Pasca Tanggap Darurat"
+            )
+        }
+        var selectedArchivePurpose by remember { mutableStateOf(archivePurposeOptions.first()) }
+
+        AlertDialog(
+            onDismissRequest = { showDownloadVolunteerArchiveDialog = false },
+            modifier = Modifier.testTag("dialog_download_volunteer_archive"),
+            icon = {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF0D9488),
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    text = "Unduh Daftar Data Seluruh Relawan",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF0F172A),
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Dokumen ini memuat daftar lengkap seluruh relawan kebencanaan terdaftar (NIK KTP 16 digit, Organisasi, Keahlian, Lokasi Posko, Waktu Check-in/Check-out, & Nomor Surat Tugas) untuk keperluan arsip resmi, pelaporan berjenjang kepada pihak berkompeten, serta dokumentasi pengakhiran waktu penanggulangan bencana.",
+                        fontSize = 11.5.sp,
+                        color = Color(0xFF334155),
+                        lineHeight = 16.sp
+                    )
+
+                    Text(
+                        text = "Pilih Peruntukan Dokumen:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF0F172A)
+                    )
+
+                    archivePurposeOptions.forEachIndexed { idx, purpose ->
+                        val isSelected = selectedArchivePurpose == purpose
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) Color(0xFFF0FDFA) else Color(0xFFF8FAFC),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) Color(0xFF0D9488) else Color(0xFFCBD5E1)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedArchivePurpose = purpose }
+                                .testTag("option_volunteer_archive_purpose_$idx")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.Assignment,
+                                    contentDescription = null,
+                                    tint = if (isSelected) Color(0xFF0D9488) else Color(0xFF64748B),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = purpose,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color(0xFF0F766E) else Color(0xFF334155)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val chosenPurpose = selectedArchivePurpose
+                                showDownloadVolunteerArchiveDialog = false
+                                coroutineScope.launch {
+                                    com.example.util.VolunteerDirectoryExporter.exportAllVolunteersFromDbToPdf(
+                                        context = context,
+                                        officerName = officerName,
+                                        officerNip = officerBadgeId,
+                                        officerRole = officerRole,
+                                        documentPurpose = chosenPurpose
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 44.dp)
+                                .testTag("btn_dialog_export_all_volunteers_pdf")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PictureAsPdf,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Unduh PDF",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                val chosenPurpose = selectedArchivePurpose
+                                showDownloadVolunteerArchiveDialog = false
+                                coroutineScope.launch {
+                                    com.example.util.VolunteerDirectoryExporter.exportAllVolunteersFromDbToCsv(
+                                        context = context,
+                                        officerName = officerName,
+                                        officerNip = officerBadgeId,
+                                        officerRole = officerRole,
+                                        documentPurpose = chosenPurpose
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 44.dp)
+                                .testTag("btn_dialog_export_all_volunteers_csv")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.TableChart,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Unduh CSV (Excel)",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                OutlinedButton(onClick = { showDownloadVolunteerArchiveDialog = false }) {
+                    Text("Tutup", fontSize = 11.5.sp)
+                }
+            }
+        )
+    }
+
     // 8. OFFICIAL OFFICER FOLLOW-UP NOTE EDITOR DIALOG
     if (noteEditingReport != null) {
         val activeRep = noteEditingReport!!
@@ -3993,7 +4200,6 @@ fun OfficerDashboardConsoleView(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding()
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
@@ -5573,7 +5779,6 @@ fun AdminAuthDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .imePadding()
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(

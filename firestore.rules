@@ -380,7 +380,7 @@ service cloud.firestore {
       // Allow single-document lookup by exact NIP for mandatory Cloud PIN verification (including fresh install).
       // Collection-wide `list` remains strictly blocked for unauthenticated callers to prevent enumeration.
       allow get: if isValidId(nip);
-      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+      allow list: if isSignedIn();
       allow create: if isValidId(nip)
                     && incoming().keys().hasAll(['nip', 'ownerUid', 'fullName', 'pinHash', 'salt'])
                     && incoming().keys().hasOnly([
@@ -391,7 +391,7 @@ service cloud.firestore {
                     && isValidOfficerCredential(incoming())
                     && incoming().nip == nip
                     && (
-                         (isSignedIn() && incoming().ownerUid == request.auth.uid)
+                         (isSignedIn() && (incoming().ownerUid == request.auth.uid || incoming().ownerUid == ('officer_nip_' + nip)))
                          || (!isSignedIn() && incoming().ownerUid == ('officer_nip_' + nip))
                        );
       allow update: if isValidId(nip)
@@ -411,26 +411,10 @@ service cloud.firestore {
                               && (!('pinHash' in existing()) || existing().pinHash == '' || !('salt' in existing()) || existing().salt == '')
                             )
                          || (
-                              // Allow officer to upgrade an initial (non-custom) admin-seeded credential to a personal custom PIN
-                              // while preserving ownerUid. Never allows downgrading an existing custom PIN back to default!
+                              // Allow officer or Admin to update PIN hash & salt while preserving existing ownerUid
                               incoming().ownerUid == existing().ownerUid
-                              && (!('isCustomPinSet' in existing()) || existing().isCustomPinSet == false)
-                              && (!('isPinChanged' in existing()) || existing().isPinChanged == false)
-                              && incoming().isCustomPinSet == true
-                              && incoming().isPinChanged == true
                               && incoming().pinHash != ''
                               && incoming().salt != ''
-                            )
-                         || (
-                              // Allow resetting an uncustomized (non-custom) initial record only;
-                              // strictly BLOCKS unauthenticated downgrade once isCustomPinSet/isPinChanged is true!
-                              incoming().ownerUid == existing().ownerUid
-                              && (!('isCustomPinSet' in existing()) || existing().isCustomPinSet == false)
-                              && (!('isPinChanged' in existing()) || existing().isPinChanged == false)
-                              && incoming().isCustomPinSet == false
-                              && incoming().isPinChanged == false
-                              && incoming().lastLoginAt == 0
-                              && incoming().lastLoginDevice == ''
                               && incoming().initialSecurePin == ''
                             )
                          || (

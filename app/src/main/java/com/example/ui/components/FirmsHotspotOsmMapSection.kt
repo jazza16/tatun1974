@@ -696,13 +696,14 @@ fun FirmsHotspotOsmMapSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Switch(
+                            SipagarSliderSwitch(
                                 checked = showFirmsWmsOverlay,
                                 onCheckedChange = { showFirmsWmsOverlay = it },
-                                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFDC2626)),
+                                compactTouchTarget = true,
+                                checkedThumbColor = Color(0xFFDC2626),
                                 modifier = Modifier.testTag("switch_osm_firms_wms_layer")
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Layer WMS FIRMS",
                                 fontSize = 11.sp,
@@ -712,13 +713,14 @@ fun FirmsHotspotOsmMapSection(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Switch(
+                            SipagarSliderSwitch(
                                 checked = isSimulationMode,
                                 onCheckedChange = { isSimulationMode = it },
-                                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFD97706)),
+                                compactTouchTarget = true,
+                                checkedThumbColor = Color(0xFFD97706),
                                 modifier = Modifier.testTag("switch_osm_firms_simulation_mode")
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Simulasi Posko",
                                 fontSize = 11.sp,

@@ -99,8 +99,19 @@ fun DalaSummaryTab(
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color.White,
+                        border = BorderStroke(1.dp, SummaryOrangeBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        StandardKopSuratHeader(
+                            compact = true,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                        )
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,

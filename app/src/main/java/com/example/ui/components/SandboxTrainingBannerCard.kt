@@ -170,18 +170,17 @@ fun SandboxTrainingControlCard(
                         }
                     }
 
-                    Switch(
+                    Spacer(modifier = Modifier.width(8.dp))
+                    SipagarSliderSwitch(
                         checked = isSandboxEnabled,
                         onCheckedChange = { enabled ->
                             SandboxTrainingManager.setSandboxModeEnabled(context, enabled)
                         },
                         modifier = Modifier.testTag("sandbox_training_toggle_switch"),
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color(0xFF78350F),
-                            checkedTrackColor = Color(0xFFFDE68A),
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = Color.White.copy(alpha = 0.35f)
-                        )
+                        checkedThumbColor = Color(0xFFFDE68A),
+                        checkedTrackColor = Color(0xFFFDE68A).copy(alpha = 0.45f),
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = Color.White.copy(alpha = 0.35f)
                     )
                 }
             }

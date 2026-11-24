@@ -283,23 +283,26 @@ fun CitizenReportMapView(
                     // Hazard Overlay Switch
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { showHazardOverlay = !showHazardOverlay }
+                        modifier = Modifier
+                            .heightIn(min = 32.dp)
+                            .clickable { showHazardOverlay = !showHazardOverlay }
+                            .padding(start = 6.dp)
                     ) {
                         Text(
                             text = "Layer Rawan",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (showHazardOverlay) Color(0xFFDC2626) else Color.Gray
+                            color = if (showHazardOverlay) Color(0xFFDC2626) else Color.Gray,
+                            maxLines = 1,
+                            softWrap = false
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Switch(
+                        Spacer(modifier = Modifier.width(6.dp))
+                        SipagarSliderSwitch(
                             checked = showHazardOverlay,
                             onCheckedChange = { showHazardOverlay = it },
-                            modifier = Modifier.size(width = 36.dp, height = 24.dp),
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = Color(0xFFDC2626)
-                            )
+                            compactTouchTarget = true,
+                            checkedThumbColor = Color(0xFFDC2626),
+                            modifier = Modifier.testTag("switch_hazard_overlay")
                         )
                     }
                 }

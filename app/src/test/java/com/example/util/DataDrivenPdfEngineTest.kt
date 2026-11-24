@@ -32,7 +32,7 @@ import org.robolectric.annotation.Config
 import retrofit2.Response
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class DataDrivenPdfEngineTest {
 
     private lateinit var context: Context
@@ -371,6 +371,51 @@ class DataDrivenPdfEngineTest {
         )
         assertTrue("Expected drawnSize ($drawnSize) in [5.5, 10.0]", drawnSize in 5.5f..10.0f)
         assertEquals(10.0f, basePaint.textSize, 0.01f)
+    }
+
+    @Test
+    fun `standard Kop Surat matches Kop Surat Tugas Relawan and migrates legacy cached defaults`() {
+        val defaultSettings = DocumentSettings().clamped()
+        assertEquals("PEMERINTAH KABUPATEN MUKOMUKO", defaultSettings.kopHeaderLine1)
+        assertEquals("BADAN PENANGGULANGAN BENCANA DAERAH", defaultSettings.kopHeaderLine2)
+        assertEquals(
+            "PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)",
+            defaultSettings.kopHeaderLine3
+        )
+        assertEquals(
+            "Jl. Imam Bonjol Komplek Perkantoran Pemda Kab. Mukomuko, Prov. Bengkulu 38365",
+            defaultSettings.kopAddressLine
+        )
+
+        // Legacy cached defaults must auto-migrate to the new Standard Kop Surat
+        val legacyJson = """
+            {
+              "kopHeaderLine1": "PEMERINTAH KABUPATEN MUKOMUKO",
+              "kopHeaderLine2": "BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)",
+              "kopHeaderLine3": "PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)",
+              "kopAddressLine": "Jl. Danau Nibung, Kompleks Perkantoran Pemkab Mukomuko • Call Center Darurat 117 • Sistem SIPAGAR KITA"
+            }
+        """.trimIndent()
+        val migrated = DocumentSettings.fromJson(legacyJson)!!
+        assertEquals(DocumentSettings.DEFAULT_KOP_LINE_2, migrated.kopHeaderLine2)
+        assertEquals(DocumentSettings.DEFAULT_KOP_ADDRESS, migrated.kopAddressLine)
+
+        val lines = ReportExporter.buildStandardKopLines(migrated)
+        assertEquals(4, lines.size)
+        assertEquals(DocumentSettings.DEFAULT_KOP_ADDRESS, lines[3])
+
+        val plainText = ReportExporter.buildStandardKopPlainText(migrated)
+        assertTrue(plainText.contains("PEMERINTAH KABUPATEN MUKOMUKO"))
+        assertTrue(plainText.contains("BADAN PENANGGULANGAN BENCANA DAERAH"))
+        assertTrue(plainText.contains("Jl. Imam Bonjol Komplek Perkantoran Pemda Kab. Mukomuko, Prov. Bengkulu 38365"))
+
+        // Verify Canvas drawKopSuratResmi returns consistent Y for page 1 and skips page 2+
+        val bmp = Bitmap.createBitmap(595, 842, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val yPage1 = ReportExporter.drawKopSuratResmi(context, canvas, 595, margin = 36f, pageNumber = 1, documentSettings = migrated)
+        val yPage2 = ReportExporter.drawKopSuratResmi(context, canvas, 595, margin = 36f, pageNumber = 2, documentSettings = migrated)
+        assertTrue("Expected page 1 Kop Y ($yPage1) in [110, 130]", yPage1 in 110f..130f)
+        assertEquals(36f, yPage2, 0.01f)
     }
 
     private class FakeDocumentTemplateApi(

@@ -356,6 +356,9 @@ class SmartOfficerAuthRepository(private val context: Context) {
         var preservedExistingCustomPin = false
         var existingOwnerUid: String? = null
 
+        val isEffectivePinInitialNip = isValidFirstTimeActivationPin(cleanNip, effectiveInitialPin)
+        val shouldMarkCustomPin = !customInitialPin.isNullOrBlank() && !isEffectivePinInitialNip
+
         val credentialToSync = when (existingCloudLookup) {
             is CloudCredentialLookupResult.Found -> {
                 existingOwnerUid = existingCloudLookup.ownerUid
@@ -388,7 +391,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
                         phone = resolvedPhone,
                         pinHash = pinHash,
                         salt = salt,
-                        isCustomPinSet = !customInitialPin.isNullOrBlank(),
+                        isCustomPinSet = shouldMarkCustomPin,
                         initialSecurePin = "",
                         isSyncedWithCloud = true,
                         updatedAt = now
@@ -407,7 +410,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
                     phone = resolvedPhone,
                     pinHash = pinHash,
                     salt = salt,
-                    isCustomPinSet = !customInitialPin.isNullOrBlank(),
+                    isCustomPinSet = shouldMarkCustomPin,
                     initialSecurePin = "",
                     lastLoginAt = 0L,
                     lastLoginDevice = "Terdaftar via Kelola Petugas (${Build.MANUFACTURER} ${Build.MODEL})",
@@ -420,7 +423,8 @@ class SmartOfficerAuthRepository(private val context: Context) {
         val cloudCredSyncResult = FirestoreHelper.syncCredentialToCloudSuspend(
             credential = credentialToSync,
             context = context,
-            preserveOwnerUid = existingOwnerUid
+            preserveOwnerUid = existingOwnerUid,
+            overwriteFullDocument = !customInitialPin.isNullOrBlank()
         )
 
         // 5. Cache sanitized metadata into local Room `officer_credentials`
@@ -913,8 +917,8 @@ class SmartOfficerAuthRepository(private val context: Context) {
                 val needsHashActivation = existingCred.pinHash.isBlank() ||
                     (existingCred.salt.isBlank() && existingCred.pinHash.trim().length != 64)
                 val hasServerPlainPin = !cloudLookup.serverPlainPin.isNullOrBlank()
-                if (needsHashActivation && !hasServerPlainPin && !existingCred.isCustomPinSet && !existingCred.isPinChanged) {
-                    // Existing Firestore doc without cryptographic hash (e.g. seeded via createDefault() or partial Console doc):
+                if (needsHashActivation && !hasServerPlainPin) {
+                    // Existing Firestore doc without cryptographic hash (even if isCustomPinSet was left true):
                     // Activate securely if NIP is an official registered officer and PIN matches unique NIP activation key.
                     val registeredOfficer = findRegisteredOfficerMetadata(cleanLookupNip)
                     val matchesUniqueNipKey = isValidFirstTimeActivationPin(cleanLookupNip, trimmedPin)
@@ -1068,8 +1072,11 @@ class SmartOfficerAuthRepository(private val context: Context) {
 
         val credential = foundCloudRecord.credential
 
+        // 3. STRICT SERVER CREDENTIAL MATCHING (Zero local default fallback)
+        val isPinCorrect = verifyAgainstCloudRecord(trimmedPin, foundCloudRecord)
+
         // Block old 6-digit NIP initial PIN if officer already changed PIN in Cloud
-        // (unless Admin explicitly configured matching serverPlainPin in Firebase Console)
+        // (i.e. isPinCorrect is false AND the officer typed their 6-digit NIP while isCustomPinSet == true)
         val sixDigitNip = OfficerCredentialEntity.generateInitialPinForNip(credential.nip)
         val rawLastSixNip = credential.nip.trim().takeLast(6)
         val isInputSixDigitNip = trimmedPin.equals(sixDigitNip, ignoreCase = true) ||
@@ -1078,7 +1085,7 @@ class SmartOfficerAuthRepository(private val context: Context) {
             !FORBIDDEN_DEFAULT_PINS.any { it.equals(pinVal, ignoreCase = true) } &&
                 OfficerCredentialEntity.constantTimeEqualsPlain(trimmedPin, pinVal)
         } == true
-        if ((credential.isPinChanged || credential.isCustomPinSet) && isInputSixDigitNip && !adminConfiguredSamePlainPin) {
+        if (!isPinCorrect && (credential.isPinChanged || credential.isCustomPinSet) && isInputSixDigitNip && !adminConfiguredSamePlainPin) {
             safeInsertAuditLog(
                 PersonnelAuditLogEntity(
                     nip = trimmedNip,
@@ -1108,8 +1115,6 @@ class SmartOfficerAuthRepository(private val context: Context) {
             )
         }
 
-        // 3. STRICT SERVER CREDENTIAL MATCHING (Zero local default fallback)
-        val isPinCorrect = verifyAgainstCloudRecord(trimmedPin, foundCloudRecord)
         if (!isPinCorrect) {
             val currentFailures = (failedAttemptMap[lockoutKey]?.takeIf { it.lockedUntilMs <= System.currentTimeMillis() }?.count ?: 0) + 1
             val lockUntil = if (currentFailures >= MAX_FAILED_ATTEMPTS) System.currentTimeMillis() + LOCKOUT_DURATION_MS else 0L
@@ -1167,8 +1172,14 @@ class SmartOfficerAuthRepository(private val context: Context) {
         val now = System.currentTimeMillis()
         val deviceDesc = "$deviceModel (Android ${Build.VERSION.RELEASE})"
 
+        val healedCustomPinSet = if (isInputSixDigitNip && !adminConfiguredSamePlainPin) {
+            false
+        } else {
+            credential.isCustomPinSet
+        }
         val resolvedCredential = credential.copy(
             role = effectiveDynamicRole,
+            isCustomPinSet = healedCustomPinSet,
             lastLoginAt = now,
             lastLoginDevice = deviceDesc,
             updatedAt = now

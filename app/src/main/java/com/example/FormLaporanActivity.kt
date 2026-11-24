@@ -48,11 +48,14 @@ class FormLaporanActivity : AppCompatActivity() {
         val rootView = findViewById<View>(R.id.rootFormLaporan)
         val bottomNavContainer = findViewById<View>(R.id.bottomNavContainer)
         val basePaddingPx = (16 * resources.displayMetrics.density).toInt()
+        val compactVerticalPx = (10 * resources.displayMetrics.density).toInt()
         if (rootView != null && bottomNavContainer != null) {
             ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, windowInsets ->
                 val bars = windowInsets.getInsets(
                     WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
                 )
+                val imeVisible = windowInsets.isVisible(WindowInsetsCompat.Type.ime())
+                val verticalPad = if (imeVisible) compactVerticalPx else basePaddingPx
                 view.updatePadding(
                     left = bars.left,
                     top = bars.top,
@@ -60,11 +63,11 @@ class FormLaporanActivity : AppCompatActivity() {
                 )
                 bottomNavContainer.updatePadding(
                     left = basePaddingPx,
-                    top = basePaddingPx,
+                    top = verticalPad,
                     right = basePaddingPx,
-                    bottom = basePaddingPx + bars.bottom
+                    bottom = verticalPad + bars.bottom
                 )
-                windowInsets
+                WindowInsetsCompat.CONSUMED
             }
         }
 

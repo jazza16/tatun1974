@@ -68,6 +68,7 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -137,6 +138,7 @@ import com.example.data.local.VolunteerStatus
 import com.example.data.repository.VolunteerRegistrationResult
 import com.example.data.repository.VolunteerRepository
 import com.example.util.VolunteerAssignmentPdfGenerator
+import com.example.util.VolunteerDirectoryExporter
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -274,6 +276,32 @@ fun VolunteerCoordinationScreen(
                 officerName = officerName.ifBlank { volunteer.verifiedByOfficer.ifBlank { "HITATUN ARAZAK" } }
             )
             previewSuratTugasVolunteer = volunteer
+        }
+    }
+
+    val handleExportAllVolunteersPdf: (String) -> Unit = { purpose ->
+        coroutineScope.launch {
+            VolunteerDirectoryExporter.exportVolunteersToPdf(
+                context = context,
+                volunteers = volunteers,
+                officerName = officerName.ifBlank { "Petugas Sesi Aktif" },
+                officerNip = officerNip,
+                officerRole = officerRole,
+                documentPurpose = purpose
+            )
+        }
+    }
+
+    val handleExportAllVolunteersCsv: (String) -> Unit = { purpose ->
+        coroutineScope.launch {
+            VolunteerDirectoryExporter.exportVolunteersToCsv(
+                context = context,
+                volunteers = volunteers,
+                officerName = officerName.ifBlank { "Petugas Sesi Aktif" },
+                officerNip = officerNip,
+                officerRole = officerRole,
+                documentPurpose = purpose
+            )
         }
     }
 
@@ -589,7 +617,11 @@ fun VolunteerCoordinationScreen(
                     totalTerverifikasi = totalTerverifikasi,
                     totalSedangBertugas = totalSedangBertugas,
                     totalButuhBantuan = totalButuhBantuan,
+                    isOfficerLoggedIn = isOfficerLoggedIn,
                     isAdminView = isEffectiveAdminView,
+                    officerName = officerName,
+                    onExportAllVolunteersPdf = handleExportAllVolunteersPdf,
+                    onExportAllVolunteersCsv = handleExportAllVolunteersCsv,
                     onNavigateToRegister = { selectedTab = 1 },
                     onNavigateToVerification = { selectedTab = 2 },
                     onOpenDetailVolunteer = { volunteer ->
@@ -648,6 +680,8 @@ fun VolunteerCoordinationScreen(
                     isOfficerLoggedIn = isOfficerLoggedIn,
                     isEffectiveAdminView = isEffectiveAdminView,
                     officerName = officerName,
+                    onExportAllVolunteersPdf = handleExportAllVolunteersPdf,
+                    onExportAllVolunteersCsv = handleExportAllVolunteersCsv,
                     onRequestOfficerLogin = onRequestOfficerLogin,
                     onDisablePublicSimulation = { simulatePublicPrivacyMask = false },
                     onVerifyVolunteer = { volunteer ->
@@ -834,7 +868,11 @@ private fun VolunteerDashboardTabContent(
     totalTerverifikasi: Int,
     totalSedangBertugas: Int,
     totalButuhBantuan: Int,
+    isOfficerLoggedIn: Boolean,
     isAdminView: Boolean,
+    officerName: String,
+    onExportAllVolunteersPdf: (String) -> Unit,
+    onExportAllVolunteersCsv: (String) -> Unit,
     onNavigateToRegister: () -> Unit,
     onNavigateToVerification: () -> Unit,
     onOpenDetailVolunteer: (VolunteerEntity) -> Unit,
@@ -931,6 +969,18 @@ private fun VolunteerDashboardTabContent(
                         modifier = Modifier.weight(1f)
                     )
                 }
+            }
+        }
+
+        // 1B. Panel Unduh Data Seluruh Relawan (Khusus Sesi Aktif Petugas: Arsip, Pelaporan Berjenjang, & Pengakhiran Penanggulangan Bencana)
+        if (isOfficerLoggedIn) {
+            item(key = "active_session_volunteer_archive_export_card") {
+                VolunteerActiveSessionArchiveExportCard(
+                    totalVolunteers = volunteers.size,
+                    officerName = officerName,
+                    onExportPdf = onExportAllVolunteersPdf,
+                    onExportCsv = onExportAllVolunteersCsv
+                )
             }
         }
 
@@ -3065,6 +3115,8 @@ private fun VolunteerVerificationTabContent(
     isOfficerLoggedIn: Boolean,
     isEffectiveAdminView: Boolean,
     officerName: String,
+    onExportAllVolunteersPdf: (String) -> Unit,
+    onExportAllVolunteersCsv: (String) -> Unit,
     onRequestOfficerLogin: (() -> Unit)?,
     onDisablePublicSimulation: () -> Unit,
     onVerifyVolunteer: (VolunteerEntity) -> Unit,
@@ -3219,6 +3271,18 @@ private fun VolunteerVerificationTabContent(
                         }
                     }
                 }
+            }
+        }
+
+        // Panel Unduh Data Seluruh Relawan dalam Sesi Aktif pada Tab Verifikasi & Penugasan
+        if (isOfficerLoggedIn) {
+            item(key = "verify_tab_volunteer_archive_export_card") {
+                VolunteerActiveSessionArchiveExportCard(
+                    totalVolunteers = volunteers.size,
+                    officerName = officerName,
+                    onExportPdf = onExportAllVolunteersPdf,
+                    onExportCsv = onExportAllVolunteersCsv
+                )
             }
         }
 
@@ -4166,31 +4230,8 @@ private fun SuratTugasDigitalPreviewDialog(
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Kop Surat BPBD Mukomuko
-                    Text(
-                        text = "PEMERINTAH KABUPATEN MUKOMUKO",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "BADAN PENANGGULANGAN BENCANA DAERAH",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF0F172A),
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "PUSDALOPS-PB KABUPATEN MUKOMUKO",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFFEA580C),
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-                    HorizontalDivider(thickness = 2.dp, color = Color(0xFF0F172A))
+                    // Kop Surat Standar Resmi SIPAGAR KITA
+                    StandardKopSuratHeader(compact = true)
                     Spacer(modifier = Modifier.height(10.dp))
 
                     // Judul "SURAT TUGAS RELAWAN"
@@ -4300,3 +4341,212 @@ private fun copyVolunteerPhotoToInternalStorage(
         sourceUri.toString()
     }
 }
+
+/**
+ * Panel Unduh Daftar Data Seluruh Relawan (Khusus Sesi Aktif Petugas):
+ * Digunakan untuk arsip resmi, pelaporan secara berjenjang kepada pihak yang berkompeten,
+ * maupun dalam pengakhiran waktu Penanggulangan Bencana sebagai Dokumentasi Kegiatan.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun VolunteerActiveSessionArchiveExportCard(
+    totalVolunteers: Int,
+    officerName: String,
+    onExportPdf: (purpose: String) -> Unit,
+    onExportCsv: (purpose: String) -> Unit
+) {
+    val purposeOptions = remember {
+        listOf(
+            "Arsip & Pelaporan Berjenjang kepada Pihak Berkompeten",
+            "Dokumentasi Kegiatan Pengakhiran Waktu Penanggulangan Bencana",
+            "Arsip Gabungan Pelaporan Berjenjang & Dokumentasi Pasca Tanggap Darurat"
+        )
+    }
+    var selectedPurpose by rememberSaveable { mutableStateOf(purposeOptions.first()) }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+        border = BorderStroke(1.dp, Color(0xFF0D9488)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("card_volunteer_active_session_export")
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFF0D9488).copy(alpha = 0.22f),
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                tint = Color(0xFF2DD4BF),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "UNDUH DAFTAR DATA SELURUH RELAWAN ($totalVolunteers PERSONEL)",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Arsip Pelaporan Berjenjang & Dokumentasi Pengakhiran Penanggulangan Bencana",
+                            fontSize = 9.5.sp,
+                            color = Color(0xFF99F6E4),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFF065F46),
+                    border = BorderStroke(1.dp, Color(0xFF10B981))
+                ) {
+                    Text(
+                        text = "SESI AKTIF",
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = "Unduh daftar lengkap seluruh relawan (NIK KTP utuh, Organisasi, Keahlian, Posko Penugasan, Waktu Check-in/Out, & Nomor Surat Tugas) untuk pelaporan berjenjang kepada pimpinan/instansi berkompeten atau dokumentasi pengakhiran operasi penanggulangan bencana.",
+                fontSize = 10.sp,
+                color = Color(0xFFCBD5E1),
+                lineHeight = 14.sp
+            )
+
+            // Pilihan Peruntukan Dokumen Arsip / Pelaporan
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Pilih Peruntukan Dokumen:",
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF94A3B8)
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    purposeOptions.forEachIndexed { idx, option ->
+                        val isSelected = selectedPurpose == option
+                        val shortLabel = when (idx) {
+                            0 -> "Pelaporan Berjenjang"
+                            1 -> "Pengakhiran Penanggulangan Bencana"
+                            else -> "Arsip & Dokumentasi Lengkap"
+                        }
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedPurpose = option },
+                            label = {
+                                Text(
+                                    text = shortLabel,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFF0D9488),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color(0xFF1E293B),
+                                labelColor = Color(0xFFCBD5E1)
+                            ),
+                            modifier = Modifier.testTag("chip_volunteer_export_purpose_$idx")
+                        )
+                    }
+                }
+            }
+
+            // Dua Tombol Unduh Utama: PDF Resmi Berkop Surat & CSV (Excel)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { onExportPdf(selectedPurpose) },
+                    shape = RoundedCornerShape(9.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 44.dp)
+                        .testTag("btn_download_all_volunteers_pdf")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PictureAsPdf,
+                        contentDescription = "Unduh PDF Data Seluruh Relawan",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Unduh PDF Relawan",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                Button(
+                    onClick = { onExportCsv(selectedPurpose) },
+                    shape = RoundedCornerShape(9.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 44.dp)
+                        .testTag("btn_download_all_volunteers_csv")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.TableChart,
+                        contentDescription = "Unduh CSV Excel Data Seluruh Relawan",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Unduh CSV (Excel)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+        }
+    }
+}
+

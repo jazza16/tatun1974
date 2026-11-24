@@ -723,7 +723,7 @@ object PdfGenerator {
             append("1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n")
             append("2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n")
             append("3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R >> endobj\n")
-            val textStream = "BT /F1 12 Tf 36 800 Td ($watermarkLine - ${laporan.jenisBencana} - ${laporan.lokasi}) Tj ET"
+            val textStream = "BT /F1 11 Tf 36 800 Td (${DocumentSettings.DEFAULT_KOP_LINE_1}) Tj 0 -14 Td (${DocumentSettings.DEFAULT_KOP_LINE_2}) Tj 0 -12 Td (${DocumentSettings.DEFAULT_KOP_LINE_3}) Tj 0 -12 Td (${DocumentSettings.DEFAULT_KOP_ADDRESS}) Tj 0 -20 Td ($watermarkLine - ${laporan.jenisBencana} - ${laporan.lokasi}) Tj ET"
             append("4 0 obj << /Length ${textStream.length} >> stream\n$textStream\nendstream endobj\n")
             append("trailer << /Root 1 0 R >>\n")
             append("%%EOF\n")

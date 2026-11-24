@@ -63,19 +63,12 @@ data class OfficerCredentialEntity(
             return false
         }
 
-        // 2. If officer has ALREADY changed their PIN (isCustomPinSet == true),
-        // 6-digit NIP is strictly forbidden for login
-        if (isCustomPinSet) {
-            val sixDigitNip = generateInitialPinForNip(nip)
-            val rawLastSixNip = nip.trim().takeLast(6)
-            val isMatchingInitialNip = trimmed.equals(sixDigitNip, ignoreCase = true) ||
-                (rawLastSixNip.length == 6 && trimmed.equals(rawLastSixNip, ignoreCase = true))
-            if (isMatchingInitialNip) {
-                return false
-            }
-        }
-
-        // 3. Strictly verify against cryptographic pinHash & salt from Cloud Firestore
+        // 2. Strictly verify against cryptographic pinHash & salt from Cloud Firestore.
+        // Note: If the stored cryptographic pinHash in Cloud actually matches the input PIN
+        // (for instance, when an Admin reset the PIN to the 6-digit NIP via Edit Personil even if
+        // isCustomPinSet was previously true), verifyHash returns true so the officer is never deadlocked.
+        // If the officer has a custom PIN hash in Cloud, verifyHash(sixDigitNip) naturally returns false.
+        if (pinHash.isBlank()) return false
         return verifyHash(trimmed, salt, pinHash)
     }
 

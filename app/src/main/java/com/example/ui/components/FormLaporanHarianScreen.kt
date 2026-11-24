@@ -17,17 +17,19 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -371,10 +373,9 @@ fun FormLaporanHarianScreen(
     val weatherOptions = listOf("Cerah", "Cerah Berawan", "Berawan", "Hujan Ringan", "Hujan Lebat", "Angin Kencang")
 
     Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = WindowInsets.systemBars,
         modifier = modifier
             .fillMaxSize()
-            .safeDrawingPadding()
             .testTag("form_laporan_harian_screen"),
         topBar = {
             TopAppBar(
@@ -415,9 +416,8 @@ fun FormLaporanHarianScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .imePadding()
-                        .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 22.dp),
+                        .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -568,6 +568,7 @@ fun FormLaporanHarianScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
                 .background(Color(0xFFF5F5F5))
         ) {
             SandboxTrainingCompactNoticeBanner(
@@ -970,9 +971,8 @@ private fun Step1DataKejadian(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // KARTU 1: INFO PETUGAS & TOMBOL "DARI WARGA" DENGAN BADGE NOTIFIKASI MERAH
@@ -1291,9 +1291,8 @@ private fun Step2DampakDanKorban(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
@@ -1413,9 +1412,8 @@ private fun Step3UpayaDanKondisi(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
@@ -1494,9 +1492,8 @@ private fun Step4AdministrasiDanKomunikasi(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 110.dp),
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
@@ -1944,7 +1941,6 @@ private fun DialogTambahLogKomunikasi(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .imePadding()
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
