@@ -408,6 +408,7 @@ fun OfficerDashboardConsoleView(
     var showFormLaporanHarian by remember { mutableStateOf(false) }
     var showDalaModule by remember { mutableStateOf(false) }
     var showVolunteerModule by remember { mutableStateOf(false) }
+    var showPoskoLogisticsModule by remember { mutableStateOf(false) }
     var showDownloadVolunteerArchiveDialog by remember { mutableStateOf(false) }
     var showSandboxPanel by remember { mutableStateOf(false) }
     var integrityCheckResult by remember { mutableStateOf<com.example.data.sync.IntegrityCheckResult?>(null) }
@@ -1250,6 +1251,45 @@ fun OfficerDashboardConsoleView(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
+                            }
+
+                            // BARIS 2B: Modul Manajemen Pengungsi & Logistik Posko (Indikator Kritis < 10, FEFO, & Anti-Duplikasi NIK)
+                            val poskoRepo = remember { com.example.data.repository.PoskoLogisticsRepository.getInstance(context) }
+                            val poskoLogisticStocks by poskoRepo.logisticStocks.collectAsStateWithLifecycle()
+                            val criticalLogisticCount = remember(poskoLogisticStocks) {
+                                poskoLogisticStocks.count { it.isCritical }
+                            }
+                            Button(
+                                onClick = { showPoskoLogisticsModule = true },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (criticalLogisticCount > 0) Color(0xFFB91C1C) else Color(0xFF1D4ED8)
+                                ),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp)
+                                    .testTag("btn_open_posko_logistics_module")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Archive,
+                                    contentDescription = "Buka Modul Manajemen Posko & Logistik",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (criticalLogisticCount > 0) {
+                                        "Manajemen Posko & Logistik ($criticalLogisticCount Stok Kritis <10)"
+                                    } else {
+                                        "Manajemen Posko & Logistik (FEFO & NIK)"
+                                    },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
 
                             // BARIS 3: Ekspor Dokumen Resmi PDF & CSV (2 Kolom Simetris 50% : 50% untuk Tier 1 & Tier 2 atau Mode Latihan)
@@ -4313,7 +4353,7 @@ fun OfficerDashboardConsoleView(
             onDismissRequest = { showDatabaseExplorer = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
+                decorFitsSystemWindows = true
             )
         ) {
             DatabaseExplorerScreen(
@@ -4381,7 +4421,7 @@ fun OfficerDashboardConsoleView(
             onDismissRequest = { showFormLaporanHarian = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
+                decorFitsSystemWindows = true
             )
         ) {
             FormLaporanHarianScreen(
@@ -4397,7 +4437,7 @@ fun OfficerDashboardConsoleView(
             onDismissRequest = { showDalaModule = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
+                decorFitsSystemWindows = true
             )
         ) {
             DalaAssessmentScreen(
@@ -4414,7 +4454,7 @@ fun OfficerDashboardConsoleView(
             onDismissRequest = { showVolunteerModule = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
+                decorFitsSystemWindows = true
             )
         ) {
             VolunteerCoordinationScreen(
@@ -4423,6 +4463,24 @@ fun OfficerDashboardConsoleView(
                 officerNip = officerBadgeId,
                 officerRole = officerRole,
                 onClose = { showVolunteerModule = false }
+            )
+        }
+    }
+
+    // FULL SCREEN DIALOG MODUL MANAJEMEN POSKO, PENGUNGSI, & LOGISTIK DARURAT (MASTER PRD)
+    if (showPoskoLogisticsModule) {
+        Dialog(
+            onDismissRequest = { showPoskoLogisticsModule = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = true
+            )
+        ) {
+            PoskoLogisticsManagementScreen(
+                officerName = officerName,
+                officerNip = officerBadgeId,
+                officerRole = officerRole,
+                onClose = { showPoskoLogisticsModule = false }
             )
         }
     }

@@ -90,6 +90,7 @@ import com.example.model.UrgentNeedItem
 import com.example.model.UrgentNeedStatus
 import com.example.model.VulnerableGroupCategory
 import com.example.viewmodel.DalaAssessmentStateManager
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 private val BpbdOrange = Color(0xFFEA580C)
 private val BpbdOrangeSoft = Color(0xFFFFF7ED)
@@ -313,13 +314,147 @@ fun DalaCasualtiesTab(
         "Lapangan / Tenda BPBD"
     )
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val poskoRepository = remember { com.example.data.repository.PoskoLogisticsRepository.getInstance(context) }
+    val poskoUnits by poskoRepository.poskoUnits.collectAsStateWithLifecycle()
+    val lockedSnapshot by poskoRepository.dalaLockedSnapshot.collectAsStateWithLifecycle()
+
+    val activePoskoSnapshot = remember(poskoUnits, lockedSnapshot) {
+        lockedSnapshot ?: poskoRepository.getLiveAggregatedSnapshot()
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .testTag("dala_tab_casualties_list"),
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // 0. PANEL READ-ONLY AUTO-POPULATE PENGUNGSI DARI MODUL POSKO & LOGISTIK (TAHAP 4 PRD)
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (activePoskoSnapshot.isLocked) Color(0xFF0F172A) else Color(0xFF1E293B)
+                ),
+                border = BorderStroke(
+                    width = 1.5.dp,
+                    color = if (activePoskoSnapshot.isLocked) Color(0xFF38BDF8) else BpbdOrange
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("card_dala_posko_autopopulate_readonly")
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (activePoskoSnapshot.isLocked) {
+                                "DATA PENGUNGSI POSKO (SNAPSHOT TERKUNCI)"
+                            } else {
+                                "DATA PENGUNGSI POSKO (AUTO-POPULATE)"
+                            },
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (activePoskoSnapshot.isLocked) Color(0xFF38BDF8) else Color(0xFFFBBF24),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color.Black.copy(alpha = 0.45f)
+                        ) {
+                            Text(
+                                text = "READ-ONLY",
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Incident: ${activePoskoSnapshot.incidentId} (${activePoskoSnapshot.activePoskoCount} Posko Aktif) • Status: ${activePoskoSnapshot.lockedAtIso}",
+                        fontSize = 11.sp,
+                        color = Color(0xFFCBD5E1)
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color.Black.copy(alpha = 0.35f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Total Pengungsi Terdata Posko:",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF94A3B8)
+                                )
+                                Text(
+                                    text = "${activePoskoSnapshot.totalJiwa} Jiwa",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Lansia: ${activePoskoSnapshot.lansia} • Ibu Hamil: ${activePoskoSnapshot.ibuHamil} • Balita: ${activePoskoSnapshot.balita} • Disabilitas: ${activePoskoSnapshot.disabilitas}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFFDE047)
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val snap = poskoRepository.captureAndLockDalaSnapshot(state.officerName)
+                            android.widget.Toast.makeText(
+                                context,
+                                "Snapshot Data Posko (${snap.totalJiwa} Jiwa) dikunci untuk Laporan DaLA!",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (activePoskoSnapshot.isLocked) Color(0xFF0284C7) else BpbdOrange
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 44.dp)
+                            .testTag("btn_dala_capture_posko_snapshot")
+                    ) {
+                        Text(
+                            text = if (activePoskoSnapshot.isLocked) {
+                                "PERBARUI & KUNCI ULANG SNAPSHOT DATA POSKO"
+                            } else {
+                                "AMBIL SNAPSHOT DATA POSKO (KUNCI DATA)"
+                            },
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
         // Identitas Kejadian (Collapsible agar tidak memenuhi layar)
         item {
             DalaAccordionCard(

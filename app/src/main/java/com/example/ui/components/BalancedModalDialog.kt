@@ -128,3 +128,72 @@ fun BalancedModalDialog(
         }
     }
 }
+
+data class AdaptiveSystemBarInsets(
+    val topBarInset: Dp,
+    val bottomNavInset: Dp,
+    val imeBottomInset: Dp,
+    val effectiveBottomInset: Dp,
+    val isThreeButtonNavigation: Boolean
+)
+
+/**
+ * Helper WindowInsets Adaptif untuk memastikan 100% kompatibilitas pada:
+ * 1. Mode Navigasi 3 Tombol (Three-Button Navigation Bar: Back, Home, Recents ~48dp-56dp)
+ * 2. Mode Navigasi 2 Tombol (Pill Navigation)
+ * 3. Mode Navigasi Penuh / Usap (Gesture Navigation ~16dp-24dp)
+ *
+ * Membaca insets langsung dari Activity `decorView` sekaligus `WindowInsets` Compose,
+ * karena di dalam full-screen `Dialog(decorFitsSystemWindows = false)` WindowInsets Compose
+ * terkadang bernilai 0.dp untuk bilah navigasi 3 tombol.
+ */
+@Composable
+fun rememberAdaptiveSystemBarInsets(): AdaptiveSystemBarInsets {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+
+    val (activityStatusTop, activityNavBottom, isThreeButtonMode) = remember(context, density) {
+        var c: Context? = context
+        while (c is ContextWrapper && c !is Activity) {
+            c = c.baseContext
+        }
+        val decorView = (c as? Activity)?.window?.decorView
+        val rootInsets = decorView?.let { ViewCompat.getRootWindowInsets(it) }
+        val statusPx = rootInsets?.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.statusBars())?.top
+            ?: rootInsets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top
+            ?: 0
+        val navPx = rootInsets?.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.navigationBars())?.bottom
+            ?: rootInsets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom
+            ?: 0
+
+        // Deteksi mode navigasi Android (0 = 3-button, 1 = 2-button, 2 = gesture)
+        val navModeInt = runCatching {
+            val resId = context.resources.getIdentifier("config_navBarInteractionMode", "integer", "android")
+            if (resId > 0) context.resources.getInteger(resId) else -1
+        }.getOrDefault(-1)
+
+        val navDp = with(density) { navPx.toDp() }
+        val statusDp = with(density) { statusPx.toDp() }
+        val detectedThreeButton = (navModeInt == 0 || navModeInt == 1) || navDp >= 40.dp
+        val guaranteedNavBottom = if (detectedThreeButton) maxOf(navDp, 52.dp) else maxOf(navDp, 24.dp)
+
+        Triple(statusDp, guaranteedNavBottom, detectedThreeButton)
+    }
+
+    val composeStatusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val composeNavBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val composeImeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+
+    val finalTop = maxOf(composeStatusTop, activityStatusTop)
+    val finalNavBottom = maxOf(composeNavBottom, activityNavBottom)
+    val effectiveBottom = maxOf(finalNavBottom, composeImeBottom)
+
+    return AdaptiveSystemBarInsets(
+        topBarInset = finalTop,
+        bottomNavInset = finalNavBottom,
+        imeBottomInset = composeImeBottom,
+        effectiveBottomInset = effectiveBottom,
+        isThreeButtonNavigation = isThreeButtonMode || finalNavBottom >= 40.dp
+    )
+}
+

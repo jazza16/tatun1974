@@ -3715,7 +3715,7 @@ fun CitizenReportScreen(
             onDismissRequest = { showVolunteerCoordinationDialog = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
+                decorFitsSystemWindows = true
             )
         ) {
             VolunteerCoordinationScreen(
