@@ -160,6 +160,18 @@ fun PusdalopsNotesSection(
             for (dn in defaultNotes) {
                 noteDao.insertNote(OfficerNoteEntity.fromModel(dn))
             }
+        } else {
+            // Migrate any previously saved notes that still carry the "- AI" header suffix
+            for (entity in notesEntities) {
+                if (entity.content.contains("[RINGKASAN EKSEKUTIF PUSDALOPS - AI]") ||
+                    entity.content.contains("[DRAF REKOMENDASI SOP PUSDALOPS - AI]")
+                ) {
+                    val cleanedContent = entity.content
+                        .replace("[RINGKASAN EKSEKUTIF PUSDALOPS - AI]", "[RINGKASAN EKSEKUTIF PUSDALOPS]")
+                        .replace("[DRAF REKOMENDASI SOP PUSDALOPS - AI]", "[DRAF REKOMENDASI SOP PUSDALOPS]")
+                    noteDao.insertNote(entity.copy(content = cleanedContent))
+                }
+            }
         }
     }
 
@@ -755,7 +767,13 @@ private fun NoteEditorView(
     onBackClick: () -> Unit
 ) {
     var title by remember(note.id) { mutableStateOf(note.title) }
-    var content by remember(note.id) { mutableStateOf(note.content) }
+    var content by remember(note.id) {
+        mutableStateOf(
+            note.content
+                .replace("[RINGKASAN EKSEKUTIF PUSDALOPS - AI]", "[RINGKASAN EKSEKUTIF PUSDALOPS]")
+                .replace("[DRAF REKOMENDASI SOP PUSDALOPS - AI]", "[DRAF REKOMENDASI SOP PUSDALOPS]")
+        )
+    }
     var category by remember(note.id) { mutableStateOf(note.category) }
     var priority by remember(note.id) { mutableStateOf(note.priority) }
     var tags by remember(note.id) { mutableStateOf(note.tags) }
@@ -1010,7 +1028,7 @@ private fun NoteEditorView(
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // AI Action 1: Ringkas Catatan
+                        // Action 1: Analisa Kesimpulan
                         OutlinedButton(
                             onClick = {
                                 if (content.isBlank()) {
@@ -1021,7 +1039,7 @@ private fun NoteEditorView(
                                 // Rule-based Pusdalops executive extraction
                                 val lines = content.lines().filter { it.isNotBlank() }
                                 val summary = buildString {
-                                    appendLine("\n\n📋 [RINGKASAN EKSEKUTIF PUSDALOPS - AI]")
+                                    appendLine("\n\n📋 [RINGKASAN EKSEKUTIF PUSDALOPS]")
                                     appendLine("• Topik: $title (${category.uppercase()})")
                                     appendLine("• Prioritas Penanganan: $priority")
                                     appendLine("• Poin Kunci Lapangan: ${lines.take(3).joinToString(" / ") { it.take(60) }}")
@@ -1029,7 +1047,7 @@ private fun NoteEditorView(
                                 }
                                 content += summary
                                 isAiProcessing = false
-                                aiNotificationMessage = "Ringkasan eksekutif telah ditambahkan di bagian bawah catatan."
+                                aiNotificationMessage = "Analisa kesimpulan ringkasan eksekutif telah ditambahkan di bagian bawah catatan."
                             },
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -1037,15 +1055,21 @@ private fun NoteEditorView(
                         ) {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(12.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Ringkas Catatan AI", fontSize = 11.sp, fontWeight = FontWeight.Normal)
+                            Text(
+                                text = "Analisa Kesimpulan",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Normal,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
 
-                        // AI Action 2: Draf SOP Rekomendasi
+                        // Action 2: Draf SOP Rekomendasi
                         OutlinedButton(
                             onClick = {
                                 isAiProcessing = true
                                 val sopDraft = buildString {
-                                    appendLine("\n\n🛡️ [DRAF REKOMENDASI SOP PUSDALOPS - AI]")
+                                    appendLine("\n\n🛡️ [DRAF REKOMENDASI SOP PUSDALOPS]")
                                     appendLine("1. Pastikan komunikasi radio HT frekuensi 143.550 MHz aktif.")
                                     appendLine("2. Konfirmasi update data korban / kerusakan dengan pihak Desa dan Camat.")
                                     appendLine("3. Siapkan laporan situasi (Lapsit) harian untuk dikirim ke BNPB dan Bupati Mukomuko.")
@@ -1061,7 +1085,13 @@ private fun NoteEditorView(
                         ) {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(12.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Draf SOP Rekomendasi", fontSize = 11.sp, fontWeight = FontWeight.Normal)
+                            Text(
+                                text = "Draf SOP Rekomendasi",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Normal,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
 

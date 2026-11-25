@@ -16,8 +16,8 @@
     <string name="note_action_delete">Hapus</string>
     <string name="note_action_pin">Sematkan</string>
     <string name="note_action_unpin">Lepas Sematan</string>
-    <string name="note_action_ai_summarize">Ringkas Catatan AI</string>
-    <string name="note_action_ai_sop">Draf SOP &amp; Rekomendasi AI</string>
+    <string name="note_action_ai_summarize">Analisa Kesimpulan</string>
+    <string name="note_action_ai_sop">Draf SOP Rekomendasi</string>
     <string name="note_empty_title">Belum Ada Catatan Lapangan</string>
     <string name="note_empty_desc">Tekan tombol + untuk membuat catatan koordinasi baru atau mencatat instruksi siaga bencana.</string>
     <string name="note_category_operational">Operasional</string>
