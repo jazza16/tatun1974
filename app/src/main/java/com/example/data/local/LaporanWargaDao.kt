@@ -47,4 +47,7 @@ interface LaporanWargaDao {
 
     @Query("DELETE FROM laporan_warga WHERE id = :id")
     suspend fun deleteLaporanWargaById(id: Int)
+
+    @Query("DELETE FROM laporan_warga WHERE id > 1")
+    suspend fun deleteNonDefaultLaporanWarga(): Int
 }

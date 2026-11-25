@@ -97,6 +97,14 @@ class OfficerRealtimeNewReportDetector {
     }
 
     @Synchronized
+    fun resetBaselineAndClearAlerts() {
+        lastReadReportId = null
+        seenReportIds.clear()
+        unacknowledgedQueue.clear()
+        isBaselineInitialized = false
+    }
+
+    @Synchronized
     fun initializeBaselineIfNeeded(existingReports: List<CitizenDisasterReport>) {
         if (!isBaselineInitialized) {
             val pendingSortedDesc = existingReports

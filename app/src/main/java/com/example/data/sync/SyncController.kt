@@ -431,6 +431,11 @@ class SyncController(
                     val incomingReports = mutableListOf<CitizenDisasterReport>()
                     for (doc in snapshot.documents) {
                         val id = doc.getString("id") ?: doc.id
+                        val rawStatus = doc.getString("status") ?: ""
+                        if (com.example.data.local.FirestoreHelper.isLegacyPreV110SimulationReport(id, rawStatus)) {
+                            weatherDao.deleteCitizenReportById(id)
+                            continue
+                        }
                         val ts = doc.getLong("timestamp") ?: System.currentTimeMillis()
                         val updatedAt = doc.getLong("updatedAt") ?: ts
                         val r = CitizenDisasterReport(

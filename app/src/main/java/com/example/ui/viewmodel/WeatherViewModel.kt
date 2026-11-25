@@ -172,6 +172,7 @@ class WeatherViewModel(
 
         viewModelScope.launch {
             try {
+                repository.performV110BaselineCitizenReportsResetIfNeeded()
                 repository.seedInitialCommunityReportsIfEmpty()
                 repository.ensureHazardZonesSeeded()
                 // Tarik laporan nyata dari Cloud Firestore lebih dulu sebelum mengisi fallback kosong

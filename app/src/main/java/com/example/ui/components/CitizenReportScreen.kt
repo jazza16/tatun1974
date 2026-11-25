@@ -1922,7 +1922,7 @@ fun CitizenReportScreen(
 
                                     if (isSubmittingReport) return@Button
                                     val nowMs = System.currentTimeMillis()
-                                    val reportId = "LAP-MMK-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(nowMs)) + "-" + (100..999).random()
+                                    val reportId = "LAP-MMK-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(nowMs)) + "-R" + (100..999).random()
                                      val isOnlineNow = com.example.data.sync.OfflineReportConnectivityMonitor.refreshConnectivityState(context)
                                      isSubmittingReport = true
                                      submitStatusLabel = if (!isOnlineNow) {

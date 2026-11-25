@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Shield
@@ -81,7 +82,7 @@ data class QuickActionItemData(
  * - High-reliability click handling (no gesture conflicts)
  * - Tap anywhere outside on scrim to dismiss
  * - Dockable on bottom-right or bottom-left
- * - Direct quick links to: Laporan Warga, Prakiraan Cuaca, BPBD 117, Kompas, Peta Bencana, Maritim, Panduan
+ * - Direct quick links to: Laporan Warga, Prakiraan Cuaca, BPBD 117, Modul Relawan, Peta Bencana, Maritim
  */
 @Composable
 fun QuickActionsFab(
@@ -95,6 +96,7 @@ fun QuickActionsFab(
     onCall117: () -> Unit = {},
     onOpenCompass: () -> Unit = {},
     onOpenOnboarding: () -> Unit = {},
+    onOpenVolunteerModule: () -> Unit = {},
     onSelectFormLaporan: () -> Unit = {},
     parentMaxWidth: Dp = 380.dp,
     parentMaxHeight: Dp = 700.dp,
@@ -127,13 +129,12 @@ fun QuickActionsFab(
         ) {
             add(QuickActionItemData("form_laporan", "Form Laporan Harian", Icons.Default.Edit, Color(0xFF1976D2), Color.White, "cardBuatLaporan"))
         }
-        add(QuickActionItemData("citizen_report", "Laporan Warga Bencana", Icons.Default.Edit, Color(0xFFEA580C), Color.White, "action_citizen_report"))
+        add(QuickActionItemData("citizen_report", "Laporan Warga", Icons.Default.Edit, Color(0xFFEA580C), Color.White, "action_citizen_report"))
         add(QuickActionItemData("forecast", "Prakiraan Cuaca", Icons.Default.CalendarMonth, Color(0xFF2563EB), Color.White, "action_forecast"))
         add(QuickActionItemData("dial_117", "Darurat 117 BPBD", Icons.Default.PhoneInTalk, Color(0xFFDC2626), Color.White, "action_dial_117"))
-        add(QuickActionItemData("compass", "Kompas Evakuasi", Icons.Default.Explore, Color(0xFF16A34A), Color.White, "action_open_compass"))
+        add(QuickActionItemData("volunteer_module", "Modul Relawan", Icons.Default.Groups, Color(0xFF16A34A), Color.White, "action_volunteer_module"))
         add(QuickActionItemData("disaster_map", "Peta Bencana Mukomuko", Icons.Default.Map, Color(0xFF0D9488), Color.White, "action_disaster_map"))
         add(QuickActionItemData("maritime", "Keselamatan Maritim", Icons.Default.Surfing, Color(0xFF0284C7), Color.White, "action_maritime_safety_guide"))
-        add(QuickActionItemData("onboarding", "Panduan Aplikasi", Icons.Default.AutoAwesome, Color(0xFF8B5CF6), Color.White, "action_open_onboarding"))
     }
 
     Box(
@@ -221,6 +222,7 @@ fun QuickActionsFab(
                                     "citizen_report" -> onSelectCitizenReport()
                                     "forecast" -> onSelectForecast()
                                     "dial_117" -> onCall117()
+                                    "volunteer_module" -> onOpenVolunteerModule()
                                     "compass" -> onOpenCompass()
                                     "disaster_map" -> onSelectDisasterMap()
                                     "maritime" -> onSelectMaritimeGuide()

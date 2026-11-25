@@ -549,6 +549,7 @@ fun WeatherAppScreen(
     var isEmergencyPopupDismissed by remember { mutableStateOf(false) }
     var isSipagarKitaDismissed by remember { mutableStateOf(false) }
     var isPanduanEvakuasiOpen by remember { mutableStateOf(false) }
+    var isVolunteerModuleDialogOpen by remember { mutableStateOf(false) }
     var officerLoginRequestId by remember { mutableStateOf(0) }
     var openRuangKerjaRequestId by remember { mutableStateOf(0) }
     val disclaimerConsentManager = remember { com.example.data.local.DisclaimerConsentManager(context) }
@@ -1378,10 +1379,36 @@ fun WeatherAppScreen(
                 isQuickActionsFabExpanded = false
                 viewModel.setOnboardingOpen(true)
             },
+            onOpenVolunteerModule = {
+                isQuickActionsFabExpanded = false
+                isVolunteerModuleDialogOpen = true
+            },
             parentMaxWidth = this.maxWidth,
             parentMaxHeight = this.maxHeight,
             isDark = isActuallyDark
         )
+        }
+    }
+
+    // Layar Penuh Modul Koordinasi Relawan Kebencanaan (Accessible directly from QuickActionsFab)
+    if (isVolunteerModuleDialogOpen) {
+        val officerAuthManager = remember { com.example.data.local.OfficerAuthManager(context) }
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { isVolunteerModuleDialogOpen = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            com.example.ui.components.VolunteerCoordinationScreen(
+                isOfficerLoggedIn = officerAuthManager.isOfficerLoggedIn(),
+                officerName = officerAuthManager.getOfficerName(),
+                officerNip = officerAuthManager.getOfficerBadgeId(),
+                officerRole = officerAuthManager.getOfficerRole(),
+                onClose = { isVolunteerModuleDialogOpen = false },
+                onRequestOfficerLogin = {
+                    isVolunteerModuleDialogOpen = false
+                    officerLoginRequestId++
+                    viewModel.selectTab(1)
+                }
+            )
         }
     }
 

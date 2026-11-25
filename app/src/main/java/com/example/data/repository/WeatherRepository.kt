@@ -771,16 +771,27 @@ class WeatherRepository(
             return@withContext syncedOrUpdatedCount
         }
 
+        // Bersihkan entri simulasi pra-v1.1.0 yang masih tersisa di Room lokal agar tidak pernah didorong kembali ke Cloud
+        val initialLocals = weatherDao.getAllCitizenDisasterReportsSync()
+        for (entity in initialLocals) {
+            if (com.example.data.local.FirestoreHelper.isLegacyPreV110SimulationReport(entity.id, entity.status)) {
+                weatherDao.deleteCitizenReportById(entity.id)
+            }
+        }
+
         val localEntities = weatherDao.getAllCitizenDisasterReportsSync()
         if (localEntities.isNotEmpty()) {
             com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
                 .initializeBaselineIfNeeded(localEntities.map { mapCitizenEntityToModel(it) })
         }
         val localReportsMap = localEntities.associateBy { it.id }
-        val remoteReportsMap = remoteReports.associateBy { it.id }
+        val filteredRemoteReports = remoteReports.filterNot {
+            com.example.data.local.FirestoreHelper.isLegacyPreV110SimulationReport(it.id, it.status)
+        }
+        val remoteReportsMap = filteredRemoteReports.associateBy { it.id }
 
         // 1. PULL: Terapkan data terbaru dari Cloud Firestore -> Room lokal
-        for (remote in remoteReports) {
+        for (remote in filteredRemoteReports) {
             val existing = localReportsMap[remote.id]
             if (shouldAcceptRemoteCitizenReport(existing, remote)) {
                 val mergedReport = remote.copy(
@@ -804,6 +815,10 @@ class WeatherRepository(
         //    ATURAN KETAT: Jangan pernah mendorong teks tanpa foto jika laporan memiliki lampiran foto lokal!
         val refreshedLocals = weatherDao.getAllCitizenDisasterReportsSync()
         for (local in refreshedLocals) {
+            if (com.example.data.local.FirestoreHelper.isLegacyPreV110SimulationReport(local.id, local.status)) {
+                weatherDao.deleteCitizenReportById(local.id)
+                continue
+            }
             val remote = remoteReportsMap[local.id]
             val localHasPhotoButCloudMissing = remote != null &&
                 !com.example.util.ImageUtils.isCloudPortablePhotoUri(remote.photoUri) &&
@@ -861,13 +876,22 @@ class WeatherRepository(
         if (SandboxTrainingManager.isSandboxModeActive()) {
             return@withContext
         }
+        val initialLocals = weatherDao.getAllCitizenDisasterReportsSync()
+        for (entity in initialLocals) {
+            if (com.example.data.local.FirestoreHelper.isLegacyPreV110SimulationReport(entity.id, entity.status)) {
+                weatherDao.deleteCitizenReportById(entity.id)
+            }
+        }
         val localEntities = weatherDao.getAllCitizenDisasterReportsSync()
         if (localEntities.isNotEmpty()) {
             com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
                 .initializeBaselineIfNeeded(localEntities.map { mapCitizenEntityToModel(it) })
         }
         val localReportsMap = localEntities.associateBy { it.id }
-        for (remote in remoteReports) {
+        val filteredRemoteReports = remoteReports.filterNot {
+            com.example.data.local.FirestoreHelper.isLegacyPreV110SimulationReport(it.id, it.status)
+        }
+        for (remote in filteredRemoteReports) {
             val existing = localReportsMap[remote.id]
             if (shouldAcceptRemoteCitizenReport(existing, remote)) {
                 val mergedReport = remote.copy(
@@ -892,13 +916,9 @@ class WeatherRepository(
         }
     }
 
-    suspend fun seedInitialCitizenDisasterReportsIfEmpty() = withContext(databaseWriteDispatcher) {
-        // PENTING: Hanya isi data contoh apabila tabel lokal benar-benar kosong setelah sinkronisasi Cloud.
-        // Jangan pernah menimpa laporan atau pembaruan status petugas aktif yang sudah ada!
-        if (weatherDao.getCitizenReportCount() > 0) return@withContext
-
+    fun buildDefaultDummyCitizenReportEntities(): List<CitizenDisasterReportEntity> {
         val fixedSeedBaseTs = 1761355800000L // 25 Okt 2025 (timestamp historis tetap agar tidak menimpa data nyata)
-        val initialList = listOf(
+        return listOf(
             CitizenDisasterReportEntity(
                 id = "LAP-MMK-20261025-001",
                 disasterType = "Gelombang Pasang / Rob",
@@ -920,6 +940,9 @@ class WeatherRepository(
                 timestamp = fixedSeedBaseTs,
                 status = "Divalidasi",
                 updatedAt = fixedSeedBaseTs,
+                handledByOfficerName = "",
+                handledByOfficerNip = "",
+                handledByOfficerRole = "",
                 isSyncedToCloud = true
             ),
             CitizenDisasterReportEntity(
@@ -943,6 +966,9 @@ class WeatherRepository(
                 timestamp = fixedSeedBaseTs - 70 * 60 * 1000L,
                 status = "Divalidasi",
                 updatedAt = fixedSeedBaseTs - 70 * 60 * 1000L,
+                handledByOfficerName = "",
+                handledByOfficerNip = "",
+                handledByOfficerRole = "",
                 isSyncedToCloud = true
             ),
             CitizenDisasterReportEntity(
@@ -966,10 +992,102 @@ class WeatherRepository(
                 timestamp = fixedSeedBaseTs - 155 * 60 * 1000L,
                 status = "Diproses",
                 updatedAt = fixedSeedBaseTs - 155 * 60 * 1000L,
+                handledByOfficerName = "",
+                handledByOfficerNip = "",
+                handledByOfficerRole = "",
                 isSyncedToCloud = true
             )
         )
-        weatherDao.insertAllCitizenDisasterReports(initialList)
+    }
+
+    /**
+     * Reset Count & Data Tab Laporan Warga pada Rilis v1.1.0:
+     * Menghapus seluruh laporan hasil latihan/simulasi penguji pra-v1.1.0 (baik yang diinput sebagai warga
+     * maupun tanggapan petugas dalam sesi resmi sebelum tersedianya fitur Sandbox) di Room lokal dan Cloud Firestore,
+     * sehingga hanya menyisakan 3 data dummy default resmi (`LAP-MMK-20261025-001`, `002`, `003`).
+     */
+    suspend fun performV110BaselineCitizenReportsResetIfNeeded(
+        context: android.content.Context? = null
+    ) = withContext(databaseWriteDispatcher) {
+        val defaultEntities = buildDefaultDummyCitizenReportEntities()
+        val defaultById = defaultEntities.associateBy { it.id }
+
+        try {
+            val currentLocals = weatherDao.getAllCitizenDisasterReportsSync()
+            var removedOrResetAny = false
+            for (entity in currentLocals) {
+                if (com.example.data.local.FirestoreHelper.isLegacyPreV110SimulationReport(entity.id, entity.status)) {
+                    weatherDao.deleteCitizenReportById(entity.id)
+                    removedOrResetAny = true
+                } else {
+                    val cleanDummy = defaultById[entity.id]
+                    if (cleanDummy != null &&
+                        entity.updatedAt < com.example.data.local.FirestoreHelper.V110_DUMMY_RESET_UPDATED_AT &&
+                        (entity.status != cleanDummy.status ||
+                            entity.additionalNotes != cleanDummy.additionalNotes ||
+                            entity.handledByOfficerName.isNotBlank() ||
+                            entity.handledByOfficerNip.isNotBlank())
+                    ) {
+                        weatherDao.insertCitizenDisasterReport(
+                            cleanDummy.copy(updatedAt = com.example.data.local.FirestoreHelper.V110_DUMMY_RESET_UPDATED_AT)
+                        )
+                        removedOrResetAny = true
+                    }
+                }
+            }
+
+            val remainingAfterClean = weatherDao.getAllCitizenDisasterReportsSync().associateBy { it.id }
+            for (dummy in defaultEntities) {
+                if (!remainingAfterClean.containsKey(dummy.id)) {
+                    weatherDao.insertCitizenDisasterReport(dummy)
+                    removedOrResetAny = true
+                }
+            }
+
+            weatherDao.deleteNonDefaultCommunityReports()
+
+            if (context != null) {
+                try {
+                    com.example.data.local.AppDatabase.getInstance(context)
+                        .laporanWargaDao()
+                        .deleteNonDefaultLaporanWarga()
+                } catch (_: Exception) {
+                }
+                try {
+                    context.getSharedPreferences("sipagar_citizen_autofill_prefs", android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .remove("processed_citizen_report_ids")
+                        .apply()
+                } catch (_: Exception) {
+                }
+            }
+
+            if (removedOrResetAny) {
+                com.example.data.local.FirestoreHelper.clearInMemoryCitizenReportsCache()
+                com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
+                    .resetBaselineAndClearAlerts()
+                val refreshed = weatherDao.getAllCitizenDisasterReportsSync()
+                com.example.ui.components.OfficerRealtimeNewReportDetector.sharedSessionDetector
+                    .initializeBaselineIfNeeded(refreshed.map { mapCitizenEntityToModel(it) })
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("WeatherRepository", "Reset lokal laporan warga v1.1.0 warning: ${e.message}")
+        }
+
+        try {
+            val defaultModels = defaultEntities.map { mapCitizenEntityToModel(it) }
+            com.example.data.local.FirestoreHelper
+                .purgeLegacyPreV110SimulationReportsAndResetDefaultsInCloudSuspend(defaultModels)
+        } catch (e: Exception) {
+            android.util.Log.w("WeatherRepository", "Purge cloud laporan simulasi pra-v1.1.0 warning: ${e.message}")
+        }
+    }
+
+    suspend fun seedInitialCitizenDisasterReportsIfEmpty() = withContext(databaseWriteDispatcher) {
+        // PENTING: Hanya isi data contoh apabila tabel lokal benar-benar kosong setelah sinkronisasi Cloud.
+        // Jangan pernah menimpa laporan atau pembaruan status petugas aktif yang sudah ada!
+        if (weatherDao.getCitizenReportCount() > 0) return@withContext
+        weatherDao.insertAllCitizenDisasterReports(buildDefaultDummyCitizenReportEntities())
     }
 
     // Historical Weather Data Query

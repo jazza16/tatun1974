@@ -6,6 +6,28 @@ Dokumen ini mencatat seluruh **penambahan fitur**, **fungsi baru**, **peningkata
 
 ---
 
+## [1.1.0] - 24 November 2026
+
+### ✨ Penambahan Fitur & Fungsi Baru
+- **Modul Disklaimer Resmi & Kebijakan Privasi (UU PDP No. 27 Tahun 2022)**:
+  - Menambahkan pop-up **Disklaimer Singkat** pada saat aplikasi pertama kali dijalankan dengan kotak centang persetujuan eksplisit (*informed consent*) sebelum tombol `[ Lanjutkan ]` aktif.
+  - Menambahkan pembaca dokumen 2 tab (**Disklaimer Lengkap** & **Kebijakan Privasi UU PDP**) yang dapat diakses kapan saja melalui menu **Info Aplikasi → Disklaimer & Kebijakan Privasi** maupun dari tautan pada halaman **Lapor Bencana**.
+- **Prosedur Verifikasi Lapangan (*Cross-Check* / Pembuktian Terbalik)**:
+  - Mencantumkan penjelasan resmi pada Disklaimer bahwa Petugas Piket Resmi Pusdalops-PB BPBD melakukan *cross-check* kebenaran laporan warga kepada **Kepala Desa, Lurah, dan/atau Camat** selaku pemangku kepentingan wilayah administratif di Kabupaten Mukomuko via telepon dan saluran komunikasi resmi, dengan mempertimbangkan luasan wilayah Kabupaten Mukomuko, jarak tempuh, ketersediaan SDM, serta efisiensi anggaran.
+- **Integrasi Nomor Tunggal Panggilan Darurat 112 (Dinas Kominfo Kabupaten Mukomuko)**:
+  - Menambahkan **Nomor Tunggal Panggilan Darurat 112** (bebas pulsa 24 jam, dikelola Dinas Kominfo Kabupaten Mukomuko) ke dalam daftar **Kontak Darurat Publik 24 Jam**, pop-up Disklaimer, dan menu Pusat Panggilan Darurat berdampingan dengan **Call Center 117 (BPBD / Pusdalops)**.
+
+### ⚡ Peningkatan & Optimalisasi
+- **Penghapusan Nomor Telepon Lokal Lama `(0737) 71112`**: Menghapus nomor telepon lokal lama di seluruh fitur dan dokumen aplikasi karena layanan panggilan darurat telah terintegrasi ke dalam **Call Center 117** dan **Nomor Tunggal Panggilan Darurat 112**.
+- **Presisi Tata Letak Dialog Disklaimer & Pelindungan Privasi Pelapor**:
+  - Merapikan tombol tautan dokumen dan tombol panggilan darurat (`117` & `112`) dalam grid 2 kolom yang simetris dan presisi.
+  - Menyembunyikan tombol **Foto Bukti** pada tab publik **Lacak ID** bagi pengunjung umum/warga demi melindungi privasi foto laporan warga sesuai UU PDP, namun tetap menampilkannya secara penuh bagi Petugas BPBD yang telah login resmi.
+
+### 🐛 Perbaikan Bug & Keamanan
+- **Perbaikan Sinkronisasi CRUD Kelola Personil & Aturan Cloud Firestore**: Memperbarui aturan keamanan Cloud Firestore (`firestore.rules`) dan alur pemeliharaan data personil sehingga proses tambah, ubah, dan hapus personil oleh Administrator tersimpan permanen di server dan tidak muncul kembali dari data bawaan (*seed*).
+
+---
+
 ## [1.0.10] - 23 November 2026
 
 ### ✨ Penambahan Fitur & Fungsi Baru

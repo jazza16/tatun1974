@@ -1074,7 +1074,7 @@ private fun VersionChangelogSection(
     }
 
     var expandedVersion by remember {
-        mutableStateOf<String?>(accordionLogs.firstOrNull { it.isLatest }?.version ?: "1.0.10")
+        mutableStateOf<String?>(accordionLogs.firstOrNull { it.isLatest }?.version ?: "1.1.0")
     }
 
     Column(modifier = Modifier.testTag("release_notes_accordion_section")) {

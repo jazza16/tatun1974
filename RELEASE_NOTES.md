@@ -1,45 +1,39 @@
-# Catatan Rilis Resmi SIPAGAR KITA (v1.0.10)
+# Catatan Rilis Resmi SIPAGAR KITA (v1.1.0)
 
 **Pusdalops-PB Badan Penanggulangan Bencana Daerah (BPBD) Kabupaten Mukomuko**  
-*Versi Rilis: **v1.0.10** (Build 11) | Tanggal Rilis: **23 November 2026***
+*Versi Rilis: **v1.1.0** (Build 12) | Tanggal Rilis: **24 November 2026***
 
 ---
 
 ## Ringkasan Rilis
-Rilis **SIPAGAR KITA v1.0.10** merupakan pembaruan langsung (*in-place upgrade*) yang kompatibel penuh dengan seluruh versi sebelumnya (`v1.0.0` – `v1.0.9`) tanpa perlu mencopot aplikasi (*uninstall*) dan tanpa mengubah PIN Cloud petugas. Rilis ini menuntaskan permasalahan Reset PIN, login menggantung, celah keamanan Mode Warga, pemulihan biometrik, serta optimalisasi performa dan hemat baterai pada **Ruang Kerja Mode Administrator**.
+Rilis **SIPAGAR KITA v1.1.0** menghadirkan kepatuhan penuh terhadap **UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU PDP)** melalui fitur **Disklaimer & Kebijakan Privasi Resmi**, penjelasan transparan mekanisme **Verifikasi Lapangan (*Cross-Check* / Pembuktian Terbalik)** oleh Petugas Piket Resmi BPBD kepada Kades/Lurah/Camat, penyatuan layanan darurat ke **Call Center 117** dan **Nomor Tunggal Panggilan Darurat 112 (Dinas Kominfo Kabupaten Mukomuko)**, serta penyempurnaan sinkronisasi CRUD Kelola Personil di Cloud Firestore.
 
 ---
 
 ## ✨ Penambahan Fitur & Fungsi Baru
-- **Mekanisme Perlindungan Sesi Reset PIN**: Sistem kini membedakan secara tegas antara pencabutan akses oleh Administrator dengan proses **Reset PIN** oleh petugas, sehingga perangkat asli tetap diizinkan login kembali tanpa kendala.
-- **Otomatisasi Catatan Rilis GitHub (Bahasa Indonesia)**: Seluruh catatan penambahan fitur, fungsi, peningkatan, dan perbaikan kini terdokumentasi terstruktur dalam bahasa Indonesia di `CHANGELOG.md`, `RELEASE_NOTES.md`, halaman **Info Aplikasi**, serta otomatis diterbitkan pada setiap **GitHub Release**.
-- **Integrasi Info Lanskap & Wallpaper HD di Menu Info Aplikasi**: Akses dialog *Info Lanskap & Wallpaper HD Kabupaten Mukomuko* tersusun rapi di dalam menu **Info Aplikasi**.
+- **Pop-up & Menu Disklaimer Resmi serta Kebijakan Privasi (UU PDP)**:
+  - Pop-up **Disklaimer Singkat** otomatis tampil pada saat aplikasi pertama kali dibuka dengan kotak centang persetujuan eksplisit sebelum tombol **Lanjutkan** aktif.
+  - Menu **Disklaimer & Kebijakan Privasi** tersedia permanen di dalam **Info Aplikasi** serta tautan cepat pada formulir **Lapor Bencana**.
+- **Penjelasan Resmi Metode Pembuktian Kejadian (*Cross-Check* / Pembuktian Terbalik)**:
+  - Menjelaskan bahwa Petugas Piket Resmi Pusdalops-PB BPBD melakukan konfirmasi kebenaran laporan warga kepada **Kepala Desa, Lurah, dan/atau Camat** selaku penanggung jawab wilayah secara administratif di Kabupaten Mukomuko melalui telepon dan saluran komunikasi resmi, mengingat cakupan luasan wilayah Kabupaten Mukomuko, jarak tempuh, ketersediaan SDM, dan efisiensi anggaran.
+- **Penambahan Nomor Tunggal Panggilan Darurat 112 (Diskominfo Kab. Mukomuko)**:
+  - Menambahkan **Nomor Tunggal Panggilan Darurat 112** yang dikelola oleh **Dinas Komunikasi dan Informatika (Diskominfo) Kabupaten Mukomuko** ke dalam **Kontak Darurat Publik 24 Jam** dan akses panggilan darurat cepat.
 
 ---
 
 ## ⚡ Peningkatan & Optimalisasi
-- **Ruang Kerja Mode Administrator Lebih Ringan & Hemat Baterai**:
-  - Memutus siklus penulisan berulang antara database lokal (Room) dan Cloud Firestore pada sinkronisasi daftar personil sehingga layar tidak lagi *lag* atau *freeze* di ponsel fisik.
-  - Mengganti pelacakan aktivitas sentuhan/gulir agar tidak memicu penggambaran ulang (*recomposition*) seluruh halaman saat disentuh.
-  - Memindahkan pemrosesan data sesi keamanan, aktivitas login, dan rekonsiliasi detak jantung perangkat (*Device Heartbeat*) ke *background thread*.
-  - Melonggarkan jadwal sinkronisasi cadangan menjadi 60 detik (pembaruan utama tetap berjalan seketika secara *real-time*) dan membatasi waktu tunggu ping/heartbeat maksimal 5 detik.
-  - Menambahkan cache statistik laporan serta pembatasan muat awal kartu sesi keamanan agar perpindahan tab Administrator mulus.
-- **Presisi Teks Tombol Alarm Sirene**: Ukuran huruf dan jarak padding pada tombol **"SEGERA CEK & MATIKAN ALARM"** dan **"MATIKAN SIRENE"** disesuaikan agar presisi, jelas dibaca, dan tidak terpotong.
-- **Jaminan Bebas Spinner Menggantung**: Seluruh proses verifikasi Login PIN Cloud, Login Biometrik, Reset PIN, dan pemeriksaan sesi Ruang Kerja dilengkapi *timeout* terukur dan penutupan status *loading* yang aman.
-- **Notifikasi Pembaruan Otomatis**: Penaikan versi ke **v1.0.10 (Build 11)** memastikan perangkat yang sudah memakai `v1.0.9` sekalipun otomatis mendeteksi pembaruan terbaru dari GitHub Releases.
+- **Unifikasi Call Center 117 & 112**: Menghapus nomor telepon Posko lokal lama `(0737) 71112` di seluruh komponen aplikasi dan dokumen Disklaimer karena telah terintegrasi dalam **Call Center 117 (BPBD)** dan **Nomor Tunggal Panggilan Darurat 112 (Diskominfo)**.
+- **Tata Letak Simetris & Pelindungan Privasi Lacak Laporan**:
+  - Menyusun tombol panggilan darurat (`117` & `112`) dan tombol dokumen hukum pada pop-up Disklaimer dalam tata letak 2 kolom yang simetris dan presisi.
+  - Melindungi privasi foto laporan warga pada fitur publik **Lacak ID** (foto bukti hanya dapat dibuka oleh Petugas BPBD yang login resmi), dilengkapi petunjuk privasi kamera, deskripsi, dan nama pelapor sesuai UU PDP.
 
 ---
 
 ## 🐛 Perbaikan Bug & Keamanan
-- **Perbaikan Notifikasi "Sesi Dicabut" Palsu saat Reset PIN**: Reset PIN tidak lagi menulis status `REVOKED` / `is_active = false` ke server. Setelah Reset PIN berhasil, petugas menerima notifikasi jelas bahwa PIN kembali ke **6 digit terakhir NIP** dan dapat langsung login kembali ke Cloud.
-- **Perbaikan Alur Login, Logout, & Biometrik**:
-  - Relogin petugas setelah logout resmi kini berfungsi normal menggunakan PIN pribadi Cloud (tanpa kembali ke PIN default).
-  - Tombol **Login Biometrik (`BiometricPrompt`)** pada halaman awal (*Landing Page*) dan dialog login berfungsi kembali sebagaimana mestinya.
-  - **Isolasi Keamanan Mode Warga**: Memilih masuk sebagai warga kini selalu membersihkan sesi petugas yang tersisa sehingga Ruang Kerja tetap terkunci dan wajib autentikasi PIN/Biometrik.
-- **Perbaikan Timeout Audio Sirene (`ToneGenerator`)**: Mengatasi pesan error *Stop timed out* saat menghentikan nada alarm sirene darurat.
+- **Sinkronisasi CRUD Kelola Personil Cloud Firestore**: Memperbarui `firestore.rules` dan logika *tombstone* penghapusan personil agar penambahan, pengubahan, dan penghapusan data personil tersinkronisasi permanen di Cloud Firestore.
 
 ---
 
-> 📄 **Riwayat lengkap seluruh versi (v1.0.0 – v1.0.10)** tersedia di berkas [`CHANGELOG.md`](./CHANGELOG.md) serta pada menu **Info Aplikasi → Riwayat Catatan Rilis Versi** di dalam aplikasi.
+> 📄 **Riwayat lengkap seluruh versi (v1.0.0 – v1.1.0)** tersedia di berkas [`CHANGELOG.md`](./CHANGELOG.md) serta pada menu **Info Aplikasi → Riwayat Catatan Rilis Versi** di dalam aplikasi.
 
 *Pusdalops-PB BPBD Kabupaten Mukomuko — Siaga, Tanggap, Tangguh Menghadapi Bencana.*

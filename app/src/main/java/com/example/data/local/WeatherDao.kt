@@ -131,6 +131,12 @@ interface WeatherDao {
     @Query("DELETE FROM citizen_disaster_reports WHERE id = :reportId")
     suspend fun deleteCitizenReportById(reportId: String): Int
 
+    @Query("DELETE FROM citizen_disaster_reports")
+    suspend fun deleteAllCitizenDisasterReports(): Int
+
+    @Query("DELETE FROM community_reports WHERE id NOT IN ('comm_1', 'comm_2', 'comm_3', 'comm_4', 'comm_5')")
+    suspend fun deleteNonDefaultCommunityReports(): Int
+
     // Historical Cache
     @Query("SELECT * FROM historical_cache WHERE districtId = :districtId AND date = :date LIMIT 1")
     suspend fun getHistoricalCache(districtId: String, date: String): HistoricalWeatherEntity?

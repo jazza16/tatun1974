@@ -515,12 +515,55 @@ object FirestoreHelper {
         }
     }
 
+    val DEFAULT_DUMMY_REPORT_IDS: Set<String> = setOf(
+        "LAP-MMK-20261025-001",
+        "LAP-MMK-20261025-002",
+        "LAP-MMK-20261024-003"
+    )
+
+    const val STATUS_DELETED_RESET_V110 = "DIHAPUS_RESET_V110"
+    const val V110_DUMMY_RESET_UPDATED_AT = 1795600000000L
+
+    /**
+     * Mendeteksi laporan simulasi/latihan pra-v1.1.0 (sebelum fitur Sandbox digunakan) atau laporan yang telah dihapus.
+     * - Laporan dummy default resmi (3 item: `LAP-MMK-20261025-001`, `002`, `003`) SELALU dipertahankan.
+     * - Laporan asli warga mulai rilis v1.1.0+ memiliki penanda `-R` pada ID (`LAP-MMK-yyyyMMdd-HHmmss-Rxxx`) dan SELALU dipertahankan.
+     * - Saat pengujian unit (ketika mock override aktif), filter ini dinonaktifkan agar ID sintetis unit test tetap berjalan normal.
+     */
+    fun isLegacyPreV110SimulationReport(id: String, rawStatus: String? = null): Boolean {
+        val statusTrimmed = rawStatus?.trim().orEmpty()
+        if (statusTrimmed.equals(STATUS_DELETED_RESET_V110, ignoreCase = true) ||
+            statusTrimmed.equals("DELETED", ignoreCase = true)
+        ) {
+            return true
+        }
+        if (overrideCitizenReportFetcherForTesting != null ||
+            overrideCitizenReportUploaderForTesting != null ||
+            overrideCitizenReportStatusUpdaterForTesting != null
+        ) {
+            return false
+        }
+        val cleanId = id.trim()
+        if (cleanId in DEFAULT_DUMMY_REPORT_IDS) return false
+        if (cleanId.contains("-R")) return false
+        return true
+    }
+
+    fun clearInMemoryCitizenReportsCache() {
+        inMemoryLatestReportsById.clear()
+    }
+
     /**
      * Parses a Firestore DocumentSnapshot into CitizenDisasterReport.
      */
     private fun parseCitizenReportDocument(doc: com.google.firebase.firestore.DocumentSnapshot): CitizenDisasterReport? {
         if (!doc.exists()) return null
         val id = doc.getString("id") ?: doc.id
+        val rawStatus = doc.getString("status")?.trim().orEmpty()
+        if (isLegacyPreV110SimulationReport(id, rawStatus)) {
+            inMemoryLatestReportsById.remove(sanitizeCitizenReportId(id))
+            return null
+        }
         val disasterType = doc.getString("disasterType") ?: "Lainnya"
         val incidentTime = doc.getString("incidentTime") ?: ""
         val incidentLocation = doc.getString("incidentLocation") ?: ""
@@ -552,20 +595,41 @@ object FirestoreHelper {
         val photoUri = rawFotoUrl ?: rawFotoLampiran ?: rawPhotoUri ?: com.example.util.ImageUtils.getInlineDataUriForReport(id)
         val reporterName = doc.getString("reporterName") ?: "Warga"
         val reporterPhone = doc.getString("reporterPhone") ?: ""
-        val notes = doc.getString("additionalNotes") ?: ""
+        val rawNotes = doc.getString("additionalNotes") ?: ""
         val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
-        val updatedAt = doc.getLong("updatedAt") ?: timestamp
-        val rawStatus = doc.getString("status")?.trim().orEmpty()
-        val status = if (rawStatus.equals("Pending", ignoreCase = true)) {
+        val rawUpdatedAt = doc.getLong("updatedAt") ?: timestamp
+
+        val isPreResetDummyModification = id in DEFAULT_DUMMY_REPORT_IDS &&
+            overrideCitizenReportFetcherForTesting == null &&
+            rawUpdatedAt < V110_DUMMY_RESET_UPDATED_AT
+
+        val notes = if (isPreResetDummyModification) {
+            when (id) {
+                "LAP-MMK-20261025-001" -> "Ombak pasang mencapai bibir tanggul pengaman, perahu nelayan dievakuasi ke dataran lebih tinggi."
+                "LAP-MMK-20261025-002" -> "Dahan pohon trembesi patah melintang di badan jalan lintas, arus lalu lintas sempat terhambat. Tim BPBD sudah tiba memotong kayu."
+                "LAP-MMK-20261024-003" -> "Air saluran primer meluap sekitar 20 cm ke pekarangan jalan tani akibat hujan lebat perbukitan."
+                else -> rawNotes
+            }
+        } else {
+            rawNotes
+        }
+
+        val status = if (isPreResetDummyModification) {
+            when (id) {
+                "LAP-MMK-20261025-001", "LAP-MMK-20261025-002" -> "Divalidasi"
+                else -> "Diproses"
+            }
+        } else if (rawStatus.equals("Pending", ignoreCase = true)) {
             "Pending"
         } else {
             com.example.model.CitizenReportStatusHelper.normalizeStatus(
                 rawStatus.ifBlank { com.example.model.CitizenReportStatusHelper.STATUS_DIPROSES }
             )
         }
-        val handledByOfficerName = doc.getString("handledByOfficerName") ?: ""
-        val handledByOfficerNip = doc.getString("handledByOfficerNip") ?: ""
-        val handledByOfficerRole = doc.getString("handledByOfficerRole") ?: ""
+        val handledByOfficerName = if (isPreResetDummyModification) "" else (doc.getString("handledByOfficerName") ?: "")
+        val handledByOfficerNip = if (isPreResetDummyModification) "" else (doc.getString("handledByOfficerNip") ?: "")
+        val handledByOfficerRole = if (isPreResetDummyModification) "" else (doc.getString("handledByOfficerRole") ?: "")
+        val effectiveUpdated = if (isPreResetDummyModification) timestamp else maxOf(rawUpdatedAt, timestamp)
 
         return CitizenDisasterReport(
             id = id,
@@ -587,7 +651,7 @@ object FirestoreHelper {
             additionalNotes = notes,
             timestamp = timestamp,
             status = status,
-            updatedAt = maxOf(updatedAt, timestamp),
+            updatedAt = effectiveUpdated,
             handledByOfficerName = handledByOfficerName,
             handledByOfficerNip = handledByOfficerNip,
             handledByOfficerRole = handledByOfficerRole,
@@ -1206,32 +1270,126 @@ object FirestoreHelper {
     }
 
     /**
-     * Menghapus dokumen laporan warga di Cloud Firestore (khusus Tier 1 Manajer / Full Access).
+     * Menghapus dokumen laporan warga di Cloud Firestore (khusus Tier 1 Manajer / Full Access & Reset v1.1.0).
+     * Mencoba `.delete()` terlebih dahulu; jika terhalang aturan `authorUid` milik perangkat warga lain,
+     * otomatis melakukan soft-delete tombstone (`status = DIHAPUS_RESET_V110`) yang diizinkan oleh `firestore.rules`.
      */
     suspend fun deleteReportFromCloudSuspend(reportId: String): Result<Unit> {
+        val safeId = sanitizeCitizenReportId(reportId)
+        inMemoryLatestReportsById.remove(safeId)
         val dbResult = getFirestoreOrThrow()
         val db = dbResult.getOrNull()
             ?: return Result.failure(dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia"))
         ensureAppCheckTokenAttached()
-        val safeId = sanitizeCitizenReportId(reportId)
-        return suspendCancellableCoroutine { cont ->
+
+        val hardDeleteResult = suspendCancellableCoroutine<Result<Unit>> { cont ->
             try {
                 db.collection(COLLECTION_CITIZEN_REPORTS)
                     .document(safeId)
                     .delete()
                     .addOnSuccessListener {
-                        Log.d(TAG, "Report $safeId deleted from Firestore by Tier 1 Manajer")
+                        Log.d(TAG, "Report $safeId deleted from Firestore")
                         if (cont.isActive) cont.resume(Result.success(Unit))
                     }
                     .addOnFailureListener { e ->
-                        logFirestoreError("deleteReportFromCloudSuspend($safeId)", e)
                         if (cont.isActive) cont.resume(Result.failure(e))
                     }
             } catch (e: Exception) {
-                logFirestoreError("deleteReportFromCloudSuspend($safeId)", e)
                 if (cont.isActive) cont.resume(Result.failure(e))
             }
         }
+        if (hardDeleteResult.isSuccess) return Result.success(Unit)
+
+        val tombstoneFields = mapOf<String, Any>(
+            "status" to STATUS_DELETED_RESET_V110,
+            "updatedAt" to System.currentTimeMillis()
+        )
+        return suspendCancellableCoroutine { cont ->
+            try {
+                db.collection(COLLECTION_CITIZEN_REPORTS)
+                    .document(safeId)
+                    .update(tombstoneFields)
+                    .addOnSuccessListener {
+                        Log.d(TAG, "Report $safeId tombstoned ($STATUS_DELETED_RESET_V110) in Firestore")
+                        if (cont.isActive) cont.resume(Result.success(Unit))
+                    }
+                    .addOnFailureListener { e ->
+                        logFirestoreError("deleteReportFromCloudSuspend(tombstone $safeId)", e)
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                logFirestoreError("deleteReportFromCloudSuspend(tombstone $safeId)", e)
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
+    }
+
+    /**
+     * Membersihkan seluruh dokumen laporan simulasi/latihan pra-v1.1.0 di Cloud Firestore
+     * dan memulihkan 3 dokumen dummy default (`LAP-MMK-20261025-001`, `002`, `003`) ke kondisi default bersih.
+     */
+    suspend fun purgeLegacyPreV110SimulationReportsAndResetDefaultsInCloudSuspend(
+        defaultDummyReports: List<CitizenDisasterReport>
+    ): Int {
+        if (overrideCitizenReportFetcherForTesting != null ||
+            overrideCitizenReportUploaderForTesting != null ||
+            overrideCitizenReportStatusUpdaterForTesting != null
+        ) {
+            return 0
+        }
+        val db = getFirestoreOrThrow().getOrNull() ?: return 0
+        ensureAppCheckTokenAttached()
+        var purgedOrResetCount = 0
+
+        val rawDocs = suspendCancellableCoroutine<List<com.google.firebase.firestore.DocumentSnapshot>> { cont ->
+            try {
+                db.collection(COLLECTION_CITIZEN_REPORTS)
+                    .get(Source.SERVER)
+                    .addOnSuccessListener { snapshot ->
+                        if (cont.isActive) cont.resume(snapshot?.documents.orEmpty())
+                    }
+                    .addOnFailureListener {
+                        if (cont.isActive) cont.resume(emptyList())
+                    }
+            } catch (_: Exception) {
+                if (cont.isActive) cont.resume(emptyList())
+            }
+        }
+
+        for (doc in rawDocs) {
+            val id = (doc.getString("id") ?: doc.id).trim()
+            val rawStatus = doc.getString("status")?.trim().orEmpty()
+            if (id !in DEFAULT_DUMMY_REPORT_IDS && !id.contains("-R")) {
+                if (!rawStatus.equals(STATUS_DELETED_RESET_V110, ignoreCase = true)) {
+                    val delRes = deleteReportFromCloudSuspend(id)
+                    if (delRes.isSuccess) {
+                        purgedOrResetCount++
+                    }
+                } else {
+                    inMemoryLatestReportsById.remove(sanitizeCitizenReportId(id))
+                }
+            }
+        }
+
+        val rawDocsById = rawDocs.associateBy { (it.getString("id") ?: it.id).trim() }
+        for (dummy in defaultDummyReports) {
+            val remoteDoc = rawDocsById[dummy.id]
+            val remoteUpdatedAt = remoteDoc?.getLong("updatedAt") ?: 0L
+            if (remoteDoc == null || remoteUpdatedAt < V110_DUMMY_RESET_UPDATED_AT) {
+                val cleanDummy = dummy.copy(
+                    updatedAt = V110_DUMMY_RESET_UPDATED_AT,
+                    handledByOfficerName = "",
+                    handledByOfficerNip = "",
+                    handledByOfficerRole = "",
+                    isSyncedToCloud = true
+                )
+                val syncRes = syncReportToCloudSuspend(cleanDummy)
+                if (syncRes.isSuccess) {
+                    purgedOrResetCount++
+                }
+            }
+        }
+        return purgedOrResetCount
     }
 
     /**

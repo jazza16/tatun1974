@@ -828,11 +828,12 @@ fun OfficerDashboardConsoleView(
                         }
                     }
 
-                    // Baris Badge Aksi: Mengisi kekosongan secara presisi dan terbagi sejajar dalam Ruang Kerja
+                    // Baris Badge Aksi: Mengisi kekosongan secara presisi dan terbagi sejajar 2 kolom dalam Ruang Kerja
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        maxItemsInEachRow = 2
                     ) {
                         if (isOfficerLoggedIn) {
                             // TIER 1 KHUSUS MANAJER: Menu Rahasia "Kelola Personil" HANYA tampil jika role == Manajer
@@ -1123,164 +1124,237 @@ fun OfficerDashboardConsoleView(
                         HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        FlowRow(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Modul Pasca Bencana / DALA (Tersedia untuk Tier 1, Tier 2, Tier 3)
-                            Button(
-                                onClick = { showDalaModule = true },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier
-                                    .heightIn(min = 40.dp)
-                                    .testTag("btn_open_dala_module")
+                            // BARIS 1: Modul Operasional Bencana (2 Kolom Simetris 50% : 50%)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Assignment,
-                                    contentDescription = "Buka Modul Pasca Bencana DALA",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Pasca Bencana / DALA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                // Modul Pasca Bencana / DALA (Tersedia untuk Tier 1, Tier 2, Tier 3)
+                                Button(
+                                    onClick = { showDalaModule = true },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .testTag("btn_open_dala_module")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Assignment,
+                                        contentDescription = "Buka Modul Pasca Bencana DALA",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = "Pasca Bencana / DALA",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                // Input Form Laporan Harian (Operasional untuk Tier 1, Tier 2, Tier 3)
+                                Button(
+                                    onClick = { showFormLaporanHarian = true },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .testTag("btn_open_form_harian")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Buka Form Laporan Harian",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = "Form Harian",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
 
-                            // Input Form Laporan Harian (Operasional untuk Tier 1, Tier 2, Tier 3)
-                            Button(
-                                onClick = { showFormLaporanHarian = true },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier
-                                    .heightIn(min = 40.dp)
-                                    .testTag("btn_open_form_harian")
+                            // BARIS 2: Modul Koordinasi & Unduh Data Relawan (2 Kolom Simetris 50% : 50%)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Buka Form Laporan Harian",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Form Harian", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                // Modul Pendataan & Koordinasi Relawan (Dashboard, Registrasi Offline-First, Verifikasi & Penugasan)
+                                Button(
+                                    onClick = { showVolunteerModule = true },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D9488)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .testTag("btn_open_volunteer_module")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "Buka Modul Pendataan & Koordinasi Relawan",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = "Koordinasi Relawan",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                // Tombol Unduh Daftar Data Seluruh Relawan (Khusus Sesi Aktif: Arsip, Pelaporan Berjenjang, & Pengakhiran Penanggulangan Bencana)
+                                Button(
+                                    onClick = { showDownloadVolunteerArchiveDialog = true },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .testTag("btn_command_bar_download_all_volunteers")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = "Unduh Daftar Data Seluruh Relawan",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = "Unduh Data Relawan",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
 
-                            // Modul Pendataan & Koordinasi Relawan (Dashboard, Registrasi Offline-First, Verifikasi & Penugasan)
-                            Button(
-                                onClick = { showVolunteerModule = true },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D9488)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier
-                                    .heightIn(min = 40.dp)
-                                    .testTag("btn_open_volunteer_module")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = "Buka Modul Pendataan & Koordinasi Relawan",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Koordinasi Relawan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            // BARIS 3: Ekspor Dokumen Resmi PDF & CSV (2 Kolom Simetris 50% : 50% untuk Tier 1 & Tier 2 atau Mode Latihan)
+                            if (isExportAuthorized) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // PDF Export Button (Tier 1 & Tier 2, atau Mode Latihan)
+                                    Button(
+                                        onClick = {
+                                            val exportList = liveReports.filter {
+                                                it.status.equals("Divalidasi", ignoreCase = true) ||
+                                                    it.status.equals("Selesai", ignoreCase = true)
+                                            }
+                                            val finalExport = if (exportList.isNotEmpty()) exportList else liveReports
+                                            ReportExporter.exportToPdf(context, finalExport, officerName, officerBadgeId)
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(42.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PictureAsPdf,
+                                            contentDescription = "Ekspor PDF",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            text = if (isSandboxModeActive) "Ekspor PDF (Latihan)" else "Ekspor PDF",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    // CSV Export Button (Tier 1 & Tier 2, atau Mode Latihan)
+                                    Button(
+                                        onClick = {
+                                            ReportExporter.exportToCsv(context, liveReports, officerName, officerBadgeId)
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(42.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.TableChart,
+                                            contentDescription = "Ekspor CSV",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            text = if (isSandboxModeActive) "Ekspor CSV (Latihan)" else "Ekspor CSV (Excel)",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             }
 
-                            // Tombol Unduh Daftar Data Seluruh Relawan (Khusus Sesi Aktif: Arsip, Pelaporan Berjenjang, & Pengakhiran Penanggulangan Bencana)
-                            Button(
-                                onClick = { showDownloadVolunteerArchiveDialog = true },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier
-                                    .heightIn(min = 40.dp)
-                                    .testTag("btn_command_bar_download_all_volunteers")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Unduh Daftar Data Seluruh Relawan",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Unduh Data Relawan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            // Tombol Toggle Mode Latihan Petugas (Sandbox Simulasi Terisolasi)
+                            // BARIS 4: Mode Latihan Petugas (Sandbox Simulasi Terisolasi) — Full Width Presisi Sejajar Kiri-Kanan
                             Button(
                                 onClick = { showSandboxPanel = !showSandboxPanel },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isSandboxModeActive) Color(0xFFD97706) else Color(0xFF475569)
+                                    containerColor = if (isSandboxModeActive) Color(0xFFD97706) else Color(0xFF334155)
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isSandboxModeActive) Color(0xFFFBBF24) else Color(0xFF475569)
                                 ),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                 modifier = Modifier
-                                    .heightIn(min = 40.dp)
+                                    .fillMaxWidth()
+                                    .height(42.dp)
                                     .testTag("btn_toggle_sandbox_panel")
                             ) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = "Mode Latihan Sandbox",
+                                    tint = if (isSandboxModeActive) Color.White else Color(0xFF94A3B8),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (isSandboxModeActive) "Mode Latihan: AKTIF" else "Mode Latihan",
+                                    text = if (isSandboxModeActive) "Mode Latihan (Sandbox): AKTIF" else "Mode Latihan (Sandbox Simulasi)",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                            }
-
-                            if (isExportAuthorized) {
-                                // PDF Export Button (Tier 1 & Tier 2, atau Mode Latihan)
-                                Button(
-                                    onClick = {
-                                        val exportList = liveReports.filter {
-                                            it.status.equals("Divalidasi", ignoreCase = true) ||
-                                                it.status.equals("Selesai", ignoreCase = true)
-                                        }
-                                        val finalExport = if (exportList.isNotEmpty()) exportList else liveReports
-                                        ReportExporter.exportToPdf(context, finalExport, officerName, officerBadgeId)
-                                    },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.heightIn(min = 40.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PictureAsPdf,
-                                        contentDescription = "Ekspor PDF",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (isSandboxModeActive) "Ekspor PDF (Latihan)" else "Ekspor PDF",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                // CSV Export Button (Tier 1 & Tier 2, atau Mode Latihan)
-                                Button(
-                                    onClick = {
-                                        ReportExporter.exportToCsv(context, liveReports, officerName, officerBadgeId)
-                                    },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.heightIn(min = 40.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.TableChart,
-                                        contentDescription = "Ekspor CSV",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (isSandboxModeActive) "Ekspor CSV (Latihan)" else "Ekspor CSV (Excel)",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
                             }
                         }
                     }
@@ -1356,12 +1430,14 @@ fun OfficerDashboardConsoleView(
                 }
                 add(4 to "📝 Catatan")
             }
-            Row(
+            FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                maxItemsInEachRow = 3
             ) {
                 visibleSubTabs.forEach { (idx, label) ->
                     val isSel = dashboardSubTab == idx
@@ -1391,7 +1467,7 @@ fun OfficerDashboardConsoleView(
                             textAlign = TextAlign.Center,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp)
+                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
                         )
                     }
                 }

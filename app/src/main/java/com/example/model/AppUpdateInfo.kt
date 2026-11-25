@@ -26,20 +26,32 @@ val INITIAL_RELEASE_CHANGELOG = VersionChangelog(
 )
 
 val LATEST_RELEASE_CHANGELOG = VersionChangelog(
-    version = "1.0.10",
-    releaseDate = "23 November 2026",
+    version = "1.1.0",
+    releaseDate = "24 November 2026",
     isCurrent = true,
     isLatest = true,
     highlights = listOf(
-        "Perbaikan Reset PIN & Login Cloud: Reset PIN kembali ke 6 digit terakhir NIP kini bebas notifikasi pencabutan sesi palsu dan langsung mengizinkan login ulang ke server tanpa logo loading menggantung.",
-        "Optimalisasi Performa & Hemat Baterai Mode Administrator: Memutus siklus sinkronisasi berulang daftar personil, memindahkan pemrosesan keamanan ke latar belakang, dan meniadakan lag/freeze saat menggulir Ruang Kerja.",
-        "Pemulihan Skema Login, Logout, Biometrik, & Isolasi Mode Warga: Relogin PIN pribadi Cloud dan Biometrik native Android kembali berfungsi optimal, serta Mode Warga selalu mengisolasi sesi agar Ruang Kerja tetap terkunci.",
-        "Kompatibilitas Upgrade Langsung & Catatan Rilis Bahasa Indonesia: Pembaruan langsung (in-place update) dari seluruh versi v1.0.0–v1.0.9 tanpa menghapus data atau PIN Cloud, lengkap dengan otomatisasi catatan rilis GitHub berbahasa Indonesia."
+        "Disklaimer Resmi & Kebijakan Privasi (UU PDP No. 27 Tahun 2022): Pop-up persetujuan rilis pertama serta dokumen lengkap Disklaimer & Kebijakan Privasi di menu Info Aplikasi untuk pelindungan data pribadi warga.",
+        "Prosedur Verifikasi Lapangan (Cross-Check / Pembuktian Terbalik): Penjelasan resmi mekanisme konfirmasi laporan warga oleh Petugas Piket Resmi BPBD kepada Kades, Lurah, dan Camat di wilayah administratif Kabupaten Mukomuko.",
+        "Unifikasi Layanan Darurat 117 & Nomor Tunggal Panggilan Darurat 112: Penambahan Nomor Tunggal Panggilan Darurat 112 (dikelola Dinas Kominfo Kabupaten Mukomuko) ke Kontak Darurat Publik 24 Jam serta penghapusan nomor telepon lokal lama yang sudah terintegrasi.",
+        "Sinkronisasi CRUD Kelola Personil & Aturan Cloud Firestore: Pembaruan aturan keamanan Cloud Firestore dan sinkronisasi tambah, edit, serta hapus personil agar perubahan tersimpan permanen lintas perangkat."
     )
 )
 
 val RELEASE_HISTORY_ACCORDION_CHANGELOGS: List<VersionChangelog> = listOf(
     LATEST_RELEASE_CHANGELOG,
+    VersionChangelog(
+        version = "1.0.10",
+        releaseDate = "23 November 2026",
+        isCurrent = false,
+        isLatest = false,
+        highlights = listOf(
+            "Perbaikan Reset PIN & Login Cloud: Reset PIN kembali ke 6 digit terakhir NIP kini bebas notifikasi pencabutan sesi palsu dan langsung mengizinkan login ulang ke server tanpa logo loading menggantung.",
+            "Optimalisasi Performa & Hemat Baterai Mode Administrator: Memutus siklus sinkronisasi berulang daftar personil, memindahkan pemrosesan keamanan ke latar belakang, dan meniadakan lag/freeze saat menggulir Ruang Kerja.",
+            "Pemulihan Skema Login, Logout, Biometrik, & Isolasi Mode Warga: Relogin PIN pribadi Cloud dan Biometrik native Android kembali berfungsi optimal, serta Mode Warga selalu mengisolasi sesi agar Ruang Kerja tetap terkunci.",
+            "Kompatibilitas Upgrade Langsung & Catatan Rilis Bahasa Indonesia: Pembaruan langsung (in-place update) dari seluruh versi v1.0.0–v1.0.9 tanpa menghapus data atau PIN Cloud, lengkap dengan otomatisasi catatan rilis GitHub berbahasa Indonesia."
+        )
+    ),
     VersionChangelog(
         version = "1.0.9",
         releaseDate = "23 November 2026",
@@ -142,8 +154,8 @@ val DEFAULT_RELEASE_CHANGELOGS: List<VersionChangelog> = RELEASE_HISTORY_ACCORDI
 
 @Keep
 data class AppUpdateState(
-    val currentVersion: String = "1.0.10",
-    val latestVersion: String = "1.0.10",
+    val currentVersion: String = "1.1.0",
+    val latestVersion: String = "1.1.0",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -155,9 +167,9 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "1.0.10",
+    val lastCheckedVersion: String = "1.1.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Production Release) v1.0.10 terbaru secara permanen.",
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Production Release) v1.1.0 terbaru secara permanen.",
     val packageSizeMb: Float = 20.4f,
     val downloadUrl: String = "https://github.com/jazza16/tatun1974/releases/latest",
     val isBannerDismissed: Boolean = false,

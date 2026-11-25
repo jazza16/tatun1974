@@ -385,7 +385,14 @@ object CitizenIncomingReportsProvider {
 
         // 1. Muat dari tabel citizen_disaster_reports (Laporan Warga real-time & sinkronisasi Cloud)
         val citizenEntities: List<CitizenDisasterReportEntity> = try {
-            database.weatherDao().getAllCitizenDisasterReportsSync()
+            val rawList = database.weatherDao().getAllCitizenDisasterReportsSync()
+            rawList.filter { entity ->
+                val isLegacy = com.example.data.local.FirestoreHelper.isLegacyPreV110SimulationReport(entity.id, entity.status)
+                if (isLegacy) {
+                    runCatching { database.weatherDao().deleteCitizenReportById(entity.id) }
+                }
+                !isLegacy
+            }
         } catch (_: Exception) {
             emptyList()
         }
