@@ -1226,9 +1226,10 @@ object PdfGenerator {
         }
 
         y += 8f
-        canvas.drawText("IV. Distribusi Logistik / Aset Bantuan", margin, y, sectionTitlePaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "IV. Distribusi Logistik / Aset Bantuan", margin, y, sectionTitlePaint)
         y += 14f
-        canvas.drawText(
+        PdfTextAutoShrinkHelper.drawPdfText(
+            canvas,
             "Daftar penyaluran logistik darurat dan aset bantuan penanggulangan bencana pada kejadian ini:",
             margin,
             y,
@@ -1251,15 +1252,21 @@ object PdfGenerator {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
-        val cellTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(15, 23, 42)
-            textSize = 8.2f
-        }
-        val cellCenterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(15, 23, 42)
-            textSize = 8.2f
-            textAlign = Paint.Align.CENTER
-        }
+        val cellTextPaint = PdfTextAutoShrinkHelper.configurePdfPaint(
+            TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(15, 23, 42)
+                textSize = 8.2f
+            },
+            letterSpacingEm = 0.03f
+        )
+        val cellCenterPaint = PdfTextAutoShrinkHelper.configurePdfPaint(
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(15, 23, 42)
+                textSize = 8.2f
+                textAlign = Paint.Align.CENTER
+            },
+            letterSpacingEm = 0.03f
+        )
 
         val logistikWeights = floatArrayOf(0.08f, 0.32f, 0.14f, 0.16f, 0.30f)
         val logistikHeaders = arrayOf("NO", "NAMA BARANG / ASET BANTUAN", "JUMLAH", "SATUAN", "KETERANGAN")
@@ -1270,7 +1277,7 @@ object PdfGenerator {
             val colW = contentWidth * logistikWeights[i]
             canvas.drawRect(colX, y, colX + colW, y + headerHeight, tableHeaderBgPaint)
             canvas.drawRect(colX, y, colX + colW, y + headerHeight, borderPaint)
-            canvas.drawText(logistikHeaders[i], colX + colW / 2f, y + 13f, tableHeaderTextPaint)
+            PdfTextAutoShrinkHelper.drawPdfText(canvas, logistikHeaders[i], colX + colW / 2f, y + 13f, tableHeaderTextPaint)
             colX += colW
         }
         y += headerHeight
@@ -1283,7 +1290,8 @@ object PdfGenerator {
                 textSize = 8.5f
                 textAlign = Paint.Align.CENTER
             }
-            canvas.drawText(
+            PdfTextAutoShrinkHelper.drawPdfText(
+                canvas,
                 "Belum ada distribusi logistik / aset bantuan yang dicatat",
                 PAGE_WIDTH / 2f,
                 y + 14f,
@@ -1297,8 +1305,8 @@ object PdfGenerator {
                 val w2 = contentWidth * logistikWeights[2]
                 val w3 = contentWidth * logistikWeights[3]
                 val w4 = contentWidth * logistikWeights[4]
-                val nama = item.namaBarang.ifBlank { "-" }
-                val ket = item.keterangan.ifBlank { "-" }
+                val nama = PdfTextAutoShrinkHelper.normalizePdfWordSpacing(item.namaBarang.ifBlank { "-" })
+                val ket = PdfTextAutoShrinkHelper.normalizePdfWordSpacing(item.keterangan.ifBlank { "-" })
                 val namaLayout = StaticLayout.Builder
                     .obtain(nama, 0, nama.length, cellTextPaint, (w1 - 10f).toInt().coerceAtLeast(30))
                     .setAlignment(Layout.Alignment.ALIGN_NORMAL)
@@ -1320,7 +1328,7 @@ object PdfGenerator {
 
                 // Kolom 1: NO
                 canvas.drawRect(cellX, y, cellX + w0, y + rowH, borderPaint)
-                canvas.drawText("${index + 1}", cellX + w0 / 2f, textCenterBaseline, cellCenterPaint)
+                PdfTextAutoShrinkHelper.drawPdfText(canvas, "${index + 1}", cellX + w0 / 2f, textCenterBaseline, cellCenterPaint)
                 cellX += w0
 
                 // Kolom 2: NAMA BARANG
@@ -1333,12 +1341,12 @@ object PdfGenerator {
 
                 // Kolom 3: JUMLAH
                 canvas.drawRect(cellX, y, cellX + w2, y + rowH, borderPaint)
-                canvas.drawText(item.jumlah.ifBlank { "0" }, cellX + w2 / 2f, textCenterBaseline, cellCenterPaint)
+                PdfTextAutoShrinkHelper.drawPdfText(canvas, item.jumlah.ifBlank { "0" }, cellX + w2 / 2f, textCenterBaseline, cellCenterPaint)
                 cellX += w2
 
                 // Kolom 4: SATUAN
                 canvas.drawRect(cellX, y, cellX + w3, y + rowH, borderPaint)
-                canvas.drawText(item.satuan.ifBlank { "-" }, cellX + w3 / 2f, textCenterBaseline, cellCenterPaint)
+                PdfTextAutoShrinkHelper.drawPdfText(canvas, item.satuan.ifBlank { "-" }, cellX + w3 / 2f, textCenterBaseline, cellCenterPaint)
                 cellX += w3
 
                 // Kolom 5: KETERANGAN

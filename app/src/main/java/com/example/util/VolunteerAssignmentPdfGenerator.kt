@@ -226,7 +226,7 @@ object VolunteerAssignmentPdfGenerator {
                 // 2. JUDUL "SURAT TUGAS RELAWAN"
                 titlePaint.color = Color.BLACK
                 titlePaint.textSize = 15.5f
-                canvas.drawText("SURAT TUGAS RELAWAN", centerX, y, titlePaint)
+                PdfTextAutoShrinkHelper.drawPdfText(canvas, "SURAT TUGAS RELAWAN", centerX, y, titlePaint)
                 linePaint.color = Color.BLACK
                 linePaint.strokeWidth = 0.8f
                 canvas.drawLine(centerX - 102f, y + 4f, centerX + 102f, y + 4f, linePaint)
@@ -237,22 +237,31 @@ object VolunteerAssignmentPdfGenerator {
                     textSize = 10.5f
                     color = Color.rgb(51, 65, 85)
                 }
-                canvas.drawText("Nomor: $letterNumber", centerX, y, numberPaint)
+                PdfTextAutoShrinkHelper.drawPdfText(canvas, "Nomor: $letterNumber", centerX, y, numberPaint)
 
                 // 3. NARASI PEMBUKA
                 y += 28f
-                canvas.drawText(
-                    "Kepala Pelaksana Badan Penanggulangan Bencana Daerah (BPBD) Kabupaten Mukomuko",
-                    MARGIN,
-                    y,
-                    bodyPaint
+                val maxTextWidth = A4_WIDTH - (MARGIN * 2)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "Kepala Pelaksana Badan Penanggulangan Bencana Daerah (BPBD) Kabupaten Mukomuko",
+                    x = MARGIN,
+                    y = y,
+                    maxWidth = maxTextWidth,
+                    basePaint = bodyPaint,
+                    initialFontSize = bodyPaint.textSize,
+                    minFontSize = 7.5f
                 )
                 y += 16f
-                canvas.drawText(
-                    "melalui Pusat Pengendalian Operasi Penanggulangan Bencana (Pusdalops-PB) menugaskan kepada:",
-                    MARGIN,
-                    y,
-                    bodyPaint
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "melalui Pusat Pengendalian Operasi Penanggulangan Bencana (Pusdalops-PB) menugaskan kepada:",
+                    x = MARGIN,
+                    y = y,
+                    maxWidth = maxTextWidth,
+                    basePaint = bodyPaint,
+                    initialFontSize = bodyPaint.textSize,
+                    minFontSize = 7.5f
                 )
 
                 // 4. KOTAK DATA RELAWAN (Nama, NIK, Keahlian, Organisasi)
@@ -275,11 +284,21 @@ object VolunteerAssignmentPdfGenerator {
                 val labelX = MARGIN + 16f
                 val colonX = MARGIN + 155f
                 val valueX = MARGIN + 168f
+                val maxValW = (A4_WIDTH - MARGIN - 16f) - valueX
 
                 fun drawFieldRow(label: String, value: String) {
-                    canvas.drawText(label, labelX, rowY, bodyPaint)
-                    canvas.drawText(":", colonX, rowY, bodyPaint)
-                    canvas.drawText(value, valueX, rowY, boldPaint)
+                    PdfTextAutoShrinkHelper.drawPdfText(canvas, label, labelX, rowY, bodyPaint)
+                    PdfTextAutoShrinkHelper.drawPdfText(canvas, ":", colonX, rowY, bodyPaint)
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = value,
+                        x = valueX,
+                        y = rowY,
+                        maxWidth = maxValW,
+                        basePaint = boldPaint,
+                        initialFontSize = boldPaint.textSize,
+                        minFontSize = 7.2f
+                    )
                     rowY += 21f
                 }
 
@@ -291,7 +310,16 @@ object VolunteerAssignmentPdfGenerator {
 
                 // 5. KOTAK LOKASI PENUGASAN, SHIFT & TANGGAL
                 y = dataBoxBottom + 24f
-                canvas.drawText("Untuk melaksanakan tugas kemanusiaan dan kesiapsiagaan bencana pada:", MARGIN, y, bodyPaint)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "Untuk melaksanakan tugas kemanusiaan dan kesiapsiagaan bencana pada:",
+                    x = MARGIN,
+                    y = y,
+                    maxWidth = maxTextWidth,
+                    basePaint = bodyPaint,
+                    initialFontSize = bodyPaint.textSize,
+                    minFontSize = 7.5f
+                )
 
                 y += 14f
                 val assignBoxTop = y
@@ -316,13 +344,40 @@ object VolunteerAssignmentPdfGenerator {
 
                 // 6. KETENTUAN PELAKSANAAN
                 y = assignBoxBottom + 26f
-                canvas.drawText("Ketentuan Penugasan:", MARGIN, y, boldPaint)
+                PdfTextAutoShrinkHelper.drawPdfText(canvas, "Ketentuan Penugasan:", MARGIN, y, boldPaint)
                 y += 17f
-                canvas.drawText("1. Melakukan Check-in dan Check-out kehadiran secara real-time di Posko melalui aplikasi SIPAGAR KITA.", MARGIN, y, bodyPaint)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "1. Melakukan Check-in dan Check-out kehadiran secara real-time di Posko melalui aplikasi SIPAGAR KITA.",
+                    x = MARGIN,
+                    y = y,
+                    maxWidth = maxTextWidth,
+                    basePaint = bodyPaint,
+                    initialFontSize = bodyPaint.textSize,
+                    minFontSize = 7.2f
+                )
                 y += 16f
-                canvas.drawText("2. Melaksanakan koordinasi komando lapangan bersama Koordinator Posko & TRC BPBD Mukomuko.", MARGIN, y, bodyPaint)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "2. Melaksanakan koordinasi komando lapangan bersama Koordinator Posko & TRC BPBD Mukomuko.",
+                    x = MARGIN,
+                    y = y,
+                    maxWidth = maxTextWidth,
+                    basePaint = bodyPaint,
+                    initialFontSize = bodyPaint.textSize,
+                    minFontSize = 7.2f
+                )
                 y += 16f
-                canvas.drawText("3. Mengutamakan keselamatan personel (Zero Accident) dan melaporkan situasi darurat ke Pusdalops.", MARGIN, y, bodyPaint)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "3. Mengutamakan keselamatan personel (Zero Accident) dan melaporkan situasi darurat ke Pusdalops.",
+                    x = MARGIN,
+                    y = y,
+                    maxWidth = maxTextWidth,
+                    basePaint = bodyPaint,
+                    initialFontSize = bodyPaint.textSize,
+                    minFontSize = 7.2f
+                )
 
                 // 7. FOOTER & TANDA TANGAN DIGITAL PUSDALOPS-PB BPBD MUKOMUKO
                 y += 44f
@@ -330,13 +385,31 @@ object VolunteerAssignmentPdfGenerator {
                 val signPaint = Paint(bodyPaint).apply { textAlign = Paint.Align.CENTER }
                 val signBoldPaint = Paint(boldPaint).apply { textAlign = Paint.Align.CENTER }
 
-                canvas.drawText("Ditetapkan di: Kota Mukomuko", signCenterX, y, signPaint)
+                PdfTextAutoShrinkHelper.drawPdfText(canvas, "Ditetapkan di: Kota Mukomuko", signCenterX, y, signPaint)
                 y += 15f
-                canvas.drawText("Pada Tanggal: $currentDateStr", signCenterX, y, signPaint)
+                PdfTextAutoShrinkHelper.drawPdfText(canvas, "Pada Tanggal: $currentDateStr", signCenterX, y, signPaint)
                 y += 18f
-                canvas.drawText("a.n. KEPALA PELAKSANA BPBD KAB. MUKOMUKO", signCenterX, y, signBoldPaint)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "a.n. KEPALA PELAKSANA BPBD KAB. MUKOMUKO",
+                    x = signCenterX,
+                    y = y,
+                    maxWidth = 230f,
+                    basePaint = signBoldPaint,
+                    initialFontSize = signBoldPaint.textSize,
+                    minFontSize = 7.0f
+                )
                 y += 14f
-                canvas.drawText("Manajer Pusdalops-PB / Komando Penugasan", signCenterX, y, signPaint)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "Manajer Pusdalops-PB / Komando Penugasan",
+                    x = signCenterX,
+                    y = y,
+                    maxWidth = 230f,
+                    basePaint = signPaint,
+                    initialFontSize = signPaint.textSize,
+                    minFontSize = 7.0f
+                )
 
                 // Kotak Stempel Elektronik / Tanda Tangan Digital Pusdalops
                 y += 14f
@@ -359,9 +432,36 @@ object VolunteerAssignmentPdfGenerator {
                     textSize = 8.8f
                     textAlign = Paint.Align.CENTER
                 }
-                canvas.drawText("DITANDATANGANI SECARA ELEKTRONIK", signCenterX, y + 18f, stampTextPaint)
-                canvas.drawText("PUSDALOPS-PB BPBD MUKOMUKO", signCenterX, y + 31f, stampTextPaint)
-                canvas.drawText("VERIFIED ID: ${volunteer.id}", signCenterX, y + 41f, stampTextPaint)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "DITANDATANGANI SECARA ELEKTRONIK",
+                    x = signCenterX,
+                    y = y + 18f,
+                    maxWidth = 182f,
+                    basePaint = stampTextPaint,
+                    initialFontSize = 8.4f,
+                    minFontSize = 6.2f
+                )
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "PUSDALOPS-PB BPBD MUKOMUKO",
+                    x = signCenterX,
+                    y = y + 31f,
+                    maxWidth = 182f,
+                    basePaint = stampTextPaint,
+                    initialFontSize = 8.4f,
+                    minFontSize = 6.2f
+                )
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "VERIFIED ID: ${volunteer.id}",
+                    x = signCenterX,
+                    y = y + 41f,
+                    maxWidth = 182f,
+                    basePaint = stampTextPaint,
+                    initialFontSize = 8.2f,
+                    minFontSize = 6.2f
+                )
 
                 y += 66f
                 PdfTextAutoShrinkHelper.drawAutoShrinkText(
@@ -375,7 +475,16 @@ object VolunteerAssignmentPdfGenerator {
                     minFontSize = 6.5f
                 )
                 y += 14f
-                canvas.drawText("Pusdalops-PB BPBD Kabupaten Mukomuko", signCenterX, y, signPaint)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "Pusdalops-PB BPBD Kabupaten Mukomuko",
+                    x = signCenterX,
+                    y = y,
+                    maxWidth = 220f,
+                    basePaint = signPaint,
+                    initialFontSize = signPaint.textSize,
+                    minFontSize = 7.0f
+                )
 
                 // Catatan Kaki Dokumen Digital
                 val footerY = A4_HEIGHT - 28f
@@ -388,11 +497,15 @@ object VolunteerAssignmentPdfGenerator {
                     color = Color.rgb(100, 116, 139)
                     textSize = 8.5f
                 }
-                canvas.drawText(
-                    "Dokumen Resmi SIPAGAR KITA BPBD Kab. Mukomuko • Dicetak: $currentDateTimeStr • NIK: ${volunteer.nik}",
-                    MARGIN,
-                    footerY,
-                    footerPaint
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = canvas,
+                    text = "Dokumen Resmi SIPAGAR KITA BPBD Kab. Mukomuko • Dicetak: $currentDateTimeStr • NIK: ${volunteer.nik}",
+                    x = MARGIN,
+                    y = footerY,
+                    maxWidth = maxTextWidth,
+                    basePaint = footerPaint,
+                    initialFontSize = footerPaint.textSize,
+                    minFontSize = 6.5f
                 )
 
                 pdfDocument.finishPage(page)

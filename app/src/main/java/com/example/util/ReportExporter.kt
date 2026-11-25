@@ -671,8 +671,9 @@ object ReportExporter {
     }
 
     /**
-     * Membangun StaticLayout dengan word-wrap dan pengecilan textSize otomatis hingga minTextSize
-     * agar teks panjang tetap muat rapi di dalam lebar kolom tanpa menabrak batas kanan atau terpotong.
+     * Membangun StaticLayout dengan word-wrap, jarak spasi antar-kata yang tegas, dan pengecilan
+     * textSize otomatis hingga minTextSize agar teks panjang tetap muat rapi di dalam lebar kolom
+     * tanpa kata-kata tampak menempel pada hasil PDF.
      */
     private fun buildAutoFitStaticLayout(
         text: String,
@@ -680,18 +681,22 @@ object ReportExporter {
         paint: Paint,
         maxLines: Int = 2,
         minTextSize: Float = 5.8f,
-        lineSpacingExtra: Float = 1.5f,
-        lineSpacingMultiplier: Float = 1.15f
+        lineSpacingExtra: Float = 2.0f,
+        lineSpacingMultiplier: Float = 1.2f
     ): StaticLayout {
-        val safeText = text.ifBlank { "-" }
+        val rawSafe = text.ifBlank { "-" }
+        val safeText = PdfTextAutoShrinkHelper.normalizePdfWordSpacing(rawSafe)
         val safeWidth = maxWidth.coerceAtLeast(20)
         var currentSize = paint.textSize
         var layout: StaticLayout
         while (true) {
-            val tp = TextPaint(paint).apply {
-                isAntiAlias = true
-                textSize = currentSize
-            }
+            val tp = PdfTextAutoShrinkHelper.configurePdfPaint(
+                TextPaint(paint).apply {
+                    isAntiAlias = true
+                    textSize = currentSize
+                },
+                letterSpacingEm = 0.032f
+            )
             val fullLayout = StaticLayout.Builder
                 .obtain(safeText, 0, safeText.length, tp, safeWidth)
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
@@ -1215,7 +1220,16 @@ object ReportExporter {
             isFakeBoldText = true
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("BULETIN PETA CUACA & PERINGATAN DINI 15 KECAMATAN", pageWidth / 2f, y, docTitlePaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "BULETIN PETA CUACA & PERINGATAN DINI 15 KECAMATAN",
+            x = pageWidth / 2f,
+            y = y,
+            maxWidth = pageWidth - (margin * 2f),
+            basePaint = docTitlePaint,
+            initialFontSize = 11f,
+            minFontSize = 8.5f
+        )
         y += 14f
 
         val sdf = SimpleDateFormat("EEEE, dd MMMM yyyy - HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
@@ -1302,7 +1316,16 @@ object ReportExporter {
         canvas.drawRoundRect(summaryRect, 6f, 6f, Paint().apply { color = Color.rgb(254, 242, 242) })
         canvas.drawRoundRect(summaryRect, 6f, 6f, Paint().apply { color = Color.rgb(252, 165, 165); style = Paint.Style.STROKE; strokeWidth = 1f })
 
-        canvas.drawText("RINGKASAN PARAMETER METEOROLOGI KABUPATEN MUKOMUKO", tableLeft + 10f, y + 13f, summaryTitlePaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "RINGKASAN PARAMETER METEOROLOGI KABUPATEN MUKOMUKO",
+            x = tableLeft + 10f,
+            y = y + 13f,
+            maxWidth = tableWidth - 20f,
+            basePaint = summaryTitlePaint,
+            initialFontSize = 7.8f,
+            minFontSize = 6.5f
+        )
 
         canvas.save()
         canvas.translate(tableLeft + 10f, y + 18f)
@@ -1373,18 +1396,18 @@ object ReportExporter {
         canvas.drawLine(tableLeft, y + headerHeight, tableRight, y + headerHeight, linePaint)
 
         val headerBaselineY = y + 14f
-        canvas.drawText("Kecamatan", colStart(0) + 4f, headerBaselineY, headerTextLeftPaint)
-        canvas.drawText("Karakter Wilayah", colStart(1) + 4f, headerBaselineY, headerTextLeftPaint)
-        canvas.drawText("Hujan", colCenter(2), headerBaselineY - 3f, headerTextCenterPaint)
-        canvas.drawText("(mm/j)", colCenter(2), headerBaselineY + 5f, Paint(headerTextCenterPaint).apply { textSize = 6.2f })
-        canvas.drawText("Suhu", colCenter(3), headerBaselineY - 3f, headerTextCenterPaint)
-        canvas.drawText("(°C)", colCenter(3), headerBaselineY + 5f, Paint(headerTextCenterPaint).apply { textSize = 6.2f })
-        canvas.drawText("Terasa", colCenter(4), headerBaselineY - 3f, headerTextCenterPaint)
-        canvas.drawText("(°C)", colCenter(4), headerBaselineY + 5f, Paint(headerTextCenterPaint).apply { textSize = 6.2f })
-        canvas.drawText("Angin", colCenter(5), headerBaselineY - 3f, headerTextCenterPaint)
-        canvas.drawText("(km/j)", colCenter(5), headerBaselineY + 5f, Paint(headerTextCenterPaint).apply { textSize = 6.2f })
-        canvas.drawText("RH (%)", colCenter(6), headerBaselineY, headerTextCenterPaint)
-        canvas.drawText("Kondisi", colStart(7) + 4f, headerBaselineY, headerTextLeftPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Kecamatan", colStart(0) + 4f, headerBaselineY, headerTextLeftPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Karakter Wilayah", colStart(1) + 4f, headerBaselineY, headerTextLeftPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Hujan", colCenter(2), headerBaselineY - 3f, headerTextCenterPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "(mm/j)", colCenter(2), headerBaselineY + 5f, Paint(headerTextCenterPaint).apply { textSize = 6.2f })
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Suhu", colCenter(3), headerBaselineY - 3f, headerTextCenterPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "(°C)", colCenter(3), headerBaselineY + 5f, Paint(headerTextCenterPaint).apply { textSize = 6.2f })
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Terasa", colCenter(4), headerBaselineY - 3f, headerTextCenterPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "(°C)", colCenter(4), headerBaselineY + 5f, Paint(headerTextCenterPaint).apply { textSize = 6.2f })
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Angin", colCenter(5), headerBaselineY - 3f, headerTextCenterPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "(km/j)", colCenter(5), headerBaselineY + 5f, Paint(headerTextCenterPaint).apply { textSize = 6.2f })
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "RH (%)", colCenter(6), headerBaselineY, headerTextCenterPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Kondisi", colStart(7) + 4f, headerBaselineY, headerTextLeftPaint)
         y += headerHeight
 
         // Table Rows (15 Kecamatan) dengan tinggi baris dinamis & StaticLayout auto-fit
@@ -1480,14 +1503,23 @@ object ReportExporter {
             maxLines = 4,
             minTextSize = 6.5f
         )
-        val noteBoxHeight = 19f + sopLayout.height + 7f
+        val noteBoxHeight = 20f + sopLayout.height + 8f
         val noteRect = RectF(tableLeft, y, tableRight, y + noteBoxHeight)
         canvas.drawRoundRect(noteRect, 6f, 6f, Paint().apply { color = Color.rgb(255, 251, 235) })
         canvas.drawRoundRect(noteRect, 6f, 6f, Paint().apply { color = Color.rgb(253, 230, 138); style = Paint.Style.STROKE; strokeWidth = 1f })
 
-        canvas.drawText("PETUNJUK KESIAPSIAGAAN & DISPOSISI KEBENCANAAN:", tableLeft + 10f, y + 13f, Paint(boldTextPaint).apply { color = Color.rgb(180, 83, 9); textAlign = Paint.Align.LEFT })
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "PETUNJUK KESIAPSIAGAAN & DISPOSISI KEBENCANAAN:",
+            x = tableLeft + 10f,
+            y = y + 13f,
+            maxWidth = tableWidth - 20f,
+            basePaint = Paint(boldTextPaint).apply { color = Color.rgb(180, 83, 9); textAlign = Paint.Align.LEFT },
+            initialFontSize = 7.6f,
+            minFontSize = 6.5f
+        )
         canvas.save()
-        canvas.translate(tableLeft + 10f, y + 17f)
+        canvas.translate(tableLeft + 10f, y + 18f)
         sopLayout.draw(canvas)
         canvas.restore()
 
@@ -1855,11 +1887,15 @@ object ReportExporter {
             isAntiAlias = true
         })
 
-        canvas.drawText(
-            "I. RINGKASAN EKSEKUTIF STATISTIK KEBENCANAAN TAHUN $selectedYear (JANUARI – $lastMonthNameUpper)",
-            margin + 10f,
-            y + 12f,
-            Paint(boldTextPaint).apply { color = Color.rgb(30, 64, 175); textSize = 7.4f }
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "I. RINGKASAN EKSEKUTIF STATISTIK KEBENCANAAN TAHUN $selectedYear (JANUARI – $lastMonthNameUpper)",
+            x = margin + 10f,
+            y = y + 12f,
+            maxWidth = (pageWidth - margin * 2 - 20f),
+            basePaint = Paint(boldTextPaint).apply { color = Color.rgb(30, 64, 175); textSize = 7.4f },
+            initialFontSize = 7.4f,
+            minFontSize = 6.2f
         )
 
         canvas.save()
@@ -1875,11 +1911,15 @@ object ReportExporter {
         y += kpiBoxHeight + 18f
 
         // 4. Visualisasi Grafik Batang & Pie Chart Proporsi Bencana
-        canvas.drawText(
-            "II. VISUALISASI GRAFIK BATANG TREN BULANAN & PIE CHART PROPORSI BENCANA",
-            margin,
-            y,
-            sectionHeaderPaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "II. VISUALISASI GRAFIK BATANG TREN BULANAN & PIE CHART PROPORSI BENCANA",
+            x = margin,
+            y = y,
+            maxWidth = (pageWidth - margin * 2),
+            basePaint = sectionHeaderPaint,
+            initialFontSize = 9.0f,
+            minFontSize = 7.2f
         )
         y += 8f
 
@@ -1890,11 +1930,15 @@ object ReportExporter {
         // Kotak Kiri: Grafik Batang Bulanan (Jan s/d Bulan Berjalan)
         canvas.drawRoundRect(barBoxRect, 6f, 6f, Paint().apply { color = Color.rgb(248, 250, 252) })
         canvas.drawRoundRect(barBoxRect, 6f, 6f, Paint(linePaint).apply { style = Paint.Style.STROKE })
-        canvas.drawText(
-            "Grafik Batang Kejadian Bulanan (Jan–$lastMonthShort $selectedYear)",
-            barBoxRect.left + 8f,
-            barBoxRect.top + 12f,
-            boldTextPaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Grafik Batang Kejadian Bulanan (Jan–$lastMonthShort $selectedYear)",
+            x = barBoxRect.left + 8f,
+            y = barBoxRect.top + 12f,
+            maxWidth = barBoxRect.width() - 16f,
+            basePaint = boldTextPaint,
+            initialFontSize = 7.8f,
+            minFontSize = 6.4f
         )
 
         val chartLeft = barBoxRect.left + 24f
@@ -1955,21 +1999,26 @@ object ReportExporter {
         // Legenda ringkas di bawah grafik batang
         var legX = barBoxRect.left + 8f
         val legY = barBoxRect.bottom - 7f
-        val legPaint = Paint(textPaint).apply { textSize = 6.3f }
+        val legPaint = PdfTextAutoShrinkHelper.configurePdfPaint(Paint(textPaint).apply { textSize = 6.3f }, 0.025f)
         DisasterChartCategory.entries.forEach { cat ->
+            val labelText = PdfTextAutoShrinkHelper.normalizePdfWordSpacing(cat.shortLabel)
             canvas.drawRect(legX, legY - 5f, legX + 5f, legY, Paint().apply { color = getCategoryRgbColor(cat) })
-            canvas.drawText(cat.shortLabel, legX + 7f, legY - 0.5f, legPaint)
-            legX += legPaint.measureText(cat.shortLabel) + 14f
+            canvas.drawText(labelText, legX + 7f, legY - 0.5f, legPaint)
+            legX += legPaint.measureText(labelText) + 14f
         }
 
         // Kotak Kanan: Pie / Donut Chart Proporsi Bencana
         canvas.drawRoundRect(pieBoxRect, 6f, 6f, Paint().apply { color = Color.rgb(248, 250, 252) })
         canvas.drawRoundRect(pieBoxRect, 6f, 6f, Paint(linePaint).apply { style = Paint.Style.STROKE })
-        canvas.drawText(
-            "Pie Chart Proporsi Bencana",
-            pieBoxRect.left + 8f,
-            pieBoxRect.top + 12f,
-            boldTextPaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Pie Chart Proporsi Bencana",
+            x = pieBoxRect.left + 8f,
+            y = pieBoxRect.top + 12f,
+            maxWidth = pieBoxRect.width() - 16f,
+            basePaint = boldTextPaint,
+            initialFontSize = 7.8f,
+            minFontSize = 6.4f
         )
 
         val pieOval = RectF(
@@ -2026,7 +2075,8 @@ object ReportExporter {
             canvas.restore()
             pLegY += 15f
         }
-        canvas.drawText(
+        PdfTextAutoShrinkHelper.drawPdfText(
+            canvas,
             "Total: $totalAnnual Kejadian ($selectedYear)",
             pieBoxRect.left + 10f,
             pieBoxRect.bottom - 8f,
@@ -2036,11 +2086,15 @@ object ReportExporter {
         y += chartBoxHeight + 28f
 
         // 5. Tabel Rekapitulasi Bulanan (Januari s/d Bulan Berjalan)
-        canvas.drawText(
-            "III. TABEL REKAPITULASI DATA KEJADIAN BENCANA BULANAN (JANUARI – $lastMonthNameUpper $selectedYear)",
-            margin,
-            y,
-            sectionHeaderPaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "III. TABEL REKAPITULASI DATA KEJADIAN BENCANA BULANAN (JANUARI – $lastMonthNameUpper $selectedYear)",
+            x = margin,
+            y = y,
+            maxWidth = (pageWidth - margin * 2),
+            basePaint = sectionHeaderPaint,
+            initialFontSize = 9.0f,
+            minFontSize = 7.2f
         )
         y += 8f
 
@@ -2079,19 +2133,19 @@ object ReportExporter {
         canvas.drawRect(RectF(margin, y, tableRight, y + thHeight), Paint().apply { color = Color.rgb(226, 232, 240) })
         val thPaintLeft = Paint(boldTextPaint).apply { textSize = 6.3f; textAlign = Paint.Align.LEFT }
         val thPaintCenter = Paint(boldTextPaint).apply { textSize = 6.3f; textAlign = Paint.Align.CENTER }
-        canvas.drawText("No", colNoCenter, y + 12f, thPaintCenter)
-        canvas.drawText("Bulan", colBulanText, y + 12f, thPaintLeft)
-        canvas.drawText("Banjir", colBanjirCenter, y + 12f, thPaintCenter)
-        canvas.drawText("Ekstrem", colEkstremCenter, y + 12f, thPaintCenter)
-        canvas.drawText("Longsor", colLongsorCenter, y + 12f, thPaintCenter)
-        canvas.drawText("Abrasi", colAbrasiCenter, y + 12f, thPaintCenter)
-        canvas.drawText("Karhutla", colKarhutlaCenter, y + 12f, thPaintCenter)
-        canvas.drawText("Lainnya", colLainCenter, y + 12f, thPaintCenter)
-        canvas.drawText("Total", colTotalCenter, y + 12f, thPaintCenter)
-        canvas.drawText("Dampak", colJiwaCenter, y + 12f, thPaintCenter)
-        canvas.drawText("Selesai", colSelesaiCenter, y + 12f, thPaintCenter)
-        canvas.drawText("Kec. Dominan", colKecText, y + 12f, thPaintLeft)
-        canvas.drawText("Status", colStatusCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "No", colNoCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Bulan", colBulanText, y + 12f, thPaintLeft)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Banjir", colBanjirCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Ekstrem", colEkstremCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Longsor", colLongsorCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Abrasi", colAbrasiCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Karhutla", colKarhutlaCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Lainnya", colLainCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Total", colTotalCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Dampak", colJiwaCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Selesai", colSelesaiCenter, y + 12f, thPaintCenter)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Kec. Dominan", colKecText, y + 12f, thPaintLeft)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Status", colStatusCenter, y + 12f, thPaintCenter)
         y += thHeight
         canvas.drawLine(margin, y, tableRight, y, linePaint)
 
@@ -2286,33 +2340,37 @@ object ReportExporter {
         y = tableBottomY + 14f
 
         // 6. Catatan Evaluasi Musiman & Tanda Tangan Pengesahan Laporan Harian
-        val notePaddingHorizontal = 10f
-        val notePaddingTop = 9f
-        val notePaddingBottom = 9f
-        val noteHeaderHeight = 10f
-        val noteGapAfterHeader = 5f
+        val notePaddingHorizontal = 12f
+        val notePaddingTop = 10f
+        val notePaddingBottom = 10f
+        val noteHeaderHeight = 12f
+        val noteGapAfterHeader = 6f
         val noteBodyPaint = Paint(cellPaint).apply {
-            color = Color.rgb(71, 85, 105)
-            textSize = 6.6f
+            color = Color.rgb(30, 41, 59)
+            textSize = 7.4f
         }
         val noteBodyLayout = buildAutoFitStaticLayout(
-            text = "Dokumen statistik bulanan ini dihasilkan otomatis dari basis data terpadu SiPagarKita BPBD Mukomuko sebagai lampiran resmi laporan harian Pusdalops-PB untuk evaluasi kesiapsiagaan personil TRC dan distribusi logistik kebencanaan.",
+            text = "Dokumen statistik bulanan ini dihasilkan otomatis dari basis data terpadu SIPAGAR KITA BPBD Mukomuko sebagai lampiran resmi laporan harian Pusdalops-PB untuk evaluasi kesiapsiagaan personil TRC dan distribusi logistik kebencanaan.",
             maxWidth = (pageWidth - margin * 2 - notePaddingHorizontal * 2).toInt(),
             paint = noteBodyPaint,
             maxLines = 4,
-            minTextSize = 6.2f,
-            lineSpacingExtra = 2.5f,
-            lineSpacingMultiplier = 1.25f
+            minTextSize = 6.8f,
+            lineSpacingExtra = 3.0f,
+            lineSpacingMultiplier = 1.3f
         )
         val noteBoxHeight = notePaddingTop + noteHeaderHeight + noteGapAfterHeader + noteBodyLayout.height + notePaddingBottom
         val noteBox = RectF(margin, y, pageWidth - margin, y + noteBoxHeight)
         canvas.drawRoundRect(noteBox, 5f, 5f, Paint().apply { color = Color.rgb(255, 251, 235) })
-        canvas.drawRoundRect(noteBox, 5f, 5f, Paint().apply { color = Color.rgb(253, 230, 138); style = Paint.Style.STROKE; strokeWidth = 0.8f })
-        canvas.drawText(
-            "CATATAN LAMPIRAN LAPORAN HARIAN PUSDALOPS-PB BPBD KABUPATEN MUKOMUKO:",
-            margin + notePaddingHorizontal,
-            y + notePaddingTop + 7.5f,
-            Paint(boldTextPaint).apply { color = Color.rgb(180, 83, 9); textSize = 7.0f }
+        canvas.drawRoundRect(noteBox, 5f, 5f, Paint().apply { color = Color.rgb(253, 230, 138); style = Paint.Style.STROKE; strokeWidth = 0.9f })
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "CATATAN LAMPIRAN LAPORAN HARIAN PUSDALOPS-PB BPBD KABUPATEN MUKOMUKO:",
+            x = margin + notePaddingHorizontal,
+            y = y + notePaddingTop + 8.5f,
+            maxWidth = pageWidth - margin * 2 - notePaddingHorizontal * 2,
+            basePaint = Paint(boldTextPaint).apply { color = Color.rgb(180, 83, 9); textSize = 7.6f },
+            initialFontSize = 7.6f,
+            minFontSize = 6.6f
         )
         canvas.save()
         canvas.translate(margin + notePaddingHorizontal, y + notePaddingTop + noteHeaderHeight + noteGapAfterHeader)
@@ -2495,11 +2553,15 @@ object ReportExporter {
             isFakeBoldText = true
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText(
-            "TABEL PRAKIRAAN CUACA HARIAN BMKG 15 KECAMATAN KABUPATEN MUKOMUKO",
-            pageWidth / 2f,
-            y,
-            titlePaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "TABEL PRAKIRAAN CUACA HARIAN BMKG 15 KECAMATAN KABUPATEN MUKOMUKO",
+            x = pageWidth / 2f,
+            y = y,
+            maxWidth = tableWidth,
+            basePaint = titlePaint,
+            initialFontSize = 11f,
+            minFontSize = 8.5f
         )
         y += 13f
 
@@ -2567,16 +2629,16 @@ object ReportExporter {
         }
         val cellBoldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(15, 23, 42)
-            textSize = 7.1f
+            textSize = 7.2f
             isFakeBoldText = true
         }
         val cellSubPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(100, 116, 139)
-            textSize = 6.2f
+            color = Color.rgb(71, 85, 105)
+            textSize = 6.3f
         }
         val cellTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(30, 41, 59)
-            textSize = 6.8f
+            textSize = 7.0f
         }
         val cellCenterPaint = Paint(cellTextPaint).apply {
             textAlign = Paint.Align.CENTER
@@ -2587,14 +2649,14 @@ object ReportExporter {
         canvas.drawRect(RectF(tableLeft, y, tableRight, y + thHeight), headerBgPaint)
 
         val thBaseline = y + 14f
-        canvas.drawText("No", colCenter(0), thBaseline, headerTextPaint)
-        canvas.drawText("Kecamatan", colStart(1) + 5f, thBaseline, headerLeftPaint)
-        canvas.drawText("Pagi", colCenter(2), thBaseline, headerTextPaint)
-        canvas.drawText("Siang", colCenter(3), thBaseline, headerTextPaint)
-        canvas.drawText("Malam", colCenter(4), thBaseline, headerTextPaint)
-        canvas.drawText("Dini Hari", colCenter(5), thBaseline, headerTextPaint)
-        canvas.drawText("Suhu", colCenter(6), thBaseline, headerTextPaint)
-        canvas.drawText("Angin", colCenter(7), thBaseline, headerTextPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "No", colCenter(0), thBaseline, headerTextPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Kecamatan", colStart(1) + 5f, thBaseline, headerLeftPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Pagi", colCenter(2), thBaseline, headerTextPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Siang", colCenter(3), thBaseline, headerTextPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Malam", colCenter(4), thBaseline, headerTextPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Dini Hari", colCenter(5), thBaseline, headerTextPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Suhu", colCenter(6), thBaseline, headerTextPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Angin", colCenter(7), thBaseline, headerTextPaint)
         y += thHeight
 
         val rowH = 31f
@@ -2607,7 +2669,7 @@ object ReportExporter {
             }
 
             // Kolom 0: No
-            canvas.drawText("${idx + 1}", colCenter(0), y + 18f, cellCenterPaint)
+            PdfTextAutoShrinkHelper.drawPdfText(canvas, "${idx + 1}", colCenter(0), y + 18f, cellCenterPaint)
 
             // Kolom 1: Kecamatan + Kategori Wilayah
             val kecLayout = buildAutoFitStaticLayout(
@@ -2622,7 +2684,7 @@ object ReportExporter {
                 maxWidth = (colWidth(1) - 8f).toInt(),
                 paint = cellSubPaint,
                 maxLines = 1,
-                minTextSize = 5.2f
+                minTextSize = 5.4f
             )
             canvas.save()
             canvas.translate(colStart(1) + 5f, y + 5f)
@@ -2646,14 +2708,14 @@ object ReportExporter {
                     51, 53, 55, 61, 80 -> Color.rgb(37, 99, 235)
                     63, 65, 81, 82 -> Color.rgb(29, 78, 216)
                     95, 96, 99 -> Color.rgb(220, 38, 38)
-                    else -> Color.rgb(71, 85, 105)
+                    else -> Color.rgb(51, 65, 85)
                 }
                 val condLayout = buildAutoFitStaticLayout(
                     text = condText,
-                    maxWidth = (colWidth(colIdx) - 6f).toInt(),
-                    paint = Paint(cellBoldPaint).apply { color = badgeColor; textSize = 6.6f },
+                    maxWidth = (colWidth(colIdx) - 4f).toInt(),
+                    paint = Paint(cellBoldPaint).apply { color = badgeColor; textSize = 6.7f },
                     maxLines = 2,
-                    minTextSize = 5.4f
+                    minTextSize = 5.5f
                 )
                 canvas.save()
                 val textWidth = (0 until condLayout.lineCount).maxOfOrNull { condLayout.getLineWidth(it) } ?: 0f
@@ -2667,18 +2729,18 @@ object ReportExporter {
 
             // Kolom 6: Suhu & RH
             val tempLayout = buildAutoFitStaticLayout(
-                text = "${row.tempMin}-${row.tempMax}°C",
-                maxWidth = (colWidth(6) - 6f).toInt(),
+                text = "${row.tempMin} - ${row.tempMax} °C",
+                maxWidth = (colWidth(6) - 4f).toInt(),
                 paint = cellBoldPaint,
                 maxLines = 1,
                 minTextSize = 5.6f
             )
             val rhLayout = buildAutoFitStaticLayout(
                 text = "RH ${row.humidityMin}-${row.humidityMax}%",
-                maxWidth = (colWidth(6) - 6f).toInt(),
+                maxWidth = (colWidth(6) - 4f).toInt(),
                 paint = cellSubPaint,
                 maxLines = 1,
-                minTextSize = 5.0f
+                minTextSize = 5.2f
             )
             canvas.save()
             canvas.translate(colStart(6) + (colWidth(6) - tempLayout.getLineWidth(0)) / 2f, y + 6f)
@@ -2692,14 +2754,14 @@ object ReportExporter {
             // Kolom 7: Angin (Arah + Kecepatan)
             val windDirLayout = buildAutoFitStaticLayout(
                 text = "➤ ${row.windDirectionLabel}",
-                maxWidth = (colWidth(7) - 6f).toInt(),
+                maxWidth = (colWidth(7) - 4f).toInt(),
                 paint = Paint(cellBoldPaint).apply { color = Color.rgb(3, 105, 161); textSize = 6.6f },
                 maxLines = 1,
                 minTextSize = 5.4f
             )
             val windSpdLayout = buildAutoFitStaticLayout(
                 text = "${row.windSpeedKmh} km/jam",
-                maxWidth = (colWidth(7) - 6f).toInt(),
+                maxWidth = (colWidth(7) - 4f).toInt(),
                 paint = cellSubPaint,
                 maxLines = 1,
                 minTextSize = 5.2f
@@ -2732,33 +2794,40 @@ object ReportExporter {
 
         y += 12f
 
-        // Kotak Catatan Kesiapsiagaan Hidrometeorologi BMKG
-        val notePaddingH = 10f
-        val notePaddingV = 8f
-        val noteHeaderH = 10f
-        val noteGap = 4f
+        // Kotak Catatan Kesiapsiagaan Hidrometeorologi BMKG (Spasi antar-kata dipertegas & kalimat lebih jelas)
+        val notePaddingH = 12f
+        val notePaddingV = 10f
+        val noteHeaderH = 12f
+        val noteGap = 6f
         val noteBodyLayout = buildAutoFitStaticLayout(
             text = "Prakiraan cuaca harian 15 Kecamatan Kabupaten Mukomuko ini digunakan sebagai acuan kesiapsiagaan personil TRC Pusdalops-PB BPBD terhadap potensi hujan lebat, angin kencang pesisir Samudra Hindia, serta kenaikan muka air sungai.",
             maxWidth = (tableWidth - notePaddingH * 2).toInt(),
-            paint = Paint(cellTextPaint).apply { color = Color.rgb(71, 85, 105); textSize = 6.6f },
-            maxLines = 3,
-            minTextSize = 6.0f,
-            lineSpacingExtra = 2.2f,
-            lineSpacingMultiplier = 1.2f
+            paint = Paint(cellTextPaint).apply {
+                color = Color.rgb(30, 41, 59)
+                textSize = 7.4f
+            },
+            maxLines = 4,
+            minTextSize = 6.8f,
+            lineSpacingExtra = 3.2f,
+            lineSpacingMultiplier = 1.32f
         )
         val noteBoxH = notePaddingV + noteHeaderH + noteGap + noteBodyLayout.height + notePaddingV
         val noteRect = RectF(tableLeft, y, tableRight, y + noteBoxH)
-        canvas.drawRoundRect(noteRect, 5f, 5f, Paint().apply { color = Color.rgb(239, 246, 255) })
-        canvas.drawRoundRect(noteRect, 5f, 5f, Paint().apply {
-            color = Color.rgb(147, 197, 253)
+        canvas.drawRoundRect(noteRect, 6f, 6f, Paint().apply { color = Color.rgb(239, 246, 255) })
+        canvas.drawRoundRect(noteRect, 6f, 6f, Paint().apply {
+            color = Color.rgb(96, 165, 250)
             style = Paint.Style.STROKE
-            strokeWidth = 0.8f
+            strokeWidth = 1.0f
         })
-        canvas.drawText(
-            "CATATAN LAMPIRAN PRAKIRAAN CUACA HARIAN BMKG - PUSDALOPS BPBD MUKOMUKO:",
-            tableLeft + notePaddingH,
-            y + notePaddingV + 7.5f,
-            Paint(cellBoldPaint).apply { color = Color.rgb(30, 64, 175); textSize = 6.9f }
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "CATATAN LAMPIRAN PRAKIRAAN CUACA HARIAN BMKG - PUSDALOPS BPBD MUKOMUKO:",
+            x = tableLeft + notePaddingH,
+            y = y + notePaddingV + 8.5f,
+            maxWidth = tableWidth - notePaddingH * 2,
+            basePaint = Paint(cellBoldPaint).apply { color = Color.rgb(30, 64, 175); textSize = 7.6f },
+            initialFontSize = 7.6f,
+            minFontSize = 6.6f
         )
         canvas.save()
         canvas.translate(tableLeft + notePaddingH, y + notePaddingV + noteHeaderH + noteGap)

@@ -131,9 +131,10 @@ class OfficerRealtimeNewReportDetector {
         lastReadReportId = report.id
         unacknowledgedQueue.removeAll { it.id == report.id }
         unacknowledgedQueue.add(0, report)
-        if (context != null) {
+        val effectiveContext = context?.applicationContext ?: OfficerPushNotificationHelper.getAppContext()
+        if (effectiveContext != null) {
             try {
-                OfficerPushNotificationHelper.notifyOfficerForNewReport(context.applicationContext, report)
+                OfficerPushNotificationHelper.notifyOfficerForNewReport(effectiveContext, report)
             } catch (_: Throwable) {
             }
         }
@@ -179,9 +180,16 @@ class OfficerRealtimeNewReportDetector {
         pendingSortedDesc.forEach { seenReportIds.add(it.id) }
 
         if (allNewUnseen.isNotEmpty()) {
+            val appCtx = OfficerPushNotificationHelper.getAppContext()
             for (newRep in allNewUnseen.asReversed()) {
                 unacknowledgedQueue.removeAll { it.id == newRep.id }
                 unacknowledgedQueue.add(0, newRep)
+                if (appCtx != null) {
+                    try {
+                        OfficerPushNotificationHelper.notifyOfficerForNewReport(appCtx, newRep)
+                    } catch (_: Throwable) {
+                    }
+                }
             }
         }
 

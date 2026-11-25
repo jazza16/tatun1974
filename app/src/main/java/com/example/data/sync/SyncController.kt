@@ -471,6 +471,8 @@ class SyncController(
                         incomingReports.add(r)
                     }
 
+                    val baselineAlreadyInitialized = OfficerPushNotificationHelper.isBaselineInitialized(context)
+
                     // Reconcile each report with Room using SyncConflictHandler
                     for (remoteReport in incomingReports) {
                         val localEntity = weatherDao.getCitizenReportById(remoteReport.id)
@@ -506,13 +508,24 @@ class SyncController(
                             )
                         )
 
-                        // Trigger push notification to devices logged in as Officer/Pusdalops for brand-new reports
-                        if (!isFirstSnapshot && !knownReportIds.contains(remoteReport.id) && localEntity == null) {
+                        // Trigger push notification to devices registered/logged in as Officer/Pusdalops for brand-new pending reports.
+                        // Uses persistent notification history (hasReportBeenNotified) instead of localEntity == null
+                        // to prevent race condition when WeatherRepository inserts the report milliseconds earlier.
+                        val isPendingReport = com.example.model.CitizenReportStatusHelper.isPending(resolved.status) ||
+                            resolved.status.equals("Pending", ignoreCase = true)
+                        if ((!isFirstSnapshot || baselineAlreadyInitialized) &&
+                            isPendingReport &&
+                            !knownReportIds.contains(remoteReport.id) &&
+                            !OfficerPushNotificationHelper.hasReportBeenNotified(context, resolved.id)
+                        ) {
+                            com.example.ui.components.OfficerRealtimeNewReportDetector
+                                .sharedSessionDetector
+                                .recordNewCitizenReport(resolved, context)
                             triggerSimultaneousDisasterAlert(resolved)
                         }
                         knownReportIds.add(remoteReport.id)
                     }
-                    if (isFirstSnapshot) {
+                    if (isFirstSnapshot && !baselineAlreadyInitialized) {
                         OfficerPushNotificationHelper.registerInitialBaselineReports(context, knownReportIds)
                     }
                     isFirstSnapshot = false

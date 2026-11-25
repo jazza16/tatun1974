@@ -274,13 +274,19 @@ class MainActivity : FragmentActivity() {
             Log.w("MainActivity", "KarhutlaSyncScheduler skipped: ${e.message}")
         }
 
-        // Initialize BMKG Earthquake and Severe Weather Notification Channels
+        // Initialize BMKG Earthquake, Severe Weather, and Real-Time Officer Push Notification Channels
         try {
             com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
             com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
             com.example.util.WeatherNotificationHelper.initAppUpdateNotificationChannel(this)
+            com.example.data.sync.OfficerPushNotificationHelper.registerAppContext(applicationContext)
+            com.example.data.sync.OfficerPushNotificationHelper.syncOfficerTopicSubscription(applicationContext)
+            com.example.data.sync.SyncController.getInstance(
+                applicationContext,
+                AppDatabase.getInstance(applicationContext)
+            )
         } catch (e: Throwable) {
-            Log.w("MainActivity", "NotificationChannel init skipped: ${e.message}")
+            Log.w("MainActivity", "NotificationChannel / SyncController init skipped: ${e.message}")
         }
 
         // Pemicu pemeriksaan Auto-Update GitHub saat aplikasi dibuka

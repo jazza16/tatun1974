@@ -2726,6 +2726,9 @@ fun OfficerDashboardConsoleView(
             val matchesRole = when (selectedRoleTab) {
                 "Semua" -> true
                 "Pengawas" -> off.role.contains("Pengawas", ignoreCase = true)
+                "Sekretaris" -> off.role.contains("Sekretaris", ignoreCase = true)
+                "Kabid KL" -> off.role.contains("Kabid KL", ignoreCase = true)
+                "Kabid RR" -> off.role.contains("Kabid RR", ignoreCase = true)
                 "Manajer" -> off.role.contains("Manajer", ignoreCase = true)
                 "Supervisor" -> off.role.contains("Supervisor", ignoreCase = true)
                 OfficerRoles.OPERATOR -> off.role.contains("Operator", ignoreCase = true)
@@ -2987,6 +2990,9 @@ fun OfficerDashboardConsoleView(
                                 val roleTabs = listOf(
                                     "Semua" to "Semua (${rosterList.size})",
                                     "Pengawas" to "Pengawas (${rosterList.count { it.role.contains("Pengawas", ignoreCase = true) }})",
+                                    "Sekretaris" to "Sekretaris (${rosterList.count { it.role.contains("Sekretaris", ignoreCase = true) }})",
+                                    "Kabid KL" to "Kabid KL (${rosterList.count { it.role.contains("Kabid KL", ignoreCase = true) }})",
+                                    "Kabid RR" to "Kabid RR (${rosterList.count { it.role.contains("Kabid RR", ignoreCase = true) }})",
                                     "Manajer" to "Manajer Pusdalops (${rosterList.count { it.role.contains("Manajer", ignoreCase = true) }})",
                                     "Supervisor" to "Supervisor (${rosterList.count { it.role.contains("Supervisor", ignoreCase = true) }})",
                                     OfficerRoles.OPERATOR to "Operator (${rosterList.count { it.role.contains("Operator", ignoreCase = true) }})",
@@ -3087,6 +3093,7 @@ fun OfficerDashboardConsoleView(
                                         val roleBorder = roleColor.copy(alpha = 0.35f)
                                         val roleIcon = when {
                                             off.role.contains("Pengawas", ignoreCase = true) || off.role.contains("Kalaksa", ignoreCase = true) -> Icons.Default.AdminPanelSettings
+                                            off.role.contains("Sekretaris", ignoreCase = true) -> Icons.Default.AdminPanelSettings
                                             off.role.contains("Supervisor", ignoreCase = true) || off.role.contains("Kabid", ignoreCase = true) -> Icons.Default.Shield
                                             off.role.contains("Koord", ignoreCase = true) || off.role.contains("Administrasi", ignoreCase = true) -> Icons.Default.Badge
                                             off.role.contains("Manajer", ignoreCase = true) -> Icons.Default.AdminPanelSettings
@@ -3407,9 +3414,12 @@ fun OfficerDashboardConsoleView(
 
                             Spacer(modifier = Modifier.height(6.dp))
 
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 val roleChoices = listOf(
                                     Triple(OfficerRoles.PENGAWAS, "🏛️ Pengawas BPBD", "Pimpinan pengawasan siaga & koordinasi komando kebijakan bencana"),
+                                    Triple(OfficerRoles.SEKRETARIS, "📑 Sekretaris", "Koordinasi kesekretariatan, administrasi umum, & tata kelola BPBD"),
+                                    Triple(OfficerRoles.KABID_KL, "🚨 Kabid KL", "Kepala Bidang Kedaruratan dan Logistik penanggulangan bencana"),
+                                    Triple(OfficerRoles.KABID_RR, "🏗️ Kabid RR", "Kepala Bidang Rehabilitasi dan Rekonstruksi pasca bencana"),
                                     Triple(OfficerRoles.MANAJER, "⭐ Manajer Pusdalops PB", "Penanggung jawab koordinasi operasional komando penanggulangan bencana"),
                                     Triple(OfficerRoles.SUPERVISOR, "🛡️ Supervisor BPBD", "Supervisi kesiapsiagaan posko darurat dan pemantauan personil"),
                                     Triple(OfficerRoles.KOORD_ADMINISTRASI, "📋 Koord. Administrasi", "Pengelolaan administrasi data posko dan logistik kebencanaan"),
@@ -3421,7 +3431,7 @@ fun OfficerDashboardConsoleView(
                                 roleChoices.forEach { (roleVal, roleTitle, roleDesc) ->
                                     val isSelected = inputRole == roleVal
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(10.dp),
                                         color = if (isSelected) Color(0xFFEFF6FF) else Color(0xFFF8FAFC),
                                         border = androidx.compose.foundation.BorderStroke(
                                             width = if (isSelected) 1.5.dp else 1.dp,
@@ -3432,28 +3442,32 @@ fun OfficerDashboardConsoleView(
                                             .clickable { inputRole = roleVal }
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(8.dp),
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
                                                     text = roleTitle,
-                                                    fontSize = 11.sp,
+                                                    fontSize = 11.5.sp,
+                                                    lineHeight = 16.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = if (isSelected) Color(0xFF1D4ED8) else Color(0xFF1E293B)
                                                 )
+                                                Spacer(modifier = Modifier.height(2.dp))
                                                 Text(
                                                     text = roleDesc,
                                                     fontSize = 11.sp,
+                                                    lineHeight = 15.sp,
                                                     color = Color(0xFF64748B)
                                                 )
                                             }
                                             if (isSelected) {
+                                                Spacer(modifier = Modifier.width(8.dp))
                                                 Icon(
                                                     imageVector = Icons.Default.CheckCircle,
                                                     contentDescription = null,
                                                     tint = Color(0xFF2563EB),
-                                                    modifier = Modifier.size(16.dp)
+                                                    modifier = Modifier.size(18.dp)
                                                 )
                                             }
                                         }
@@ -3592,6 +3606,9 @@ fun OfficerDashboardConsoleView(
 
                             val editRolePresets = listOf(
                                 OfficerRoles.PENGAWAS,
+                                OfficerRoles.SEKRETARIS,
+                                OfficerRoles.KABID_KL,
+                                OfficerRoles.KABID_RR,
                                 OfficerRoles.MANAJER,
                                 OfficerRoles.SUPERVISOR,
                                 OfficerRoles.KOORD_ADMINISTRASI,

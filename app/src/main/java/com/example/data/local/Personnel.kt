@@ -46,6 +46,9 @@ data class Personnel(
  */
 object OfficialAsnBpbdPersonnel {
     const val ROLE_PENGAWAS = "Pengawas BPBD"
+    const val ROLE_SEKRETARIS = "Sekretaris"
+    const val ROLE_KABID_KL = "Kabid KL"
+    const val ROLE_KABID_RR = "Kabid RR"
     const val ROLE_SUPERVISOR = "Supervisor BPBD"
     const val ROLE_KOORD_ADMINISTRASI = "Koord. Administrasi"
     const val ROLE_MANAJER = "Manajer Pusdalops-PB"
@@ -327,7 +330,9 @@ object OfficialAsnBpbdPersonnel {
         return when {
             role.contains("Pengawas", ignoreCase = true) ->
                 Pair(androidx.compose.ui.graphics.Color(0xFFEDE9FE), androidx.compose.ui.graphics.Color(0xFF6D28D9)) // Ungu
-            role.contains("Supervisor", ignoreCase = true) ->
+            role.contains("Sekretaris", ignoreCase = true) ->
+                Pair(androidx.compose.ui.graphics.Color(0xFFE0E7FF), androidx.compose.ui.graphics.Color(0xFF4338CA)) // Indigo
+            role.contains("Kabid", ignoreCase = true) || role.contains("Supervisor", ignoreCase = true) ->
                 Pair(androidx.compose.ui.graphics.Color(0xFFE0F2FE), androidx.compose.ui.graphics.Color(0xFF0369A1)) // Biru Muda
             role.contains("Koord", ignoreCase = true) || role.contains("Administrasi", ignoreCase = true) ->
                 Pair(androidx.compose.ui.graphics.Color(0xFFCCFBF1), androidx.compose.ui.graphics.Color(0xFF0F766E)) // Hijau Teal

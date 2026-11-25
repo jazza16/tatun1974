@@ -96,18 +96,61 @@ object PdfTextAutoShrinkHelper {
     }
 
     /**
-     * Menggambar teks satu baris pada `canvas` dengan logika Auto-Shrink otomatis.
+     * Memperlebar spasi antar-kata dan mengaktifkan subpixel/linear text metrics khusus untuk
+     * rendering Android `PdfDocument` (SkPDF).
      *
-     * @param canvas Canvas halaman PDF.
-     * @param text Teks target (misalnya Nama + Gelar atau baris NIP).
-     * @param x Koordinat horizontal (mengikuti `basePaint.textAlign`: LEFT, CENTER, atau RIGHT).
-     * @param y Baseline vertikal teks.
-     * @param maxWidth Lebar maksimum kotak/kolom yang tersedia (dalam pt).
-     * @param basePaint Gaya Paint awal (warna, typeface, underline, alignment) — tidak dimutasi.
-     * @param initialFontSize Ukuran font awal dari `DocumentSettings.fontSize`.
-     * @param minFontSize Batas minimum ukuran font dari `DocumentSettings.minFontSize`.
-     * @param maxLengthBeforeTruncate Batas panjang karakter maksimum sebelum pemotongan dari `DocumentSettings`.
-     * @return Ukuran font akhir (pt) yang digunakan saat menggambar teks.
+     * Pada mesin PDF native Android (`PdfDocument`), lebar glyph spasi tunggal (`' '`) pada ukuran
+     * font kecil (6pt–9pt) dan huruf tebal (`FakeBoldText` / `Typeface.BOLD`) sering terkompresi
+     * sehingga kata-kata tampak menempel ("HujanRintik", "BerawanTebal", "CATATANLAMPIRAN...").
+     * Fungsi ini menggandakan jarak visual spasi antar-kata secara presisi tanpa mengubah baris baru (`\n`).
+     */
+    fun normalizePdfWordSpacing(text: String): String {
+        if (text.isEmpty()) return text
+        // Pertahankan baris baru (\n), namun ganti setiap spasi tunggal/berurutan antar-kata
+        // dengan dua spasi penuh ("  ") agar di PDF terlihat memiliki jarak pemisah kata yang tegas.
+        return text.lines().joinToString("\n") { line ->
+            val trimmedLine = line.trim()
+            if (trimmedLine.isEmpty()) {
+                ""
+            } else {
+                trimmedLine.replace(Regex("[ \\t]+"), "  ")
+            }
+        }
+    }
+
+    /**
+     * Mengonfigurasi `Paint` / `TextPaint` agar memiliki `letterSpacing` dan `isSubpixelText`
+     * yang optimal saat dirender ke Canvas `PdfDocument`.
+     */
+    fun <T : Paint> configurePdfPaint(paint: T, letterSpacingEm: Float = 0.035f): T {
+        paint.isAntiAlias = true
+        paint.isSubpixelText = true
+        paint.isLinearText = true
+        if (paint.letterSpacing < letterSpacingEm) {
+            paint.letterSpacing = letterSpacingEm
+        }
+        return paint
+    }
+
+    /**
+     * Menggambar teks satu baris pada `canvas` dengan penegasan spasi antar-kata PDF.
+     */
+    fun drawPdfText(
+        canvas: Canvas,
+        text: String,
+        x: Float,
+        y: Float,
+        paint: Paint,
+        letterSpacingEm: Float = 0.035f
+    ) {
+        val pdfPaint = configurePdfPaint(Paint(paint), letterSpacingEm)
+        val spacedText = normalizePdfWordSpacing(text)
+        canvas.drawText(spacedText, x, y, pdfPaint)
+    }
+
+    /**
+     * Menggambar teks satu baris pada `canvas` dengan logika Auto-Shrink otomatis
+     * serta jarak spasi antar-kata yang tegas untuk dokumen PDF.
      */
     fun drawAutoShrinkText(
         canvas: Canvas,
@@ -126,24 +169,26 @@ object PdfTextAutoShrinkHelper {
         } else {
             cleanText
         }
+        val spacedText = normalizePdfWordSpacing(lengthCapped)
+        val configuredBase = configurePdfPaint(Paint(basePaint), 0.03f)
 
         val resolvedSize = computeAutoShrinkFontSize(
-            text = lengthCapped,
-            paint = basePaint,
+            text = spacedText,
+            paint = configuredBase,
             maxWidth = maxWidth,
             initialFontSize = initialFontSize,
             minFontSize = minFontSize
         )
 
-        val drawPaint = Paint(basePaint).apply {
+        val drawPaint = Paint(configuredBase).apply {
             textSize = resolvedSize
         }
 
         val finalText = fitTextToWidth(
-            text = lengthCapped,
+            text = spacedText,
             paint = drawPaint,
             maxWidth = maxWidth,
-            maxLengthBeforeTruncate = maxLengthBeforeTruncate
+            maxLengthBeforeTruncate = Int.MAX_VALUE
         )
 
         canvas.drawText(finalText, x, y, drawPaint)

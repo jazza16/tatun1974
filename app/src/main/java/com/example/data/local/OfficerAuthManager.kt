@@ -38,6 +38,9 @@ object OfficerRoles {
     const val SUPER_ADMIN = "SuperAdmin"
     const val RBAC_OPERATOR = "Operator"
     const val PENGAWAS = "Pengawas BPBD"
+    const val SEKRETARIS = "Sekretaris"
+    const val KABID_KL = "Kabid KL"
+    const val KABID_RR = "Kabid RR"
     const val MANAJER = "Manajer Pusdalops-PB"
     const val SUPERVISOR = "Supervisor BPBD"
     const val KOORD_ADMINISTRASI = "Koord. Administrasi"
@@ -45,7 +48,20 @@ object OfficerRoles {
     const val PETUGAS_JAGA = "Petugas Jaga Siaga / Piket"
     const val PETUGAS_LAPANGAN = "Petugas Lapangan TRC / Logistik"
 
-    val ALL_ROLES = listOf(SUPER_ADMIN, RBAC_OPERATOR, PENGAWAS, MANAJER, SUPERVISOR, KOORD_ADMINISTRASI, OPERATOR, PETUGAS_JAGA, PETUGAS_LAPANGAN)
+    val ALL_ROLES = listOf(
+        SUPER_ADMIN,
+        RBAC_OPERATOR,
+        PENGAWAS,
+        SEKRETARIS,
+        KABID_KL,
+        KABID_RR,
+        MANAJER,
+        SUPERVISOR,
+        KOORD_ADMINISTRASI,
+        OPERATOR,
+        PETUGAS_JAGA,
+        PETUGAS_LAPANGAN
+    )
 
     /**
      * Official hierarchy rank for duty personnel list.
@@ -55,12 +71,15 @@ object OfficerRoles {
         role.equals(SUPER_ADMIN, ignoreCase = true) -> 0
         role.contains("Pengawas", ignoreCase = true) -> 1
         role.contains("Manajer", ignoreCase = true) || role.contains("Manager", ignoreCase = true) -> 2
-        role.contains("Supervisor", ignoreCase = true) -> 3
-        role.contains("Koord", ignoreCase = true) || role.contains("Administrasi", ignoreCase = true) -> 4
-        role.contains("Operator", ignoreCase = true) -> 5
-        role.contains("Piket", ignoreCase = true) || role.contains("Jaga", ignoreCase = true) -> 6
-        role.contains("Lapangan", ignoreCase = true) || role.contains("Logistik", ignoreCase = true) || role.contains("TRC", ignoreCase = true) -> 7
-        else -> 8
+        role.contains("Sekretaris", ignoreCase = true) -> 3
+        role.contains("Kabid KL", ignoreCase = true) -> 4
+        role.contains("Kabid RR", ignoreCase = true) -> 5
+        role.contains("Supervisor", ignoreCase = true) -> 6
+        role.contains("Koord", ignoreCase = true) || role.contains("Administrasi", ignoreCase = true) -> 7
+        role.contains("Operator", ignoreCase = true) -> 8
+        role.contains("Piket", ignoreCase = true) || role.contains("Jaga", ignoreCase = true) -> 9
+        role.contains("Lapangan", ignoreCase = true) || role.contains("Logistik", ignoreCase = true) || role.contains("TRC", ignoreCase = true) -> 10
+        else -> 11
     }
 }
 
@@ -1001,9 +1020,9 @@ class OfficerAuthManager(private val context: Context) {
         com.example.util.SessionManager(context).clearSession()
         SecurityManager.getInstance(context).clearLocalSession()
         com.example.security.AdminAccessSecurityManager.revokeToken()
+        // Pertahankan langganan topik FCM bpbd_officer_alerts jika identitas petugas masih terdaftar di HP Asli Petugas
         com.example.data.sync.OfficerPushNotificationHelper.syncOfficerTopicSubscription(
-            context = context,
-            forceOfficerActive = false
+            context = context
         )
     }
 

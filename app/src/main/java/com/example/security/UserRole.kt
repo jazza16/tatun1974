@@ -117,15 +117,20 @@ enum class UserRole(
         }
 
         /**
-         * Pengecekan sederhana Tier 2: Pengawas, Supervisor, atau Koord. Administrasi.
+         * Pengecekan sederhana Tier 2: Pengawas, Sekretaris, Kabid KL, Kabid RR, Supervisor, atau Koord. Administrasi.
          */
         fun isPengawasOrKoordinator(role: String?): Boolean {
             val clean = role?.trim().orEmpty()
             if (clean.isBlank() || isManajer(clean)) return false
             return clean.equals("Pengawas", ignoreCase = true) ||
+                clean.equals("Sekretaris", ignoreCase = true) ||
+                clean.equals("Kabid KL", ignoreCase = true) ||
+                clean.equals("Kabid RR", ignoreCase = true) ||
                 clean.equals("Supervisor", ignoreCase = true) ||
                 clean.equals("Koord. Administrasi", ignoreCase = true) ||
                 clean.contains("Pengawas", ignoreCase = true) ||
+                clean.contains("Sekretaris", ignoreCase = true) ||
+                clean.contains("Kabid", ignoreCase = true) ||
                 clean.contains("Supervisor", ignoreCase = true) ||
                 clean.contains("Koord. Administrasi", ignoreCase = true) ||
                 clean.contains("Koordinator Administrasi", ignoreCase = true) ||

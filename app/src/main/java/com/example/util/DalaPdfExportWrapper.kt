@@ -181,11 +181,15 @@ object DalaPdfExportWrapper {
         }
 
         // Judul & Metadata
-        canvas.drawText(
-            "LAPORAN KAJI CEPAT PASCA BENCANA (DALA) — STANDAR BNPB",
-            A4_WIDTH / 2f,
-            y,
-            titlePaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "LAPORAN KAJI CEPAT PASCA BENCANA (DALA) — STANDAR BNPB",
+            x = A4_WIDTH / 2f,
+            y = y,
+            maxWidth = contentWidth,
+            basePaint = titlePaint,
+            initialFontSize = titlePaint.textSize,
+            minFontSize = 7.5f
         )
         y += 12f
         PdfTextAutoShrinkHelper.drawAutoShrinkText(
@@ -212,7 +216,7 @@ object DalaPdfExportWrapper {
         y += 12f
 
         // BAGIAN I: KORBAN & PENGUNGSI
-        canvas.drawText("I. KORBAN JIWA, PENGUNGSI & KELOMPOK RENTAN", MARGIN, y, sectionPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "I. KORBAN JIWA, PENGUNGSI & KELOMPOK RENTAN", MARGIN, y, sectionPaint)
         y += 6f
         val kpiBoxH = 34f
         val kpiRect = RectF(MARGIN, y, MARGIN + contentWidth, y + kpiBoxH)
@@ -231,8 +235,8 @@ object DalaPdfExportWrapper {
             val cx = MARGIN + colW * (i + 0.5f)
             val lPaint = Paint(bodyPaint).apply { textAlign = Paint.Align.CENTER; textSize = 7.2f; color = Color.rgb(100, 116, 139) }
             val vPaint = Paint(boldBodyPaint).apply { textAlign = Paint.Align.CENTER; textSize = 9.0f; color = Color.rgb(194, 65, 12) }
-            canvas.drawText(label, cx, y + 12f, lPaint)
-            canvas.drawText(value, cx, y + 25f, vPaint)
+            PdfTextAutoShrinkHelper.drawPdfText(canvas, label, cx, y + 12f, lPaint)
+            PdfTextAutoShrinkHelper.drawPdfText(canvas, value, cx, y + 25f, vPaint)
         }
         y += kpiBoxH + 10f
 
@@ -272,7 +276,7 @@ object DalaPdfExportWrapper {
         y += 16f
 
         // BAGIAN II: KERUSAKAN, KERUGIAN & GRAFIK BATANG RUMAH (RB / RS / RR)
-        canvas.drawText("II. KERUSAKAN INFRASTRUKTUR, RUMAH & ESTIMASI KERUGIAN", MARGIN, y, sectionPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "II. KERUSAKAN INFRASTRUKTUR, RUMAH & ESTIMASI KERUGIAN", MARGIN, y, sectionPaint)
         y += 8f
 
         val leftW = contentWidth * 0.56f
@@ -310,7 +314,16 @@ object DalaPdfExportWrapper {
         val chartRect = RectF(chartLeft, y, MARGIN + contentWidth, y + dmgBoxH)
         canvas.drawRoundRect(chartRect, 5f, 5f, borderPaint)
         val chartTitlePaint = Paint(boldBodyPaint).apply { textAlign = Paint.Align.CENTER; textSize = 7.4f }
-        canvas.drawText("GRAFIK KERUSAKAN RUMAH (UNIT)", chartRect.centerX(), y + 12f, chartTitlePaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "GRAFIK KERUSAKAN RUMAH (UNIT)",
+            x = chartRect.centerX(),
+            y = y + 12f,
+            maxWidth = rightW - 12f,
+            basePaint = chartTitlePaint,
+            initialFontSize = 7.4f,
+            minFontSize = 5.8f
+        )
 
         val bars = listOf(
             Triple("RB", assessment.damages.houseHeavy, Color.rgb(220, 38, 38)),
@@ -328,14 +341,14 @@ object DalaPdfExportWrapper {
             val barRect = RectF(barCx - barW / 2f, barAreaBottom - h, barCx + barW / 2f, barAreaBottom)
             canvas.drawRoundRect(barRect, 3f, 3f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorInt })
             val valPaint = Paint(boldBodyPaint).apply { textAlign = Paint.Align.CENTER; textSize = 7.5f; color = colorInt }
-            canvas.drawText("$count", barCx, barRect.top - 3f, valPaint)
+            PdfTextAutoShrinkHelper.drawPdfText(canvas, "$count", barCx, barRect.top - 3f, valPaint)
             val lblPaint = Paint(bodyPaint).apply { textAlign = Paint.Align.CENTER; textSize = 7.2f }
-            canvas.drawText(label, barCx, barAreaBottom + 11f, lblPaint)
+            PdfTextAutoShrinkHelper.drawPdfText(canvas, label, barCx, barAreaBottom + 11f, lblPaint)
         }
         y += dmgBoxH + 16f
 
         // BAGIAN III: KEBUTUHAN MENDESAK
-        canvas.drawText("III. DAFTAR KEBUTUHAN MENDESAK LAPANGAN", MARGIN, y, sectionPaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "III. DAFTAR KEBUTUHAN MENDESAK LAPANGAN", MARGIN, y, sectionPaint)
         y += 7f
         val needCols = floatArrayOf(0.20f, 0.14f, 0.14f, 0.16f, 0.36f)
         val needHeaders = arrayOf("JENIS", "JUMLAH", "SATUAN", "STATUS", "KETERANGAN")
@@ -346,14 +359,15 @@ object DalaPdfExportWrapper {
             canvas.drawRect(cx, y, cx + w, y + hdrH, headerFillPaint)
             canvas.drawRect(cx, y, cx + w, y + hdrH, borderPaint)
             val hp = Paint(boldBodyPaint).apply { textAlign = Paint.Align.CENTER; textSize = 7.4f }
-            canvas.drawText(needHeaders[i], cx + w / 2f, y + 11f, hp)
+            PdfTextAutoShrinkHelper.drawPdfText(canvas, needHeaders[i], cx + w / 2f, y + 11f, hp)
             cx += w
         }
         y += hdrH
 
         if (assessment.urgentNeeds.isEmpty()) {
             canvas.drawRect(MARGIN, y, MARGIN + contentWidth, y + 18f, borderPaint)
-            canvas.drawText(
+            PdfTextAutoShrinkHelper.drawPdfText(
+                canvas,
                 "Belum ada kebutuhan mendesak tercatat.",
                 A4_WIDTH / 2f,
                 y + 12f,

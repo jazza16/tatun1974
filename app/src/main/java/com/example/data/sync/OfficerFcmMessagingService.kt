@@ -115,20 +115,38 @@ object OfficerPushNotificationHelper {
     @Volatile
     var overrideOfficerSessionForTesting: Boolean? = null
 
+    @Volatile
+    private var cachedAppContext: Context? = null
+
+    fun registerAppContext(context: Context) {
+        cachedAppContext = context.applicationContext
+    }
+
+    fun getAppContext(): Context? = cachedAppContext
+
     /**
-     * Memeriksa apakah perangkat saat ini sedang login aktif sebagai Petugas ASN / Pusdalops BPBD.
+     * Memeriksa apakah perangkat saat ini merupakan HP Asli Petugas ASN / Pusdalops BPBD
+     * (baik yang sedang membuka konsol Sesi Resmi aktif maupun perangkat resmi petugas
+     * yang identitas NIP/kredensialnya sudah terdaftar di perangkat melalui PIN / Biometrik).
+     * Dengan demikian notifikasi darurat diterima real-time tanpa harus menunggu petugas
+     * membuka sesi login Resmi.
      */
     fun isDeviceLoggedInAsOfficer(context: Context): Boolean {
         overrideOfficerSessionForTesting?.let { return it }
-        val officerNipActive = try {
-            OfficerAuthManager(context.applicationContext).isOfficerLoggedIn()
+        val appCtx = context.applicationContext
+        cachedAppContext = appCtx
+        val isRegisteredOrActiveOfficerDevice = try {
+            val officerAuth = OfficerAuthManager(appCtx)
+            officerAuth.isOfficerLoggedIn() ||
+                officerAuth.hasSavedOfficerIdentity() ||
+                officerAuth.getOfficerBadgeId().isNotBlank()
         } catch (_: Exception) {
             false
         }
-        if (officerNipActive) return true
+        if (isRegisteredOrActiveOfficerDevice) return true
 
         val pusdalopsSessionActive = try {
-            AuthManager.getInstance(context.applicationContext).isSessionActive()
+            AuthManager.getInstance(appCtx).isSessionActive()
         } catch (_: Exception) {
             false
         }
@@ -155,10 +173,11 @@ object OfficerPushNotificationHelper {
 
     /**
      * Menyinkronkan langganan topik FCM `bpbd_officer_alerts`.
-     * - Saat Petugas/Pusdalops login: otomatis `subscribeToTopic("bpbd_officer_alerts")`.
-     * - Saat Petugas logout: otomatis `unsubscribeFromTopic("bpbd_officer_alerts")`.
+     * - Selama perangkat terdaftar sebagai HP Petugas/Pusdalops: otomatis `subscribeToTopic("bpbd_officer_alerts")`.
+     * - Hanya saat identitas akun petugas dihapus dari perangkat: `unsubscribeFromTopic("bpbd_officer_alerts")`.
      */
     fun syncOfficerTopicSubscription(context: Context, forceOfficerActive: Boolean? = null) {
+        registerAppContext(context)
         val isOfficer = forceOfficerActive ?: isDeviceLoggedInAsOfficer(context)
         try {
             val messaging = FirebaseMessaging.getInstance()
@@ -185,10 +204,11 @@ object OfficerPushNotificationHelper {
     }
 
     /**
-     * Mencatat kumpulan ID laporan awal (baseline) yang sudah ada di server saat aplikasi dibuka
+     * Mencatat kumpulan ID laporan awal (baseline) yang sudah ada di server saat aplikasi pertama kali dipasang
      * agar hanya dokumen laporan BARU di `citizen_disaster_reports` yang membunyikan push notification.
      */
     fun registerInitialBaselineReports(context: Context, existingReportIds: Collection<String>) {
+        registerAppContext(context)
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val currentSet = prefs.getStringSet(KEY_NOTIFIED_REPORT_IDS, emptySet())?.toMutableSet() ?: mutableSetOf()
         currentSet.addAll(existingReportIds.filter { it.isNotBlank() })
@@ -229,22 +249,27 @@ object OfficerPushNotificationHelper {
     }
 
     /**
-     * Mengirim Push Notification Darurat ke perangkat yang sedang login sebagai Petugas / Pusdalops
-     * setiap kali ada dokumen baru di koleksi `citizen_disaster_reports`.
+     * Mengirim Push Notification Darurat secara real-time ke HP Asli Petugas / Pusdalops
+     * setiap kali ada dokumen baru di koleksi `citizen_disaster_reports` tanpa menunggu
+     * petugas membuka sesi login Resmi.
      *
      * @return `true` jika push notification berhasil diterbitkan ke perangkat petugas,
-     *         `false` jika perangkat bukan sesi petugas atau laporan sudah pernah dinotifikasi.
+     *         `false` jika perangkat bukan HP petugas atau laporan sudah pernah dinotifikasi.
      */
     fun notifyOfficerForNewReport(
         context: Context,
         report: CitizenDisasterReport
     ): Boolean {
         val appCtx = context.applicationContext
+        cachedAppContext = appCtx
         if (!isDeviceLoggedInAsOfficer(appCtx)) {
             return false
         }
         if (report.id.isBlank() || report.id.startsWith("LAP-MMK-20261025-00")) {
             // Abaikan data seed contoh statis
+            return false
+        }
+        if (com.example.data.local.FirestoreHelper.isLegacyPreV110SimulationReport(report.id, report.status)) {
             return false
         }
         if (hasReportBeenNotified(appCtx, report.id)) {
@@ -284,9 +309,11 @@ object OfficerPushNotificationHelper {
             .setStyle(NotificationCompat.BigTextStyle().bigText(detailedBody))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setVibrate(longArrayOf(0, 500, 200, 500))
+            .setVibrate(longArrayOf(0, 500, 200, 500, 200, 650))
             .build()
 
         try {
@@ -304,7 +331,15 @@ object OfficerPushNotificationHelper {
                 val nm = appCtx.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
                 nm?.notify(report.id.hashCode(), notification)
             }
-            Log.i(TAG, "Push notification laporan warga baru [${report.id}] terkirim ke perangkat Petugas/Pusdalops.")
+            try {
+                com.example.ui.components.OfficerAlarmPlayer.triggerSirenAndVibration(
+                    context = appCtx,
+                    report = report,
+                    dispatchSystemNotification = false
+                )
+            } catch (_: Throwable) {
+            }
+            Log.i(TAG, "Push notification laporan warga baru [${report.id}] terkirim real-time ke HP Asli Petugas/Pusdalops.")
         } catch (e: Exception) {
             Log.w(TAG, "Gagal menampilkan push notification sistem untuk [${report.id}]: ${e.message}")
         }
@@ -321,8 +356,12 @@ object OfficerPushNotificationHelper {
                     "Peringatan Laporan Darurat Warga (Petugas Pusdalops)",
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
-                    description = "Notifikasi real-time FCM & Firestore khusus Petugas/Pusdalops saat laporan bencana warga baru masuk"
+                    description = "Notifikasi real-time FCM & Firestore khusus HP Asli Petugas/Pusdalops saat laporan bencana warga baru masuk"
+                    enableLights(true)
+                    lightColor = android.graphics.Color.RED
                     enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 650)
+                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                 }
                 nm.createNotificationChannel(channel)
             }

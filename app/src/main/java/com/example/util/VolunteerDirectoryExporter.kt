@@ -431,18 +431,20 @@ object VolunteerDirectoryExporter {
         paint: TextPaint,
         maxLines: Int = 4
     ): Float {
-        val safeText = text.trim().ifEmpty { "-" }
+        val rawSafeText = text.trim().ifEmpty { "-" }
+        val safeText = PdfTextAutoShrinkHelper.normalizePdfWordSpacing(rawSafeText)
+        val configuredPaint = PdfTextAutoShrinkHelper.configurePdfPaint(TextPaint(paint), letterSpacingEm = 0.03f)
         val width = maxWidthPx.coerceAtLeast(24)
         val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            StaticLayout.Builder.obtain(safeText, 0, safeText.length, paint, width)
+            StaticLayout.Builder.obtain(safeText, 0, safeText.length, configuredPaint, width)
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                .setLineSpacing(0f, 1.0f)
+                .setLineSpacing(1.5f, 1.15f)
                 .setIncludePad(false)
                 .setMaxLines(maxLines)
                 .build()
         } else {
             @Suppress("DEPRECATION")
-            StaticLayout(safeText, paint, width, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0f, false)
+            StaticLayout(safeText, configuredPaint, width, Layout.Alignment.ALIGN_NORMAL, 1.15f, 1.5f, false)
         }
         canvas.save()
         canvas.translate(x, topY)
@@ -573,25 +575,38 @@ object VolunteerDirectoryExporter {
                     }
 
                     val centerX = A4_WIDTH / 2f
-                    canvas.drawText(
-                        "REKAPITULASI RESMI DATA SELURUH RELAWAN KEBENCANAAN",
-                        centerX,
-                        y,
-                        titlePaint
+                    val contentW = A4_WIDTH - (MARGIN * 2)
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = "REKAPITULASI RESMI DATA SELURUH RELAWAN KEBENCANAAN",
+                        x = centerX,
+                        y = y,
+                        maxWidth = contentW,
+                        basePaint = titlePaint,
+                        initialFontSize = 11.5f,
+                        minFontSize = 7.5f
                     )
                     y += 12f
-                    canvas.drawText(
-                        "ARSIP PELAPORAN BERJENJANG & DOKUMENTASI KEGIATAN PENANGGULANGAN BENCANA",
-                        centerX,
-                        y,
-                        subTitlePaint
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = "ARSIP PELAPORAN BERJENJANG & DOKUMENTASI KEGIATAN PENANGGULANGAN BENCANA",
+                        x = centerX,
+                        y = y,
+                        maxWidth = contentW,
+                        basePaint = subTitlePaint,
+                        initialFontSize = 8.5f,
+                        minFontSize = 6.5f
                     )
                     y += 11f
-                    canvas.drawText(
-                        "Nomor Dokumen: $docReferenceNumber",
-                        centerX,
-                        y,
-                         Paint(metaPaint).apply { textAlign = Paint.Align.CENTER }
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = "Nomor Dokumen: $docReferenceNumber",
+                        x = centerX,
+                        y = y,
+                        maxWidth = contentW,
+                        basePaint = Paint(metaPaint).apply { textAlign = Paint.Align.CENTER },
+                        initialFontSize = 8.0f,
+                        minFontSize = 6.5f
                     )
 
                     y += 14f
@@ -653,12 +668,12 @@ object VolunteerDirectoryExporter {
 
                     fun drawTableHeader(targetCanvas: android.graphics.Canvas, topY: Float): Float {
                         targetCanvas.drawRect(MARGIN, topY, A4_WIDTH - MARGIN, topY + 18f, tableHeaderBgPaint)
-                        targetCanvas.drawText("No", colNoX, topY + 12f, headerTextPaint)
-                        targetCanvas.drawText("Nama Lengkap & NIK KTP", colNamaNikX, topY + 12f, headerTextPaint)
-                        targetCanvas.drawText("Organisasi & Kontak", colOrgHpX, topY + 12f, headerTextPaint)
-                        targetCanvas.drawText("Keahlian Relawan", colSkillX, topY + 12f, headerTextPaint)
-                        targetCanvas.drawText("Posko, Kecamatan & Shift", colPoskoX, topY + 12f, headerTextPaint)
-                        targetCanvas.drawText("Status & Kehadiran", colStatusX, topY + 12f, headerTextPaint)
+                        PdfTextAutoShrinkHelper.drawPdfText(targetCanvas, "No", colNoX, topY + 12f, headerTextPaint)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Nama Lengkap & NIK KTP", colNamaNikX, topY + 12f, 114f, headerTextPaint, 7.4f, 5.8f)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Organisasi & Kontak", colOrgHpX, topY + 12f, 90f, headerTextPaint, 7.4f, 5.8f)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Keahlian Relawan", colSkillX, topY + 12f, 86f, headerTextPaint, 7.4f, 5.8f)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Posko, Kecamatan & Shift", colPoskoX, topY + 12f, 112f, headerTextPaint, 7.4f, 5.8f)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Status & Kehadiran", colStatusX, topY + 12f, 76f, headerTextPaint, 7.4f, 5.8f)
                         return topY + 20f
                     }
 
@@ -699,7 +714,7 @@ object VolunteerDirectoryExporter {
                             canvas.drawRect(MARGIN, rowStartY - 1f, A4_WIDTH - MARGIN, rowStartY + 34f, zebraBgPaint)
                         }
 
-                        canvas.drawText("${idx + 1}.", colNoX, rowStartY + 9f, cellBoldPaint)
+                        PdfTextAutoShrinkHelper.drawPdfText(canvas, "${idx + 1}.", colNoX, rowStartY + 9f, cellBoldPaint)
 
                         val h1 = drawWrappedCellText(canvas, namaNikText, colNamaNikX, rowStartY + 2f, 115, cellBoldPaint, maxLines = 4)
                         val h2 = drawWrappedCellText(canvas, orgHpText, colOrgHpX, rowStartY + 2f, 92, cellTextPaint, maxLines = 4)
@@ -734,7 +749,16 @@ object VolunteerDirectoryExporter {
                     val noteBoxRect = RectF(MARGIN, y, MARGIN + 275f, y + 84f)
                     canvas.drawRoundRect(noteBoxRect, 6f, 6f, summaryFill)
                     canvas.drawRoundRect(noteBoxRect, 6f, 6f, summaryBorder)
-                    canvas.drawText("CATATAN ARSIP & DOKUMENTASI KEGIATAN:", MARGIN + 8f, y + 14f, metaBoldPaint)
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = "CATATAN ARSIP & DOKUMENTASI KEGIATAN:",
+                        x = MARGIN + 8f,
+                        y = y + 14f,
+                        maxWidth = 258f,
+                        basePaint = metaBoldPaint,
+                        initialFontSize = 7.8f,
+                        minFontSize = 6.2f
+                    )
                     drawWrappedCellText(
                         canvas = canvas,
                         text = "1. Dokumen ini merupakan arsip resmi daftar seluruh relawan terdaftar dan ditugaskan pada Pusdalops-PB BPBD Kabupaten Mukomuko.\n" +
@@ -750,9 +774,27 @@ object VolunteerDirectoryExporter {
                     val signPaint = Paint(metaPaint).apply { textAlign = Paint.Align.CENTER }
                     val signBoldPaint = Paint(metaBoldPaint).apply { textAlign = Paint.Align.CENTER }
 
-                    canvas.drawText("Mukomuko, $currentDateStr", signCenterX, y + 10f, signPaint)
-                    canvas.drawText("PUSAT PENGENDALIAN OPERASI (PUSDALOPS-PB)", signCenterX, y + 22f, signBoldPaint)
-                    canvas.drawText("BPBD KABUPATEN MUKOMUKO", signCenterX, y + 33f, signBoldPaint)
+                    PdfTextAutoShrinkHelper.drawPdfText(canvas, "Mukomuko, $currentDateStr", signCenterX, y + 10f, signPaint)
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = "PUSAT PENGENDALIAN OPERASI (PUSDALOPS-PB)",
+                        x = signCenterX,
+                        y = y + 22f,
+                        maxWidth = 220f,
+                        basePaint = signBoldPaint,
+                        initialFontSize = 8.0f,
+                        minFontSize = 6.2f
+                    )
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = "BPBD KABUPATEN MUKOMUKO",
+                        x = signCenterX,
+                        y = y + 33f,
+                        maxWidth = 220f,
+                        basePaint = signBoldPaint,
+                        initialFontSize = 8.0f,
+                        minFontSize = 6.2f
+                    )
 
                     val stampRect = RectF(signCenterX - 88f, y + 38f, signCenterX + 88f, y + 66f)
                     val stampFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -772,8 +814,26 @@ object VolunteerDirectoryExporter {
                         textSize = 7.2f
                         textAlign = Paint.Align.CENTER
                     }
-                    canvas.drawText("TERVERIFIKASI SISTEM SIPAGAR KITA", signCenterX, y + 50f, stampTextPaint)
-                    canvas.drawText("ARSIP RESMI PELAPORAN BERJENJANG", signCenterX, y + 61f, stampTextPaint)
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = "TERVERIFIKASI SISTEM SIPAGAR KITA",
+                        x = signCenterX,
+                        y = y + 50f,
+                        maxWidth = 170f,
+                        basePaint = stampTextPaint,
+                        initialFontSize = 7.2f,
+                        minFontSize = 5.8f
+                    )
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = "ARSIP RESMI PELAPORAN BERJENJANG",
+                        x = signCenterX,
+                        y = y + 61f,
+                        maxWidth = 170f,
+                        basePaint = stampTextPaint,
+                        initialFontSize = 7.2f,
+                        minFontSize = 5.8f
+                    )
 
                     PdfTextAutoShrinkHelper.drawAutoShrinkText(
                         canvas = canvas,
@@ -845,14 +905,18 @@ object VolunteerDirectoryExporter {
             color = Color.rgb(100, 116, 139)
             textSize = 7.5f
         }
-        canvas.drawText(
-            "Arsip Resmi Pusdalops-PB BPBD Kab. Mukomuko • SIPAGAR KITA • Dicetak: $printedAtWib",
-            MARGIN,
-            footerY,
-            footerPaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Arsip Resmi Pusdalops-PB BPBD Kab. Mukomuko • SIPAGAR KITA • Dicetak: $printedAtWib",
+            x = MARGIN,
+            y = footerY,
+            maxWidth = A4_WIDTH - (MARGIN * 2) - 70f,
+            basePaint = footerPaint,
+            initialFontSize = 7.5f,
+            minFontSize = 6.0f
         )
         val pagePaint = Paint(footerPaint).apply { textAlign = Paint.Align.RIGHT }
-        canvas.drawText("Halaman $pageNumber", A4_WIDTH - MARGIN, footerY, pagePaint)
+        PdfTextAutoShrinkHelper.drawPdfText(canvas, "Halaman $pageNumber", A4_WIDTH - MARGIN, footerY, pagePaint)
     }
 
     private fun buildFallbackPdfBytes(

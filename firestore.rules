@@ -329,24 +329,34 @@ service cloud.firestore {
                        ])
                     && isValidCitizenDisasterReport(incoming());
       allow update: if isValidId(reportId)
-                    && incoming().id == existing().id
-                    && incoming().authorUid == existing().authorUid
-                    && isValidCitizenDisasterReport(incoming())
+                    && (!('id' in existing()) || incoming().id == existing().id)
+                    && (!('authorUid' in existing()) || incoming().authorUid == existing().authorUid)
                     && (
-                      // Action: Officer status / follow-up update with active officer attribution
-                      incoming().diff(existing()).affectedKeys().hasOnly([
-                        'status', 'additionalNotes', 'updatedAt',
-                        'handledByOfficerName', 'handledByOfficerNip', 'handledByOfficerRole'
-                      ])
+                      // Action: Officer status / follow-up / tombstone update
+                      (
+                        incoming().diff(existing()).affectedKeys().hasOnly([
+                          'status', 'additionalNotes', 'updatedAt',
+                          'handledByOfficerName', 'handledByOfficerNip', 'handledByOfficerRole'
+                        ])
+                        && incoming().status is string && incoming().status.size() >= 1 && incoming().status.size() <= 64
+                        && (!('additionalNotes' in incoming()) || (incoming().additionalNotes is string && incoming().additionalNotes.size() <= 2000))
+                        && (!('updatedAt' in incoming()) || incoming().updatedAt is int)
+                        && (!('handledByOfficerName' in incoming()) || (incoming().handledByOfficerName is string && incoming().handledByOfficerName.size() <= 150))
+                        && (!('handledByOfficerNip' in incoming()) || (incoming().handledByOfficerNip is string && incoming().handledByOfficerNip.size() <= 64))
+                        && (!('handledByOfficerRole' in incoming()) || (incoming().handledByOfficerRole is string && incoming().handledByOfficerRole.size() <= 80))
+                      )
                       // Action: Full report sync update (preserving id & authorUid)
-                      || incoming().diff(existing()).affectedKeys().hasOnly([
-                           'disasterType', 'incidentTime', 'incidentLocation', 'district', 'village',
-                           'latitude', 'longitude', 'gpsAccuracyMeters', 'isGpsVerified',
-                           'casualtiesDead', 'casualtiesInjured', 'casualtiesMissing',
-                           'photoUri', 'fotoUrl', 'fotoLampiran', 'reporterName', 'reporterPhone', 'additionalNotes',
-                           'timestamp', 'updatedAt', 'status',
-                           'handledByOfficerName', 'handledByOfficerNip', 'handledByOfficerRole'
-                         ])
+                      || (
+                        isValidCitizenDisasterReport(incoming())
+                        && incoming().diff(existing()).affectedKeys().hasOnly([
+                             'disasterType', 'incidentTime', 'incidentLocation', 'district', 'village',
+                             'latitude', 'longitude', 'gpsAccuracyMeters', 'isGpsVerified',
+                             'casualtiesDead', 'casualtiesInjured', 'casualtiesMissing',
+                             'photoUri', 'fotoUrl', 'fotoLampiran', 'reporterName', 'reporterPhone', 'additionalNotes',
+                             'timestamp', 'updatedAt', 'status',
+                             'handledByOfficerName', 'handledByOfficerNip', 'handledByOfficerRole'
+                           ])
+                      )
                     );
       allow delete: if isSignedIn() && isValidId(reportId) && existing().authorUid == request.auth.uid;
     }
