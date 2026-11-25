@@ -42,15 +42,58 @@ import kotlin.math.max
  */
 object PoskoStockOpnameExporter {
 
-    private const val A4_WIDTH = 595
-    private const val A4_HEIGHT = 842
-    private const val MARGIN = 32f
+    private const val A4_WIDTH = ReportExporter.A4_PAGE_WIDTH
+    private const val A4_HEIGHT = ReportExporter.A4_PAGE_HEIGHT
+    private const val MARGIN = ReportExporter.STANDARD_MARGIN
 
     val OFFICIAL_REPORT_PURPOSES = listOf(
         "Berita Acara Stock Opname Logistik & Tertib Administrasi BMN/BMD",
         "Laporan Pertanggungjawaban Mutasi Persediaan & Distribusi Bantuan (NIK 16 Digit)",
         "Rekonsiliasi Aset Kebencanaan & Audit Inspektorat / BPKP / BNPB"
     )
+
+    private data class OfficialDocumentSpec(
+        val title: String,
+        val numberPrefix: String,
+        val closingDocumentName: String,
+        val executorTitle: String,
+        val fileNamePrefix: String
+    )
+
+    private fun resolveDocumentSpec(documentPurpose: String): OfficialDocumentSpec {
+        return when {
+            documentPurpose.contains("Mutasi", ignoreCase = true) -> OfficialDocumentSpec(
+                title = "LAPORAN PERTANGGUNGJAWABAN MUTASI PERSEDIAAN & DISTRIBUSI BANTUAN (BMN/BMD)",
+                numberPrefix = "LPJ-MUT/BPBD-MM",
+                closingDocumentName = "Laporan Pertanggungjawaban Mutasi Persediaan Logistik & Distribusi Bantuan (NIK 16 Digit)",
+                executorTitle = "Petugas Pelaksana Pertanggungjawaban Mutasi",
+                fileNamePrefix = "LPJ_Mutasi_Persediaan_BMN_Logistik_BPBD_Mukomuko"
+            )
+            documentPurpose.contains("Rekonsiliasi", ignoreCase = true) -> OfficialDocumentSpec(
+                title = "BERITA ACARA REKONSILIASI ASET KEBENCANAAN & TATA KELOLA BMN / BMD",
+                numberPrefix = "BA-REKON/BPBD-MM",
+                closingDocumentName = "Berita Acara Rekonsiliasi Aset Kebencanaan & Persediaan Logistik (BMN/BMD)",
+                executorTitle = "Petugas Pelaksana Rekonsiliasi Aset BMN/BMD",
+                fileNamePrefix = "BA_Rekonsiliasi_Aset_BMN_Logistik_BPBD_Mukomuko"
+            )
+            else -> OfficialDocumentSpec(
+                title = "BERITA ACARA STOCK OPNAME LOGISTIK & TATA KELOLA BARANG MILIK NEGARA / DAERAH (BMN/BMD)",
+                numberPrefix = "BA-SO/BPBD-MM",
+                closingDocumentName = "Berita Acara Stock Opname Persediaan Logistik & Aset Kebencanaan",
+                executorTitle = "Petugas Pelaksana Stock Opname",
+                fileNamePrefix = "BA_Stock_Opname_BMN_Logistik_BPBD_Mukomuko"
+            )
+        }
+    }
+
+    /**
+     * Menghitung posisi Y awal blok pernyataan penutup & tanda tangan pejabat tepat 16 pt
+     * di bawah batas akhir tabel terakhir (tanpa ruang kosong berlebih), dengan batas aman
+     * agar tidak pernah menumpuk di atas Footer Resmi (`A4_HEIGHT - 28f`).
+     */
+    internal fun computeSignatureBlockTopY(tableEndY: Float): Float {
+        return (tableEndY + 16f).coerceAtMost(A4_HEIGHT - 132f)
+    }
 
     private fun getExportDir(context: Context): File {
         return File(context.cacheDir, "exported_reports").apply {
@@ -105,7 +148,7 @@ object PoskoStockOpnameExporter {
     }
 
     /**
-     * Mengekspor langsung dari [PoskoLogisticsRepository] ke dokumen PDF Resmi Berita Acara Stock Opname BMN/BMD.
+     * Mengekspor langsung dari [PoskoLogisticsRepository] ke dokumen PDF Resmi Berita Acara Stock Opname / LPJ Mutasi BMN/BMD.
      */
     fun exportStockOpnameToPdf(
         context: Context,
@@ -118,16 +161,15 @@ object PoskoStockOpnameExporter {
         val stocks = repo.logisticStocks.value
         val poskoUnits = repo.poskoUnits.value
         val ledger = repo.distributionLedger.value
+        val docSpec = resolveDocumentSpec(documentPurpose)
 
         val idLocale = Locale.forLanguageTag("id-ID")
         val timestampTag = SimpleDateFormat("yyyyMMdd_HHmm", idLocale).apply {
             timeZone = TimeZone.getTimeZone("Asia/Jakarta")
         }.format(Date())
 
-        val outFile = File(
-            getExportDir(context),
-            "BA_Stock_Opname_BMN_Logistik_BPBD_Mukomuko_$timestampTag.pdf"
-        )
+        val downloadName = "${docSpec.fileNamePrefix}_$timestampTag.pdf"
+        val outFile = File(getExportDir(context), downloadName)
 
         val pdfBytes = buildStockOpnamePdfBytes(
             context = context,
@@ -145,7 +187,6 @@ object PoskoStockOpnameExporter {
             fos.flush()
         }
 
-        val downloadName = "BA_Stock_Opname_BMN_Logistik_BPBD_Mukomuko_$timestampTag.pdf"
         val savedToDownloads = saveToPublicDownloads(
             context = context,
             sourceFile = outFile,
@@ -157,9 +198,9 @@ object PoskoStockOpnameExporter {
             Toast.makeText(
                 context,
                 if (savedToDownloads) {
-                    "PDF Berita Acara Stock Opname BMN/BMD tersimpan di Downloads/SIPAGAR_KITA/$downloadName"
+                    "PDF ${docSpec.closingDocumentName} tersimpan di Downloads/SIPAGAR_KITA/$downloadName"
                 } else {
-                    "PDF Berita Acara Stock Opname BMN/BMD siap diunduh & dibagikan"
+                    "PDF ${docSpec.closingDocumentName} siap diunduh & dibagikan"
                 },
                 Toast.LENGTH_LONG
             ).show()
@@ -172,15 +213,15 @@ object PoskoStockOpnameExporter {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(
                     Intent.EXTRA_SUBJECT,
-                    "Berita Acara Stock Opname Logistik & BMN/BMD BPBD Kab. Mukomuko (${stocks.size} Komoditas)"
+                    "${docSpec.closingDocumentName} BPBD Kab. Mukomuko (${stocks.size} Komoditas)"
                 )
                 putExtra(
                     Intent.EXTRA_TEXT,
-                    "Terlampir Dokumen Resmi Berita Acara Stock Opname Logistik, Aset Kebencanaan & Pertanggungjawaban Tata Kelola Barang Milik Negara/Daerah (BMN/BMD) BPBD Kabupaten Mukomuko untuk keperluan: $documentPurpose."
+                    "Terlampir Dokumen Resmi ${docSpec.closingDocumentName} Pusdalops-PB BPBD Kabupaten Mukomuko untuk keperluan: $documentPurpose."
                 )
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            val chooser = Intent.createChooser(shareIntent, "Unduh / Bagikan PDF Stock Opname BMN/BMD").apply {
+            val chooser = Intent.createChooser(shareIntent, "Unduh / Bagikan PDF Resmi BMN/BMD").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(chooser)
@@ -203,16 +244,15 @@ object PoskoStockOpnameExporter {
         val stocks = repo.logisticStocks.value
         val poskoUnits = repo.poskoUnits.value
         val ledger = repo.distributionLedger.value
+        val docSpec = resolveDocumentSpec(documentPurpose)
 
         val idLocale = Locale.forLanguageTag("id-ID")
         val timestampTag = SimpleDateFormat("yyyyMMdd_HHmm", idLocale).apply {
             timeZone = TimeZone.getTimeZone("Asia/Jakarta")
         }.format(Date())
 
-        val outFile = File(
-            getExportDir(context),
-            "Rekap_Stock_Opname_BMN_Logistik_BPBD_Mukomuko_$timestampTag.csv"
-        )
+        val downloadName = "${docSpec.fileNamePrefix}_$timestampTag.csv"
+        val outFile = File(getExportDir(context), downloadName)
 
         val csvContent = buildStockOpnameCsvString(
             stocks = stocks,
@@ -231,7 +271,6 @@ object PoskoStockOpnameExporter {
             fos.flush()
         }
 
-        val downloadName = "Rekap_Stock_Opname_BMN_Logistik_BPBD_Mukomuko_$timestampTag.csv"
         val savedToDownloads = saveToPublicDownloads(
             context = context,
             sourceFile = outFile,
@@ -243,9 +282,9 @@ object PoskoStockOpnameExporter {
             Toast.makeText(
                 context,
                 if (savedToDownloads) {
-                    "CSV/Excel Stock Opname BMN/BMD tersimpan di Downloads/SIPAGAR_KITA/$downloadName"
+                    "CSV/Excel ${docSpec.closingDocumentName} tersimpan di Downloads/SIPAGAR_KITA/$downloadName"
                 } else {
-                    "CSV/Excel Stock Opname BMN/BMD siap diunduh & dibagikan"
+                    "CSV/Excel ${docSpec.closingDocumentName} siap diunduh & dibagikan"
                 },
                 Toast.LENGTH_LONG
             ).show()
@@ -258,15 +297,15 @@ object PoskoStockOpnameExporter {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(
                     Intent.EXTRA_SUBJECT,
-                    "CSV Stock Opname Logistik & BMN/BMD BPBD Kab. Mukomuko (${stocks.size} Komoditas)"
+                    "CSV ${docSpec.closingDocumentName} BPBD Kab. Mukomuko (${stocks.size} Komoditas)"
                 )
                 putExtra(
                     Intent.EXTRA_TEXT,
-                    "Terlampir Kertas Kerja CSV/Excel Stock Opname Logistik & Pertanggungjawaban Tata Kelola Barang Milik Negara/Daerah (BMN/BMD) BPBD Kabupaten Mukomuko untuk keperluan: $documentPurpose."
+                    "Terlampir Kertas Kerja CSV/Excel ${docSpec.closingDocumentName} BPBD Kabupaten Mukomuko untuk keperluan: $documentPurpose."
                 )
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            val chooser = Intent.createChooser(shareIntent, "Unduh / Bagikan CSV Stock Opname BMN/BMD").apply {
+            val chooser = Intent.createChooser(shareIntent, "Unduh / Bagikan CSV Stock Opname & Mutasi BMN/BMD").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(chooser)
@@ -292,12 +331,17 @@ object PoskoStockOpnameExporter {
         val printedAt = SimpleDateFormat("dd MMMM yyyy HH:mm 'WIB'", idLocale).apply {
             timeZone = TimeZone.getTimeZone("Asia/Jakarta")
         }.format(Date())
+        val docSpec = resolveDocumentSpec(documentPurpose)
 
         val sb = StringBuilder()
-        sb.appendLine("PEMERINTAH KABUPATEN MUKOMUKO - BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)")
-        sb.appendLine("BERITA ACARA STOCK OPNAME PERSEDIAAN LOGISTIK & PERTANGGUNGJAWABAN TATA KELOLA BMN/BMD")
+        // Standar Kop Surat Resmi 4 Baris sesuai Laporan Harian Pusdalops
+        sb.appendLine(com.example.model.DocumentSettings.DEFAULT_KOP_LINE_1)
+        sb.appendLine(com.example.model.DocumentSettings.DEFAULT_KOP_LINE_2)
+        sb.appendLine(com.example.model.DocumentSettings.DEFAULT_KOP_LINE_3)
+        sb.appendLine(com.example.model.DocumentSettings.DEFAULT_KOP_ADDRESS)
+        sb.appendLine(docSpec.title)
         sb.appendLine("Tujuan Dokumen,${sanitizeCsvCell(documentPurpose)}")
-        sb.appendLine("Waktu Cetak Stock Opname,${sanitizeCsvCell(printedAt)}")
+        sb.appendLine("Waktu Cetak Dokumen,${sanitizeCsvCell(printedAt)}")
         sb.appendLine("Petugas Penanggung Jawab,${sanitizeCsvCell(officerName.ifBlank { "Petugas Posko / Logistik" })}")
         sb.appendLine("NIP / ID Registrasi,${sanitizeCsvCell(officerNip.ifBlank { "-" })}")
         sb.appendLine("Jabatan / Role RBAC,${sanitizeCsvCell(officerRole.ifBlank { "Petugas Posko" })}")
@@ -378,11 +422,13 @@ object PoskoStockOpnameExporter {
                 ).joinToString(",")
             )
         }
+        sb.appendLine()
+        sb.appendLine(com.example.model.DocumentSettings.DEFAULT_FOOTER_TEXT)
 
         return sb.toString()
     }
 
-    private fun buildStockOpnamePdfBytes(
+    fun buildStockOpnamePdfBytes(
         context: Context,
         stocks: List<PoskoLogisticCommodity>,
         poskoUnits: List<PoskoRefugeeUnit>,
@@ -393,16 +439,23 @@ object PoskoStockOpnameExporter {
         documentPurpose: String
     ): ByteArray {
         val docSettings = runCatching {
-            DocumentSettingsRepository.getCachedOrDefaultSettings(context)
-        }.getOrNull()
+            DocumentSettingsRepository.getCachedOrDefaultSettings(context).clamped()
+        }.getOrDefault(com.example.model.DocumentSettings().clamped())
+
         val resolvedSignatories = runCatching {
-            if (docSettings != null) {
-                DocumentSettingsRepository.resolveSignatories(context, docSettings)
-            } else {
-                emptyMap()
-            }
+            DocumentSettingsRepository.resolveSignatories(context, docSettings)
         }.getOrDefault(emptyMap())
 
+        val resolvedOfficer = runCatching {
+            DocumentSettingsRepository.resolveOfficerIdentity(
+                context = context,
+                rawName = officerName,
+                rawNip = officerNip,
+                settings = docSettings
+            )
+        }.getOrNull()
+
+        val docSpec = resolveDocumentSpec(documentPurpose)
         val idLocale = Locale.forLanguageTag("id-ID")
         val now = Date()
         val fullDateStr = SimpleDateFormat("EEEE, dd MMMM yyyy • HH:mm 'WIB'", idLocale).apply {
@@ -414,32 +467,36 @@ object PoskoStockOpnameExporter {
         val pageInfo = PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, 1).create()
         val page = pdfDocument.startPage(pageInfo)
         val canvas = page.canvas
+        canvas.drawColor(Color.WHITE)
+
+        val contentWidth = A4_WIDTH - (MARGIN * 2f)
+        val centerX = A4_WIDTH / 2f
 
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(15, 23, 42)
-            textSize = 11.5f
+            textSize = 10.5f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
         val subHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(30, 41, 59)
-            textSize = 8.5f
+            textSize = 8.2f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             textAlign = Paint.Align.CENTER
         }
         val sectionTitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(15, 23, 42)
-            textSize = 9.5f
+            textSize = 9.0f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(30, 41, 59)
-            textSize = 8f
+            textSize = 7.8f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         }
         val boldBodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(15, 23, 42)
-            textSize = 8f
+            textSize = 7.8f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         val tableHeaderBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -448,7 +505,7 @@ object PoskoStockOpnameExporter {
         }
         val tableHeaderTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = 7.5f
+            textSize = 7.4f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -465,270 +522,590 @@ object PoskoStockOpnameExporter {
             style = Paint.Style.FILL
         }
 
-        var y = MARGIN
-
-        // 1. KOP SURAT RESMI PEMERINTAH KABUPATEN MUKOMUKO - BPBD
-        val centerX = A4_WIDTH / 2f
-        canvas.drawText("PEMERINTAH KABUPATEN MUKOMUKO", centerX, y + 10f, titlePaint)
-        titlePaint.textSize = 13f
-        canvas.drawText("BADAN PENANGGULANGAN BENCANA DAERAH (BPBD)", centerX, y + 25f, titlePaint)
-        canvas.drawText(
-            "PUSAT PENGENDALIAN OPERASI PENANGGULANGAN BENCANA (PUSDALOPS-PB)",
-            centerX,
-            y + 37f,
-            subHeaderPaint
+        // 1. KOP SURAT RESMI STANDAR (SAMA DENGAN LAPORAN HARIAN PUSDALOPS & DOKUMEN RESMI LAINNYA)
+        var y = ReportExporter.drawKopSuratResmi(
+            context = context,
+            canvas = canvas,
+            pageWidth = A4_WIDTH,
+            margin = MARGIN,
+            pageNumber = 1,
+            documentSettings = docSettings
         )
-        val addressLine = "Jl. Imam Bonjol, Komplek Perkantoran Pemda Kabupaten Mukomuko, Provinsi Bengkulu"
-        canvas.drawText(addressLine, centerX, y + 48f, subHeaderPaint)
 
-        y += 56f
-        val doubleLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(15, 23, 42)
-            strokeWidth = 1.8f
-        }
-        canvas.drawLine(MARGIN, y, A4_WIDTH - MARGIN, y, doubleLinePaint)
-        doubleLinePaint.strokeWidth = 0.7f
-        canvas.drawLine(MARGIN, y + 3f, A4_WIDTH - MARGIN, y + 3f, doubleLinePaint)
-        y += 18f
-
-        // 2. JUDUL BERITA ACARA STOCK OPNAME BMN/BMD
-        titlePaint.textSize = 10.5f
-        canvas.drawText(
-            "BERITA ACARA STOCK OPNAME LOGISTIK & TATA KELOLA BARANG MILIK NEGARA / DAERAH (BMN/BMD)",
-            centerX,
-            y,
-            titlePaint
+        // 2. JUDUL DOKUMEN RESMI (BA STOCK OPNAME / LPJ MUTASI / BA REKONSILIASI ASET)
+        y += 2f
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = docSpec.title,
+            x = centerX,
+            y = y,
+            maxWidth = contentWidth,
+            basePaint = titlePaint,
+            initialFontSize = 10.2f,
+            minFontSize = 7.2f
+        )
+        y += 11.5f
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Nomor Dokumen: ${docSpec.numberPrefix}/$docNumberDate • Dicetak: $fullDateStr",
+            x = centerX,
+            y = y,
+            maxWidth = contentWidth,
+            basePaint = subHeaderPaint,
+            initialFontSize = 8.0f,
+            minFontSize = 6.5f
         )
         y += 12f
-        canvas.drawText(
-            "Nomor Dokumen: BA-SO/BPBD-MM/$docNumberDate • Dicetak: $fullDateStr",
-            centerX,
-            y,
-            subHeaderPaint
-        )
-        y += 16f
 
-        // 3. KOTAK RINGKASAN METADATA PERTANGGUNGJAWABAN PETUGAS
+        // 3. KOTAK RINGKASAN METADATA PERTANGGUNGJAWABAN PETUGAS (AUTO-SHRINK AGAR TIDAK MELEBAR KELUAR KOTAK)
         val criticalCount = stocks.count { it.isCritical }
         val fefoWarnCount = stocks.count { it.isExpired || it.isExpiringSoonFefo }
         val totalRefugees = poskoUnits.sumOf { it.totalJiwa }
         val totalVulnerable = poskoUnits.sumOf { it.totalKelompokRentan }
 
-        val metaRect = RectF(MARGIN, y, A4_WIDTH - MARGIN, y + 54f)
+        val metaBoxHeight = 52f
+        val metaRect = RectF(MARGIN, y, A4_WIDTH - MARGIN, y + metaBoxHeight)
         canvas.drawRoundRect(metaRect, 6f, 6f, zebraRowPaint)
         canvas.drawRoundRect(metaRect, 6f, 6f, borderPaint)
 
-        val safeOfficer = officerName.ifBlank { "Petugas Posko & Logistik" }
-        val safeNip = officerNip.ifBlank { "-" }
-        val safeRole = officerRole.ifBlank { "Petugas Posko" }
+        val formattedOfficerName = resolvedOfficer?.formattedName?.takeIf { it.isNotBlank() && it != "-" }
+            ?: officerName.ifBlank { "Petugas Posko & Logistik" }
+        val formattedNipLine = resolvedOfficer?.nipLine?.takeIf { it.isNotBlank() && it != "NIP. -" }
+            ?: officerNip.takeIf { it.isNotBlank() && it != "-" }?.let { "NIP. $it" }
+            ?: "NIP. -"
+        val safeRole = officerRole.ifBlank {
+            resolvedOfficer?.role?.takeIf { it.isNotBlank() } ?: "Manajer Pusdalops-PB"
+        }
 
-        canvas.drawText("Tujuan Pelaporan: $documentPurpose", MARGIN + 10f, y + 14f, boldBodyPaint)
-        canvas.drawText(
-            "Pejabat / Petugas Pelapor: $safeOfficer (NIP/ID: $safeNip • Role: $safeRole)",
-            MARGIN + 10f,
-            y + 27f,
-            bodyPaint
-        )
-        canvas.drawText(
-            "Ringkasan Aset & Posko: ${stocks.size} Komoditas Logistik ($criticalCount Status Kritis <10, $fefoWarnCount Peringatan FEFO) • ${poskoUnits.size} Posko Aktif ($totalRefugees Jiwa / $totalVulnerable Rentan)",
-            MARGIN + 10f,
-            y + 40f,
-            bodyPaint
-        )
-        canvas.drawText(
-            "Standar Kepatuhan: PP No. 27/2014 & Permendagri No. 19/2016 tentang Pedoman Pengelolaan Barang Milik Negara/Daerah (BMN/BMD) & Perka BNPB",
-            MARGIN + 10f,
-            y + 50f,
-            bodyPaint
-        )
-        y += 68f
+        val innerMetaX = MARGIN + 10f
+        val innerMetaMaxW = contentWidth - 20f
 
-        // 4. TABEL I: STOCK OPNAME PERSEDIAAN LOGISTIK & FEFO
-        canvas.drawText(
-            "I. TABEL PEMERIKSAAN FISIK (STOCK OPNAME) PERSEDIAAN LOGISTIK & STATUS FEFO (BMN/BMD)",
-            MARGIN,
-            y,
-            sectionTitlePaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Tujuan Pelaporan: $documentPurpose",
+            x = innerMetaX,
+            y = y + 12.5f,
+            maxWidth = innerMetaMaxW,
+            basePaint = boldBodyPaint,
+            initialFontSize = 7.8f,
+            minFontSize = 6.2f
         )
-        y += 6f
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Pejabat / Petugas Pelapor: $formattedOfficerName ($formattedNipLine • Jabatan: $safeRole)",
+            x = innerMetaX,
+            y = y + 24.5f,
+            maxWidth = innerMetaMaxW,
+            basePaint = bodyPaint,
+            initialFontSize = 7.6f,
+            minFontSize = 6.0f
+        )
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Ringkasan Aset & Posko: ${stocks.size} Komoditas Logistik ($criticalCount Status Kritis <10, $fefoWarnCount Peringatan FEFO) • ${poskoUnits.size} Posko Aktif ($totalRefugees Jiwa / $totalVulnerable Rentan)",
+            x = innerMetaX,
+            y = y + 36.5f,
+            maxWidth = innerMetaMaxW,
+            basePaint = bodyPaint,
+            initialFontSize = 7.6f,
+            minFontSize = 6.0f
+        )
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Standar Kepatuhan: PP No. 27/2014 & Permendagri No. 19/2016 tentang Pedoman Pengelolaan Barang Milik Negara/Daerah (BMN/BMD) & Perka BNPB",
+            x = innerMetaX,
+            y = y + 47.5f,
+            maxWidth = innerMetaMaxW,
+            basePaint = bodyPaint,
+            initialFontSize = 7.5f,
+            minFontSize = 5.8f
+        )
+        y += metaBoxHeight + 13f
 
-        val colWidths1 = floatArrayOf(24f, 68f, 155f, 62f, 58f, 82f, 82f)
+        // 4. TABEL I: STOCK OPNAME PERSEDIAAN LOGISTIK & FEFO (Total Lebar = 523pt)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "I. TABEL PEMERIKSAAN FISIK (STOCK OPNAME) PERSEDIAAN LOGISTIK & STATUS FEFO (BMN/BMD)",
+            x = MARGIN,
+            y = y,
+            maxWidth = contentWidth,
+            basePaint = sectionTitlePaint,
+            initialFontSize = 8.8f,
+            minFontSize = 6.8f
+        )
+        y += 5f
+
+        val colWidths1 = floatArrayOf(24f, 66f, 151f, 64f, 60f, 76f, 82f) // Total = 523pt
         val headers1 = arrayOf("No", "Kode BMN", "Nama Komoditas Logistik", "Posko", "Saldo Fisik", "Tgl Exp (FEFO)", "Status Audit")
-        val rowHeight1 = 18f
+        val colCentered1 = booleanArrayOf(true, false, false, true, true, true, true)
+        val rowHeight1 = 16.5f
+        val gridLinePaint = Paint(borderPaint).apply { strokeWidth = 0.7f }
+        val tableHeaderCenterPaint = Paint(tableHeaderTextPaint).apply { textAlign = Paint.Align.CENTER }
+        val bodyCenterPaint = Paint(bodyPaint).apply { textAlign = Paint.Align.CENTER }
+        val boldCenterPaint = Paint(boldBodyPaint).apply { textAlign = Paint.Align.CENTER }
 
-        // Draw Table 1 Header
+        // Header Tabel I
         canvas.drawRect(MARGIN, y, A4_WIDTH - MARGIN, y + rowHeight1, tableHeaderBgPaint)
         var xCursor = MARGIN
         headers1.forEachIndexed { i, h ->
-            canvas.drawText(h, xCursor + 4f, y + 12f, tableHeaderTextPaint)
+            val centered = colCentered1[i]
+            val drawX = if (centered) xCursor + (colWidths1[i] / 2f) else xCursor + 4f
+            val baseP = if (centered) tableHeaderCenterPaint else tableHeaderTextPaint
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = h,
+                x = drawX,
+                y = y + 11.5f,
+                maxWidth = colWidths1[i] - 8f,
+                basePaint = baseP,
+                initialFontSize = 7.3f,
+                minFontSize = 5.6f
+            )
+            if (i > 0) {
+                canvas.drawLine(xCursor, y, xCursor, y + rowHeight1, gridLinePaint)
+            }
             xCursor += colWidths1[i]
         }
+        canvas.drawRect(MARGIN, y, A4_WIDTH - MARGIN, y + rowHeight1, gridLinePaint)
         y += rowHeight1
 
-        stocks.take(12).forEachIndexed { idx, item ->
-            val rowTop = y
-            val rowBottom = y + rowHeight1
-            if (item.isCritical) {
-                canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, criticalRowPaint)
-            } else if (idx % 2 == 1) {
-                canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, zebraRowPaint)
-            }
-            canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, borderPaint)
-
-            val auditLabel = when {
-                item.isExpired -> "EXP / TARIK"
-                item.isCritical -> "KRITIS (<10)"
-                item.isExpiringSoonFefo -> "FEFO <=30Hr"
-                else -> "AMAN / LAYAK"
-            }
-
-            val cells = arrayOf(
-                (idx + 1).toString(),
-                item.code,
-                item.name.take(28),
-                item.poskoCode,
-                "${item.currentStock} ${item.unit}",
-                item.expiryDateIso ?: "Non-Exp",
-                auditLabel
+        if (stocks.isEmpty()) {
+            canvas.drawRect(MARGIN, y, A4_WIDTH - MARGIN, y + rowHeight1, gridLinePaint)
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Belum ada data komoditas logistik tercatat.",
+                x = centerX,
+                y = y + 11.5f,
+                maxWidth = contentWidth - 16f,
+                basePaint = subHeaderPaint,
+                initialFontSize = 7.5f,
+                minFontSize = 6.0f
             )
-
-            var cellX = MARGIN
-            cells.forEachIndexed { cIdx, text ->
-                val p = if (cIdx == 4 || cIdx == 6) boldBodyPaint else bodyPaint
-                canvas.drawText(text, cellX + 4f, rowTop + 12f, p)
-                cellX += colWidths1[cIdx]
-            }
             y += rowHeight1
+        } else {
+            stocks.take(10).forEachIndexed { idx, item ->
+                val rowTop = y
+                val rowBottom = y + rowHeight1
+                if (item.isCritical) {
+                    canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, criticalRowPaint)
+                } else if (idx % 2 == 1) {
+                    canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, zebraRowPaint)
+                }
+                canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, gridLinePaint)
+
+                val auditLabel = when {
+                    item.isExpired -> "EXP / TARIK"
+                    item.isCritical -> "KRITIS (<10)"
+                    item.isExpiringSoonFefo -> "FEFO <=30Hr"
+                    else -> "AMAN / LAYAK"
+                }
+
+                val cells = arrayOf(
+                    (idx + 1).toString(),
+                    item.code,
+                    item.name,
+                    item.poskoCode,
+                    "${item.currentStock} ${item.unit}",
+                    item.expiryDateIso ?: "Non-Exp",
+                    auditLabel
+                )
+
+                var cellX = MARGIN
+                cells.forEachIndexed { cIdx, text ->
+                    if (cIdx > 0) {
+                        canvas.drawLine(cellX, rowTop, cellX, rowBottom, gridLinePaint)
+                    }
+                    val centered = colCentered1[cIdx]
+                    val p = when {
+                        centered && (cIdx == 4 || cIdx == 6) -> boldCenterPaint
+                        centered -> bodyCenterPaint
+                        cIdx == 4 || cIdx == 6 -> boldBodyPaint
+                        else -> bodyPaint
+                    }
+                    val drawX = if (centered) cellX + (colWidths1[cIdx] / 2f) else cellX + 4f
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = text,
+                        x = drawX,
+                        y = rowTop + 11.5f,
+                        maxWidth = colWidths1[cIdx] - 8f,
+                        basePaint = p,
+                        initialFontSize = 7.5f,
+                        minFontSize = 5.6f
+                    )
+                    cellX += colWidths1[cIdx]
+                }
+                y += rowHeight1
+            }
         }
-        y += 16f
+        y += 13f
 
-        // 5. TABEL II: REKAPITULASI PENGUNGSI POSKO AKTIF
-        canvas.drawText(
-            "II. REKAPITULASI DATA PENGUNGSI TERPILAH PER POSKO AKTIF (DASAR DISTRIBUSI LOGISTIK)",
-            MARGIN,
-            y,
-            sectionTitlePaint
+        // 5. TABEL II: REKAPITULASI PENGUNGSI POSKO AKTIF (Total Lebar = 523pt)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "II. REKAPITULASI DATA PENGUNGSI TERPILAH PER POSKO AKTIF (DASAR DISTRIBUSI LOGISTIK)",
+            x = MARGIN,
+            y = y,
+            maxWidth = contentWidth,
+            basePaint = sectionTitlePaint,
+            initialFontSize = 8.8f,
+            minFontSize = 6.8f
         )
-        y += 6f
+        y += 5f
 
-        val colWidths2 = floatArrayOf(75f, 165f, 70f, 55f, 55f, 55f, 56f)
+        val colWidths2 = floatArrayOf(74f, 165f, 68f, 54f, 54f, 54f, 54f) // Total = 523pt
         val headers2 = arrayOf("Kode Posko", "Nama Posko Pengungsian", "Total Jiwa", "Lansia", "Ibu Hamil", "Balita", "Disabilitas")
+        val colCentered2 = booleanArrayOf(true, false, true, true, true, true, true)
 
         canvas.drawRect(MARGIN, y, A4_WIDTH - MARGIN, y + rowHeight1, tableHeaderBgPaint)
         xCursor = MARGIN
         headers2.forEachIndexed { i, h ->
-            canvas.drawText(h, xCursor + 4f, y + 12f, tableHeaderTextPaint)
+            val centered = colCentered2[i]
+            val drawX = if (centered) xCursor + (colWidths2[i] / 2f) else xCursor + 4f
+            val baseP = if (centered) tableHeaderCenterPaint else tableHeaderTextPaint
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = h,
+                x = drawX,
+                y = y + 11.5f,
+                maxWidth = colWidths2[i] - 8f,
+                basePaint = baseP,
+                initialFontSize = 7.3f,
+                minFontSize = 5.6f
+            )
+            if (i > 0) {
+                canvas.drawLine(xCursor, y, xCursor, y + rowHeight1, gridLinePaint)
+            }
             xCursor += colWidths2[i]
         }
+        canvas.drawRect(MARGIN, y, A4_WIDTH - MARGIN, y + rowHeight1, gridLinePaint)
         y += rowHeight1
 
-        poskoUnits.take(6).forEachIndexed { idx, posko ->
-            val rowTop = y
-            val rowBottom = y + rowHeight1
-            if (idx % 2 == 1) {
-                canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, zebraRowPaint)
-            }
-            canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, borderPaint)
-
-            val cells = arrayOf(
-                posko.poskoCode,
-                posko.poskoName.take(29),
-                "${posko.totalJiwa}/${posko.maxCapacity}",
-                posko.lansia.toString(),
-                posko.ibuHamil.toString(),
-                posko.balita.toString(),
-                posko.disabilitas.toString()
+        if (poskoUnits.isEmpty()) {
+            canvas.drawRect(MARGIN, y, A4_WIDTH - MARGIN, y + rowHeight1, gridLinePaint)
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Belum ada data posko pengungsian aktif tercatat.",
+                x = centerX,
+                y = y + 11.5f,
+                maxWidth = contentWidth - 16f,
+                basePaint = subHeaderPaint,
+                initialFontSize = 7.5f,
+                minFontSize = 6.0f
             )
-            var cellX = MARGIN
-            cells.forEachIndexed { cIdx, text ->
-                canvas.drawText(text, cellX + 4f, rowTop + 12f, bodyPaint)
-                cellX += colWidths2[cIdx]
-            }
             y += rowHeight1
+        } else {
+            poskoUnits.take(5).forEachIndexed { idx, posko ->
+                val rowTop = y
+                val rowBottom = y + rowHeight1
+                if (idx % 2 == 1) {
+                    canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, zebraRowPaint)
+                }
+                canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, gridLinePaint)
+
+                val cells = arrayOf(
+                    posko.poskoCode,
+                    posko.poskoName,
+                    "${posko.totalJiwa}/${posko.maxCapacity}",
+                    posko.lansia.toString(),
+                    posko.ibuHamil.toString(),
+                    posko.balita.toString(),
+                    posko.disabilitas.toString()
+                )
+                var cellX = MARGIN
+                cells.forEachIndexed { cIdx, text ->
+                    if (cIdx > 0) {
+                        canvas.drawLine(cellX, rowTop, cellX, rowBottom, gridLinePaint)
+                    }
+                    val centered = colCentered2[cIdx]
+                    val drawX = if (centered) cellX + (colWidths2[cIdx] / 2f) else cellX + 4f
+                    val p = if (centered) bodyCenterPaint else bodyPaint
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = text,
+                        x = drawX,
+                        y = rowTop + 11.5f,
+                        maxWidth = colWidths2[cIdx] - 8f,
+                        basePaint = p,
+                        initialFontSize = 7.5f,
+                        minFontSize = 5.6f
+                    )
+                    cellX += colWidths2[cIdx]
+                }
+                y += rowHeight1
+            }
         }
-        y += 16f
+        y += 13f
 
-        // 6. TABEL III: LOG AUDIT MUTASI KELUAR / DISTRIBUSI BANTUAN BERBASIS NIK 16 DIGIT
-        canvas.drawText(
-            "III. BUKU BESAR MUTASI KELUAR & DISTRIBUSI BANTUAN WARGA (ANTI-DATA GANDA NIK 16 DIGIT)",
-            MARGIN,
-            y,
-            sectionTitlePaint
+        // 6. TABEL III: LOG AUDIT MUTASI KELUAR / DISTRIBUSI BANTUAN BERBASIS NIK 16 DIGIT (Total Lebar = 523pt)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "III. BUKU BESAR MUTASI KELUAR & DISTRIBUSI BANTUAN WARGA (ANTI-DATA GANDA NIK 16 DIGIT)",
+            x = MARGIN,
+            y = y,
+            maxWidth = contentWidth,
+            basePaint = sectionTitlePaint,
+            initialFontSize = 8.8f,
+            minFontSize = 6.8f
         )
-        y += 6f
+        y += 5f
 
-        val colWidths3 = floatArrayOf(62f, 98f, 105f, 130f, 56f, 80f)
+        val colWidths3 = floatArrayOf(62f, 96f, 108f, 125f, 54f, 78f) // Total = 523pt
         val headers3 = arrayOf("ID Mutasi", "NIK Penerima (16 Digit)", "Nama Penerima", "Komoditas Disalurkan", "Jumlah", "Waktu Salur")
+        val colCentered3 = booleanArrayOf(true, true, false, false, true, true)
 
         canvas.drawRect(MARGIN, y, A4_WIDTH - MARGIN, y + rowHeight1, tableHeaderBgPaint)
         xCursor = MARGIN
         headers3.forEachIndexed { i, h ->
-            canvas.drawText(h, xCursor + 4f, y + 12f, tableHeaderTextPaint)
+            val centered = colCentered3[i]
+            val drawX = if (centered) xCursor + (colWidths3[i] / 2f) else xCursor + 4f
+            val baseP = if (centered) tableHeaderCenterPaint else tableHeaderTextPaint
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = h,
+                x = drawX,
+                y = y + 11.5f,
+                maxWidth = colWidths3[i] - 8f,
+                basePaint = baseP,
+                initialFontSize = 7.3f,
+                minFontSize = 5.6f
+            )
+            if (i > 0) {
+                canvas.drawLine(xCursor, y, xCursor, y + rowHeight1, gridLinePaint)
+            }
             xCursor += colWidths3[i]
         }
+        canvas.drawRect(MARGIN, y, A4_WIDTH - MARGIN, y + rowHeight1, gridLinePaint)
         y += rowHeight1
 
-        distributionLedger.take(8).forEachIndexed { idx, log ->
-            val rowTop = y
-            val rowBottom = y + rowHeight1
-            if (idx % 2 == 1) {
-                canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, zebraRowPaint)
-            }
-            canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, borderPaint)
-
-            val cells = arrayOf(
-                log.distributionId,
-                log.recipientNik,
-                "${log.recipientName.take(14)} (${log.vulnerabilityGroup.take(6)})",
-                log.commodityName.take(22),
-                "${log.quantity} ${log.unit}",
-                log.timestampIso.takeLast(11)
+        if (distributionLedger.isEmpty()) {
+            canvas.drawRect(MARGIN, y, A4_WIDTH - MARGIN, y + rowHeight1, gridLinePaint)
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Belum ada mutasi distribusi bantuan warga yang tercatat.",
+                x = centerX,
+                y = y + 11.5f,
+                maxWidth = contentWidth - 16f,
+                basePaint = subHeaderPaint,
+                initialFontSize = 7.5f,
+                minFontSize = 6.0f
             )
-            var cellX = MARGIN
-            cells.forEachIndexed { cIdx, text ->
-                canvas.drawText(text, cellX + 4f, rowTop + 12f, bodyPaint)
-                cellX += colWidths3[cIdx]
-            }
             y += rowHeight1
+        } else {
+            distributionLedger.take(6).forEachIndexed { idx, log ->
+                val rowTop = y
+                val rowBottom = y + rowHeight1
+                if (idx % 2 == 1) {
+                    canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, zebraRowPaint)
+                }
+                canvas.drawRect(MARGIN, rowTop, A4_WIDTH - MARGIN, rowBottom, gridLinePaint)
+
+                val cells = arrayOf(
+                    log.distributionId,
+                    log.recipientNik,
+                    "${log.recipientName} (${log.vulnerabilityGroup})",
+                    log.commodityName,
+                    "${log.quantity} ${log.unit}",
+                    log.timestampIso.takeLast(11)
+                )
+                var cellX = MARGIN
+                cells.forEachIndexed { cIdx, text ->
+                    if (cIdx > 0) {
+                        canvas.drawLine(cellX, rowTop, cellX, rowBottom, gridLinePaint)
+                    }
+                    val centered = colCentered3[cIdx]
+                    val drawX = if (centered) cellX + (colWidths3[cIdx] / 2f) else cellX + 4f
+                    val p = if (centered) bodyCenterPaint else bodyPaint
+                    PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                        canvas = canvas,
+                        text = text,
+                        x = drawX,
+                        y = rowTop + 11.5f,
+                        maxWidth = colWidths3[cIdx] - 8f,
+                        basePaint = p,
+                        initialFontSize = 7.5f,
+                        minFontSize = 5.6f
+                    )
+                    cellX += colWidths3[cIdx]
+                }
+                y += rowHeight1
+            }
         }
 
-        // 7. BLOK PENGESAHAN & PERTANGGUNGJAWABAN BMN/BMD DI BAGIAN BAWAH HALAMAN
-        val signTopY = max(y + 22f, A4_HEIGHT - 135f)
-        val leftSignX = MARGIN + 20f
-        val rightSignX = A4_WIDTH - MARGIN - 185f
+        // 7. BLOK PENGESAHAN & PERTANGGUNGJAWABAN BMN/BMD (PRESISI TEPAT DI BAWAH TABEL TERAKHIR)
+        // Diposisikan proporsional tepat 16 pt di bawah Tabel III agar tidak menyisakan ruang kosong berlebih,
+        // dengan batas bawah aman agar tidak pernah bertabrakan dengan Footer Resmi.
+        val signTopY = computeSignatureBlockTopY(y)
 
-        val statementText =
-            "Demikian Berita Acara Stock Opname Persediaan Logistik & Aset Kebencanaan ini dibuat dengan sebenarnya sebagai bukti pertanggungjawaban " +
+        val statementText = PdfTextAutoShrinkHelper.normalizePdfWordSpacing(
+            "Demikian ${docSpec.closingDocumentName} ini dibuat dengan sebenarnya sebagai bukti pertanggungjawaban " +
                 "tertib administrasi Pengelolaan Barang Milik Negara/Daerah (BMN/BMD) pada Pusdalops-PB BPBD Kabupaten Mukomuko."
-        val textPaint = TextPaint(bodyPaint)
+        )
+        val textPaint = PdfTextAutoShrinkHelper.configurePdfPaint(
+            TextPaint(bodyPaint).apply { textSize = 7.6f },
+            letterSpacingEm = 0.025f
+        )
         val staticLayout = StaticLayout.Builder
-            .obtain(statementText, 0, statementText.length, textPaint, (A4_WIDTH - 2 * MARGIN).toInt())
+            .obtain(statementText, 0, statementText.length, textPaint, contentWidth.toInt())
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setLineSpacing(1.5f, 1.15f)
+            .setIncludePad(false)
             .build()
         canvas.save()
-        canvas.translate(MARGIN, signTopY - 14f)
+        canvas.translate(MARGIN, signTopY)
         staticLayout.draw(canvas)
         canvas.restore()
 
-        val sigBlockY = signTopY + 18f
-        canvas.drawText("Mengetahui / Mengesahkan,", leftSignX, sigBlockY, bodyPaint)
-        canvas.drawText("Pejabat Penatausahaan BMN/BMD / Kalak BPBD", leftSignX, sigBlockY + 11f, boldBodyPaint)
+        val sigBlockY = signTopY + staticLayout.height + 16f
+        val leftColCenterX = MARGIN + (contentWidth * 0.25f)
+        val rightColCenterX = A4_WIDTH - MARGIN - (contentWidth * 0.25f)
+        val sigColMaxW = (contentWidth * 0.46f).coerceAtLeast(160f)
 
+        val sigRolePaint = Paint(bodyPaint).apply {
+            textAlign = Paint.Align.CENTER
+            textSize = 7.8f
+            color = Color.rgb(30, 41, 59)
+        }
+        val sigRoleBoldPaint = Paint(boldBodyPaint).apply {
+            textAlign = Paint.Align.CENTER
+            textSize = 8.0f
+            color = Color.rgb(15, 23, 42)
+        }
+        val sigNamePaint = Paint(boldBodyPaint).apply {
+            textAlign = Paint.Align.CENTER
+            textSize = 8.2f
+            isUnderlineText = true
+            color = Color.rgb(15, 23, 42)
+        }
+        val sigNipPaint = Paint(bodyPaint).apply {
+            textAlign = Paint.Align.CENTER
+            textSize = 7.6f
+            color = Color.rgb(51, 65, 85)
+        }
+
+        // Kolom Kiri Atas: Mengetahui / Mengesahkan Pejabat Penatausahaan BMN/BMD / Kalak BPBD
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Mengetahui / Mengesahkan,",
+            x = leftColCenterX,
+            y = sigBlockY,
+            maxWidth = sigColMaxW,
+            basePaint = sigRolePaint,
+            initialFontSize = 7.8f,
+            minFontSize = 6.2f
+        )
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Kepala Pelaksana BPBD Kab. Mukomuko",
+            x = leftColCenterX,
+            y = sigBlockY + 10.5f,
+            maxWidth = sigColMaxW,
+            basePaint = sigRoleBoldPaint,
+            initialFontSize = 8.0f,
+            minFontSize = 6.2f
+        )
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Selaku Pejabat Penatausahaan BMN/BMD",
+            x = leftColCenterX,
+            y = sigBlockY + 20.5f,
+            maxWidth = sigColMaxW,
+            basePaint = sigRolePaint,
+            initialFontSize = 7.6f,
+            minFontSize = 6.0f
+        )
+
+        // Kolom Kanan Atas: Tanggal, Jabatan Resmi (mis. Manajer Pusdalops-PB) & Peran Pelaksana
         val datePlaceStr = SimpleDateFormat("dd MMMM yyyy", idLocale).format(now)
-        canvas.drawText("Mukomuko, $datePlaceStr", rightSignX, sigBlockY, bodyPaint)
-        canvas.drawText("Petugas Pelaksana Stock Opname,", rightSignX, sigBlockY + 11f, boldBodyPaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Mukomuko, $datePlaceStr",
+            x = rightColCenterX,
+            y = sigBlockY,
+            maxWidth = sigColMaxW,
+            basePaint = sigRolePaint,
+            initialFontSize = 7.8f,
+            minFontSize = 6.2f
+        )
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = safeRole,
+            x = rightColCenterX,
+            y = sigBlockY + 10.5f,
+            maxWidth = sigColMaxW,
+            basePaint = sigRoleBoldPaint,
+            initialFontSize = 8.0f,
+            minFontSize = 6.2f
+        )
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "Selaku ${docSpec.executorTitle}",
+            x = rightColCenterX,
+            y = sigBlockY + 20.5f,
+            maxWidth = sigColMaxW,
+            basePaint = sigRolePaint,
+            initialFontSize = 7.6f,
+            minFontSize = 6.0f
+        )
 
+        // Kolom Kiri Bawah: Nama & NIP Kepala Pelaksana BPBD
         val pengawasSig = resolvedSignatories[com.example.model.DocumentSettings.SLOT_PENGAWAS]
         val kalakName = pengawasSig?.formattedName?.takeIf { it.isNotBlank() && it != "-" }
-            ?: "Kepala Pelaksana BPBD Kab. Mukomuko"
+            ?: "RURI IRWANDI, ST, MT"
         val kalakNip = pengawasSig?.nipLine?.takeIf { it.isNotBlank() && it != "NIP. -" }
-            ?: "NIP. 197805122005011004"
+            ?: "NIP. 197906072006041011"
 
-        canvas.drawText(kalakName, leftSignX, sigBlockY + 54f, boldBodyPaint)
-        canvas.drawText(kalakNip, leftSignX, sigBlockY + 64f, bodyPaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = kalakName,
+            x = leftColCenterX,
+            y = sigBlockY + 54.5f,
+            maxWidth = sigColMaxW,
+            basePaint = sigNamePaint,
+            initialFontSize = 8.2f,
+            minFontSize = 6.5f
+        )
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = kalakNip,
+            x = leftColCenterX,
+            y = sigBlockY + 65f,
+            maxWidth = sigColMaxW,
+            basePaint = sigNipPaint,
+            initialFontSize = 7.6f,
+            minFontSize = 6.2f
+        )
 
-        canvas.drawText(safeOfficer, rightSignX, sigBlockY + 54f, boldBodyPaint)
-        canvas.drawText("NIP/ID: $safeNip • $safeRole", rightSignX, sigBlockY + 64f, bodyPaint)
+        // Kolom Kanan Bawah: Nama & NIP Petugas (Tanpa menempelkan jabatan di samping NIP agar tidak melebar)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = formattedOfficerName,
+            x = rightColCenterX,
+            y = sigBlockY + 54.5f,
+            maxWidth = sigColMaxW,
+            basePaint = sigNamePaint,
+            initialFontSize = 8.2f,
+            minFontSize = 6.5f
+        )
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = formattedNipLine,
+            x = rightColCenterX,
+            y = sigBlockY + 65f,
+            maxWidth = sigColMaxW,
+            basePaint = sigNipPaint,
+            initialFontSize = 7.6f,
+            minFontSize = 6.2f
+        )
+
+        // 8. FOOTER ATRIBUSI RESMI (DISAMAKAN DENGAN LAPORAN HARIAN PUSDALOPS & DOKUMEN RESMI LAINNYA)
+        ReportExporter.drawFooterAtribusiResmi(
+            canvas = canvas,
+            pageWidth = A4_WIDTH,
+            pageHeight = A4_HEIGHT,
+            margin = MARGIN,
+            documentSettings = docSettings
+        )
 
         pdfDocument.finishPage(page)
 

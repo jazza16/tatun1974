@@ -33,9 +33,9 @@ import kotlin.math.max
  */
 object DalaPdfExportWrapper {
 
-    private const val A4_WIDTH = 595
-    private const val A4_HEIGHT = 842
-    private const val MARGIN = 36f
+    private const val A4_WIDTH = ReportExporter.A4_PAGE_WIDTH
+    private const val A4_HEIGHT = ReportExporter.A4_PAGE_HEIGHT
+    private const val MARGIN = ReportExporter.STANDARD_MARGIN
 
     suspend fun exportAndSharePdf(
         context: Context,
@@ -402,7 +402,7 @@ object DalaPdfExportWrapper {
                         text = vals[i],
                         x = drawX,
                         y = y + 11f,
-                        maxWidth = w - 6f,
+                        maxWidth = w - 8f,
                         basePaint = cellP,
                         initialFontSize = 7.4f,
                         minFontSize = settings.minFontSize
@@ -414,7 +414,7 @@ object DalaPdfExportWrapper {
         }
 
         // BAGIAN IV: BLOK TANDA TANGAN TATA NASKAH DINAS (DATA-DRIVEN + AUTO-SHRINK)
-        val sigStartY = max(y + 22f, 560f).coerceAtMost(A4_HEIGHT - 195f)
+        val sigStartY = (y + 20f).coerceAtMost(A4_HEIGHT - 195f)
         ReportExporter.drawBlokTandaTanganPiramidaTerbalik(
             canvas = canvas,
             pageWidth = A4_WIDTH,

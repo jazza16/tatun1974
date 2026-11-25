@@ -35,9 +35,9 @@ import java.util.TimeZone
  */
 object VolunteerAssignmentPdfGenerator {
 
-    private const val A4_WIDTH = 595
-    private const val A4_HEIGHT = 842
-    private const val MARGIN = 44f
+    private const val A4_WIDTH = ReportExporter.A4_PAGE_WIDTH
+    private const val A4_HEIGHT = ReportExporter.A4_PAGE_HEIGHT
+    private const val MARGIN = ReportExporter.STANDARD_MARGIN
 
     fun buildLetterNumber(nik: String, timestampMs: Long = System.currentTimeMillis()): String {
         val tail = nik.trim().takeLast(4).ifBlank { "0001" }
@@ -214,22 +214,26 @@ object VolunteerAssignmentPdfGenerator {
 
                 // 1. KOP SURAT STANDAR RESMI SIPAGAR KITA (Seragam Hitam & Bebas Tabrakan Logo)
                 val centerX = A4_WIDTH / 2f
+                val docSettings = com.example.data.repository.DocumentSettingsRepository
+                    .getCachedOrDefaultSettings(context).clamped()
                 var y = ReportExporter.drawKopSuratResmi(
                     context = context,
                     canvas = canvas,
                     pageWidth = A4_WIDTH,
                     margin = MARGIN,
                     pageNumber = 1,
-                    spacingAfterLine = 30f
+                    documentSettings = docSettings,
+                    spacingAfterLine = 22f
                 )
 
                 // 2. JUDUL "SURAT TUGAS RELAWAN"
                 titlePaint.color = Color.BLACK
                 titlePaint.textSize = 15.5f
                 PdfTextAutoShrinkHelper.drawPdfText(canvas, "SURAT TUGAS RELAWAN", centerX, y, titlePaint)
+                val titleHalfW = (titlePaint.measureText("SURAT  TUGAS  RELAWAN") / 2f).coerceIn(88f, 118f)
                 linePaint.color = Color.BLACK
                 linePaint.strokeWidth = 0.8f
-                canvas.drawLine(centerX - 102f, y + 4f, centerX + 102f, y + 4f, linePaint)
+                canvas.drawLine(centerX - titleHalfW, y + 4f, centerX + titleHalfW, y + 4f, linePaint)
 
                 y += 18f
                 val numberPaint = Paint(boldPaint).apply {
@@ -380,8 +384,9 @@ object VolunteerAssignmentPdfGenerator {
                 )
 
                 // 7. FOOTER & TANDA TANGAN DIGITAL PUSDALOPS-PB BPBD MUKOMUKO
-                y += 44f
-                val signCenterX = A4_WIDTH - MARGIN - 115f
+                y += 40f
+                val signBoxW = maxTextWidth * 0.48f
+                val signCenterX = A4_WIDTH - MARGIN - (signBoxW / 2f)
                 val signPaint = Paint(bodyPaint).apply { textAlign = Paint.Align.CENTER }
                 val signBoldPaint = Paint(boldPaint).apply { textAlign = Paint.Align.CENTER }
 
@@ -486,26 +491,13 @@ object VolunteerAssignmentPdfGenerator {
                     minFontSize = 7.0f
                 )
 
-                // Catatan Kaki Dokumen Digital
-                val footerY = A4_HEIGHT - 28f
-                val footerLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.rgb(203, 213, 225)
-                    strokeWidth = 1f
-                }
-                canvas.drawLine(MARGIN, footerY - 12f, A4_WIDTH - MARGIN, footerY - 12f, footerLinePaint)
-                val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.rgb(100, 116, 139)
-                    textSize = 8.5f
-                }
-                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                // Catatan Kaki Resmi Terstandarisasi SIPAGAR KITA
+                ReportExporter.drawFooterAtribusiResmi(
                     canvas = canvas,
-                    text = "Dokumen Resmi SIPAGAR KITA BPBD Kab. Mukomuko • Dicetak: $currentDateTimeStr • NIK: ${volunteer.nik}",
-                    x = MARGIN,
-                    y = footerY,
-                    maxWidth = maxTextWidth,
-                    basePaint = footerPaint,
-                    initialFontSize = footerPaint.textSize,
-                    minFontSize = 6.5f
+                    pageWidth = A4_WIDTH,
+                    pageHeight = A4_HEIGHT,
+                    margin = MARGIN,
+                    documentSettings = docSettings
                 )
 
                 pdfDocument.finishPage(page)

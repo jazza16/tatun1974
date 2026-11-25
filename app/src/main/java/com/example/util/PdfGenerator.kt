@@ -47,9 +47,9 @@ import kotlin.math.max
 
 object PdfGenerator {
 
-    private const val PAGE_WIDTH = 595
-    private const val PAGE_HEIGHT = 842
-    private const val PAGE_MARGIN = 36f // Standar margin A4 (~1.27 cm)
+    private const val PAGE_WIDTH = ReportExporter.A4_PAGE_WIDTH
+    private const val PAGE_HEIGHT = ReportExporter.A4_PAGE_HEIGHT
+    private const val PAGE_MARGIN = ReportExporter.STANDARD_MARGIN // Standar margin A4 (36pt / ~1.27 cm)
 
     private val pdfScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -774,7 +774,16 @@ object PdfGenerator {
             textAlign = Paint.Align.CENTER
         }
         y += 4f
-        canvas.drawText("LAPORAN HARIAN PUSDALOPS", PAGE_WIDTH / 2f, y, titlePaint)
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "LAPORAN HARIAN PUSDALOPS",
+            x = PAGE_WIDTH / 2f,
+            y = y,
+            maxWidth = contentWidth,
+            basePaint = titlePaint,
+            initialFontSize = 11.5f,
+            minFontSize = 8.5f
+        )
         y += 10f
 
         val introText =
@@ -1476,25 +1485,12 @@ object PdfGenerator {
     }
 
     private fun drawPageFooter(canvas: Canvas, settings: DocumentSettings) {
-        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(203, 213, 225)
-            strokeWidth = 0.8f
-        }
-        val footerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(100, 116, 139)
-            textSize = 7.5f
-            textAlign = Paint.Align.CENTER
-        }
-        canvas.drawLine(PAGE_MARGIN, PAGE_HEIGHT - 28f, PAGE_WIDTH - PAGE_MARGIN, PAGE_HEIGHT - 28f, linePaint)
-        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+        ReportExporter.drawFooterAtribusiResmi(
             canvas = canvas,
-            text = settings.footerText,
-            x = PAGE_WIDTH / 2f,
-            y = PAGE_HEIGHT - 17f,
-            maxWidth = PAGE_WIDTH - (PAGE_MARGIN * 2f),
-            basePaint = footerTextPaint,
-            initialFontSize = 7.5f,
-            minFontSize = settings.minFontSize
+            pageWidth = PAGE_WIDTH,
+            pageHeight = PAGE_HEIGHT,
+            margin = PAGE_MARGIN,
+            documentSettings = settings
         )
     }
 

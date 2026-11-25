@@ -55,9 +55,11 @@ import kotlin.math.roundToInt
  */
 object ReportExporter {
 
-    private const val A4_PAGE_WIDTH = 595
-    private const val A4_PAGE_HEIGHT = 842
-    private const val STANDARD_MARGIN = 36f
+    const val A4_PAGE_WIDTH = 595
+    const val A4_PAGE_HEIGHT = 842
+    const val STANDARD_MARGIN = 36f
+    const val STANDARD_CONTENT_WIDTH = A4_PAGE_WIDTH - (STANDARD_MARGIN * 2f)
+    const val A4_CENTER_X = A4_PAGE_WIDTH / 2f
 
     @Volatile
     private var cachedMukomukoLogo: Bitmap? = null
@@ -312,30 +314,31 @@ object ReportExporter {
             isDither = true
         }
 
-        // 1. Logo KIRI: Kabupaten Mukomuko (Perisai proporsional sesuai Laporan Harian Pusdalops, transparan & tajam)
-        var leftLogoWidth = 36f
+        val logoSlotWidth = 44f
+        // 1. Logo KIRI: Kabupaten Mukomuko (Perisai proporsional, diposisikan simetris di dalam slot kiri 44pt)
         try {
             val leftLogo = getCleanTransparentLogo(context, isMukomukoShield = true)
             if (leftLogo != null && leftLogo.height > 0) {
                 val aspect = leftLogo.width.toFloat() / leftLogo.height.toFloat()
-                leftLogoWidth = targetLogoHeight * aspect
-                val dstLeft = RectF(margin, logoTop, margin + leftLogoWidth, logoBottom)
+                val leftLogoWidth = (targetLogoHeight * aspect).coerceAtMost(logoSlotWidth)
+                val slotStart = margin + (logoSlotWidth - leftLogoWidth) / 2f
+                val dstLeft = RectF(slotStart, logoTop, slotStart + leftLogoWidth, logoBottom)
                 canvas.drawBitmap(leftLogo, null, dstLeft, bitmapPaint)
             }
         } catch (_: Exception) {
         }
 
-        // 2. Logo KANAN: BPBD Kabupaten Mukomuko (Lingkaran proporsional sejajar tinggi dengan Logo Kab. Mukomuko)
-        var rightLogoWidth = 44f
+        // 2. Logo KANAN: BPBD Kabupaten Mukomuko (Lingkaran proporsional, diposisikan simetris di dalam slot kanan 44pt)
         try {
             val rightLogo = getCleanTransparentLogo(context, isMukomukoShield = false)
             if (rightLogo != null && rightLogo.height > 0) {
                 val aspect = rightLogo.width.toFloat() / rightLogo.height.toFloat()
-                rightLogoWidth = targetLogoHeight * aspect
+                val rightLogoWidth = (targetLogoHeight * aspect).coerceAtMost(logoSlotWidth)
+                val slotStart = (pageWidth - margin - logoSlotWidth) + (logoSlotWidth - rightLogoWidth) / 2f
                 val dstRight = RectF(
-                    pageWidth - margin - rightLogoWidth,
+                    slotStart,
                     logoTop,
-                    pageWidth - margin,
+                    slotStart + rightLogoWidth,
                     logoBottom
                 )
                 canvas.drawBitmap(rightLogo, null, dstRight, bitmapPaint)
@@ -344,7 +347,7 @@ object ReportExporter {
         }
 
         val logoTextClearance = 14f
-        val maxLogoReserve = max(leftLogoWidth, rightLogoWidth) + logoTextClearance
+        val maxLogoReserve = logoSlotWidth + logoTextClearance
         val maxKopTextWidth = (pageWidth - (margin + maxLogoReserve) * 2f).coerceAtLeast(180f)
 
         // 2. Teks Kop Surat Seragam Hitam Resmi (Serif Bold untuk Instansi, Sans-Serif Normal untuk Alamat)
@@ -436,7 +439,7 @@ object ReportExporter {
         canvas: Canvas,
         pageWidth: Int,
         pageHeight: Int,
-        margin: Float = 30f
+        margin: Float = STANDARD_MARGIN
     ) {
         // 1. Pita merah/oranye di bagian paling atas halaman
         val bannerRect = RectF(margin, 14f, pageWidth - margin, 32f)
@@ -489,7 +492,7 @@ object ReportExporter {
         canvas: Canvas,
         pageWidth: Int,
         pageHeight: Int,
-        margin: Float = 30f,
+        margin: Float = STANDARD_MARGIN,
         documentSettings: DocumentSettings? = null
     ) {
         val settings = (documentSettings ?: DocumentSettingsRepository.getCachedOrDefaultSettings(null)).clamped()
@@ -787,8 +790,14 @@ object ReportExporter {
             val sdf = SimpleDateFormat("dd MMMM yyyy, HH:mm 'WIB'", Locale.forLanguageTag("id-ID"))
             val printDate = sdf.format(Date())
 
+            val margin = STANDARD_MARGIN
+            val tableLeft = margin
+            val tableRight = pageWidth - margin
+            val contentWidth = tableRight - tableLeft
+            val centerX = pageWidth / 2f
+
             val settings = DocumentSettingsRepository.getCachedOrDefaultSettings(context).clamped()
-            var y = drawKopSuratResmi(context, canvas, pageWidth, margin = 36f, documentSettings = settings)
+            var y = drawKopSuratResmi(context, canvas, pageWidth, margin = margin, documentSettings = settings)
             val resolvedOfficer = DocumentSettingsRepository.resolveOfficerIdentity(
                 context = context,
                 rawName = officerName,
@@ -797,15 +806,24 @@ object ReportExporter {
             )
 
             // Document Title
-            canvas.drawText("REKAPITULASI RESMI LAPORAN BENCANA WARGA TERVALIDASI", (pageWidth / 2).toFloat(), y, titlePaint)
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "REKAPITULASI RESMI LAPORAN BENCANA WARGA TERVALIDASI",
+                x = centerX,
+                y = y,
+                maxWidth = contentWidth,
+                basePaint = titlePaint,
+                initialFontSize = 12.0f,
+                minFontSize = 8.0f
+            )
             y += 14f
             textPaint.textAlign = Paint.Align.LEFT
             PdfTextAutoShrinkHelper.drawAutoShrinkText(
                 canvas = canvas,
                 text = "Waktu Cetak: $printDate",
-                x = 36f,
+                x = tableLeft,
                 y = y,
-                maxWidth = (pageWidth - 72).toFloat(),
+                maxWidth = contentWidth,
                 basePaint = textPaint,
                 initialFontSize = settings.bodyFontSize,
                 minFontSize = settings.minFontSize
@@ -814,38 +832,72 @@ object ReportExporter {
             PdfTextAutoShrinkHelper.drawAutoShrinkText(
                 canvas = canvas,
                 text = "Petugas Validasi: ${resolvedOfficer.formattedName} (${resolvedOfficer.nipLine})",
-                x = 36f,
+                x = tableLeft,
                 y = y,
-                maxWidth = (pageWidth - 72).toFloat(),
+                maxWidth = contentWidth,
                 basePaint = textPaint,
                 initialFontSize = settings.bodyFontSize,
                 minFontSize = settings.minFontSize
             )
             y += 10f
 
-            // Summary KPI Box
-            canvas.drawRect(36f, y, (pageWidth - 36).toFloat(), y + 26f, headerBoxPaint)
+            // Summary KPI Box (sepenuhnya simetris pada lebar kertas kerja A4)
+            val kpiRect = RectF(tableLeft, y, tableRight, y + 26f)
+            canvas.drawRoundRect(kpiRect, 4f, 4f, headerBoxPaint)
+            canvas.drawRoundRect(kpiRect, 4f, 4f, Paint(linePaint).apply { style = Paint.Style.STROKE })
             val totalReports = reports.size
             val totalDead = reports.sumOf { it.casualtiesDead }
             val totalInjured = reports.sumOf { it.casualtiesInjured }
             val totalMissing = reports.sumOf { it.casualtiesMissing }
-            canvas.drawText(
-                "Total: $totalReports Laporan Tervalidasi  |  Korban: $totalDead Meninggal, $totalInjured Luka-Luka, $totalMissing Hilang",
-                46f,
-                y + 17f,
-                boldPaint
+            val centeredBoldPaint = Paint(boldPaint).apply { textAlign = Paint.Align.CENTER }
+            PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                canvas = canvas,
+                text = "Total: $totalReports Laporan Tervalidasi  |  Korban: $totalDead Meninggal, $totalInjured Luka-Luka, $totalMissing Hilang",
+                x = centerX,
+                y = y + 16.5f,
+                maxWidth = contentWidth - 16f,
+                basePaint = centeredBoldPaint,
+                initialFontSize = 8.5f,
+                minFontSize = settings.minFontSize
             )
-            y += 36f
+            y += 34f
 
-            // Table Columns: No (25), ID (75), Bencana (105), Kecamatan/Desa (115), Status (65), Catatan (135)
-            canvas.drawRect(36f, y, (pageWidth - 36).toFloat(), y + 18f, headerBoxPaint)
-            canvas.drawText("No", 42f, y + 12f, boldPaint)
-            canvas.drawText("ID Laporan", 68f, y + 12f, boldPaint)
-            canvas.drawText("Bencana", 145f, y + 12f, boldPaint)
-            canvas.drawText("Wilayah", 245f, y + 12f, boldPaint)
-            canvas.drawText("Status", 370f, y + 12f, boldPaint)
-            canvas.drawText("Catatan Tindak Lanjut TRC", 445f, y + 12f, boldPaint)
-            y += 20f
+            // Proporsi Kolom Tabel Presisi A4 (Total = 100% dari contentWidth = 523pt)
+            val colWeights = floatArrayOf(0.055f, 0.145f, 0.17f, 0.24f, 0.14f, 0.25f)
+            val colBounds = FloatArray(colWeights.size + 1)
+            colBounds[0] = tableLeft
+            for (i in colWeights.indices) {
+                colBounds[i + 1] = colBounds[i] + (contentWidth * colWeights[i])
+            }
+            colBounds[colWeights.size] = tableRight
+            fun colStart(i: Int) = colBounds[i]
+            fun colWidth(i: Int) = colBounds[i + 1] - colBounds[i]
+            fun colCenter(i: Int) = (colBounds[i] + colBounds[i + 1]) / 2f
+
+            val headerCenterPaint = Paint(boldPaint).apply { textAlign = Paint.Align.CENTER; textSize = 8.0f }
+            val headerLeftPaint = Paint(boldPaint).apply { textAlign = Paint.Align.LEFT; textSize = 8.0f }
+            val cellCenterPaint = Paint(textPaint).apply { textAlign = Paint.Align.CENTER; textSize = 8.0f }
+            val cellCenterBoldPaint = Paint(boldPaint).apply { textAlign = Paint.Align.CENTER; textSize = 8.0f }
+            val gridBorderPaint = Paint(linePaint).apply { style = Paint.Style.STROKE; strokeWidth = 0.7f }
+
+            fun drawReportTableHeader(targetCanvas: Canvas, topY: Float): Float {
+                val hdrH = 19f
+                targetCanvas.drawRect(tableLeft, topY, tableRight, topY + hdrH, headerBoxPaint)
+                targetCanvas.drawRect(tableLeft, topY, tableRight, topY + hdrH, gridBorderPaint)
+                for (i in 1 until colWeights.size) {
+                    targetCanvas.drawLine(colBounds[i], topY, colBounds[i], topY + hdrH, gridBorderPaint)
+                }
+                val baseY = topY + 12.5f
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "No", colCenter(0), baseY, colWidth(0) - 4f, headerCenterPaint, 8.0f, 6.0f)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "ID Laporan", colCenter(1), baseY, colWidth(1) - 6f, headerCenterPaint, 8.0f, 6.0f)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Bencana", colStart(2) + 5f, baseY, colWidth(2) - 10f, headerLeftPaint, 8.0f, 6.0f)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Wilayah", colStart(3) + 5f, baseY, colWidth(3) - 10f, headerLeftPaint, 8.0f, 6.0f)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Status", colCenter(4), baseY, colWidth(4) - 6f, headerCenterPaint, 8.0f, 6.0f)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Catatan Tindak Lanjut TRC", colStart(5) + 5f, baseY, colWidth(5) - 10f, headerLeftPaint, 8.0f, 5.8f)
+                return topY + hdrH
+            }
+
+            y = drawReportTableHeader(canvas, y)
 
             var currentPageNumber = 1
             var currentPage = page
@@ -855,7 +907,7 @@ object ReportExporter {
             val maxRowBottomY = pageHeight - 52f
             reports.forEachIndexed { idx, rep ->
                 if (y > maxRowBottomY - 40f) {
-                    drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f, documentSettings = settings)
+                    drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = margin, documentSettings = settings)
                     pdfDoc.finishPage(currentPage)
 
                     currentPageNumber += 1
@@ -863,19 +915,12 @@ object ReportExporter {
                     currentPage = pdfDoc.startPage(nextPageInfo)
                     currentCanvas = currentPage.canvas
 
-                    // Halaman 2+ langsung dimulai dari konten tabel tanpa Kop Surat
-                    y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = 36f, pageNumber = currentPageNumber, documentSettings = settings)
-                    currentCanvas.drawRect(36f, y, (pageWidth - 36).toFloat(), y + 18f, headerBoxPaint)
-                    currentCanvas.drawText("No", 42f, y + 12f, boldPaint)
-                    currentCanvas.drawText("ID Laporan", 68f, y + 12f, boldPaint)
-                    currentCanvas.drawText("Bencana", 145f, y + 12f, boldPaint)
-                    currentCanvas.drawText("Wilayah", 245f, y + 12f, boldPaint)
-                    currentCanvas.drawText("Status", 370f, y + 12f, boldPaint)
-                    currentCanvas.drawText("Catatan Tindak Lanjut TRC", 445f, y + 12f, boldPaint)
-                    y += 20f
+                    y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = margin, pageNumber = currentPageNumber, documentSettings = settings)
+                    y = drawReportTableHeader(currentCanvas, y)
                 }
 
-                val rowTopY = y + 2f
+                val rowTopY = y
+                val cellTopPad = 4f
                 val wilayahText = buildString {
                     append("${rep.village}, ${rep.district}")
                     if (rep.incidentLocation.isNotBlank()) {
@@ -884,50 +929,47 @@ object ReportExporter {
                 }
                 val noteText = settings.truncateIfNeeded(rep.additionalNotes.ifBlank { "-" })
 
-                currentCanvas.drawText("${idx + 1}.", 42f, rowTopY + 8f, textPaint)
-                currentCanvas.drawText("#${rep.id.takeLast(7)}", 68f, rowTopY + 8f, boldPaint)
-
                 val hBencana = drawWrappedText(
                     canvas = currentCanvas,
                     text = rep.disasterType,
-                    x = 145f,
-                    topY = rowTopY,
-                    maxWidth = 94,
+                    x = colStart(2) + 5f,
+                    topY = rowTopY + cellTopPad,
+                    maxWidth = (colWidth(2) - 10f).toInt(),
                     paint = textPaint,
                     maxLines = 3
                 )
                 val hWilayah = drawWrappedText(
                     canvas = currentCanvas,
                     text = wilayahText,
-                    x = 245f,
-                    topY = rowTopY,
-                    maxWidth = 118,
+                    x = colStart(3) + 5f,
+                    topY = rowTopY + cellTopPad,
+                    maxWidth = (colWidth(3) - 10f).toInt(),
                     paint = textPaint,
                     maxLines = 3
-                )
-                val hStatus = drawWrappedText(
-                    canvas = currentCanvas,
-                    text = rep.status,
-                    x = 370f,
-                    topY = rowTopY,
-                    maxWidth = 68,
-                    paint = boldPaint,
-                    maxLines = 2
                 )
                 val hNote = drawWrappedText(
                     canvas = currentCanvas,
                     text = noteText,
-                    x = 445f,
-                    topY = rowTopY,
-                    maxWidth = (pageWidth - 36) - 445,
+                    x = colStart(5) + 5f,
+                    topY = rowTopY + cellTopPad,
+                    maxWidth = (colWidth(5) - 10f).toInt(),
                     paint = textPaint,
                     maxLines = 4
                 )
 
-                val rowHeight = max(max(hBencana, hWilayah), max(hStatus, hNote)).coerceAtLeast(12f)
-                y = rowTopY + rowHeight + 5f
-                currentCanvas.drawLine(36f, y, (pageWidth - 36).toFloat(), y, linePaint)
-                y += 4f
+                val rowHeight = max(max(hBencana, hWilayah), hNote).coerceAtLeast(13f) + (cellTopPad * 2f)
+                val centerBaseline = rowTopY + (rowHeight / 2f) + 2.5f
+
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(currentCanvas, "${idx + 1}", colCenter(0), centerBaseline, colWidth(0) - 4f, cellCenterPaint, 8.0f, 6.0f)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(currentCanvas, "#${rep.id.takeLast(7)}", colCenter(1), centerBaseline, colWidth(1) - 6f, cellCenterBoldPaint, 8.0f, 6.0f)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(currentCanvas, rep.status, colCenter(4), centerBaseline, colWidth(4) - 6f, cellCenterBoldPaint, 7.8f, 5.8f)
+
+                val rowBottomY = rowTopY + rowHeight
+                currentCanvas.drawRect(tableLeft, rowTopY, tableRight, rowBottomY, gridBorderPaint)
+                for (i in 1 until colWeights.size) {
+                    currentCanvas.drawLine(colBounds[i], rowTopY, colBounds[i], rowBottomY, gridBorderPaint)
+                }
+                y = rowBottomY
             }
 
             // Lampiran Bukti Foto Dokumentasi Lapangan untuk Pelaporan Berjenjang
@@ -944,7 +986,7 @@ object ReportExporter {
             if (reportsWithPhotos.isNotEmpty()) {
                 val photoCardHeight = 132f
                 val photoGap = 14f
-                val cardWidth = ((pageWidth - 72f) - photoGap) / 2f
+                val cardWidth = (contentWidth - photoGap) / 2f
                 val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = Color.rgb(148, 163, 184)
                     style = Paint.Style.STROKE
@@ -953,40 +995,45 @@ object ReportExporter {
                 val photoBitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
                 if (y + 32f + photoCardHeight > maxRowBottomY) {
-                    drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f, documentSettings = settings)
+                    drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = margin, documentSettings = settings)
                     pdfDoc.finishPage(currentPage)
                     currentPageNumber += 1
                     val nextPageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, currentPageNumber).create()
                     currentPage = pdfDoc.startPage(nextPageInfo)
                     currentCanvas = currentPage.canvas
-                    y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = 36f, pageNumber = currentPageNumber, documentSettings = settings)
+                    y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = margin, pageNumber = currentPageNumber, documentSettings = settings)
                 } else {
                     y += 12f
                 }
 
-                currentCanvas.drawRect(36f, y, (pageWidth - 36).toFloat(), y + 18f, headerBoxPaint)
-                currentCanvas.drawText(
-                    "LAMPIRAN BUKTI FOTO DOKUMENTASI LAPANGAN (BUKTI DUKUNG PELAPORAN BERJENJANG)",
-                    42f,
-                    y + 12f,
-                    boldPaint
+                currentCanvas.drawRect(tableLeft, y, tableRight, y + 18f, headerBoxPaint)
+                currentCanvas.drawRect(tableLeft, y, tableRight, y + 18f, gridBorderPaint)
+                PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                    canvas = currentCanvas,
+                    text = "LAMPIRAN BUKTI FOTO DOKUMENTASI LAPANGAN (BUKTI DUKUNG PELAPORAN BERJENJANG)",
+                    x = centerX,
+                    y = y + 12f,
+                    maxWidth = contentWidth - 16f,
+                    basePaint = centeredBoldPaint,
+                    initialFontSize = 8.2f,
+                    minFontSize = 6.0f
                 )
                 y += 24f
 
                 val chunkedPhotos = reportsWithPhotos.chunked(2)
                 for (pair in chunkedPhotos) {
                     if (y + photoCardHeight > maxRowBottomY) {
-                        drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = 36f, documentSettings = settings)
+                        drawFooterAtribusiResmi(currentCanvas, pageWidth, pageHeight, margin = margin, documentSettings = settings)
                         pdfDoc.finishPage(currentPage)
                         currentPageNumber += 1
                         val nextPageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, currentPageNumber).create()
                         currentPage = pdfDoc.startPage(nextPageInfo)
                         currentCanvas = currentPage.canvas
-                        y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = 36f, pageNumber = currentPageNumber, documentSettings = settings)
+                        y = drawKopSuratResmi(context, currentCanvas, pageWidth, margin = margin, pageNumber = currentPageNumber, documentSettings = settings)
                     }
 
                     pair.forEachIndexed { colIdx, (rep, bmp) ->
-                        val leftX = 36f + colIdx * (cardWidth + photoGap)
+                        val leftX = tableLeft + colIdx * (cardWidth + photoGap)
                         val cardRect = RectF(leftX, y, leftX + cardWidth, y + photoCardHeight)
                         val imgRect = RectF(leftX + 4f, y + 4f, leftX + cardWidth - 4f, y + 96f)
                         currentCanvas.drawBitmap(bmp, null, imgRect, photoBitmapPaint)
@@ -1287,7 +1334,9 @@ object ReportExporter {
             textAlign = Paint.Align.LEFT
         }
 
-        val summaryColWidth = ((tableWidth - 28f) / 2f).toInt()
+        val summaryInnerPad = 10f
+        val summaryGap = 12f
+        val summaryColWidth = ((tableWidth - (summaryInnerPad * 2f) - summaryGap) / 2f).toInt()
         val leftSummaryText =
             "• Curah Hujan Tertinggi: ${maxRain?.districtName ?: "-"} (${maxRain?.precipitation ?: 0.0} mm/j)\n" +
             "• Suhu Ekstrem: Maks ${maxTemp?.districtName ?: "-"} (${maxTemp?.temperature ?: 0.0}°C) | Min ${minTemp?.districtName ?: "-"} (${minTemp?.temperature ?: 0.0}°C)"
@@ -1319,21 +1368,21 @@ object ReportExporter {
         PdfTextAutoShrinkHelper.drawAutoShrinkText(
             canvas = canvas,
             text = "RINGKASAN PARAMETER METEOROLOGI KABUPATEN MUKOMUKO",
-            x = tableLeft + 10f,
+            x = tableLeft + summaryInnerPad,
             y = y + 13f,
-            maxWidth = tableWidth - 20f,
+            maxWidth = tableWidth - (summaryInnerPad * 2f),
             basePaint = summaryTitlePaint,
             initialFontSize = 7.8f,
             minFontSize = 6.5f
         )
 
         canvas.save()
-        canvas.translate(tableLeft + 10f, y + 18f)
+        canvas.translate(tableLeft + summaryInnerPad, y + 18f)
         leftSummaryLayout.draw(canvas)
         canvas.restore()
 
         canvas.save()
-        canvas.translate(tableLeft + 18f + summaryColWidth, y + 18f)
+        canvas.translate(tableRight - summaryInnerPad - summaryColWidth, y + 18f)
         rightSummaryLayout.draw(canvas)
         canvas.restore()
 
@@ -1794,15 +1843,20 @@ object ReportExporter {
         var y = drawKopSuratResmi(context, canvas, pageWidth, margin, documentSettings = settings)
 
         // 2. Judul Dokumen & Metadata
+        val usableWidth = pageWidth - (margin * 2f)
         val docTitlePaint = Paint(titlePaint).apply {
             color = Color.rgb(30, 58, 138)
             textSize = 10.5f
         }
-        canvas.drawText(
-            "LAPORAN RESMI RINGKASAN & STATISTIK DATA BENCANA BULANAN TAHUN $selectedYear",
-            pageWidth / 2f,
-            y,
-            docTitlePaint
+        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+            canvas = canvas,
+            text = "LAPORAN RESMI RINGKASAN & STATISTIK DATA BENCANA BULANAN TAHUN $selectedYear",
+            x = pageWidth / 2f,
+            y = y,
+            maxWidth = usableWidth,
+            basePaint = docTitlePaint,
+            initialFontSize = 10.5f,
+            minFontSize = 7.5f
         )
         y += 12f
 
@@ -1817,7 +1871,7 @@ object ReportExporter {
             text = "Cakupan Wilayah: $scopeLabel  |  Waktu Unduh: $printDateStr",
             x = pageWidth / 2f,
             y = y,
-            maxWidth = pageWidth - (margin * 2f),
+            maxWidth = usableWidth,
             basePaint = metaPaint,
             initialFontSize = 7.8f,
             minFontSize = settings.minFontSize
@@ -1828,7 +1882,7 @@ object ReportExporter {
             text = "Petugas: $rawOfficerName",
             x = pageWidth / 2f,
             y = y,
-            maxWidth = pageWidth - (margin * 2f),
+            maxWidth = usableWidth,
             basePaint = metaPaint,
             initialFontSize = 7.8f,
             minFontSize = settings.minFontSize
@@ -1846,7 +1900,9 @@ object ReportExporter {
             activeMonthlyData.sumOf { it.countsByCategory[cat] ?: 0 }
         }.maxByOrNull { it.value }
 
-        val kpiColWidth = ((pageWidth - 2f * margin - 28f) / 2f).toInt()
+        val kpiPad = 10f
+        val kpiGap = 12f
+        val kpiColWidth = ((usableWidth - (kpiPad * 2f) - kpiGap) / 2f).toInt()
         val kpiBodyPaint = Paint(textPaint).apply {
             textSize = 7.0f
         }
@@ -1890,21 +1946,21 @@ object ReportExporter {
         PdfTextAutoShrinkHelper.drawAutoShrinkText(
             canvas = canvas,
             text = "I. RINGKASAN EKSEKUTIF STATISTIK KEBENCANAAN TAHUN $selectedYear (JANUARI – $lastMonthNameUpper)",
-            x = margin + 10f,
+            x = margin + kpiPad,
             y = y + 12f,
-            maxWidth = (pageWidth - margin * 2 - 20f),
+            maxWidth = usableWidth - (kpiPad * 2f),
             basePaint = Paint(boldTextPaint).apply { color = Color.rgb(30, 64, 175); textSize = 7.4f },
             initialFontSize = 7.4f,
             minFontSize = 6.2f
         )
 
         canvas.save()
-        canvas.translate(margin + 10f, y + 17f)
+        canvas.translate(margin + kpiPad, y + 17f)
         leftKpiLayout.draw(canvas)
         canvas.restore()
 
         canvas.save()
-        canvas.translate(margin + 18f + kpiColWidth, y + 17f)
+        canvas.translate((pageWidth - margin) - kpiPad - kpiColWidth, y + 17f)
         rightKpiLayout.draw(canvas)
         canvas.restore()
 
@@ -1916,7 +1972,7 @@ object ReportExporter {
             text = "II. VISUALISASI GRAFIK BATANG TREN BULANAN & PIE CHART PROPORSI BENCANA",
             x = margin,
             y = y,
-            maxWidth = (pageWidth - margin * 2),
+            maxWidth = usableWidth,
             basePaint = sectionHeaderPaint,
             initialFontSize = 9.0f,
             minFontSize = 7.2f
@@ -1924,8 +1980,10 @@ object ReportExporter {
         y += 8f
 
         val chartBoxHeight = 142f
-        val barBoxRect = RectF(margin, y, margin + 306f, y + chartBoxHeight)
-        val pieBoxRect = RectF(margin + 314f, y, pageWidth - margin, y + chartBoxHeight)
+        val chartGap = 8f
+        val barBoxW = (usableWidth - chartGap) * 0.585f
+        val barBoxRect = RectF(margin, y, margin + barBoxW, y + chartBoxHeight)
+        val pieBoxRect = RectF(margin + barBoxW + chartGap, y, pageWidth - margin, y + chartBoxHeight)
 
         // Kotak Kiri: Grafik Batang Bulanan (Jan s/d Bulan Berjalan)
         canvas.drawRoundRect(barBoxRect, 6f, 6f, Paint().apply { color = Color.rgb(248, 250, 252) })
@@ -1996,15 +2054,20 @@ object ReportExporter {
             canvas.drawText(m.monthShort, cx, chartBottom + 9f, barMonthPaint)
         }
 
-        // Legenda ringkas di bawah grafik batang
-        var legX = barBoxRect.left + 8f
+        // Legenda ringkas terpusat secara horizontal di bawah grafik batang
         val legY = barBoxRect.bottom - 7f
         val legPaint = PdfTextAutoShrinkHelper.configurePdfPaint(Paint(textPaint).apply { textSize = 6.3f }, 0.025f)
-        DisasterChartCategory.entries.forEach { cat ->
-            val labelText = PdfTextAutoShrinkHelper.normalizePdfWordSpacing(cat.shortLabel)
+        val legendEntries = DisasterChartCategory.entries.map { cat ->
+            cat to PdfTextAutoShrinkHelper.normalizePdfWordSpacing(cat.shortLabel)
+        }
+        val totalLegendWidth = legendEntries.sumOf { (_, lbl) ->
+            (7f + legPaint.measureText(lbl) + 10f).toDouble()
+        }.toFloat() - 10f
+        var legX = (barBoxRect.centerX() - (totalLegendWidth / 2f)).coerceAtLeast(barBoxRect.left + 8f)
+        legendEntries.forEach { (cat, labelText) ->
             canvas.drawRect(legX, legY - 5f, legX + 5f, legY, Paint().apply { color = getCategoryRgbColor(cat) })
             canvas.drawText(labelText, legX + 7f, legY - 0.5f, legPaint)
-            legX += legPaint.measureText(labelText) + 14f
+            legX += 7f + legPaint.measureText(labelText) + 10f
         }
 
         // Kotak Kanan: Pie / Donut Chart Proporsi Bencana
@@ -2056,7 +2119,7 @@ object ReportExporter {
         var pLegY = pieBoxRect.top + 26f
         val pLegX = pieBoxRect.left + 82f
         val maxLegendTextWidth = (pieBoxRect.right - (pLegX + 8f) - 5f).toInt()
-        val smallLegPaint = Paint(textPaint).apply { textSize = 6.2f }
+        val smallLegPaint = Paint(textPaint).apply { textSize = 6.2f; textAlign = Paint.Align.CENTER }
         val smallBoldPaint = Paint(boldTextPaint).apply { textSize = 6.0f }
         pieSlices.take(6).forEachIndexed { idx, slice ->
             val cRgb = getSliceRgbColor(slice.shortLabel, idx)
@@ -2078,7 +2141,7 @@ object ReportExporter {
         PdfTextAutoShrinkHelper.drawPdfText(
             canvas,
             "Total: $totalAnnual Kejadian ($selectedYear)",
-            pieBoxRect.left + 10f,
+            pieBoxRect.centerX(),
             pieBoxRect.bottom - 8f,
             smallLegPaint
         )

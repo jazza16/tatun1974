@@ -44,9 +44,9 @@ import kotlin.math.max
  */
 object VolunteerDirectoryExporter {
 
-    private const val A4_WIDTH = 595
-    private const val A4_HEIGHT = 842
-    private const val MARGIN = 32f
+    private const val A4_WIDTH = ReportExporter.A4_PAGE_WIDTH
+    private const val A4_HEIGHT = ReportExporter.A4_PAGE_HEIGHT
+    private const val MARGIN = ReportExporter.STANDARD_MARGIN
 
     private fun getExportDir(context: Context): File {
         return File(context.cacheDir, "exported_reports").apply {
@@ -658,23 +658,41 @@ object VolunteerDirectoryExporter {
 
                     y += 56f
 
-                    // Definisi Kolom Tabel (Total lebar = 595 - 64 = 531pt)
-                    val colNoX = MARGIN + 4f          // width ~20
-                    val colNamaNikX = MARGIN + 24f    // width ~116
-                    val colOrgHpX = MARGIN + 144f     // width ~92
-                    val colSkillX = MARGIN + 240f     // width ~88
-                    val colPoskoX = MARGIN + 332f     // width ~114
-                    val colStatusX = MARGIN + 450f    // width ~78
+                    val tableBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.rgb(203, 213, 225)
+                        style = Paint.Style.STROKE
+                        strokeWidth = 0.75f
+                    }
+                    val headerCenterPaint = Paint(headerTextPaint).apply { textAlign = Paint.Align.CENTER }
+                    val cellCenterBoldPaint = Paint(cellBoldPaint).apply { textAlign = Paint.Align.CENTER }
+
+                    // Definisi Kolom Tabel Proporsional A4 (Total lebar = contentW = 523pt dari x=36 hingga x=559)
+                    val colWeights = floatArrayOf(0.055f, 0.225f, 0.18f, 0.17f, 0.215f, 0.155f)
+                    val colBounds = FloatArray(colWeights.size + 1)
+                    colBounds[0] = MARGIN
+                    for (i in colWeights.indices) {
+                        colBounds[i + 1] = colBounds[i] + (contentW * colWeights[i])
+                    }
+                    colBounds[colWeights.size] = A4_WIDTH - MARGIN
+                    fun colStart(i: Int) = colBounds[i]
+                    fun colWidth(i: Int) = colBounds[i + 1] - colBounds[i]
+                    fun colCenter(i: Int) = (colBounds[i] + colBounds[i + 1]) / 2f
 
                     fun drawTableHeader(targetCanvas: android.graphics.Canvas, topY: Float): Float {
-                        targetCanvas.drawRect(MARGIN, topY, A4_WIDTH - MARGIN, topY + 18f, tableHeaderBgPaint)
-                        PdfTextAutoShrinkHelper.drawPdfText(targetCanvas, "No", colNoX, topY + 12f, headerTextPaint)
-                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Nama Lengkap & NIK KTP", colNamaNikX, topY + 12f, 114f, headerTextPaint, 7.4f, 5.8f)
-                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Organisasi & Kontak", colOrgHpX, topY + 12f, 90f, headerTextPaint, 7.4f, 5.8f)
-                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Keahlian Relawan", colSkillX, topY + 12f, 86f, headerTextPaint, 7.4f, 5.8f)
-                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Posko, Kecamatan & Shift", colPoskoX, topY + 12f, 112f, headerTextPaint, 7.4f, 5.8f)
-                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Status & Kehadiran", colStatusX, topY + 12f, 76f, headerTextPaint, 7.4f, 5.8f)
-                        return topY + 20f
+                        val hdrH = 19f
+                        targetCanvas.drawRect(MARGIN, topY, A4_WIDTH - MARGIN, topY + hdrH, tableHeaderBgPaint)
+                        targetCanvas.drawRect(MARGIN, topY, A4_WIDTH - MARGIN, topY + hdrH, tableBorderPaint)
+                        for (i in 1 until colWeights.size) {
+                            targetCanvas.drawLine(colBounds[i], topY, colBounds[i], topY + hdrH, tableBorderPaint)
+                        }
+                        val baseY = topY + 12.5f
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "No", colCenter(0), baseY, colWidth(0) - 4f, headerCenterPaint, 7.4f, 5.8f)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Nama Lengkap & NIK KTP", colStart(1) + 4f, baseY, colWidth(1) - 8f, headerTextPaint, 7.4f, 5.8f)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Organisasi & Kontak", colStart(2) + 4f, baseY, colWidth(2) - 8f, headerTextPaint, 7.4f, 5.8f)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Keahlian Relawan", colStart(3) + 4f, baseY, colWidth(3) - 8f, headerTextPaint, 7.4f, 5.8f)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Posko, Kecamatan & Shift", colStart(4) + 4f, baseY, colWidth(4) - 8f, headerTextPaint, 7.4f, 5.8f)
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(targetCanvas, "Status & Kehadiran", colCenter(5), baseY, colWidth(5) - 6f, headerCenterPaint, 7.4f, 5.6f)
+                        return topY + hdrH
                     }
 
                     y = drawTableHeader(canvas, y)
@@ -692,9 +710,9 @@ object VolunteerDirectoryExporter {
                             if (v.needsAssistance) "\n[DARURAT]" else ""
 
                         // Estimasi tinggi baris sebelum menggambar agar tidak memotong halaman
-                        val estimatedRowHeight = 36f
+                        val estimatedRowHeight = 38f
                         if (y + estimatedRowHeight > maxBottomY) {
-                            drawFooterPage(canvas, currentPageNumber, currentDateTimeStr)
+                            drawFooterPage(canvas, currentPageNumber, currentDateTimeStr, settings)
                             pdfDoc.finishPage(currentPage)
                             activePage = null
 
@@ -711,26 +729,38 @@ object VolunteerDirectoryExporter {
 
                         val rowStartY = y
                         if (idx % 2 == 1) {
-                            canvas.drawRect(MARGIN, rowStartY - 1f, A4_WIDTH - MARGIN, rowStartY + 34f, zebraBgPaint)
+                            canvas.drawRect(MARGIN, rowStartY, A4_WIDTH - MARGIN, rowStartY + 34f, zebraBgPaint)
                         }
 
-                        PdfTextAutoShrinkHelper.drawPdfText(canvas, "${idx + 1}.", colNoX, rowStartY + 9f, cellBoldPaint)
+                        val cellPadTop = 3f
+                        val h1 = drawWrappedCellText(canvas, namaNikText, colStart(1) + 4f, rowStartY + cellPadTop, (colWidth(1) - 8f).toInt(), cellBoldPaint, maxLines = 4)
+                        val h2 = drawWrappedCellText(canvas, orgHpText, colStart(2) + 4f, rowStartY + cellPadTop, (colWidth(2) - 8f).toInt(), cellTextPaint, maxLines = 4)
+                        val h3 = drawWrappedCellText(canvas, skillText, colStart(3) + 4f, rowStartY + cellPadTop, (colWidth(3) - 8f).toInt(), cellTextPaint, maxLines = 4)
+                        val h4 = drawWrappedCellText(canvas, poskoText, colStart(4) + 4f, rowStartY + cellPadTop, (colWidth(4) - 8f).toInt(), cellTextPaint, maxLines = 4)
+                        val h5 = drawWrappedCellText(canvas, statusText, colStart(5) + 4f, rowStartY + cellPadTop, (colWidth(5) - 8f).toInt(), cellBoldPaint, maxLines = 4)
 
-                        val h1 = drawWrappedCellText(canvas, namaNikText, colNamaNikX, rowStartY + 2f, 115, cellBoldPaint, maxLines = 4)
-                        val h2 = drawWrappedCellText(canvas, orgHpText, colOrgHpX, rowStartY + 2f, 92, cellTextPaint, maxLines = 4)
-                        val h3 = drawWrappedCellText(canvas, skillText, colSkillX, rowStartY + 2f, 88, cellTextPaint, maxLines = 4)
-                        val h4 = drawWrappedCellText(canvas, poskoText, colPoskoX, rowStartY + 2f, 114, cellTextPaint, maxLines = 4)
-                        val h5 = drawWrappedCellText(canvas, statusText, colStatusX, rowStartY + 2f, (A4_WIDTH - MARGIN - colStatusX).toInt(), cellBoldPaint, maxLines = 4)
-
-                        val rowHeight = max(max(h1, h2), max(max(h3, h4), h5)).coerceAtLeast(18f)
-                        y = rowStartY + rowHeight + 5f
-                        canvas.drawLine(MARGIN, y, A4_WIDTH - MARGIN, y, rowLinePaint)
-                        y += 3f
+                        val rowHeight = max(max(h1, h2), max(max(h3, h4), h5)).coerceAtLeast(18f) + (cellPadTop * 2f)
+                        val rowEndY = rowStartY + rowHeight
+                        PdfTextAutoShrinkHelper.drawAutoShrinkText(
+                            canvas = canvas,
+                            text = "${idx + 1}",
+                            x = colCenter(0),
+                            y = rowStartY + (rowHeight / 2f) + 2.5f,
+                            maxWidth = colWidth(0) - 4f,
+                            basePaint = cellCenterBoldPaint,
+                            initialFontSize = 7.4f,
+                            minFontSize = 5.8f
+                        )
+                        canvas.drawRect(MARGIN, rowStartY, A4_WIDTH - MARGIN, rowEndY, tableBorderPaint)
+                        for (i in 1 until colWeights.size) {
+                            canvas.drawLine(colBounds[i], rowStartY, colBounds[i], rowEndY, tableBorderPaint)
+                        }
+                        y = rowEndY
                     }
 
                     // Blok Pengesahan / Dokumentasi Pengakhiran Waktu Penanggulangan Bencana
                     if (y + 115f > maxBottomY) {
-                        drawFooterPage(canvas, currentPageNumber, currentDateTimeStr)
+                        drawFooterPage(canvas, currentPageNumber, currentDateTimeStr, settings)
                         pdfDoc.finishPage(currentPage)
                         activePage = null
 
@@ -745,8 +775,10 @@ object VolunteerDirectoryExporter {
                         y += 14f
                     }
 
-                    // Catatan Dokumentasi Kegiatan (Sebelah Kiri) & Pengesahan Pejabat (Sebelah Kanan)
-                    val noteBoxRect = RectF(MARGIN, y, MARGIN + 275f, y + 84f)
+                    // Catatan Dokumentasi Kegiatan (Sebelah Kiri) & Pengesahan Pejabat (Sebelah Kanan) secara simetris pada A4
+                    val noteBoxW = contentW * 0.52f
+                    val signColW = contentW * 0.44f
+                    val noteBoxRect = RectF(MARGIN, y, MARGIN + noteBoxW, y + 84f)
                     canvas.drawRoundRect(noteBoxRect, 6f, 6f, summaryFill)
                     canvas.drawRoundRect(noteBoxRect, 6f, 6f, summaryBorder)
                     PdfTextAutoShrinkHelper.drawAutoShrinkText(
@@ -754,7 +786,7 @@ object VolunteerDirectoryExporter {
                         text = "CATATAN ARSIP & DOKUMENTASI KEGIATAN:",
                         x = MARGIN + 8f,
                         y = y + 14f,
-                        maxWidth = 258f,
+                        maxWidth = noteBoxW - 16f,
                         basePaint = metaBoldPaint,
                         initialFontSize = 7.8f,
                         minFontSize = 6.2f
@@ -765,12 +797,12 @@ object VolunteerDirectoryExporter {
                             "2. Digunakan sebagai lampiran pelaporan berjenjang kepada Pimpinan/Instansi berwenang serta bukti dokumentasi personel pada pengakhiran waktu penanggulangan bencana.",
                         x = MARGIN + 8f,
                         topY = y + 20f,
-                        maxWidthPx = 258,
+                        maxWidthPx = (noteBoxW - 16f).toInt(),
                         paint = cellTextPaint,
                         maxLines = 6
                     )
 
-                    val signCenterX = A4_WIDTH - MARGIN - 110f
+                    val signCenterX = A4_WIDTH - MARGIN - (signColW / 2f)
                     val signPaint = Paint(metaPaint).apply { textAlign = Paint.Align.CENTER }
                     val signBoldPaint = Paint(metaBoldPaint).apply { textAlign = Paint.Align.CENTER }
 
@@ -780,7 +812,7 @@ object VolunteerDirectoryExporter {
                         text = "PUSAT PENGENDALIAN OPERASI (PUSDALOPS-PB)",
                         x = signCenterX,
                         y = y + 22f,
-                        maxWidth = 220f,
+                        maxWidth = signColW,
                         basePaint = signBoldPaint,
                         initialFontSize = 8.0f,
                         minFontSize = 6.2f
@@ -790,13 +822,14 @@ object VolunteerDirectoryExporter {
                         text = "BPBD KABUPATEN MUKOMUKO",
                         x = signCenterX,
                         y = y + 33f,
-                        maxWidth = 220f,
+                        maxWidth = signColW,
                         basePaint = signBoldPaint,
                         initialFontSize = 8.0f,
                         minFontSize = 6.2f
                     )
 
-                    val stampRect = RectF(signCenterX - 88f, y + 38f, signCenterX + 88f, y + 66f)
+                    val stampHalfW = (signColW * 0.40f).coerceAtMost(88f)
+                    val stampRect = RectF(signCenterX - stampHalfW, y + 38f, signCenterX + stampHalfW, y + 66f)
                     val stampFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         color = Color.rgb(236, 253, 245)
                         style = Paint.Style.FILL
@@ -819,7 +852,7 @@ object VolunteerDirectoryExporter {
                         text = "TERVERIFIKASI SISTEM SIPAGAR KITA",
                         x = signCenterX,
                         y = y + 50f,
-                        maxWidth = 170f,
+                        maxWidth = (stampHalfW * 2f) - 10f,
                         basePaint = stampTextPaint,
                         initialFontSize = 7.2f,
                         minFontSize = 5.8f
@@ -829,7 +862,7 @@ object VolunteerDirectoryExporter {
                         text = "ARSIP RESMI PELAPORAN BERJENJANG",
                         x = signCenterX,
                         y = y + 61f,
-                        maxWidth = 170f,
+                        maxWidth = (stampHalfW * 2f) - 10f,
                         basePaint = stampTextPaint,
                         initialFontSize = 7.2f,
                         minFontSize = 5.8f
@@ -840,7 +873,7 @@ object VolunteerDirectoryExporter {
                         text = resolvedOfficer.formattedName,
                         x = signCenterX,
                         y = y + 80f,
-                        maxWidth = 210f,
+                        maxWidth = signColW,
                         basePaint = signBoldPaint,
                         initialFontSize = 8.4f,
                         minFontSize = 6.5f
@@ -850,13 +883,13 @@ object VolunteerDirectoryExporter {
                         text = resolvedOfficer.nipLine,
                         x = signCenterX,
                         y = y + 91f,
-                        maxWidth = 210f,
+                        maxWidth = signColW,
                         basePaint = signPaint,
                         initialFontSize = 7.8f,
                         minFontSize = 6.2f
                     )
 
-                    drawFooterPage(canvas, currentPageNumber, currentDateTimeStr)
+                    drawFooterPage(canvas, currentPageNumber, currentDateTimeStr, settings)
                     pdfDoc.finishPage(currentPage)
                     activePage = null
 
@@ -893,27 +926,31 @@ object VolunteerDirectoryExporter {
     private fun drawFooterPage(
         canvas: android.graphics.Canvas,
         pageNumber: Int,
-        printedAtWib: String
+        printedAtWib: String,
+        settings: com.example.model.DocumentSettings? = null
     ) {
-        val footerY = A4_HEIGHT - 22f
+        val footerY = A4_HEIGHT - 16f
+        val lineY = A4_HEIGHT - 28f
         val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(203, 213, 225)
-            strokeWidth = 0.8f
+            strokeWidth = 0.6f
         }
-        canvas.drawLine(MARGIN, footerY - 10f, A4_WIDTH - MARGIN, footerY - 10f, linePaint)
+        canvas.drawLine(MARGIN, lineY, A4_WIDTH - MARGIN, lineY, linePaint)
         val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(100, 116, 139)
-            textSize = 7.5f
+            textSize = 7.2f
         }
+        val baseFooter = settings?.footerText?.takeIf { it.isNotBlank() }
+            ?: "Arsip Resmi Pusdalops-PB BPBD Kab. Mukomuko • SIPAGAR KITA"
         PdfTextAutoShrinkHelper.drawAutoShrinkText(
             canvas = canvas,
-            text = "Arsip Resmi Pusdalops-PB BPBD Kab. Mukomuko • SIPAGAR KITA • Dicetak: $printedAtWib",
+            text = "$baseFooter • Dicetak: $printedAtWib",
             x = MARGIN,
             y = footerY,
-            maxWidth = A4_WIDTH - (MARGIN * 2) - 70f,
+            maxWidth = A4_WIDTH - (MARGIN * 2f) - 70f,
             basePaint = footerPaint,
-            initialFontSize = 7.5f,
-            minFontSize = 6.0f
+            initialFontSize = 7.2f,
+            minFontSize = 5.8f
         )
         val pagePaint = Paint(footerPaint).apply { textAlign = Paint.Align.RIGHT }
         PdfTextAutoShrinkHelper.drawPdfText(canvas, "Halaman $pageNumber", A4_WIDTH - MARGIN, footerY, pagePaint)

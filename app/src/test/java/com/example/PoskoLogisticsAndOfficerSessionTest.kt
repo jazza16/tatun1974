@@ -131,18 +131,57 @@ class PoskoLogisticsAndOfficerSessionTest {
         assertTrue(snapshot.isLocked)
         assertEquals(snapshot.totalJiwa, repository.dalaLockedSnapshot.value?.totalJiwa)
 
-        // 8. Verifikasi Fungsi Unduh Berita Acara Stock Opname & Pertanggungjawaban BMN/BMD
-        val csvReport = PoskoStockOpnameExporter.buildStockOpnameCsvString(
+        // 8. Verifikasi Fungsi Unduh Dokumen Resmi (BA Stock Opname, LPJ Mutasi, & BA Rekonsiliasi Aset BMN/BMD)
+        // beserta Kop Surat Standar Resmi dan Footer Standar
+        val csvBaStockOpname = PoskoStockOpnameExporter.buildStockOpnameCsvString(
             stocks = repository.logisticStocks.value,
             poskoUnits = repository.poskoUnits.value,
             distributionLedger = repository.distributionLedger.value,
             officerName = firstOfficer.name,
             officerNip = firstOfficer.nip,
             officerRole = firstOfficer.role,
-            documentPurpose = PoskoStockOpnameExporter.OFFICIAL_REPORT_PURPOSES.first()
+            documentPurpose = PoskoStockOpnameExporter.OFFICIAL_REPORT_PURPOSES[0]
         )
-        assertTrue(csvReport.contains("BERITA ACARA STOCK OPNAME PERSEDIAAN LOGISTIK & PERTANGGUNGJAWABAN TATA KELOLA BMN/BMD"))
-        assertTrue(csvReport.contains("LOG-SEMBAKO"))
-        assertTrue(csvReport.contains("1706019988776655"))
+        assertTrue(csvBaStockOpname.contains(com.example.model.DocumentSettings.DEFAULT_KOP_LINE_1))
+        assertTrue(csvBaStockOpname.contains(com.example.model.DocumentSettings.DEFAULT_KOP_LINE_2))
+        assertTrue(csvBaStockOpname.contains("BERITA ACARA STOCK OPNAME LOGISTIK & TATA KELOLA BARANG MILIK NEGARA / DAERAH (BMN/BMD)"))
+        assertTrue(csvBaStockOpname.contains(com.example.model.DocumentSettings.DEFAULT_FOOTER_TEXT))
+        assertTrue(csvBaStockOpname.contains("LOG-SEMBAKO"))
+        assertTrue(csvBaStockOpname.contains("1706019988776655"))
+
+        val csvLpjMutasi = PoskoStockOpnameExporter.buildStockOpnameCsvString(
+            stocks = repository.logisticStocks.value,
+            poskoUnits = repository.poskoUnits.value,
+            distributionLedger = repository.distributionLedger.value,
+            officerName = firstOfficer.name,
+            officerNip = firstOfficer.nip,
+            officerRole = firstOfficer.role,
+            documentPurpose = PoskoStockOpnameExporter.OFFICIAL_REPORT_PURPOSES[1]
+        )
+        assertTrue(csvLpjMutasi.contains("LAPORAN PERTANGGUNGJAWABAN MUTASI PERSEDIAAN & DISTRIBUSI BANTUAN (BMN/BMD)"))
+        assertTrue(csvLpjMutasi.contains(com.example.model.DocumentSettings.DEFAULT_FOOTER_TEXT))
+
+        val csvRekonsiliasi = PoskoStockOpnameExporter.buildStockOpnameCsvString(
+            stocks = repository.logisticStocks.value,
+            poskoUnits = repository.poskoUnits.value,
+            distributionLedger = repository.distributionLedger.value,
+            officerName = firstOfficer.name,
+            officerNip = firstOfficer.nip,
+            officerRole = firstOfficer.role,
+            documentPurpose = PoskoStockOpnameExporter.OFFICIAL_REPORT_PURPOSES[2]
+        )
+        assertTrue(csvRekonsiliasi.contains("BERITA ACARA REKONSILIASI ASET KEBENCANAAN & TATA KELOLA BMN / BMD"))
+        assertTrue(csvRekonsiliasi.contains(com.example.model.DocumentSettings.DEFAULT_FOOTER_TEXT))
+
+        // 9. Verifikasi Presisi Jarak Tabel ke Blok Pejabat Penanda Tangan (tanpa pemborosan ruang kosong)
+        assertEquals(456f, PoskoStockOpnameExporter.computeSignatureBlockTopY(440f), 0.1f)
+        assertEquals(710f, PoskoStockOpnameExporter.computeSignatureBlockTopY(760f), 0.1f)
+
+        // 10. Verifikasi Standarisasi Kertas Kerja ISO A4 & Margin Simetris pada Seluruh Output PDF
+        assertEquals(595, com.example.util.ReportExporter.A4_PAGE_WIDTH)
+        assertEquals(842, com.example.util.ReportExporter.A4_PAGE_HEIGHT)
+        assertEquals(36f, com.example.util.ReportExporter.STANDARD_MARGIN, 0.01f)
+        assertEquals(523f, com.example.util.ReportExporter.STANDARD_CONTENT_WIDTH, 0.01f)
+        assertEquals(297.5f, com.example.util.ReportExporter.A4_CENTER_X, 0.01f)
     }
 }
