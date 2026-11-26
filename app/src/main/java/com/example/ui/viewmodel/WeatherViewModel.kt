@@ -51,6 +51,9 @@ data class WeatherUiState(
     // Early Warnings & Weather Alerts
     val earlyWarnings: List<DetailedEarlyWarning> = emptyList(),
     val weatherAlertSettings: WeatherAlertSettings = WeatherAlertSettings(),
+    // Unified Color-Triage Disaster Readiness Notifications
+    val triageNotificationSettings: com.example.util.TriageNotificationSettings = com.example.util.TriageNotificationSettings(),
+    val activeTriageSignals: List<com.example.util.DisasterTriageSignal> = emptyList(),
     // BMKG Real-time Earthquakes
     val latestEarthquake: com.example.model.BmkgEarthquake? = null,
     val recentEarthquakes: List<com.example.model.BmkgEarthquake> = emptyList(),
@@ -89,6 +92,7 @@ class WeatherViewModel(
     private var lastAutoSyncTimestampMs: Long = System.currentTimeMillis()
     private var hasPerformedInitialGpsAutoSelect = false
     private var citizenReportsRealtimeListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var appContext: Context? = null
 
     val favoriteDistricts: StateFlow<List<String>> = repository.getFavoriteDistrictIds()
         .stateIn(
@@ -231,6 +235,90 @@ class WeatherViewModel(
         _uiState.value = _uiState.value.copy(isOnboardingOpen = false)
     }
 
+    /**
+     * Mengaitkan ApplicationContext ke ViewModel agar evaluasi notifikasi Triase Pewarnaan
+     * dapat berjalan otomatis pada setiap pembaruan cuaca, maritim, rob, udara, gempa, dan laporan.
+     */
+    fun attachApplicationContext(context: Context) {
+        val ctx = context.applicationContext
+        val isFirstAttach = (appContext == null)
+        appContext = ctx
+        val savedSettings = com.example.util.DisasterTriageNotificationManager.getSettings(ctx)
+        _uiState.value = _uiState.value.copy(triageNotificationSettings = savedSettings)
+        if (isFirstAttach) {
+            evaluateAllModuleTriageAndNotify(ctx)
+        }
+    }
+
+    fun updateTriageNotificationSettings(
+        context: Context,
+        settings: com.example.util.TriageNotificationSettings
+    ) {
+        val ctx = context.applicationContext
+        appContext = ctx
+        com.example.util.DisasterTriageNotificationManager.saveSettings(ctx, settings)
+        _uiState.value = _uiState.value.copy(triageNotificationSettings = settings)
+        if (settings.isEnabled) {
+            evaluateAllModuleTriageAndNotify(ctx)
+        }
+    }
+
+    fun triggerTestTriageNotification(
+        context: Context,
+        level: com.example.util.DisasterTriageLevel
+    ) {
+        val districtName = _uiState.value.selectedDistrict.name
+        com.example.util.DisasterTriageNotificationManager.postTestTriageNotification(
+            context = context,
+            level = level,
+            districtName = districtName
+        )
+    }
+
+    /**
+     * Mengevaluasi seluruh modul pemantauan aktif (Peringatan Dini, Cuaca Ekstrem, Gempa/Tsunami,
+     * Maritim, Pasang Rob, Kualitas Udara, serta Eskalasi Laporan) terhadap standar Triase Pewarnaan
+     * (Hijau / Kuning / Oranye / Merah) dan memicu notifikasi bila melampaui ambang siaga.
+     */
+    fun evaluateAllModuleTriageAndNotify(contextOverride: Context? = null) {
+        val state = _uiState.value
+        val district = state.selectedDistrict
+        val signals = buildList {
+            add(
+                com.example.util.DisasterTriageNotificationManager.evaluateEarlyWarnings(
+                    warnings = state.earlyWarnings,
+                    districtName = district.name
+                )
+            )
+            state.report?.let { report ->
+                add(com.example.util.DisasterTriageNotificationManager.evaluateWeatherTelemetry(report))
+                add(com.example.util.DisasterTriageNotificationManager.evaluateMarineWave(report.marine, district.name))
+                add(com.example.util.DisasterTriageNotificationManager.evaluateAirQuality(report.airQuality, district.name))
+            }
+            val tidal = com.example.model.TidalDataHelper.getTidalForecastForDistrict(district)
+            add(com.example.util.DisasterTriageNotificationManager.evaluateTidalRob(tidal, district.name))
+            state.latestEarthquake?.let { eq ->
+                add(com.example.util.DisasterTriageNotificationManager.evaluateEarthquake(eq))
+            }
+            add(
+                com.example.util.DisasterTriageNotificationManager.evaluateDisasterReportSurge(
+                    reports = citizenDisasterReports.value,
+                    fallbackDistrict = district.name
+                )
+            )
+        }
+
+        _uiState.value = _uiState.value.copy(activeTriageSignals = signals)
+
+        val ctx = contextOverride?.applicationContext ?: appContext ?: return
+        signals.forEach { signal ->
+            com.example.util.DisasterTriageNotificationManager.evaluateAndNotify(
+                context = ctx,
+                signal = signal
+            )
+        }
+    }
+
     fun selectDistrict(district: District) {
         _uiState.value = _uiState.value.copy(
             selectedDistrict = district,
@@ -343,6 +431,7 @@ class WeatherViewModel(
                     isLoading = false,
                     errorMessage = null
                 )
+                evaluateAllModuleTriageAndNotify()
                 loadAllDistrictsSummary()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -409,6 +498,7 @@ class WeatherViewModel(
                     isLoading = false,
                     errorMessage = null
                 )
+                evaluateAllModuleTriageAndNotify(context)
                 loadAllDistrictsSummary()
                 weatherSuccess = true
             } catch (e: Exception) {
@@ -442,6 +532,7 @@ class WeatherViewModel(
                     isLoading = false,
                     errorMessage = null
                 )
+                evaluateAllModuleTriageAndNotify()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -473,6 +564,7 @@ class WeatherViewModel(
         val warnings = repository.getDetailedEarlyWarnings(district)
         _uiState.value = _uiState.value.copy(earlyWarnings = warnings)
         checkAndPostSevereWeatherAlertIfNeeded(context, district, warnings)
+        evaluateAllModuleTriageAndNotify(context)
     }
 
     fun submitCommunityReport(
@@ -630,6 +722,7 @@ class WeatherViewModel(
                     recentEarthquakes = recents,
                     isLoadingEarthquakes = false
                 )
+                evaluateAllModuleTriageAndNotify(context)
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(isLoadingEarthquakes = false)
             }
@@ -743,6 +836,7 @@ class WeatherViewModel(
                     ) {
                         _uiState.value = _uiState.value.copy(latestEarthquake = latest)
                         lastNotifiedEarthquakeId = latest.id
+                        evaluateAllModuleTriageAndNotify()
                     }
                 } catch (_: Exception) {
                     // Ignore background polling glitches

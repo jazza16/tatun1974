@@ -99,6 +99,11 @@ fun EarlyWarningSection(
     onUpdateWeatherAlertSettings: (WeatherAlertSettings) -> Unit,
     onTestWeatherAlertNotification: (android.content.Context) -> Unit,
     onTestSuddenSevereWeatherNotification: (android.content.Context) -> Unit = {},
+    triageNotificationSettings: com.example.util.TriageNotificationSettings = com.example.util.TriageNotificationSettings(),
+    activeTriageSignals: List<com.example.util.DisasterTriageSignal> = emptyList(),
+    onUpdateTriageNotificationSettings: (com.example.util.TriageNotificationSettings) -> Unit = {},
+    onTestTriageNotification: (android.content.Context, com.example.util.DisasterTriageLevel) -> Unit = { _, _ -> },
+    onNavigateToTab: (Int) -> Unit = {},
     latestEarthquake: com.example.model.BmkgEarthquake? = null,
     recentEarthquakes: List<com.example.model.BmkgEarthquake> = emptyList(),
     isLoadingEarthquakes: Boolean = false,
@@ -117,6 +122,16 @@ fun EarlyWarningSection(
             .testTag("early_warning_section"),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Unified Color-Triage Disaster Readiness Notification Center (Hijau / Kuning / Oranye / Merah)
+        DisasterTriageNotificationCard(
+            currentDistrict = currentDistrict,
+            settings = triageNotificationSettings,
+            activeSignals = activeTriageSignals,
+            onUpdateSettings = onUpdateTriageNotificationSettings,
+            onTestTriageNotification = onTestTriageNotification,
+            onNavigateToTab = onNavigateToTab
+        )
+
         // Severe Weather Notification Settings Card (Orange-themed)
         WeatherAlertNotificationSettingsCard(
             currentDistrict = currentDistrict,

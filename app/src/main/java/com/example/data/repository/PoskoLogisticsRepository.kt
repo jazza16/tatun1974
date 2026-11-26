@@ -234,7 +234,8 @@ data class PoskoDalaLockedSnapshot(
  * pada saat sesi login Petugas aktif.
  */
 class PoskoLogisticsRepository internal constructor(
-    private val prefs: android.content.SharedPreferences?
+    private val prefs: android.content.SharedPreferences?,
+    private val appContext: Context? = null
 ) {
 
     private val _poskoUnits = MutableStateFlow<List<PoskoRefugeeUnit>>(emptyList())
@@ -426,6 +427,7 @@ class PoskoLogisticsRepository internal constructor(
             }
         }
         saveLogisticStocks()
+        evaluateLogisticsTriageIfOfficerActive()
     }
 
     fun addCustomCommodity(
@@ -452,6 +454,20 @@ class PoskoLogisticsRepository internal constructor(
         )
         _logisticStocks.value = _logisticStocks.value + newItem
         saveLogisticStocks()
+        evaluateLogisticsTriageIfOfficerActive()
+    }
+
+    private fun evaluateLogisticsTriageIfOfficerActive() {
+        val ctx = appContext ?: return
+        runCatching {
+            val signal = com.example.util.DisasterTriageNotificationManager.evaluatePoskoLogistics(
+                commodities = _logisticStocks.value
+            )
+            com.example.util.DisasterTriageNotificationManager.evaluateAndNotify(
+                context = ctx,
+                signal = signal
+            )
+        }
     }
 
     /**
@@ -696,7 +712,8 @@ class PoskoLogisticsRepository internal constructor(
         fun getInstance(context: Context): PoskoLogisticsRepository {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: PoskoLogisticsRepository(
-                    context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
+                    appContext = context.applicationContext
                 ).also { INSTANCE = it }
             }
         }

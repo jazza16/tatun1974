@@ -72,10 +72,10 @@ object WeatherNotificationHelper {
             return false
         }
 
-        // Intent to open app directly on Peringatan Dini tab (index 3)
+        // Intent to open app directly on Peringatan & Gempa WRS tab (index 4)
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("EXTRA_NAVIGATE_TAB", 3)
+            putExtra("EXTRA_NAVIGATE_TAB", 4)
             putExtra("EXTRA_WARNING_ID", warning.id)
         }
 
@@ -97,10 +97,12 @@ object WeatherNotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val severityEmoji = when (warning.severity) {
-            "AWAS" -> "🚨 AWAS"
-            "SIAGA" -> "⚠️ SIAGA"
-            else -> "⚡ WASPADA"
+        val triageLevel = DisasterTriageNotificationManager.severityToTriageLevel(warning.severity)
+        val severityEmoji = when (triageLevel) {
+            DisasterTriageLevel.MERAH_AWAS -> "🔴 TRIASE MERAH • AWAS"
+            DisasterTriageLevel.ORANYE_SIAGA -> "🟠 TRIASE ORANYE • SIAGA"
+            DisasterTriageLevel.KUNING_WASPADA -> "🟡 TRIASE KUNING • WASPADA"
+            DisasterTriageLevel.HIJAU_AMAN -> "🟢 AMAN"
         }
 
         val title = "$severityEmoji: ${warning.title} • $targetDistrictName"
@@ -108,7 +110,7 @@ object WeatherNotificationHelper {
 
         val bigText = buildString {
             append("Wilayah Terdampak: ${warning.affectedDistricts.joinToString(", ")}\n")
-            append("Status: ${warning.severity} • Berlaku s/d ${warning.validUntil}\n\n")
+            append("Status: ${triageLevel.badgeLabel} • Berlaku s/d ${warning.validUntil}\n\n")
             append("${warning.description}\n\n")
             append("Panduan BPBD Mukomuko:\n")
             warning.safetyInstructions.take(2).forEach { instruction ->
@@ -124,7 +126,7 @@ object WeatherNotificationHelper {
             .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setColor(ORANGE_NOTIFICATION_COLOR)
+            .setColor(triageLevel.colorInt)
             .setColorized(true)
             .setAutoCancel(true)
             .setContentIntent(openAppPendingIntent)
@@ -159,7 +161,7 @@ object WeatherNotificationHelper {
 
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("EXTRA_NAVIGATE_TAB", 3)
+            putExtra("EXTRA_NAVIGATE_TAB", 4)
         }
 
         val openAppPendingIntent = PendingIntent.getActivity(
@@ -204,7 +206,7 @@ object WeatherNotificationHelper {
             .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setColor(ORANGE_NOTIFICATION_COLOR)
+            .setColor(DisasterTriageLevel.MERAH_AWAS.colorInt)
             .setColorized(true)
             .setAutoCancel(true)
             .setContentIntent(openAppPendingIntent)

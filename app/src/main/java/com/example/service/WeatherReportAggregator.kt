@@ -106,7 +106,7 @@ class WeatherReportAggregator(
             )
             weatherDao.insertCache(newCache)
 
-            // Dispatch notification if an anomaly was detected
+            // Dispatch color-triage notification if an anomaly was detected
             if (anomalyDetected) {
                 val timeStr = SimpleDateFormat("HH:mm 'WIB'", Locale.forLanguageTag("id-ID")).format(Date(System.currentTimeMillis() + 3 * 3600 * 1000L))
                 val warning = DetailedEarlyWarning(
@@ -122,11 +122,25 @@ class WeatherReportAggregator(
                         "Nelayan perahu motor tradisional diimbau menunda melaut saat badai."
                     )
                 )
-                WeatherNotificationHelper.postWeatherAlertNotification(
-                    context = appContext,
-                    warning = warning,
-                    targetDistrictName = primaryDistrict.name
+                val triageSignal = com.example.util.DisasterTriageNotificationManager.evaluateEarlyWarnings(
+                    warnings = listOf(warning),
+                    districtName = primaryDistrict.name
                 )
+                val dispatched = com.example.util.DisasterTriageNotificationManager.evaluateAndNotify(
+                    context = appContext,
+                    signal = triageSignal
+                )
+                if (dispatched != com.example.util.TriageDispatchResult.POSTED &&
+                    dispatched != com.example.util.TriageDispatchResult.SKIPPED_COOLDOWN_DUPLICATE &&
+                    dispatched != com.example.util.TriageDispatchResult.SKIPPED_BELOW_THRESHOLD &&
+                    dispatched != com.example.util.TriageDispatchResult.SKIPPED_DISABLED
+                ) {
+                    WeatherNotificationHelper.postWeatherAlertNotification(
+                        context = appContext,
+                        warning = warning,
+                        targetDistrictName = primaryDistrict.name
+                    )
+                }
             }
 
             Result.success()

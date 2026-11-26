@@ -33,6 +33,7 @@ class FirmsHotspotSyncWorker(
                 dayRange = 2,
                 enableSimulation = false
             )
+            repo.evaluateAndNotifyKarhutlaTriage(dayRange = 2)
             Log.d(TAG, "FIRMS periodic sync completed. Cross-matched pairs: $matched")
             Result.success()
         } catch (e: Exception) {
@@ -64,6 +65,7 @@ class BmkgHotspotSyncWorker(
                 dayRange = 2,
                 enableSimulation = false
             )
+            repo.evaluateAndNotifyKarhutlaTriage(dayRange = 2)
             Log.d(TAG, "BMKG periodic sync completed. Cross-matched pairs: $matched")
             Result.success()
         } catch (e: Exception) {

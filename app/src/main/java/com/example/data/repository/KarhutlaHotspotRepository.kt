@@ -246,12 +246,36 @@ class KarhutlaHotspotRepository(context: Context) {
         val retentionCutoffUtc = nowUtc - (retentionDays.toLong() * 24L * 3600_000L)
         val lookbackUtc = nowUtc - (dayRange.coerceIn(1, 7).toLong() * 24L * 3600_000L)
 
-        dao.syncAndMatchHotspotsTransaction(
+        val matched = dao.syncAndMatchHotspotsTransaction(
             newFirmsHotspots = emptyList(),
             newBmkgHotspots = emptyList(),
             matchingLookbackMillis = lookbackUtc,
             retentionCutoffMillisUtc = retentionCutoffUtc
         )
+        evaluateAndNotifyKarhutlaTriage(dayRange = dayRange)
+        matched
+    }
+
+    /**
+     * Mengevaluasi seluruh titik panas aktif (FIRMS & BMKG) berdasarkan Triase Pewarnaan
+     * (Hijau / Kuning / Oranye / Merah) dan memicu notifikasi siaga jika ambang tercapai.
+     */
+    suspend fun evaluateAndNotifyKarhutlaTriage(
+        dayRange: Int = 2
+    ): com.example.util.DisasterTriageSignal = withContext(Dispatchers.IO) {
+        val nowUtc = System.currentTimeMillis()
+        val lookbackUtc = nowUtc - (dayRange.coerceIn(1, 7).toLong() * 24L * 3600_000L)
+        val firmsActive = dao.getHotspotsBySourceSince(KarhutlaHotspotEntity.SOURCE_FIRMS, lookbackUtc)
+        val bmkgActive = dao.getHotspotsBySourceSince(KarhutlaHotspotEntity.SOURCE_BMKG, lookbackUtc)
+        val signal = com.example.util.DisasterTriageNotificationManager.evaluateKarhutlaHotspots(
+            hotspots = firmsActive + bmkgActive,
+            includeSimulation = false
+        )
+        com.example.util.DisasterTriageNotificationManager.evaluateAndNotify(
+            context = appContext,
+            signal = signal
+        )
+        signal
     }
 
     companion object {

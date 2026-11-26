@@ -276,6 +276,7 @@ class MainActivity : FragmentActivity() {
 
         // Initialize BMKG Earthquake, Severe Weather, and Real-Time Officer Push Notification Channels
         try {
+            com.example.util.DisasterTriageNotificationManager.initNotificationChannels(this)
             com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
             com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
             com.example.util.WeatherNotificationHelper.initAppUpdateNotificationChannel(this)
@@ -495,6 +496,7 @@ fun WeatherAppScreen(
 
     // Auto-Select Kecamatan via GPS saat pertama kali dibuka & Auto-Refresh setiap 30 menit
     LaunchedEffect(Unit) {
+        viewModel.attachApplicationContext(context.applicationContext)
         viewModel.startAutoRefresh30Minutes(context)
         if (com.example.util.LocationHelper.hasLocationPermission(context)) {
             viewModel.autoSelectDistrictViaGpsOnStartup(context)
@@ -1007,6 +1009,11 @@ fun WeatherAppScreen(
                                         onUpdateWeatherAlertSettings = { viewModel.updateWeatherAlertSettings(it) },
                                         onTestWeatherAlertNotification = { viewModel.triggerTestWeatherAlertNotification(it) },
                                         onTestSuddenSevereWeatherNotification = { viewModel.triggerSuddenSevereWeatherPushNotification(it) },
+                                        triageNotificationSettings = uiState.triageNotificationSettings,
+                                        activeTriageSignals = uiState.activeTriageSignals,
+                                        onUpdateTriageNotificationSettings = { viewModel.updateTriageNotificationSettings(context, it) },
+                                        onTestTriageNotification = { ctx, lvl -> viewModel.triggerTestTriageNotification(ctx, lvl) },
+                                        onNavigateToTab = { tabIdx -> viewModel.selectTab(tabIdx) },
                                         latestEarthquake = uiState.latestEarthquake,
                                         recentEarthquakes = uiState.recentEarthquakes,
                                         isLoadingEarthquakes = uiState.isLoadingEarthquakes,

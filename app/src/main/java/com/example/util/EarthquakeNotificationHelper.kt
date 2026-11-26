@@ -59,7 +59,7 @@ object EarthquakeNotificationHelper {
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("EXTRA_NAVIGATE_TAB", 3) // Tab 3: Peringatan Dini
+            putExtra("EXTRA_NAVIGATE_TAB", 4) // Tab 4: Peringatan & Gempa WRS
             putExtra("EXTRA_EARTHQUAKE_ID", earthquake.id)
         }
 
@@ -71,9 +71,9 @@ object EarthquakeNotificationHelper {
         )
 
         val urgencyEmoji = when (earthquake.urgencyLevel) {
-            EarthquakeUrgency.CRITICAL -> "🚨 BAHAYA"
-            EarthquakeUrgency.WARNING -> "⚠️ WASPADA"
-            EarthquakeUrgency.ADVISORY -> "ℹ️ INFO"
+            EarthquakeUrgency.CRITICAL -> "🔴 TRIASE MERAH • AWAS"
+            EarthquakeUrgency.WARNING -> "🟠 TRIASE ORANYE • SIAGA"
+            EarthquakeUrgency.ADVISORY -> "🟡 TRIASE KUNING • WASPADA"
         }
 
         val title = "$urgencyEmoji Gempa M ${earthquake.magnitude} - BMKG"
@@ -92,9 +92,9 @@ object EarthquakeNotificationHelper {
         }
 
         val notificationColor = when (earthquake.urgencyLevel) {
-            EarthquakeUrgency.CRITICAL -> Color.RED
-            EarthquakeUrgency.WARNING -> Color.rgb(234, 88, 12) // Orange
-            EarthquakeUrgency.ADVISORY -> Color.rgb(14, 165, 233) // Blue
+            EarthquakeUrgency.CRITICAL -> DisasterTriageLevel.MERAH_AWAS.colorInt
+            EarthquakeUrgency.WARNING -> DisasterTriageLevel.ORANYE_SIAGA.colorInt
+            EarthquakeUrgency.ADVISORY -> DisasterTriageLevel.KUNING_WASPADA.colorInt
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -125,10 +125,10 @@ object EarthquakeNotificationHelper {
             return false
         }
 
-        // Navigate directly to Tab 4 (Evakuasi Gempa & Kesiapsiagaan)
+        // Navigate directly to Tab 6 (Peta & SOP Evakuasi)
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("EXTRA_NAVIGATE_TAB", 4)
+            putExtra("EXTRA_NAVIGATE_TAB", 6)
             putExtra("EXTRA_EARTHQUAKE_ID", earthquake.id)
             putExtra("EXTRA_SHOW_TSUNAMI_GUIDE", true)
         }
@@ -170,7 +170,8 @@ object EarthquakeNotificationHelper {
             .setStyle(NotificationCompat.BigTextStyle().bigText(detailedContent))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setColor(Color.RED)
+            .setColor(DisasterTriageLevel.MERAH_AWAS.colorInt)
+            .setColorized(true)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .addAction(android.R.drawable.ic_menu_directions, "Panduan Evakuasi", pendingIntent)
