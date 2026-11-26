@@ -303,4 +303,23 @@ class PrdModulesCompletionTest {
         composeTestRule.onNodeWithTag("btn_test_local_siren_sop").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithTag("btn_tts_all_gempa_bumi").performScrollTo().assertIsDisplayed()
     }
+
+    @Test
+    fun `early warning section removes redundant weather alert card and integrates district relevance in triage card`() {
+        composeTestRule.setContent {
+            com.example.ui.components.EarlyWarningSection(
+                warnings = emptyList(),
+                currentDistrict = MukomukoDistricts.defaultDistrict,
+                onCall117 = {},
+                onOpenCallCenterInfo = {}
+            )
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("disaster_triage_notification_card").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("switch_district_relevance").assertExists()
+        composeTestRule.onNodeWithTag("weather_alert_settings_card").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("switch_weather_alert_master").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("btn_test_weather_alert_notification").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("btn_test_sudden_weather_push_notification").assertDoesNotExist()
+    }
 }

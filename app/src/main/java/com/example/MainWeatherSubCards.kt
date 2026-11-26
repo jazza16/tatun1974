@@ -958,7 +958,6 @@ private fun WeatherDenseComponentsPreviewContent() {
     val report = remember<WeatherFullReport> { createPreviewReport() }
     val earthquake = remember<BmkgEarthquake> { createPreviewEarthquake() }
     val warnings = remember<List<DetailedEarlyWarning>> { createPreviewEarlyWarnings() }
-    val alertSettings = remember<WeatherAlertSettings> { WeatherAlertSettings() }
 
     MyApplicationTheme {
         Surface(
@@ -986,9 +985,6 @@ private fun WeatherDenseComponentsPreviewContent() {
                 EarlyWarningSection(
                     warnings = warnings,
                     currentDistrict = report.district,
-                    weatherAlertSettings = alertSettings,
-                    onUpdateWeatherAlertSettings = {},
-                    onTestWeatherAlertNotification = {},
                     onCall117 = {},
                     onOpenCallCenterInfo = {}
                 )

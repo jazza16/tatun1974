@@ -129,7 +129,10 @@ data class DisasterTriageSignal(
     val metricSummary: String,
     val safetyAdvice: String,
     val signatureKey: String,
-    val targetTabOverride: Int? = null
+    val targetTabOverride: Int? = null,
+    val eventDateTimeLabel: String? = null,
+    val eventUniqueKey: String? = null,
+    val timeoutAfterMillis: Long? = null
 ) {
     val resolvedTargetTab: Int
         get() = targetTabOverride ?: source.targetTabIndex
@@ -141,6 +144,7 @@ data class DisasterTriageSignal(
 data class TriageNotificationSettings(
     val isEnabled: Boolean = true,
     val minimumLevel: DisasterTriageLevel = DisasterTriageLevel.ORANYE_SIAGA,
+    val onlySelectedDistrict: Boolean = true,
     val enableWeatherAndAlerts: Boolean = true,
     val enableEarthquakeTsunami: Boolean = true,
     val enableMarineAndRob: Boolean = true,
@@ -200,12 +204,15 @@ object DisasterTriageNotificationManager {
     private const val PREFS_NAME = "sipagar_disaster_triage_notif_prefs"
     private const val KEY_ENABLED = "triage_enabled"
     private const val KEY_MIN_LEVEL = "triage_min_level"
+    private const val KEY_ONLY_SELECTED_DISTRICT = "triage_only_selected_district"
     private const val KEY_ENABLE_WEATHER = "triage_enable_weather"
     private const val KEY_ENABLE_EARTHQUAKE = "triage_enable_earthquake"
     private const val KEY_ENABLE_MARINE = "triage_enable_marine"
     private const val KEY_ENABLE_KARHUTLA = "triage_enable_karhutla"
     private const val KEY_ENABLE_SURGE = "triage_enable_surge"
     private const val KEY_ENABLE_POSKO = "triage_enable_posko"
+    private const val KEY_PREFIX_EQ_LEDGER = "eq_ledger_"
+    private const val EQ_LEDGER_RETENTION_MS = 7L * 24L * 60L * 60_000L
 
     private const val NOTIFICATION_ID_BASE = 74000
 
@@ -263,6 +270,7 @@ object DisasterTriageNotificationManager {
         return TriageNotificationSettings(
             isEnabled = prefs.getBoolean(KEY_ENABLED, true),
             minimumLevel = parsedLevel,
+            onlySelectedDistrict = prefs.getBoolean(KEY_ONLY_SELECTED_DISTRICT, true),
             enableWeatherAndAlerts = prefs.getBoolean(KEY_ENABLE_WEATHER, true),
             enableEarthquakeTsunami = prefs.getBoolean(KEY_ENABLE_EARTHQUAKE, true),
             enableMarineAndRob = prefs.getBoolean(KEY_ENABLE_MARINE, true),
@@ -282,6 +290,7 @@ object DisasterTriageNotificationManager {
         prefs.edit()
             .putBoolean(KEY_ENABLED, settings.isEnabled)
             .putString(KEY_MIN_LEVEL, normalizedMin.code)
+            .putBoolean(KEY_ONLY_SELECTED_DISTRICT, settings.onlySelectedDistrict)
             .putBoolean(KEY_ENABLE_WEATHER, settings.enableWeatherAndAlerts)
             .putBoolean(KEY_ENABLE_EARTHQUAKE, settings.enableEarthquakeTsunami)
             .putBoolean(KEY_ENABLE_MARINE, settings.enableMarineAndRob)
@@ -298,6 +307,11 @@ object DisasterTriageNotificationManager {
             editor.remove("last_time_${src.key}")
             editor.remove("last_score_${src.key}")
             editor.remove("last_sig_${src.key}")
+        }
+        prefs.all.keys.forEach { key ->
+            if (key.startsWith(KEY_PREFIX_EQ_LEDGER)) {
+                editor.remove(key)
+            }
         }
         editor.apply()
     }
@@ -329,30 +343,54 @@ object DisasterTriageNotificationManager {
 
     fun evaluateEarlyWarnings(
         warnings: List<DetailedEarlyWarning>,
-        districtName: String
+        districtName: String,
+        onlySelectedDistrict: Boolean = true
     ): DisasterTriageSignal {
-        val prioritized = warnings.maxByOrNull { severityToTriageLevel(it.severity).priorityScore }
+        val relevantWarnings = if (!onlySelectedDistrict) {
+            warnings
+        } else {
+            warnings.filter { warning ->
+                warning.affectedDistricts.isEmpty() || warning.affectedDistricts.any { target ->
+                    target.contains(districtName, ignoreCase = true) ||
+                        target.contains("seluruh", ignoreCase = true) ||
+                        target.contains("semua", ignoreCase = true) ||
+                        target.contains("kabupaten mukomuko", ignoreCase = true) ||
+                        target.contains("kab. mukomuko", ignoreCase = true)
+                }
+            }
+        }
+        val prioritized = relevantWarnings.maxByOrNull { severityToTriageLevel(it.severity).priorityScore }
         if (prioritized == null) {
+            val emptySummary = if (onlySelectedDistrict && warnings.isNotEmpty()) {
+                "Tidak ada peringatan dini cuaca aktif khusus wilayah $districtName."
+            } else {
+                "Tidak ada peringatan dini cuaca aktif."
+            }
             return safeSignal(
                 source = TriageFeatureSource.PERINGATAN_CUACA,
                 districtOrLocation = districtName,
-                summary = "Tidak ada peringatan dini cuaca aktif."
+                summary = emptySummary
             )
         }
         val level = severityToTriageLevel(prioritized.severity)
         if (level == DisasterTriageLevel.HIJAU_AMAN) {
             return safeSignal(TriageFeatureSource.PERINGATAN_CUACA, districtName, "Kondisi cuaca terpantau normal.")
         }
+        val scopeLocation = if (onlySelectedDistrict) {
+            districtName
+        } else {
+            prioritized.affectedDistricts.take(3).joinToString(", ").ifBlank { "Kab. Mukomuko (15 Kec.)" }
+        }
         val advice = prioritized.safetyInstructions.firstOrNull()
             ?: "Pantau pembaruan resmi Pusdalops BPBD Mukomuko & BMKG."
         return DisasterTriageSignal(
             source = TriageFeatureSource.PERINGATAN_CUACA,
             level = level,
-            districtOrLocation = districtName,
+            districtOrLocation = scopeLocation,
             headline = prioritized.title,
             metricSummary = "${prioritized.category} • Berlaku s/d ${prioritized.validUntil}",
             safetyAdvice = advice,
-            signatureKey = "${prioritized.id}|${level.code}|$districtName"
+            signatureKey = "${prioritized.id}|${level.code}|$scopeLocation|$onlySelectedDistrict"
         )
     }
 
@@ -527,16 +565,29 @@ object DisasterTriageNotificationManager {
         )
     }
 
-    fun evaluateEarthquake(earthquake: BmkgEarthquake): DisasterTriageSignal {
-        // FILTER WILAYAH LOKAL PROVINSI BENGKULU:
-        // Notifikasi Gempa Bumi HANYA berlaku untuk gempa lokal yang terjadi di Provinsi Bengkulu
-        // atau tercatat dirasakan oleh masyarakat Provinsi Bengkulu. Gempa luar Bengkulu (global Indonesia)
-        // selalu dikembalikan sebagai HIJAU_AMAN agar tidak mengganggu pengguna.
+    fun evaluateEarthquake(
+        earthquake: BmkgEarthquake,
+        nowMillis: Long = System.currentTimeMillis()
+    ): DisasterTriageSignal {
+        // FILTER 1: WILAYAH LOKAL PROVINSI BENGKULU
         if (!earthquake.isBengkuluProvinceAffected) {
             return safeSignal(
                 source = TriageFeatureSource.GEMPA_TSUNAMI,
                 districtOrLocation = earthquake.region,
                 summary = "Gempa M ${earthquake.magnitude} di luar Provinsi Bengkulu (${earthquake.region}) — notifikasi dibisukan (filter lokal Provinsi Bengkulu)."
+            )
+        }
+
+        // FILTER 2: DATA NYATA & JENDELA WAKTU KEJADIAN (MAKSIMAL 2 JAM DARI WAKTU KEJADIAN)
+        // Data fallback offline atau kejadian lampau (> 2 jam) dikembalikan sebagai HIJAU_AMAN
+        // agar tidak memunculkan notifikasi lama atau berulang.
+        if (earthquake.isFallbackData ||
+            !com.example.model.BengkuluEarthquakeScope.isWithinNotificationWindow(earthquake, nowMillis)
+        ) {
+            return safeSignal(
+                source = TriageFeatureSource.GEMPA_TSUNAMI,
+                districtOrLocation = earthquake.region,
+                summary = "Data gempa ${earthquake.date} (${earthquake.timeWib}) di luar jendela aktif 1–2 jam kejadian — tidak memicu notifikasi."
             )
         }
 
@@ -576,41 +627,55 @@ object DisasterTriageNotificationManager {
             )
         }
 
+        val eventDateTimeText = listOf(earthquake.date.trim(), earthquake.timeWib.trim())
+            .filter { it.isNotBlank() }
+            .joinToString(" • ")
+
         val feltSuffix = if (earthquake.feltDescription.isNotBlank() && earthquake.feltDescription != "-") {
             " • Dirasakan: ${earthquake.feltDescription}"
         } else {
             ""
         }
 
+        val eventIdentity = com.example.model.BengkuluEarthquakeScope.buildEarthquakeEventIdentity(earthquake)
+        val displayTimeoutMs = com.example.model.BengkuluEarthquakeScope.computeNotificationDisplayTimeoutMs(earthquake, nowMillis)
+
         return DisasterTriageSignal(
             source = TriageFeatureSource.GEMPA_TSUNAMI,
             level = level,
             districtOrLocation = earthquake.region,
             headline = headline,
-            metricSummary = "M ${earthquake.magnitude} • Kedalaman ${earthquake.depth} • ${earthquake.timeWib} • Jarak ~${earthquake.distanceKmToMukomuko} km$feltSuffix",
+            metricSummary = "Tanggal: $eventDateTimeText • M ${earthquake.magnitude} • Kedalaman ${earthquake.depth} • Jarak ~${earthquake.distanceKmToMukomuko} km$feltSuffix",
             safetyAdvice = advice,
-            signatureKey = "eq_${earthquake.id}_${level.code}",
-            targetTabOverride = targetTab
+            signatureKey = "${eventIdentity}_${level.code}",
+            targetTabOverride = targetTab,
+            eventDateTimeLabel = eventDateTimeText,
+            eventUniqueKey = eventIdentity,
+            timeoutAfterMillis = displayTimeoutMs
         )
     }
 
     /**
-     * Memilih kejadian gempa lokal Provinsi Bengkulu dengan tingkat triase tertinggi dari daftar gempa
-     * BMKG (gabungan autogempa + gempadirasakan). Mengembalikan HIJAU_AMAN bila tidak ada gempa
-     * yang terjadi atau dirasakan di Wilayah Provinsi Bengkulu.
+     * Memilih kejadian gempa lokal Provinsi Bengkulu yang masih dalam jendela waktu kejadian (maks 2 jam)
+     * dengan tingkat triase tertinggi dari daftar gempa BMKG (gabungan autogempa + gempadirasakan).
      */
     fun evaluateEarthquakesForBengkulu(
         earthquakes: List<BmkgEarthquake>,
-        fallbackLocation: String = "Provinsi Bengkulu"
+        fallbackLocation: String = "Provinsi Bengkulu",
+        nowMillis: Long = System.currentTimeMillis()
     ): DisasterTriageSignal {
         val localSignals = earthquakes
-            .filter { it.isBengkuluProvinceAffected }
-            .map { evaluateEarthquake(it) }
+            .filter {
+                it.isBengkuluProvinceAffected &&
+                    !it.isFallbackData &&
+                    com.example.model.BengkuluEarthquakeScope.isWithinNotificationWindow(it, nowMillis)
+            }
+            .map { evaluateEarthquake(it, nowMillis) }
         return localSignals.maxByOrNull { it.level.priorityScore }
             ?: safeSignal(
                 source = TriageFeatureSource.GEMPA_TSUNAMI,
                 districtOrLocation = fallbackLocation,
-                summary = "Tidak ada gempa lokal atau dirasakan di Wilayah Provinsi Bengkulu saat ini."
+                summary = "Tidak ada kejadian gempa lokal Bengkulu dalam 2 jam terakhir."
             )
     }
 
@@ -673,16 +738,26 @@ object DisasterTriageNotificationManager {
 
     fun evaluateDisasterReportSurge(
         reports: List<CitizenDisasterReport>,
-        fallbackDistrict: String = "Kab. Mukomuko"
+        fallbackDistrict: String = "Kab. Mukomuko",
+        onlySelectedDistrict: Boolean = false
     ): DisasterTriageSignal {
         val activeReports = reports.filter { rep ->
-            !com.example.model.CitizenReportStatusHelper.isResolved(rep.status)
+            val unresolved = !com.example.model.CitizenReportStatusHelper.isResolved(rep.status)
+            val districtMatch = !onlySelectedDistrict ||
+                rep.district.isBlank() ||
+                rep.district.contains(fallbackDistrict, ignoreCase = true) ||
+                fallbackDistrict.contains(rep.district, ignoreCase = true)
+            unresolved && districtMatch
         }
         if (activeReports.isEmpty()) {
             return safeSignal(
                 source = TriageFeatureSource.LAPORAN_DARURAT_WARGA,
                 districtOrLocation = fallbackDistrict,
-                summary = "Tidak ada laporan kejadian bencana aktif yang menunggu penanganan."
+                summary = if (onlySelectedDistrict) {
+                    "Tidak ada laporan kejadian bencana aktif di wilayah $fallbackDistrict."
+                } else {
+                    "Tidak ada laporan kejadian bencana aktif yang menunggu penanganan."
+                }
             )
         }
 
@@ -843,13 +918,26 @@ object DisasterTriageNotificationManager {
             return TriageDispatchResult.SKIPPED_BELOW_THRESHOLD
         }
 
-        // 5. Cek Deduplikasi & Eskalasi (naik level Kuning->Oranye->Merah selalu lolos cooldown!)
+        // 5. Cek Deduplikasi & Eskalasi
         val lastTime = prefs.getLong(timeKey, 0L)
         val lastScore = prefs.getInt(scoreKey, 0)
         val lastSig = prefs.getString(sigKey, null)
         val isEscalation = signal.level.priorityScore > lastScore
 
+        // KHUSUS GEMPA BUMI: Kejadian gempa dengan identitas event yang sama tidak boleh
+        // berulang lagi setelah cooldown habis maupun setelah aplikasi dibuka ulang,
+        // kecuali terjadi eskalasi level bahaya yang lebih tinggi pada event yang sama.
+        val eqEventUniqueKey = signal.eventUniqueKey
         if (!forceBypassCooldown &&
+            signal.source == TriageFeatureSource.GEMPA_TSUNAMI &&
+            eqEventUniqueKey != null
+        ) {
+            val ledgerRaw = prefs.getString(KEY_PREFIX_EQ_LEDGER + eqEventUniqueKey.hashCode(), null)
+            val prevEqScore = ledgerRaw?.substringBefore("|")?.toIntOrNull() ?: -1
+            if (prevEqScore >= signal.level.priorityScore) {
+                return TriageDispatchResult.SKIPPED_COOLDOWN_DUPLICATE
+            }
+        } else if (!forceBypassCooldown &&
             !isEscalation &&
             lastSig == signal.signatureKey &&
             (nowMillis - lastTime) < signal.level.cooldownMillis
@@ -869,12 +957,30 @@ object DisasterTriageNotificationManager {
             return TriageDispatchResult.SKIPPED_NO_PERMISSION
         }
 
-        // 8. Simpan jejak deduplikasi
-        prefs.edit()
+        // 8. Simpan jejak deduplikasi + buku besar persisten event gempa
+        val editor = prefs.edit()
             .putLong(timeKey, nowMillis)
             .putInt(scoreKey, signal.level.priorityScore)
             .putString(sigKey, signal.signatureKey)
-            .apply()
+
+        if (!forceBypassCooldown &&
+            signal.source == TriageFeatureSource.GEMPA_TSUNAMI &&
+            eqEventUniqueKey != null
+        ) {
+            prefs.all.forEach { (k, v) ->
+                if (k.startsWith(KEY_PREFIX_EQ_LEDGER) && v is String) {
+                    val recordedAt = v.substringAfter("|", "0").toLongOrNull() ?: 0L
+                    if ((nowMillis - recordedAt) > EQ_LEDGER_RETENTION_MS) {
+                        editor.remove(k)
+                    }
+                }
+            }
+            editor.putString(
+                KEY_PREFIX_EQ_LEDGER + eqEventUniqueKey.hashCode(),
+                "${signal.level.priorityScore}|$nowMillis"
+            )
+        }
+        editor.apply()
 
         return TriageDispatchResult.POSTED
     }
@@ -946,10 +1052,19 @@ object DisasterTriageNotificationManager {
         )
 
         val title = "${signal.level.emoji} [${signal.level.badgeLabel}] ${signal.headline}"
-        val subtitle = "${signal.source.displayName} • ${signal.districtOrLocation}"
+        val subtitle = buildString {
+            append(signal.source.displayName)
+            if (!signal.eventDateTimeLabel.isNullOrBlank()) {
+                append(" • ${signal.eventDateTimeLabel}")
+            }
+            append(" • ${signal.districtOrLocation}")
+        }
         val detailedText = buildString {
             append("Status Triase: ${signal.level.badgeLabel}\n")
             append("Fitur Sumber: ${signal.source.displayName}\n")
+            if (!signal.eventDateTimeLabel.isNullOrBlank()) {
+                append("Tanggal & Waktu Kejadian: ${signal.eventDateTimeLabel}\n")
+            }
             append("Wilayah / Lokasi: ${signal.districtOrLocation}\n\n")
             append("Indikator Tercatat:\n${signal.metricSummary}\n\n")
             append("Arahan Kesiapsiagaan BPBD Mukomuko:\n${signal.safetyAdvice}")
@@ -987,9 +1102,14 @@ object DisasterTriageNotificationManager {
             .setColor(signal.level.colorInt)
             .setColorized(signal.level.priorityScore >= DisasterTriageLevel.ORANYE_SIAGA.priorityScore)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
             .setContentIntent(openPendingIntent)
             .addAction(android.R.drawable.ic_menu_view, "Buka Modul", openPendingIntent)
             .setVibrate(vibration)
+
+        signal.timeoutAfterMillis?.takeIf { it > 0L }?.let { timeoutMs ->
+            builder.setTimeoutAfter(timeoutMs)
+        }
 
         if (signal.level.priorityScore >= DisasterTriageLevel.ORANYE_SIAGA.priorityScore) {
             val dial117Intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:117")).apply {

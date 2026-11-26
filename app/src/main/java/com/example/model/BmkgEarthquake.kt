@@ -83,7 +83,8 @@ data class BmkgEarthquake(
     val shakemapUrl: String?,
     val distanceKmToMukomuko: Int,
     val isNearMukomuko: Boolean,
-    val urgencyLevel: EarthquakeUrgency
+    val urgencyLevel: EarthquakeUrgency,
+    val isFallbackData: Boolean = false
 ) {
     /**
      * Bernilai `true` HANYA apabila gempa terjadi di wilayah Provinsi Bengkulu (darat maupun perairan
@@ -289,5 +290,145 @@ object BengkuluEarthquakeScope {
         }
 
         return false
+    }
+
+    const val MAX_EARTHQUAKE_NOTIFICATION_WINDOW_MS = 2L * 60L * 60_000L // 2 jam sejak waktu kejadian
+    const val MIN_EARTHQUAKE_DISPLAY_TIMEOUT_MS = 1L * 60L * 60_000L // 1 jam durasi tampil minimum
+    private const val MAX_FUTURE_CLOCK_SKEW_MS = 10L * 60_000L
+
+    private val INDONESIAN_MONTH_TO_NUMBER = mapOf(
+        "jan" to "01", "januari" to "01",
+        "feb" to "02", "peb" to "02", "februari" to "02", "pebruari" to "02",
+        "mar" to "03", "maret" to "03",
+        "apr" to "04", "april" to "04",
+        "mei" to "05", "may" to "05",
+        "jun" to "06", "juni" to "06",
+        "jul" to "07", "juli" to "07",
+        "agu" to "08", "ags" to "08", "agustus" to "08", "aug" to "08",
+        "sep" to "09", "sept" to "09", "september" to "09",
+        "okt" to "10", "oktober" to "10", "oct" to "10",
+        "nov" to "11", "nop" to "11", "november" to "11", "nopember" to "11",
+        "des" to "12", "desember" to "12", "dec" to "12"
+    )
+
+    /**
+     * Mengonversi stempel waktu BMKG (`DateTime` ISO-8601 atau pasangan `Tanggal` + `Jam` WIB)
+     * menjadi epoch milidetik UTC. Mengembalikan `null` jika format waktu tidak dapat dikenali.
+     */
+    fun parseEventTimestampMillis(
+        dateTimeIso: String,
+        date: String,
+        timeWib: String
+    ): Long? {
+        val rawIso = dateTimeIso.trim()
+        if (rawIso.isNotBlank() && rawIso.contains("T")) {
+            val cleanedIso = rawIso
+                .replace(Regex("\\.\\d+"), "")
+                .let { if (it.endsWith("Z")) it.dropLast(1) + "+00:00" else it }
+
+            val isoFormats = listOf(
+                "yyyy-MM-dd'T'HH:mm:ssXXX",
+                "yyyy-MM-dd'T'HH:mm:ssZ",
+                "yyyy-MM-dd'T'HH:mm:ss"
+            )
+            for (pattern in isoFormats) {
+                try {
+                    val sdf = SimpleDateFormat(pattern, Locale.US).apply {
+                        isLenient = false
+                        if (!pattern.endsWith("XXX") && !pattern.endsWith("Z")) {
+                            timeZone = java.util.TimeZone.getTimeZone("GMT+7")
+                        }
+                    }
+                    val targetStr = if (pattern == "yyyy-MM-dd'T'HH:mm:ssZ") {
+                        // Convert +07:00 -> +0700 for SimpleDateFormat Z compatibility
+                        cleanedIso.replace(Regex("([+-]\\d{2}):(\\d{2})$"), "$1$2")
+                    } else {
+                        cleanedIso
+                    }
+                    val parsed = sdf.parse(targetStr)
+                    if (parsed != null) return parsed.time
+                } catch (_: Exception) {
+                }
+            }
+        }
+
+        // Fallback parsing format Indonesia BMKG: "16 Okt 2026" + "17:42:10 WIB"
+        val dateTokens = date.trim().split(Regex("\\s+"))
+        val timeToken = timeWib.trim().uppercase(Locale.ROOT)
+        if (dateTokens.size >= 3) {
+            val day = dateTokens[0].toIntOrNull()
+            val monthNum = INDONESIAN_MONTH_TO_NUMBER[dateTokens[1].lowercase(Locale.ROOT)]
+            val year = dateTokens[2].toIntOrNull()
+            val timeMatch = Regex("(\\d{1,2}):(\\d{2})(?::(\\d{2}))?").find(timeToken)
+            if (day != null && monthNum != null && year != null && timeMatch != null) {
+                val hh = timeMatch.groupValues[1].padStart(2, '0')
+                val mm = timeMatch.groupValues[2].padStart(2, '0')
+                val ss = timeMatch.groupValues[3].ifBlank { "00" }.padStart(2, '0')
+                val tzId = when {
+                    timeToken.contains("WITA") -> "GMT+8"
+                    timeToken.contains("WIT") && !timeToken.contains("WITA") -> "GMT+9"
+                    else -> "GMT+7"
+                }
+                val combined = "${year.toString().padStart(4, '0')}-$monthNum-${day.toString().padStart(2, '0')} $hh:$mm:$ss"
+                return try {
+                    SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+                        isLenient = false
+                        timeZone = java.util.TimeZone.getTimeZone(tzId)
+                    }.parse(combined)?.time
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Memastikan notifikasi gempa HANYA aktif untuk kejadian gempa nyata yang baru terjadi
+     * dalam jendela waktu 1–2 jam sejak waktu kejadian (menolak data fallback & kejadian lama).
+     */
+    fun isWithinNotificationWindow(
+        earthquake: BmkgEarthquake,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Boolean {
+        if (earthquake.isFallbackData) return false
+        val eventMillis = parseEventTimestampMillis(
+            dateTimeIso = earthquake.dateTimeIso,
+            date = earthquake.date,
+            timeWib = earthquake.timeWib
+        ) ?: return false
+        val ageMillis = nowMillis - eventMillis
+        return ageMillis in -MAX_FUTURE_CLOCK_SKEW_MS..MAX_EARTHQUAKE_NOTIFICATION_WINDOW_MS
+    }
+
+    /**
+     * Menghitung durasi tampil notifikasi (1–2 jam) sebelum sistem Android menutupnya otomatis.
+     */
+    fun computeNotificationDisplayTimeoutMs(
+        earthquake: BmkgEarthquake,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Long {
+        val eventMillis = parseEventTimestampMillis(
+            dateTimeIso = earthquake.dateTimeIso,
+            date = earthquake.date,
+            timeWib = earthquake.timeWib
+        ) ?: return MAX_EARTHQUAKE_NOTIFICATION_WINDOW_MS
+        val elapsedMillis = (nowMillis - eventMillis).coerceAtLeast(0L)
+        val remainingMillis = MAX_EARTHQUAKE_NOTIFICATION_WINDOW_MS - elapsedMillis
+        return remainingMillis.coerceIn(MIN_EARTHQUAKE_DISPLAY_TIMEOUT_MS, MAX_EARTHQUAKE_NOTIFICATION_WINDOW_MS)
+    }
+
+    /**
+     * Identitas stabil per kejadian gempa BMKG untuk mencegah pengulangan notifikasi
+     * pada event yang sama di berbagai refresh/restart aplikasi.
+     */
+    fun buildEarthquakeEventIdentity(earthquake: BmkgEarthquake): String {
+        val eventMs = parseEventTimestampMillis(earthquake.dateTimeIso, earthquake.date, earthquake.timeWib)
+        val normalizedCoords = String.format(Locale.US, "%.2f_%.2f", earthquake.latitude, earthquake.longitude)
+        return if (eventMs != null) {
+            "eq_${eventMs}_$normalizedCoords"
+        } else {
+            "eq_${earthquake.date.trim()}_${earthquake.timeWib.trim()}_$normalizedCoords"
+        }
     }
 }

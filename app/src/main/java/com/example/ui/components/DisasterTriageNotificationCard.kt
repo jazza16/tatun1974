@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
@@ -310,6 +311,64 @@ fun DisasterTriageNotificationCard(
                             selectedLeadingIconColor = levelColor
                         ),
                         modifier = Modifier.testTag("chip_triage_threshold_${level.code.lowercase()}")
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Lokasi Peringatan Relevan (Kecamatan terpilih vs Seluruh 15 Kecamatan)
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Lokasi Peringatan Relevan",
+                            tint = headerAccentColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Lokasi Peringatan Relevan",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (settings.onlySelectedDistrict) {
+                                    "Khusus wilayah ${currentDistrict.name}"
+                                } else {
+                                    "Seluruh 15 Kecamatan di Kab. Mukomuko"
+                                },
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                    SipagarSliderSwitch(
+                        checked = settings.onlySelectedDistrict,
+                        onCheckedChange = {
+                            onUpdateSettings(settings.copy(onlySelectedDistrict = it))
+                        },
+                        checkedThumbColor = headerAccentColor,
+                        modifier = Modifier.testTag("switch_district_relevance")
                     )
                 }
             }

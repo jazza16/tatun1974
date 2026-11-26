@@ -1005,10 +1005,6 @@ fun WeatherAppScreen(
                                     EarlyWarningSection(
                                         warnings = uiState.earlyWarnings,
                                         currentDistrict = currentDistrict,
-                                        weatherAlertSettings = uiState.weatherAlertSettings,
-                                        onUpdateWeatherAlertSettings = { viewModel.updateWeatherAlertSettings(it) },
-                                        onTestWeatherAlertNotification = { viewModel.triggerTestWeatherAlertNotification(it) },
-                                        onTestSuddenSevereWeatherNotification = { viewModel.triggerSuddenSevereWeatherPushNotification(it) },
                                         triageNotificationSettings = uiState.triageNotificationSettings,
                                         activeTriageSignals = uiState.activeTriageSignals,
                                         onUpdateTriageNotificationSettings = { viewModel.updateTriageNotificationSettings(context, it) },

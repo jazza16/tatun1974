@@ -18,7 +18,6 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import com.example.util.EarthquakeNotificationHelper
-import com.example.util.WeatherAlertSettings
 import com.example.util.WeatherNotificationHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,9 +47,8 @@ data class WeatherUiState(
     val isLoadingHistorical: Boolean = false,
     // Community Reports
     val isReportDialogOpen: Boolean = false,
-    // Early Warnings & Weather Alerts
+    // Early Warnings
     val earlyWarnings: List<DetailedEarlyWarning> = emptyList(),
-    val weatherAlertSettings: WeatherAlertSettings = WeatherAlertSettings(),
     // Unified Color-Triage Disaster Readiness Notifications
     val triageNotificationSettings: com.example.util.TriageNotificationSettings = com.example.util.TriageNotificationSettings(),
     val activeTriageSignals: List<com.example.util.DisasterTriageSignal> = emptyList(),
@@ -258,9 +256,7 @@ class WeatherViewModel(
         appContext = ctx
         com.example.util.DisasterTriageNotificationManager.saveSettings(ctx, settings)
         _uiState.value = _uiState.value.copy(triageNotificationSettings = settings)
-        if (settings.isEnabled) {
-            evaluateAllModuleTriageAndNotify(ctx)
-        }
+        evaluateAllModuleTriageAndNotify(ctx)
     }
 
     fun triggerTestTriageNotification(
@@ -283,11 +279,13 @@ class WeatherViewModel(
     fun evaluateAllModuleTriageAndNotify(contextOverride: Context? = null) {
         val state = _uiState.value
         val district = state.selectedDistrict
+        val onlySelectedDistrict = state.triageNotificationSettings.onlySelectedDistrict
         val signals = buildList {
             add(
                 com.example.util.DisasterTriageNotificationManager.evaluateEarlyWarnings(
                     warnings = state.earlyWarnings,
-                    districtName = district.name
+                    districtName = district.name,
+                    onlySelectedDistrict = onlySelectedDistrict
                 )
             )
             state.report?.let { report ->
@@ -301,6 +299,11 @@ class WeatherViewModel(
                 latestBengkuluLocalEarthquake,
                 state.latestEarthquake
             ).distinctBy { it.id }
+                .filter {
+                    !it.isFallbackData &&
+                        it.isBengkuluProvinceAffected &&
+                        com.example.model.BengkuluEarthquakeScope.isWithinNotificationWindow(it)
+                }
             if (bengkuluEarthquakeCandidates.isNotEmpty()) {
                 add(
                     com.example.util.DisasterTriageNotificationManager.evaluateEarthquakesForBengkulu(
@@ -312,7 +315,8 @@ class WeatherViewModel(
             add(
                 com.example.util.DisasterTriageNotificationManager.evaluateDisasterReportSurge(
                     reports = citizenDisasterReports.value,
-                    fallbackDistrict = district.name
+                    fallbackDistrict = district.name,
+                    onlySelectedDistrict = onlySelectedDistrict
                 )
             )
         }
@@ -321,6 +325,11 @@ class WeatherViewModel(
 
         val ctx = contextOverride?.applicationContext ?: appContext ?: return
         signals.forEach { signal ->
+            if (signal.source == com.example.util.TriageFeatureSource.GEMPA_TSUNAMI &&
+                !state.isEarthquakeNotificationEnabled
+            ) {
+                return@forEach
+            }
             com.example.util.DisasterTriageNotificationManager.evaluateAndNotify(
                 context = ctx,
                 signal = signal
@@ -572,7 +581,6 @@ class WeatherViewModel(
     fun loadEarlyWarnings(district: District, context: Context? = null) {
         val warnings = repository.getDetailedEarlyWarnings(district)
         _uiState.value = _uiState.value.copy(earlyWarnings = warnings)
-        checkAndPostSevereWeatherAlertIfNeeded(context, district, warnings)
         evaluateAllModuleTriageAndNotify(context)
     }
 
@@ -703,7 +711,6 @@ class WeatherViewModel(
         }
     }
 
-    private var lastNotifiedEarthquakeId: String? = null
     private var latestBengkuluLocalEarthquake: com.example.model.BmkgEarthquake? = null
 
     fun loadEarthquakeData(context: Context? = null) {
@@ -714,28 +721,29 @@ class WeatherViewModel(
                 val feltList = repository.fetchFeltEarthquakes()
                 val recents = repository.fetchRecentEarthquakes()
 
-                // FILTER WILAYAH LOKAL PROVINSI BENGKULU:
-                // Hanya pilih kejadian gempa yang terjadi di Provinsi Bengkulu ATAU dirasakan masyarakat Bengkulu.
-                // Gempa global se-Indonesia (Papua, Maluku, Sulawesi, Jawa, NTT, dll.) TIDAK boleh memicu notifikasi.
+                // FILTER WILAYAH LOKAL PROVINSI BENGKULU & WAKTU KEJADIAN (MAX 2 JAM):
+                // Hanya pilih kejadian gempa NYATA (bukan fallback) yang terjadi/dirasakan di Provinsi Bengkulu
+                // dan masih dalam jendela waktu 1-2 jam sejak kejadian berlangsung.
+                val nowMs = System.currentTimeMillis()
                 val bengkuluCandidate = (listOf(latest) + feltList)
-                    .firstOrNull { it.isBengkuluProvinceAffected }
+                    .firstOrNull {
+                        !it.isFallbackData &&
+                            it.isBengkuluProvinceAffected &&
+                            com.example.model.BengkuluEarthquakeScope.isWithinNotificationWindow(it, nowMs)
+                    }
                 latestBengkuluLocalEarthquake = bengkuluCandidate
 
-                if (_uiState.value.isEarthquakeNotificationEnabled && context != null && bengkuluCandidate != null) {
-                    if (lastNotifiedEarthquakeId == null) {
-                        // Pemuatan pertama: hanya notifikasi jika gempa lokal Bengkulu cukup signifikan (M >= 4.5 / Kritis)
-                        if (bengkuluCandidate.magnitude >= 4.5 ||
-                            bengkuluCandidate.urgencyLevel == com.example.model.EarthquakeUrgency.CRITICAL
-                        ) {
-                            EarthquakeNotificationHelper.postEarthquakeNotification(context, bengkuluCandidate)
-                        }
-                    } else if (lastNotifiedEarthquakeId != bengkuluCandidate.id) {
-                        // Event gempa baru yang terjadi / dirasakan di Provinsi Bengkulu
-                        EarthquakeNotificationHelper.postEarthquakeNotification(context, bengkuluCandidate)
-                    }
-                }
-                if (bengkuluCandidate != null) {
-                    lastNotifiedEarthquakeId = bengkuluCandidate.id
+                val resolvedCtx = context?.applicationContext ?: appContext
+                val triageHandlesEarthquake = _uiState.value.triageNotificationSettings.isEnabled &&
+                    _uiState.value.triageNotificationSettings.enableEarthquakeTsunami
+
+                // Jika Notifikasi Triase Gempa aktif, hindari duplikasi dengan helper langsung.
+                if (_uiState.value.isEarthquakeNotificationEnabled &&
+                    !triageHandlesEarthquake &&
+                    resolvedCtx != null &&
+                    bengkuluCandidate != null
+                ) {
+                    EarthquakeNotificationHelper.postEarthquakeNotification(resolvedCtx, bengkuluCandidate, nowMillis = nowMs)
                 }
 
                 _uiState.value = _uiState.value.copy(
@@ -743,7 +751,7 @@ class WeatherViewModel(
                     recentEarthquakes = recents,
                     isLoadingEarthquakes = false
                 )
-                evaluateAllModuleTriageAndNotify(context)
+                evaluateAllModuleTriageAndNotify(resolvedCtx)
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(isLoadingEarthquakes = false)
             }
@@ -789,32 +797,6 @@ class WeatherViewModel(
         )
     }
 
-    private var lastNotifiedWeatherWarningId: String? = null
-
-    fun updateWeatherAlertSettings(settings: WeatherAlertSettings) {
-        _uiState.value = _uiState.value.copy(weatherAlertSettings = settings)
-    }
-
-    fun triggerTestWeatherAlertNotification(context: Context) {
-        val currentDistrict = _uiState.value.selectedDistrict
-        val sampleWarning = _uiState.value.earlyWarnings.firstOrNull() ?: DetailedEarlyWarning(
-            id = "alert_test_cuaca_buruk",
-            severity = "SIAGA",
-            category = "Badai Petir & Angin Kencang",
-            title = "Peringatan Dini Cuaca Ekstrem Mukomuko",
-            description = "Potensi terjadi hujan lebat disertai kilat/petir dan angin kencang berkecepatan hingga 45 km/jam di wilayah ${currentDistrict.name} dan sekitarnya.",
-            affectedDistricts = listOf(currentDistrict.name, "Kota Mukomuko", "Air Dikit", "Teramang Jaya"),
-            validUntil = "Hari ini s/d 22:00 WIB",
-            safetyInstructions = listOf(
-                "Hindari berteduh di bawah pohon rindang atau baliho tinggi saat angin kencang",
-                "Waspadai potensi pohon tumbang dan genangan air di jalan lintas barat",
-                "Nelayan perahu katir dihimbau menunda aktivitas melaut"
-            ),
-            bpbdContact = "Pusdalops BPBD: Call Center 117 / 112"
-        )
-        WeatherNotificationHelper.postWeatherAlertNotification(context, sampleWarning, currentDistrict.name)
-    }
-
     fun triggerSuddenSevereWeatherPushNotification(context: Context) {
         val currentDistrict = _uiState.value.selectedDistrict
         val currentReport = _uiState.value.report
@@ -830,33 +812,6 @@ class WeatherViewModel(
         )
     }
 
-    private fun checkAndPostSevereWeatherAlertIfNeeded(context: Context?, district: District, warnings: List<DetailedEarlyWarning>) {
-        if (context == null) return
-        val settings = _uiState.value.weatherAlertSettings
-        if (!settings.isEnabled) return
-
-        val eligibleWarning = warnings.firstOrNull { warning ->
-            val matchesCategory = when {
-                warning.category.contains("Petir", ignoreCase = true) || warning.category.contains("Badai", ignoreCase = true) -> settings.alertThunderstorm
-                warning.category.contains("Angin", ignoreCase = true) -> settings.alertStrongWind
-                warning.category.contains("Banjir", ignoreCase = true) || warning.category.contains("Hujan", ignoreCase = true) -> settings.alertFloodHeavyRain
-                warning.category.contains("Gelombang", ignoreCase = true) || warning.category.contains("Laut", ignoreCase = true) -> settings.alertHighWaves
-                else -> true
-            }
-
-            val matchesDistrict = if (settings.onlySelectedDistrict) {
-                warning.affectedDistricts.any { it.contains(district.name, ignoreCase = true) }
-            } else true
-
-            matchesCategory && matchesDistrict
-        }
-
-        if (eligibleWarning != null && eligibleWarning.id != lastNotifiedWeatherWarningId) {
-            WeatherNotificationHelper.postWeatherAlertNotification(context, eligibleWarning, district.name)
-            lastNotifiedWeatherWarningId = eligibleWarning.id
-        }
-    }
-
     private fun startPeriodicEarthquakeMonitoring() {
         viewModelScope.launch {
             while (isActive) {
@@ -864,25 +819,29 @@ class WeatherViewModel(
                 try {
                     val latest = repository.fetchLatestEarthquake()
                     val feltList = repository.fetchFeltEarthquakes()
+                    val nowMs = System.currentTimeMillis()
                     val bengkuluCandidate = (listOf(latest) + feltList)
-                        .firstOrNull { it.isBengkuluProvinceAffected }
+                        .firstOrNull {
+                            !it.isFallbackData &&
+                                it.isBengkuluProvinceAffected &&
+                                com.example.model.BengkuluEarthquakeScope.isWithinNotificationWindow(it, nowMs)
+                        }
 
                     _uiState.value = _uiState.value.copy(latestEarthquake = latest)
                     latestBengkuluLocalEarthquake = bengkuluCandidate
 
+                    val triageHandlesEarthquake = _uiState.value.triageNotificationSettings.isEnabled &&
+                        _uiState.value.triageNotificationSettings.enableEarthquakeTsunami
+
                     if (_uiState.value.isEarthquakeNotificationEnabled &&
-                        bengkuluCandidate != null &&
-                        lastNotifiedEarthquakeId != null &&
-                        lastNotifiedEarthquakeId != bengkuluCandidate.id
+                        !triageHandlesEarthquake &&
+                        bengkuluCandidate != null
                     ) {
-                        lastNotifiedEarthquakeId = bengkuluCandidate.id
                         appContext?.let { ctx ->
-                            EarthquakeNotificationHelper.postEarthquakeNotification(ctx, bengkuluCandidate)
+                            EarthquakeNotificationHelper.postEarthquakeNotification(ctx, bengkuluCandidate, nowMillis = nowMs)
                         }
-                        evaluateAllModuleTriageAndNotify()
-                    } else if (bengkuluCandidate != null && lastNotifiedEarthquakeId == null) {
-                        lastNotifiedEarthquakeId = bengkuluCandidate.id
                     }
+                    evaluateAllModuleTriageAndNotify()
                 } catch (_: Exception) {
                     // Ignore background polling glitches
                 }

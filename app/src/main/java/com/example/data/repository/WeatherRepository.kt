@@ -1803,7 +1803,8 @@ class WeatherRepository(
             shakemapUrl = null,
             distanceKmToMukomuko = 42,
             isNearMukomuko = true,
-            urgencyLevel = com.example.model.EarthquakeUrgency.CRITICAL
+            urgencyLevel = com.example.model.EarthquakeUrgency.CRITICAL,
+            isFallbackData = true
         )
     }
 
@@ -1825,7 +1826,8 @@ class WeatherRepository(
                 shakemapUrl = null,
                 distanceKmToMukomuko = 210,
                 isNearMukomuko = true,
-                urgencyLevel = com.example.model.EarthquakeUrgency.WARNING
+                urgencyLevel = com.example.model.EarthquakeUrgency.WARNING,
+                isFallbackData = true
             ),
             com.example.model.BmkgEarthquake(
                 id = "gempa_pesisir_selatan",

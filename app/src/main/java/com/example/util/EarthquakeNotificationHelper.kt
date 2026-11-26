@@ -23,6 +23,10 @@ object EarthquakeNotificationHelper {
     private const val CHANNEL_NAME = "Peringatan Dini Gempa Lokal Provinsi Bengkulu"
     private const val CHANNEL_DESC = "Notifikasi real-time khusus gempa bumi lokal yang terjadi dan dirasakan di Wilayah Provinsi Bengkulu (BMKG)"
 
+    private const val PREFS_NAME = "sipagar_eq_direct_notif_prefs"
+    private const val KEY_PREFIX_NOTIFIED = "notified_eq_"
+    private const val RETENTION_MS = 7L * 24L * 60L * 60_000L
+
     fun initNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val importance = NotificationManager.IMPORTANCE_HIGH
@@ -39,6 +43,32 @@ object EarthquakeNotificationHelper {
         }
     }
 
+    fun clearNotifiedHistory(context: Context) {
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
+    }
+
+    private fun wasEventAlreadyNotified(context: Context, eventIdentity: String): Boolean {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.contains(KEY_PREFIX_NOTIFIED + eventIdentity.hashCode())
+    }
+
+    private fun markEventNotified(context: Context, eventIdentity: String, nowMillis: Long) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        // Prune stale history older than 7 days to keep prefs lightweight
+        prefs.all.forEach { (key, value) ->
+            if (key.startsWith(KEY_PREFIX_NOTIFIED) && value is Long && (nowMillis - value) > RETENTION_MS) {
+                editor.remove(key)
+            }
+        }
+        editor.putLong(KEY_PREFIX_NOTIFIED + eventIdentity.hashCode(), nowMillis)
+        editor.apply()
+    }
+
     fun hasNotificationPermission(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(
@@ -53,12 +83,24 @@ object EarthquakeNotificationHelper {
     fun postEarthquakeNotification(
         context: Context,
         earthquake: BmkgEarthquake,
-        allowOutsideBengkuluForManualTest: Boolean = false
+        allowOutsideBengkuluForManualTest: Boolean = false,
+        nowMillis: Long = System.currentTimeMillis()
     ): Boolean {
-        // GUARD WILAYAH LOKAL PROVINSI BENGKULU:
-        // Blokir notifikasi gempa global se-Indonesia yang tidak terjadi atau dirasakan di Provinsi Bengkulu.
-        if (!allowOutsideBengkuluForManualTest && !earthquake.isBengkuluProvinceAffected) {
-            return false
+        // GUARD WILAYAH LOKAL PROVINSI BENGKULU & WAKTU KEJADIAN (MAX 2 JAM):
+        // 1. Blokir gempa global di luar Provinsi Bengkulu.
+        // 2. Blokir data fallback offline dan kejadian lampau (> 2 jam) agar tidak muncul berulang.
+        // 3. Blokir duplikasi persisten untuk event gempa yang sama.
+        val eventIdentity = com.example.model.BengkuluEarthquakeScope.buildEarthquakeEventIdentity(earthquake)
+        if (!allowOutsideBengkuluForManualTest) {
+            if (!earthquake.isBengkuluProvinceAffected) {
+                return false
+            }
+            if (!com.example.model.BengkuluEarthquakeScope.isWithinNotificationWindow(earthquake, nowMillis)) {
+                return false
+            }
+            if (wasEventAlreadyNotified(context, eventIdentity)) {
+                return false
+            }
         }
 
         initNotificationChannel(context)
@@ -75,7 +117,7 @@ object EarthquakeNotificationHelper {
 
         val pendingIntent = PendingIntent.getActivity(
             context,
-            earthquake.id.hashCode(),
+            eventIdentity.hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -86,10 +128,14 @@ object EarthquakeNotificationHelper {
             EarthquakeUrgency.ADVISORY -> "🟡 TRIASE KUNING • WASPADA"
         }
 
+        val dateTimeLabel = listOf(earthquake.date.trim(), earthquake.timeWib.trim())
+            .filter { it.isNotBlank() }
+            .joinToString(" • ")
+
         val title = "$urgencyEmoji Gempa M ${earthquake.magnitude} - BMKG"
-        val subtitle = "${earthquake.region} (Kedalaman ${earthquake.depth})"
+        val subtitle = "$dateTimeLabel • ${earthquake.region} (Kedalaman ${earthquake.depth})"
         val detailedContent = buildString {
-            append("Waktu: ${earthquake.date} pukul ${earthquake.timeWib}\n")
+            append("Tanggal & Waktu Kejadian: ${earthquake.date} • ${earthquake.timeWib}\n")
             append("Pusat: ${earthquake.region}\n")
             append("Kedalaman: ${earthquake.depth} • Magnitudo: M ${earthquake.magnitude}\n")
             append("Status: ${earthquake.potentialTsunami}\n")
@@ -107,6 +153,12 @@ object EarthquakeNotificationHelper {
             EarthquakeUrgency.ADVISORY -> DisasterTriageLevel.KUNING_WASPADA.colorInt
         }
 
+        val displayTimeoutMs = if (allowOutsideBengkuluForManualTest) {
+            com.example.model.BengkuluEarthquakeScope.MAX_EARTHQUAKE_NOTIFICATION_WINDOW_MS
+        } else {
+            com.example.model.BengkuluEarthquakeScope.computeNotificationDisplayTimeoutMs(earthquake, nowMillis)
+        }
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle(title)
@@ -116,12 +168,17 @@ object EarthquakeNotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setColor(notificationColor)
             .setAutoCancel(true)
+            .setTimeoutAfter(displayTimeoutMs)
+            .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setVibrate(longArrayOf(0, 400, 200, 400, 200, 600))
             .build()
 
         return try {
-            NotificationManagerCompat.from(context).notify(earthquake.id.hashCode(), notification)
+            NotificationManagerCompat.from(context).notify(eventIdentity.hashCode(), notification)
+            if (!allowOutsideBengkuluForManualTest) {
+                markEventNotified(context, eventIdentity, nowMillis)
+            }
             true
         } catch (_: SecurityException) {
             false
@@ -131,11 +188,21 @@ object EarthquakeNotificationHelper {
     fun postTsunamiWarningNotification(
         context: Context,
         earthquake: BmkgEarthquake,
-        allowOutsideBengkuluForManualTest: Boolean = false
+        allowOutsideBengkuluForManualTest: Boolean = false,
+        nowMillis: Long = System.currentTimeMillis()
     ): Boolean {
-        // GUARD WILAYAH LOKAL PROVINSI BENGKULU:
-        if (!allowOutsideBengkuluForManualTest && !earthquake.isBengkuluProvinceAffected) {
-            return false
+        // GUARD WILAYAH LOKAL PROVINSI BENGKULU & WAKTU KEJADIAN:
+        val eventIdentity = "tsunami_${com.example.model.BengkuluEarthquakeScope.buildEarthquakeEventIdentity(earthquake)}"
+        if (!allowOutsideBengkuluForManualTest) {
+            if (!earthquake.isBengkuluProvinceAffected) {
+                return false
+            }
+            if (!com.example.model.BengkuluEarthquakeScope.isWithinNotificationWindow(earthquake, nowMillis)) {
+                return false
+            }
+            if (wasEventAlreadyNotified(context, eventIdentity)) {
+                return false
+            }
         }
 
         initNotificationChannel(context)
@@ -154,7 +221,7 @@ object EarthquakeNotificationHelper {
 
         val pendingIntent = PendingIntent.getActivity(
             context,
-            ("tsunami_" + earthquake.id).hashCode(),
+            eventIdentity.hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -170,16 +237,23 @@ object EarthquakeNotificationHelper {
         )
 
         val title = "🚨 PERINGATAN DINI POTENSI TSUNAMI - BPBD MUKOMUKO"
-        val subtitle = "Gempa M ${earthquake.magnitude} • Segera Evakuasi Mandiri ke Tempat Tinggi!"
+        val subtitle = "${earthquake.date} • ${earthquake.timeWib} • Gempa M ${earthquake.magnitude} • Evakuasi Mandiri!"
         val detailedContent = buildString {
             append("PERINGATAN DINI TSUNAMI RESMI PUSDALOPS BPBD MUKOMUKO\n")
+            append("Tanggal & Waktu Kejadian: ${earthquake.date} • ${earthquake.timeWib}\n")
             append("Kekuatan Gempa: M ${earthquake.magnitude} | Pusat: ${earthquake.region}\n")
-            append("Kedalaman: ${earthquake.depth} | Waktu: ${earthquake.timeWib}\n\n")
+            append("Kedalaman: ${earthquake.depth}\n\n")
             append("SOP EVAKUASI MANDIRI PESISIR MUKOMUKO (RUMUS 20-20-20):\n")
             append("1. Jangan tunggu sirene atau air surut!\n")
             append("2. Lari mandiri menuju tempat berketinggian minimal 20 meter dpl atau minimal 2 km dari bibir pantai Samudera Hindia!\n")
             append("3. Jauhi muara sungai dan jembatan.\n")
             append("4. Hubungi Call Center Darurat Bebas Pulsa: 117")
+        }
+
+        val displayTimeoutMs = if (allowOutsideBengkuluForManualTest) {
+            com.example.model.BengkuluEarthquakeScope.MAX_EARTHQUAKE_NOTIFICATION_WINDOW_MS
+        } else {
+            com.example.model.BengkuluEarthquakeScope.computeNotificationDisplayTimeoutMs(earthquake, nowMillis)
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -192,6 +266,8 @@ object EarthquakeNotificationHelper {
             .setColor(DisasterTriageLevel.MERAH_AWAS.colorInt)
             .setColorized(true)
             .setAutoCancel(true)
+            .setTimeoutAfter(displayTimeoutMs)
+            .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .addAction(android.R.drawable.ic_menu_directions, "Panduan Evakuasi", pendingIntent)
             .addAction(android.R.drawable.ic_menu_call, "Panggil 117", dial117PendingIntent)
@@ -199,7 +275,10 @@ object EarthquakeNotificationHelper {
             .build()
 
         return try {
-            NotificationManagerCompat.from(context).notify(("tsunami_" + earthquake.id).hashCode(), notification)
+            NotificationManagerCompat.from(context).notify(eventIdentity.hashCode(), notification)
+            if (!allowOutsideBengkuluForManualTest) {
+                markEventNotified(context, eventIdentity, nowMillis)
+            }
             true
         } catch (_: SecurityException) {
             false
