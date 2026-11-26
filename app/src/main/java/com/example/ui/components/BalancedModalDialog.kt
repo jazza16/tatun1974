@@ -175,7 +175,7 @@ fun rememberAdaptiveSystemBarInsets(): AdaptiveSystemBarInsets {
         val navDp = with(density) { navPx.toDp() }
         val statusDp = with(density) { statusPx.toDp() }
         val detectedThreeButton = (navModeInt == 0 || navModeInt == 1) || navDp >= 40.dp
-        val guaranteedNavBottom = if (detectedThreeButton) maxOf(navDp, 52.dp) else maxOf(navDp, 24.dp)
+        val guaranteedNavBottom = if (detectedThreeButton) maxOf(navDp, 52.dp) else maxOf(navDp, 28.dp)
 
         Triple(statusDp, guaranteedNavBottom, detectedThreeButton)
     }

@@ -201,12 +201,20 @@ class PersonnelRepository(
 
     /**
      * Starts background real-time sync from Cloud Firestore into local Room database.
+     * Isolasi Mode Warga: tidak akan menarik daftar petugas atau menulisnya ke Room jika tidak ada sesi Petugas aktif.
      * Propagates cloud soft-deletes (tombstones) and respects local deletions so deleted ASN never resurrect.
      */
-    fun startAutoSyncFromCloud(scope: CoroutineScope, context: Context? = null) {
+    fun startAutoSyncFromCloud(
+        scope: CoroutineScope,
+        context: Context? = null,
+        requireActiveOfficerSession: Boolean = true
+    ): com.google.firebase.firestore.ListenerRegistration? {
         val authManager = context?.let { OfficerAuthManager(it.applicationContext) }
+        if (requireActiveOfficerSession && authManager?.isOfficerLoggedIn() != true) {
+            return null
+        }
         var latestCloudUpdatedAt: Map<String, Long> = emptyMap()
-        com.example.data.local.FirestoreHelper.listenOfficersRealtime(
+        return com.example.data.local.FirestoreHelper.listenOfficersRealtime(
             onDeletedNips = { deletedMap ->
                 scope.launch(Dispatchers.IO) {
                     for ((delNip, delTs) in deletedMap) {

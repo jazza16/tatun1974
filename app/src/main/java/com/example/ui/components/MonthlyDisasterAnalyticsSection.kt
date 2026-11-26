@@ -187,16 +187,20 @@ fun MonthlyDisasterAnalyticsSection(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var selectedYear by rememberSaveable { mutableIntStateOf(2026) }
+    val nowCalendar = remember { Calendar.getInstance() }
+    val currentYear = nowCalendar.get(Calendar.YEAR)
+    val currentMonth = nowCalendar.get(Calendar.MONTH).coerceIn(0, 11)
+    var selectedYear by rememberSaveable { mutableIntStateOf(currentYear) }
     var filterByCurrentDistrict by rememberSaveable { mutableStateOf(false) }
+    var includeHistoricalBaseline by rememberSaveable { mutableStateOf(false) }
     var barChartMode by rememberSaveable { mutableIntStateOf(0) } // 0 = Stacked Kategori, 1 = Total + Garis Tren, 2 = Dampak/Korban
-    var selectedMonthIndex by rememberSaveable { mutableIntStateOf(Calendar.getInstance().get(Calendar.MONTH).coerceIn(0, 11)) }
+    var selectedMonthIndex by rememberSaveable { mutableIntStateOf(currentMonth) }
     var pieChartMode by rememberSaveable { mutableIntStateOf(0) } // 0 = Jenis Bencana, 1 = Status Respon TRC, 2 = Zona Kecamatan
     var selectedPieSliceIndex by rememberSaveable { mutableIntStateOf(0) }
     var lastExportedPdfName by rememberSaveable { mutableStateOf<String?>(null) }
 
     var animTriggered by remember { mutableStateOf(false) }
-    LaunchedEffect(selectedYear, filterByCurrentDistrict, barChartMode, pieChartMode) {
+    LaunchedEffect(selectedYear, filterByCurrentDistrict, includeHistoricalBaseline, barChartMode, pieChartMode) {
         animTriggered = false
         animTriggered = true
     }
@@ -206,29 +210,61 @@ fun MonthlyDisasterAnalyticsSection(
         label = "chartAnimationProgress"
     )
 
-    // Gabungkan data riil CitizenDisasterReport + baseline historis BPBD Kab. Mukomuko
-    val monthlyDataList = remember(reports, selectedYear, filterByCurrentDistrict, currentDistrict.name) {
+    // Secara bawaan hanya menggunakan data riil CitizenDisasterReport; baseline historis bersifat opsional & terpisah
+    val monthlyDataList = remember(
+        reports,
+        selectedYear,
+        filterByCurrentDistrict,
+        includeHistoricalBaseline,
+        currentDistrict.name
+    ) {
         buildMonthlyDisasterSummaries(
             reports = reports,
             selectedYear = selectedYear,
-            districtFilter = if (filterByCurrentDistrict) currentDistrict.name else null
+            districtFilter = if (filterByCurrentDistrict) currentDistrict.name else null,
+            includeHistoricalBaseline = includeHistoricalBaseline
         )
+    }
+    val safeSelectedMonthIndex = selectedMonthIndex.coerceIn(0, (monthlyDataList.size - 1).coerceAtLeast(0))
+    LaunchedEffect(monthlyDataList.size) {
+        if (monthlyDataList.isNotEmpty() && selectedMonthIndex >= monthlyDataList.size) {
+            selectedMonthIndex = monthlyDataList.lastIndex
+        }
     }
 
     val totalAnnualIncidents = remember(monthlyDataList) { monthlyDataList.sumOf { it.totalIncidents } }
     val totalResolved = remember(monthlyDataList) { monthlyDataList.sumOf { it.resolvedCount } }
-    val peakMonth = remember(monthlyDataList) { monthlyDataList.maxByOrNull { it.totalIncidents } ?: monthlyDataList.first() }
-    val avgMonthly = remember(totalAnnualIncidents) { (totalAnnualIncidents / 12f) }
+    val peakMonth = remember(monthlyDataList) {
+        monthlyDataList.filter { it.totalIncidents > 0 }.maxByOrNull { it.totalIncidents }
+    }
+    val avgMonthly = remember(totalAnnualIncidents, monthlyDataList.size) {
+        if (monthlyDataList.isNotEmpty()) totalAnnualIncidents.toFloat() / monthlyDataList.size else 0f
+    }
 
-    val pieSlices = remember(monthlyDataList, reports, pieChartMode) {
-        buildPieSlices(monthlyDataList, reports, pieChartMode)
+    val filteredReportsForPeriod = remember(reports, selectedYear, filterByCurrentDistrict, currentDistrict.name) {
+        val cal = Calendar.getInstance()
+        reports.filter { r ->
+            if (r.status == "DIHAPUS_RESET_V110") return@filter false
+            val matchesDistrict = !filterByCurrentDistrict || r.district.equals(currentDistrict.name, ignoreCase = true)
+            cal.timeInMillis = r.timestamp
+            matchesDistrict && cal.get(Calendar.YEAR) == selectedYear
+        }
+    }
+
+    val pieSlices = remember(monthlyDataList, filteredReportsForPeriod, pieChartMode, includeHistoricalBaseline) {
+        buildPieSlices(
+            monthlyList = monthlyDataList,
+            reports = filteredReportsForPeriod,
+            pieMode = pieChartMode,
+            includeHistoricalBaseline = includeHistoricalBaseline
+        )
     }
 
     val dominantCategory = remember(monthlyDataList) {
         val totals = DisasterChartCategory.entries.associateWith { cat ->
             monthlyDataList.sumOf { it.countsByCategory[cat] ?: 0 }
         }
-        totals.maxByOrNull { it.value }
+        totals.maxByOrNull { it.value }?.takeIf { it.value > 0 }
     }
 
     val cardBg = if (isDark) Color(0xFF1E293B) else Color.White
@@ -277,8 +313,8 @@ fun MonthlyDisasterAnalyticsSection(
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
+                            FlowRow(
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
@@ -286,20 +322,21 @@ fun MonthlyDisasterAnalyticsSection(
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = primaryText,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = Color(0xFFDCFCE7),
-                                    modifier = Modifier.wrapContentWidth()
+                                    color = if (includeHistoricalBaseline) Color(0xFFFEF3C7) else Color(0xFFDCFCE7),
+                                    modifier = Modifier
+                                        .wrapContentWidth()
+                                        .testTag("analytics_data_source_badge")
                                 ) {
                                     Text(
-                                        text = "LIVE DATA",
+                                        text = if (includeHistoricalBaseline) "BASELINE HISTORIS" else "DATA RIIL",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = Color(0xFF166534),
+                                        color = if (includeHistoricalBaseline) Color(0xFF92400E) else Color(0xFF166534),
                                         maxLines = 1,
                                         softWrap = false,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -307,7 +344,11 @@ fun MonthlyDisasterAnalyticsSection(
                                 }
                             }
                             Text(
-                                text = "Pusdalops PB BPBD Kab. Mukomuko • Grafik Batang & Pie Chart Interaktif",
+                                text = if (includeHistoricalBaseline) {
+                                    "Referensi Baseline Historis (Estimasi) digabungkan dengan laporan riil • Tidak berlabel Live"
+                                } else {
+                                    "Pusdalops PB BPBD Kab. Mukomuko • Bersumber 100% dari Laporan Riil Tercatat"
+                                },
                                 fontSize = 11.sp,
                                 color = secondaryText,
                                 maxLines = 2,
@@ -334,7 +375,10 @@ fun MonthlyDisasterAnalyticsSection(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf(2026 to "Tahun 2026", 2025 to "Tahun 2025").forEach { (yr, label) ->
+                    val yearOptions = remember(currentYear) {
+                        (currentYear downTo minOf(2025, currentYear)).map { yr -> yr to "Tahun $yr" }
+                    }
+                    yearOptions.forEach { (yr, label) ->
                         val selected = selectedYear == yr
                         FilterChip(
                             selected = selected,
@@ -400,7 +444,7 @@ fun MonthlyDisasterAnalyticsSection(
                                 fontSize = 11.sp,
                                 fontWeight = if (filterByCurrentDistrict) FontWeight.Bold else FontWeight.Medium,
                                 maxLines = 1,
-                                softWrap = false
+                                overflow = TextOverflow.Ellipsis
                             )
                         },
                         leadingIcon = {
@@ -417,6 +461,69 @@ fun MonthlyDisasterAnalyticsSection(
                         ),
                         modifier = Modifier.testTag("analytics_scope_district_chip")
                     )
+
+                    FilterChip(
+                        selected = includeHistoricalBaseline,
+                        onClick = { includeHistoricalBaseline = !includeHistoricalBaseline },
+                        label = {
+                            Text(
+                                text = "Data Baseline Historis (Estimasi)",
+                                fontSize = 11.sp,
+                                fontWeight = if (includeHistoricalBaseline) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFFD97706),
+                            selectedLabelColor = Color.White,
+                            selectedLeadingIconColor = Color.White
+                        ),
+                        modifier = Modifier.testTag("analytics_baseline_toggle_chip")
+                    )
+                }
+
+                if (includeHistoricalBaseline) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFFEF3C7),
+                        border = BorderStroke(1.dp, Color(0xFFF59E0B)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("analytics_baseline_notice_banner")
+                    ) {
+                        Text(
+                            text = "Mode Referensi Historis Aktif: Grafik menampilkan perkiraan baseline musiman sebagai pembanding dan BUKAN angka kejadian live.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF92400E),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                        )
+                    }
+                } else if (totalAnnualIncidents == 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFEFF6FF),
+                        border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("analytics_real_empty_notice")
+                    ) {
+                        Text(
+                            text = "Belum ada laporan bencana riil tercatat pada periode ini (menampilkan 0 kejadian murni tanpa data simulasi).",
+                            fontSize = 11.sp,
+                            color = Color(0xFF1E40AF),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -435,7 +542,8 @@ fun MonthlyDisasterAnalyticsSection(
                             monthlyData = monthlyDataList,
                             pieSlices = pieSlices,
                             selectedYear = selectedYear,
-                            scopeLabel = scopeLabelText
+                            scopeLabel = scopeLabelText,
+                            isHistoricalBaselineIncluded = includeHistoricalBaseline
                         )
                         if (exportedFile != null) {
                             lastExportedPdfName = exportedFile.name
@@ -462,7 +570,7 @@ fun MonthlyDisasterAnalyticsSection(
                         text = "Unduh Ringkasan PDF ($selectedYear) • Lampiran Laporan Harian",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -529,8 +637,8 @@ fun MonthlyDisasterAnalyticsSection(
             )
             ExecutiveKpiCard(
                 title = "Puncak Bulanan",
-                value = peakMonth.monthShort,
-                subtitle = "${peakMonth.totalIncidents} kejadian (${peakMonth.topDistrict})",
+                value = peakMonth?.monthShort ?: "-",
+                subtitle = if (peakMonth != null) "${peakMonth.totalIncidents} kejadian (${peakMonth.topDistrict})" else "Belum ada data",
                 accentColor = Color(0xFFEA580C),
                 icon = Icons.Default.TrendingUp,
                 isDark = isDark,
@@ -542,23 +650,23 @@ fun MonthlyDisasterAnalyticsSection(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            val domLabel = dominantCategory?.key?.shortLabel ?: "Banjir"
+            val domLabel = if (dominantCategory != null) dominantCategory.key.shortLabel else "Nihil"
             val domCount = dominantCategory?.value ?: 0
             val domPct = if (totalAnnualIncidents > 0) ((domCount * 100f) / totalAnnualIncidents).roundToInt() else 0
             ExecutiveKpiCard(
                 title = "Bencana Dominan",
                 value = domLabel,
-                subtitle = "$domCount kejadian ($domPct% total)",
-                accentColor = dominantCategory?.key?.color ?: Color(0xFF2563EB),
+                subtitle = if (domCount > 0) "$domCount kejadian ($domPct% total)" else "Belum ada kejadian tercatat",
+                accentColor = dominantCategory?.key?.color ?: Color(0xFF64748B),
                 icon = Icons.Default.Warning,
                 isDark = isDark,
                 modifier = Modifier.weight(1f)
             )
-            val resolvedPct = if (totalAnnualIncidents > 0) ((totalResolved * 100f) / totalAnnualIncidents).roundToInt().coerceIn(0, 100) else 100
+            val resolvedPct = if (totalAnnualIncidents > 0) ((totalResolved * 100f) / totalAnnualIncidents).roundToInt().coerceIn(0, 100) else 0
             ExecutiveKpiCard(
                 title = "Respon TRC Selesai",
-                value = "$resolvedPct%",
-                subtitle = "$totalResolved dari $totalAnnualIncidents tertangani",
+                value = if (totalAnnualIncidents > 0) "$resolvedPct%" else "0%",
+                subtitle = if (totalAnnualIncidents > 0) "$totalResolved dari $totalAnnualIncidents tertangani" else "Belum ada laporan aktif",
                 accentColor = Color(0xFF16A34A),
                 icon = Icons.Default.CheckCircle,
                 isDark = isDark,
@@ -600,8 +708,11 @@ fun MonthlyDisasterAnalyticsSection(
                                 fontWeight = FontWeight.Bold,
                                 color = primaryText
                             )
+                            val monthRangeText = if (monthlyDataList.isNotEmpty()) {
+                                "${monthlyDataList.first().monthShort}–${monthlyDataList.last().monthShort}"
+                            } else "Belum ada data"
                             Text(
-                                text = "Ketuk batang bulan (Jan–Des) untuk melihat rincian tooltip kejadian",
+                                text = "Ketuk batang bulan ($monthRangeText) untuk melihat rincian tooltip kejadian",
                                 fontSize = 11.sp,
                                 color = secondaryText
                             )
@@ -650,7 +761,7 @@ fun MonthlyDisasterAnalyticsSection(
                 // Canvas Grafik Batang Recharts/D3
                 InteractiveMonthlyBarChartCanvas(
                     monthlyData = monthlyDataList,
-                    selectedMonthIndex = selectedMonthIndex,
+                    selectedMonthIndex = safeSelectedMonthIndex,
                     barChartMode = barChartMode,
                     progress = chartProgress,
                     isDark = isDark,
@@ -689,8 +800,18 @@ fun MonthlyDisasterAnalyticsSection(
                 }
 
                 // Tooltip Detail Bulan Terpilih (Gaya Tooltip Recharts)
-                val selectedMonthData = monthlyDataList.getOrElse(selectedMonthIndex) { monthlyDataList.first() }
-                val prevMonthData = if (selectedMonthIndex > 0) monthlyDataList[selectedMonthIndex - 1] else null
+                val selectedMonthData = monthlyDataList.getOrElse(safeSelectedMonthIndex) {
+                    MonthlyDisasterSummary(
+                        monthIndex = 0,
+                        monthShort = "Jan",
+                        monthFull = "Januari",
+                        countsByCategory = emptyMap(),
+                        casualtiesAffected = 0,
+                        resolvedCount = 0,
+                        topDistrict = currentDistrict.name
+                    )
+                }
+                val prevMonthData = if (safeSelectedMonthIndex > 0) monthlyDataList.getOrNull(safeSelectedMonthIndex - 1) else null
                 val deltaCount = if (prevMonthData != null) selectedMonthData.totalIncidents - prevMonthData.totalIncidents else 0
 
                 Surface(
@@ -1026,10 +1147,11 @@ fun MonthlyDisasterAnalyticsSection(
 
                 monthlyDataList.forEach { m ->
                     val isSelected = m.monthIndex == selectedMonthIndex
-                    val topCat = m.countsByCategory.maxByOrNull { it.value }?.key ?: DisasterChartCategory.BANJIR
+                    val topCat = m.countsByCategory.maxByOrNull { it.value }?.takeIf { it.value > 0 }?.key
                     val riskLevel = when {
                         m.totalIncidents >= 10 -> "SIAGA TINGGI" to Color(0xFFDC2626)
                         m.totalIncidents >= 6 -> "WASPADA" to Color(0xFFD97706)
+                        m.totalIncidents == 0 -> "NIHIL" to Color(0xFF64748B)
                         else -> "TERKENDALI" to Color(0xFF16A34A)
                     }
 
@@ -1059,18 +1181,18 @@ fun MonthlyDisasterAnalyticsSection(
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Dominan: ${topCat.shortLabel} (${m.topDistrict})",
+                                    text = if (topCat != null) "Dominan: ${topCat.shortLabel} (${m.topDistrict})" else "Tidak ada kejadian tercatat",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = primaryText,
-                                    maxLines = 1,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = "${m.totalIncidents} kejadian • ${m.casualtiesAffected} jiwa terdampak",
                                     fontSize = 10.sp,
                                     color = secondaryText,
-                                    maxLines = 1,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
@@ -1110,7 +1232,8 @@ fun MonthlyDisasterAnalyticsSection(
                             monthlyData = monthlyDataList,
                             pieSlices = pieSlices,
                             selectedYear = selectedYear,
-                            scopeLabel = scopeLabelText
+                            scopeLabel = scopeLabelText,
+                            isHistoricalBaselineIncluded = includeHistoricalBaseline
                         )
                         if (exportedFile != null) {
                             lastExportedPdfName = exportedFile.name
@@ -1136,7 +1259,7 @@ fun MonthlyDisasterAnalyticsSection(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2563EB),
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -1258,8 +1381,9 @@ private fun InteractiveMonthlyBarChartCanvas(
                         val leftPad = 34.dp.toPx()
                         val rightPad = 10.dp.toPx()
                         val chartWidth = (size.width - leftPad - rightPad).coerceAtLeast(1f)
-                        val slotWidth = chartWidth / 12f
-                        val idx = ((tapOffset.x - leftPad) / slotWidth).toInt().coerceIn(0, 11)
+                        val slotCount = monthlyData.size.coerceAtLeast(1)
+                        val slotWidth = chartWidth / slotCount.toFloat()
+                        val idx = ((tapOffset.x - leftPad) / slotWidth).toInt().coerceIn(0, slotCount - 1)
                         onSelectMonth(idx)
                     }
                 }
@@ -1271,7 +1395,8 @@ private fun InteractiveMonthlyBarChartCanvas(
 
             val chartWidth = (size.width - leftPad - rightPad).coerceAtLeast(1f)
             val chartHeight = (size.height - topPad - bottomPad).coerceAtLeast(1f)
-            val slotWidth = chartWidth / 12f
+            val slotCount = monthlyData.size.coerceAtLeast(1)
+            val slotWidth = chartWidth / slotCount.toFloat()
             val barWidth = (slotWidth * 0.58f).coerceAtLeast(8f)
 
             val textPaint = android.graphics.Paint().apply {
@@ -1564,15 +1689,27 @@ private fun InteractiveDonutPieChartCanvas(
 }
 
 /**
- * Membangun ringkasan data bencana 12 bulan (Januari - Desember) yang memadukan
- * laporan warga real-time (`CitizenDisasterReport`), database lokal (`LaporanHarianEntity`),
- * dan profil kejadian historis BPBD Kabupaten Mukomuko.
+ * Membangun ringkasan data bencana bulanan (Januari s/d bulan berjalan untuk tahun aktif,
+ * atau penuh 12 bulan untuk tahun-tahun sebelumnya) yang memadukan
+ * laporan warga real-time (`CitizenDisasterReport`) dan profil kejadian historis BPBD Kabupaten Mukomuko.
  */
 internal fun buildMonthlyDisasterSummaries(
     reports: List<CitizenDisasterReport>,
     selectedYear: Int,
-    districtFilter: String?
+    districtFilter: String?,
+    referenceNowMillis: Long = System.currentTimeMillis(),
+    includeHistoricalBaseline: Boolean = false
 ): List<MonthlyDisasterSummary> {
+    val nowCal = Calendar.getInstance().apply { timeInMillis = referenceNowMillis }
+    val currentYear = nowCal.get(Calendar.YEAR)
+    val currentMonth = nowCal.get(Calendar.MONTH).coerceIn(0, 11)
+    val maxMonthIndex = when {
+        selectedYear < currentYear -> 11
+        selectedYear == currentYear -> currentMonth
+        else -> -1
+    }
+    if (maxMonthIndex < 0) return emptyList()
+
     val monthsShort = listOf("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des")
     val monthsFull = listOf(
         "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -1583,7 +1720,7 @@ internal fun buildMonthlyDisasterSummaries(
         "XIV Koto", "Penarik", "Selagan Raya", "Air Manjuto", "Kota Mukomuko", "Ipuh"
     )
 
-    // Baseline musiman realistis BPBD Kab. Mukomuko (Banjir, Cuaca Ekstrem, Longsor, Abrasi, Karhutla, Gempa)
+    // Referensi baseline historis musiman (hanya dipakai jika includeHistoricalBaseline == true)
     val seasonalBaseline2026 = listOf(
         intArrayOf(4, 3, 1, 2, 0, 1), // Jan
         intArrayOf(3, 2, 1, 2, 0, 1), // Feb
@@ -1600,46 +1737,61 @@ internal fun buildMonthlyDisasterSummaries(
     )
 
     val cal = Calendar.getInstance()
-    val filteredReports = if (districtFilter.isNullOrBlank()) {
-        reports
-    } else {
-        reports.filter { it.district.equals(districtFilter, ignoreCase = true) }
+    val filteredReports = reports.filter { r ->
+        r.status != "DIHAPUS_RESET_V110" &&
+            (districtFilter.isNullOrBlank() || r.district.equals(districtFilter, ignoreCase = true))
     }
 
-    return (0..11).map { mIdx ->
-        val baseRow = seasonalBaseline2026[mIdx]
-        val scale = if (districtFilter != null) 0.35f else if (selectedYear == 2025) 0.9f else 1.0f
-
+    return (0..maxMonthIndex).map { mIdx ->
         val map = mutableMapOf<DisasterChartCategory, Int>()
-        DisasterChartCategory.entries.forEachIndexed { cIdx, cat ->
-            val baseVal = (baseRow[cIdx] * scale).roundToInt().coerceAtLeast(if (baseRow[cIdx] > 0 && districtFilter == null) 1 else 0)
-            map[cat] = baseVal
+        var dynamicAffected = 0
+        var dynamicResolved = 0
+        var topDist = districtFilter?.takeIf { it.isNotBlank() } ?: "-"
+
+        if (includeHistoricalBaseline) {
+            val baseRow = seasonalBaseline2026[mIdx]
+            val scale = if (districtFilter != null) 0.35f else if (selectedYear < currentYear) 0.9f else 1.0f
+            DisasterChartCategory.entries.forEachIndexed { cIdx, cat ->
+                val baseVal = (baseRow[cIdx] * scale).roundToInt().coerceAtLeast(if (baseRow[cIdx] > 0 && districtFilter == null) 1 else 0)
+                map[cat] = baseVal
+            }
+            dynamicAffected = map.values.sum() * 14
+            dynamicResolved = (map.values.sum() * 0.85f).roundToInt()
+            if (districtFilter.isNullOrBlank()) {
+                topDist = defaultTopDistricts[mIdx]
+            }
+        } else {
+            DisasterChartCategory.entries.forEach { cat ->
+                map[cat] = 0
+            }
         }
 
-        var dynamicAffected = (map.values.sum() * 14)
-        var dynamicResolved = (map.values.sum() * 0.85f).roundToInt()
-        var topDist = districtFilter ?: defaultTopDistricts[mIdx]
-
-        // Tambahkan laporan warga aktual yang jatuh pada bulan & tahun tersebut
+        // Tambahkan laporan warga/pusdalops aktual yang jatuh pada bulan & tahun tersebut
         val monthReports = filteredReports.filter { r ->
             cal.timeInMillis = r.timestamp
             val rYear = cal.get(Calendar.YEAR)
             val rMonth = cal.get(Calendar.MONTH)
             rYear == selectedYear && rMonth == mIdx
         }
+        val districtCounts = mutableMapOf<String, Int>()
         monthReports.forEach { r ->
             val cat = DisasterChartCategory.fromRawType(r.disasterType)
             map[cat] = (map[cat] ?: 0) + 1
-            dynamicAffected += (r.casualtiesDead + r.casualtiesInjured + r.casualtiesMissing).coerceAtLeast(5)
+            dynamicAffected += (r.casualtiesDead + r.casualtiesInjured + r.casualtiesMissing).coerceAtLeast(0)
             if (r.status.contains("Selesai", ignoreCase = true) ||
                 r.status.contains("TRC", ignoreCase = true) ||
+                r.status.contains("Divalidasi", ignoreCase = true) ||
                 r.status.contains("Terverifikasi", ignoreCase = true)
             ) {
                 dynamicResolved += 1
             }
             if (r.district.isNotBlank()) {
-                topDist = r.district
+                districtCounts[r.district] = (districtCounts[r.district] ?: 0) + 1
             }
+        }
+        val modalDistrict = districtCounts.maxByOrNull { it.value }?.key
+        if (!modalDistrict.isNullOrBlank()) {
+            topDist = modalDistrict
         }
 
         val totalInc = map.values.sum()
@@ -1657,12 +1809,15 @@ internal fun buildMonthlyDisasterSummaries(
 
 /**
  * Membangun potongan data Pie / Donut Chart berdasarkan mode terpilih.
+ * Secara bawaan (includeHistoricalBaseline = false) dihitung murni dari laporan aktual.
  */
 internal fun buildPieSlices(
     monthlyList: List<MonthlyDisasterSummary>,
     reports: List<CitizenDisasterReport>,
-    pieMode: Int
+    pieMode: Int,
+    includeHistoricalBaseline: Boolean = false
 ): List<PieSliceData> {
+    val activeReports = reports.filter { it.status != "DIHAPUS_RESET_V110" }
     return when (pieMode) {
         0 -> {
             // Mode 0: Distribusi per Jenis Bencana
@@ -1678,79 +1833,168 @@ internal fun buildPieSlices(
                     count = count,
                     percentage = (count * 100f) / total,
                     color = cat.color,
-                    subtitle = "Kejadian tercatat sepanjang tahun"
+                    subtitle = if (includeHistoricalBaseline) {
+                        "Gabungan laporan tercatat & baseline historis"
+                    } else {
+                        "Laporan kejadian riil tercatat"
+                    }
                 )
             }
         }
         1 -> {
             // Mode 1: Status Respon & Penanganan Pusdalops TRC
-            val totalAnnual = monthlyList.sumOf { it.totalIncidents }.coerceAtLeast(1)
-            val resolved = monthlyList.sumOf { it.resolvedCount }
-            val inProgress = ((totalAnnual - resolved) * 0.65f).roundToInt().coerceAtLeast(1)
-            val verifying = (totalAnnual - resolved - inProgress).coerceAtLeast(1)
-            val adjustedTotal = (resolved + inProgress + verifying).coerceAtLeast(1)
+            if (!includeHistoricalBaseline) {
+                if (activeReports.isEmpty()) return emptyList()
+                val resolved = activeReports.count {
+                    it.status.contains("Selesai", ignoreCase = true)
+                }
+                val inProgress = activeReports.count {
+                    it.status.contains("Divalidasi", ignoreCase = true) ||
+                        it.status.contains("Terverifikasi", ignoreCase = true) ||
+                        it.status.contains("TRC", ignoreCase = true)
+                }
+                val verifying = (activeReports.size - resolved - inProgress).coerceAtLeast(0)
+                val total = activeReports.size.coerceAtLeast(1)
 
-            listOf(
-                PieSliceData(
-                    label = "Selesai Ditangani TRC",
-                    shortLabel = "Selesai",
-                    count = resolved,
-                    percentage = (resolved * 100f) / adjustedTotal,
-                    color = Color(0xFF16A34A),
-                    subtitle = "Penanganan lapangan & evakuasi tuntas"
-                ),
-                PieSliceData(
-                    label = "Tim TRC Meluncur / Penanganan",
-                    shortLabel = "Proses TRC",
-                    count = inProgress,
-                    percentage = (inProgress * 100f) / adjustedTotal,
-                    color = Color(0xFF2563EB),
-                    subtitle = "Personil & logistik sedang bekerja di lokasi"
-                ),
-                PieSliceData(
-                    label = "Verifikasi Pusdalops",
-                    shortLabel = "Verifikasi",
-                    count = verifying,
-                    percentage = (verifying * 100f) / adjustedTotal,
-                    color = Color(0xFFF59E0B),
-                    subtitle = "Validasi koordinat GPS & asesmen awal"
-                )
-            )
+                listOf(
+                    PieSliceData(
+                        label = "Selesai Ditangani TRC",
+                        shortLabel = "Selesai",
+                        count = resolved,
+                        percentage = (resolved * 100f) / total,
+                        color = Color(0xFF16A34A),
+                        subtitle = "Penanganan lapangan & evakuasi tuntas"
+                    ),
+                    PieSliceData(
+                        label = "Divalidasi / Penanganan TRC",
+                        shortLabel = "Divalidasi",
+                        count = inProgress,
+                        percentage = (inProgress * 100f) / total,
+                        color = Color(0xFF2563EB),
+                        subtitle = "Personil & logistik sedang bekerja di lokasi"
+                    ),
+                    PieSliceData(
+                        label = "Diproses / Verifikasi Pusdalops",
+                        shortLabel = "Diproses",
+                        count = verifying,
+                        percentage = (verifying * 100f) / total,
+                        color = Color(0xFFF59E0B),
+                        subtitle = "Validasi koordinat GPS & asesmen awal"
+                    )
+                ).filter { it.count > 0 }
+            } else {
+                val totalAnnual = monthlyList.sumOf { it.totalIncidents }.coerceAtLeast(1)
+                val resolved = monthlyList.sumOf { it.resolvedCount }
+                val inProgress = ((totalAnnual - resolved) * 0.65f).roundToInt().coerceAtLeast(0)
+                val verifying = (totalAnnual - resolved - inProgress).coerceAtLeast(0)
+                val adjustedTotal = (resolved + inProgress + verifying).coerceAtLeast(1)
+
+                listOf(
+                    PieSliceData(
+                        label = "Selesai Ditangani TRC",
+                        shortLabel = "Selesai",
+                        count = resolved,
+                        percentage = (resolved * 100f) / adjustedTotal,
+                        color = Color(0xFF16A34A),
+                        subtitle = "Estimasi penanganan lapangan & evakuasi"
+                    ),
+                    PieSliceData(
+                        label = "Tim TRC Meluncur / Penanganan",
+                        shortLabel = "Proses TRC",
+                        count = inProgress,
+                        percentage = (inProgress * 100f) / adjustedTotal,
+                        color = Color(0xFF2563EB),
+                        subtitle = "Estimasi personil & logistik di lokasi"
+                    ),
+                    PieSliceData(
+                        label = "Verifikasi Pusdalops",
+                        shortLabel = "Verifikasi",
+                        count = verifying,
+                        percentage = (verifying * 100f) / adjustedTotal,
+                        color = Color(0xFFF59E0B),
+                        subtitle = "Estimasi validasi koordinat & asesmen"
+                    )
+                ).filter { it.count > 0 }
+            }
         }
         else -> {
             // Mode 2: Sebaran per Zona Kecamatan di Kabupaten Mukomuko
-            val totalAnnual = monthlyList.sumOf { it.totalIncidents }.coerceAtLeast(1)
-            val pesisirCount = (totalAnnual * 0.46f).roundToInt().coerceAtLeast(1)
-            val tengahCount = (totalAnnual * 0.32f).roundToInt().coerceAtLeast(1)
-            val huluCount = (totalAnnual - pesisirCount - tengahCount).coerceAtLeast(1)
-            val sum = (pesisirCount + tengahCount + huluCount).coerceAtLeast(1)
+            if (!includeHistoricalBaseline) {
+                if (activeReports.isEmpty()) return emptyList()
+                val coastalSet = setOf("kota mukomuko", "ipuh", "air rami", "teramang jaya", "air dikit", "sungai rumbai")
+                val centralSet = setOf("lubuk pinang", "xiv koto", "air manjuto", "v koto")
+                var pesisirCount = 0
+                var tengahCount = 0
+                var huluCount = 0
+                activeReports.forEach { r ->
+                    val d = r.district.trim().lowercase(Locale.getDefault())
+                    when {
+                        coastalSet.any { d.contains(it) } -> pesisirCount++
+                        centralSet.any { d.contains(it) } -> tengahCount++
+                        else -> huluCount++
+                    }
+                }
+                val total = activeReports.size.coerceAtLeast(1)
+                listOf(
+                    PieSliceData(
+                        label = "Zona Pesisir Barat (Kota Mukomuko, Ipuh, Air Rami, Teramang Jaya)",
+                        shortLabel = "Zona Pesisir",
+                        count = pesisirCount,
+                        percentage = (pesisirCount * 100f) / total,
+                        color = Color(0xFF0284C7),
+                        subtitle = "Laporan tercatat pada kecamatan pesisir"
+                    ),
+                    PieSliceData(
+                        label = "Zona Tengah & Utara (Lubuk Pinang, XIV Koto, Air Manjuto, V Koto)",
+                        shortLabel = "Zona Tengah",
+                        count = tengahCount,
+                        percentage = (tengahCount * 100f) / total,
+                        color = Color(0xFF10B981),
+                        subtitle = "Laporan tercatat pada zona tengah & utara"
+                    ),
+                    PieSliceData(
+                        label = "Zona Perbukitan & Timur (Penarik, Selagan Raya, Pondok Suguh, Malin Deman)",
+                        shortLabel = "Zona Perbukitan",
+                        count = huluCount,
+                        percentage = (huluCount * 100f) / total,
+                        color = Color(0xFF8B5CF6),
+                        subtitle = "Laporan tercatat pada zona perbukitan & timur"
+                    )
+                ).filter { it.count > 0 }
+            } else {
+                val totalAnnual = monthlyList.sumOf { it.totalIncidents }.coerceAtLeast(1)
+                val pesisirCount = (totalAnnual * 0.46f).roundToInt().coerceAtLeast(1)
+                val tengahCount = (totalAnnual * 0.32f).roundToInt().coerceAtLeast(1)
+                val huluCount = (totalAnnual - pesisirCount - tengahCount).coerceAtLeast(1)
+                val sum = (pesisirCount + tengahCount + huluCount).coerceAtLeast(1)
 
-            listOf(
-                PieSliceData(
-                    label = "Zona Pesisir Barat (Kota Mukomuko, Ipuh, Air Rami, Teramang Jaya)",
-                    shortLabel = "Zona Pesisir",
-                    count = pesisirCount,
-                    percentage = (pesisirCount * 100f) / sum,
-                    color = Color(0xFF0284C7),
-                    subtitle = "Rawan banjir muara, abrasi pantai, & gelombang pasang"
-                ),
-                PieSliceData(
-                    label = "Zona Tengah & Utara (Lubuk Pinang, XIV Koto, Air Manjuto, V Koto)",
-                    shortLabel = "Zona Tengah",
-                    count = tengahCount,
-                    percentage = (tengahCount * 100f) / sum,
-                    color = Color(0xFF10B981),
-                    subtitle = "Rawan luapan irigasi/sungai & angin kencang"
-                ),
-                PieSliceData(
-                    label = "Zona Perbukitan & Timur (Penarik, Selagan Raya, Pondok Suguh, Malin Deman)",
-                    shortLabel = "Zona Perbukitan",
-                    count = huluCount,
-                    percentage = (huluCount * 100f) / sum,
-                    color = Color(0xFF8B5CF6),
-                    subtitle = "Rawan tanah longsor tebing & pohon tumbang"
+                listOf(
+                    PieSliceData(
+                        label = "Zona Pesisir Barat (Kota Mukomuko, Ipuh, Air Rami, Teramang Jaya)",
+                        shortLabel = "Zona Pesisir",
+                        count = pesisirCount,
+                        percentage = (pesisirCount * 100f) / sum,
+                        color = Color(0xFF0284C7),
+                        subtitle = "Referensi historis zona pesisir"
+                    ),
+                    PieSliceData(
+                        label = "Zona Tengah & Utara (Lubuk Pinang, XIV Koto, Air Manjuto, V Koto)",
+                        shortLabel = "Zona Tengah",
+                        count = tengahCount,
+                        percentage = (tengahCount * 100f) / sum,
+                        color = Color(0xFF10B981),
+                        subtitle = "Referensi historis zona tengah & utara"
+                    ),
+                    PieSliceData(
+                        label = "Zona Perbukitan & Timur (Penarik, Selagan Raya, Pondok Suguh, Malin Deman)",
+                        shortLabel = "Zona Perbukitan",
+                        count = huluCount,
+                        percentage = (huluCount * 100f) / sum,
+                        color = Color(0xFF8B5CF6),
+                        subtitle = "Referensi historis zona perbukitan & timur"
+                    )
                 )
-            )
+            }
         }
     }
 }

@@ -284,6 +284,55 @@
         "timestamp": { "type": "integer" }
       },
       "required": ["nip", "device_name", "os_version", "login_time", "is_active"]
+    },
+    "AdminAccessAuditLog": {
+      "title": "AdminAccessAuditLog",
+      "description": "Append-only audit trail for privileged admin authorization attempts",
+      "type": "object",
+      "properties": {
+        "officerNip": { "type": "string" },
+        "officerName": { "type": "string" },
+        "officerRole": { "type": "string" },
+        "actionCode": { "type": "string" },
+        "actionTitle": { "type": "string" },
+        "success": { "type": "boolean" },
+        "detail": { "type": "string" },
+        "timestamp": { "type": "integer" },
+        "deviceModel": { "type": "string" }
+      },
+      "required": ["officerNip", "officerName", "officerRole", "actionCode", "actionTitle", "success", "detail", "timestamp"]
+    },
+    "BpbdVolunteer": {
+      "title": "BpbdVolunteer",
+      "description": "BPBD Mukomuko disaster volunteer record keyed by 16-digit NIK primary key",
+      "type": "object",
+      "properties": {
+        "nik": { "type": "string" },
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "organization": { "type": "string" },
+        "skillsCsv": { "type": "string" },
+        "homeDistrict": { "type": "string" },
+        "assignedDistrict": { "type": "string" },
+        "assignedPoskoName": { "type": "string" },
+        "assignedShift": { "type": "string" },
+        "status": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "needsAssistance": { "type": "boolean" },
+        "assistanceNote": { "type": "string" },
+        "selfiePhotoUri": { "type": "string" },
+        "certificatePhotoUri": { "type": "string" },
+        "waktu_checkin": { "type": "integer" },
+        "waktu_checkout": { "type": "integer" },
+        "suratTugasNumber": { "type": "string" },
+        "suratTugasPdfPath": { "type": "string" },
+        "registeredAt": { "type": "integer" },
+        "updatedAt": { "type": "integer" },
+        "verifiedByOfficer": { "type": "string" },
+        "isSyncedToCloud": { "type": "boolean" }
+      },
+      "required": ["id", "fullName", "nik", "phoneNumber", "organization", "skillsCsv", "status"]
     }
   },
   "firestore": {
@@ -327,6 +376,10 @@
       "schema": "OfficerSession",
       "description": "Firestore-backed active officer session management documents"
     },
+    "/admin_access_audit_logs/{logId}": {
+      "schema": "AdminAccessAuditLog",
+      "description": "Append-only admin authorization audit trail"
+    },
     "/device_login_activities/{activityId}": {
       "schema": "DeviceLoginActivity",
       "description": "Append-only officer login activity trail with hardware and Play Integrity Classic telemetry"
@@ -334,6 +387,10 @@
     "/device_security_failures/{failureId}": {
       "schema": "DeviceSecurityFailure",
       "description": "Append-only Play Integrity failure audit trail"
+    },
+    "/bpbd_volunteers/{volunteerId}": {
+      "schema": "BpbdVolunteer",
+      "description": "Offline-first synced BPBD Mukomuko volunteer coordination records (NIK PK)"
     }
   }
 }

@@ -38,6 +38,18 @@ class FormLaporanHarianActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Strict Access Control: Modul Form Laporan Harian hanya boleh diakses oleh Petugas dengan sesi login aktif.
+        val officerAuth = com.example.data.local.OfficerAuthManager(this)
+        if (!officerAuth.isOfficerLoggedIn()) {
+            Toast.makeText(
+                this,
+                "Akses ditolak: Silakan login sebagai Petugas Pusdalops terlebih dahulu.",
+                Toast.LENGTH_SHORT
+            ).show()
+            finish()
+            return
+        }
+
         // Memaksa aplikasi menggunakan mode terang
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
 
@@ -189,5 +201,12 @@ class FormLaporanHarianActivity : AppCompatActivity() {
                 }
             }
         )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!com.example.data.local.OfficerAuthManager(this).isOfficerLoggedIn()) {
+            finish()
+        }
     }
 }

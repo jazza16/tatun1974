@@ -13,14 +13,9 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -103,6 +98,15 @@ fun DalaAssessmentScreen(
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
+    val isOfficerSessionActive = com.example.data.local.OfficerAuthManager(context).isOfficerLoggedIn()
+    if (!isOfficerSessionActive) {
+        InternalModuleLockedScreen(
+            moduleTitle = "Modul Pasca Bencana / DALA",
+            testTag = "dala_screen_locked",
+            onClose = onClose
+        )
+        return
+    }
     val coroutineScope = rememberCoroutineScope()
     val stateManager = remember(officerName, officerNip, initialDistrict) {
         DalaAssessmentStateManager(
@@ -121,6 +125,7 @@ fun DalaAssessmentScreen(
     var isExportingPdf by remember { mutableStateOf(false) }
 
     val tabs = DalaTab.entries
+    val adaptiveInsets = rememberAdaptiveSystemBarInsets()
 
     // Pastikan draft tersimpan sebelum menutup layar lewat tombol Back sistem
     BackHandler {
@@ -129,11 +134,12 @@ fun DalaAssessmentScreen(
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.systemBars,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = Modifier.fillMaxSize(),
         topBar = {
             Column {
                 TopAppBar(
+                    windowInsets = WindowInsets(top = adaptiveInsets.topBarInset),
                     title = {
                         Column {
                             Text(
@@ -264,7 +270,7 @@ fun DalaAssessmentScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+                        .padding(bottom = adaptiveInsets.effectiveBottomInset)
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically

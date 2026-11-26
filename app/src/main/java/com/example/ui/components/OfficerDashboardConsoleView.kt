@@ -195,6 +195,8 @@ fun OfficerDashboardConsoleView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val officerAuthManager = remember { OfficerAuthManager(context) }
+    val hasVerifiedOfficerSession = isOfficerLoggedIn && officerAuthManager.isOfficerLoggedIn()
 
     // Multi-Tier RBAC BPBD Kabupaten Mukomuko (Tier 1 Manajer, Tier 2 Pengawas/Koordinator, Tier 3 Operator/Lapangan)
     val currentUserRole = remember(officerRole) { UserRole.fromRoleString(officerRole) }
@@ -291,27 +293,34 @@ fun OfficerDashboardConsoleView(
 
     // StreamBuilder equivalent: Real-Time Firestore SnapshotListener on citizen_disaster_reports
     // filtered by status Pending and ordered by timestamp descending, plus full collection stream
-    DisposableEffect(isOfficerLoggedIn) {
-        val pendingReportsListener = com.example.data.local.FirestoreHelper.listenPendingCitizenReportsRealtime(
-            onUpdate = { pendingReports ->
-                if (pendingReports.isNotEmpty()) {
-                    val existingById = realtimeCloudReports.associateBy { it.id }.toMutableMap()
-                    pendingReports.forEach { r -> existingById[r.id] = r }
-                    realtimeCloudReports = existingById.values.sortedByDescending { it.timestamp }
+    DisposableEffect(hasVerifiedOfficerSession) {
+        if (!hasVerifiedOfficerSession) {
+            realtimeCloudReports = emptyList()
+            onDispose {
+                OfficerAlarmPlayer.stopActiveRingtone()
+            }
+        } else {
+            val pendingReportsListener = com.example.data.local.FirestoreHelper.listenPendingCitizenReportsRealtime(
+                onUpdate = { pendingReports ->
+                    if (pendingReports.isNotEmpty()) {
+                        val existingById = realtimeCloudReports.associateBy { it.id }.toMutableMap()
+                        pendingReports.forEach { r -> existingById[r.id] = r }
+                        realtimeCloudReports = existingById.values.sortedByDescending { it.timestamp }
+                    }
+                    handleIncomingPendingReportsStream(pendingReports)
                 }
-                handleIncomingPendingReportsStream(pendingReports)
+            )
+            val allReportsListener = com.example.data.local.FirestoreHelper.listenCitizenReportsRealtime(
+                onUpdate = { allRemote ->
+                    realtimeCloudReports = allRemote
+                    handleIncomingPendingReportsStream(allRemote)
+                }
+            )
+            onDispose {
+                pendingReportsListener?.remove()
+                allReportsListener?.remove()
+                OfficerAlarmPlayer.stopActiveRingtone()
             }
-        )
-        val allReportsListener = com.example.data.local.FirestoreHelper.listenCitizenReportsRealtime(
-            onUpdate = { allRemote ->
-                realtimeCloudReports = allRemote
-                handleIncomingPendingReportsStream(allRemote)
-            }
-        )
-        onDispose {
-            pendingReportsListener?.remove()
-            allReportsListener?.remove()
-            OfficerAlarmPlayer.stopActiveRingtone()
         }
     }
 
@@ -354,7 +363,6 @@ fun OfficerDashboardConsoleView(
     var followUpStatusTarget by remember { mutableStateOf("") }
 
     // Change Officer PIN State (Security Guard against unauthorized ID/NIP usage)
-    val officerAuthManager = remember { OfficerAuthManager(context) }
     var showChangePinDialog by remember { mutableStateOf(false) }
     var hasCustomPin by remember { mutableStateOf(officerAuthManager.hasCustomPin()) }
 
@@ -370,25 +378,36 @@ fun OfficerDashboardConsoleView(
     val coroutineScope = rememberCoroutineScope()
 
     val requestAdminProtectedAction: (String, () -> Unit) -> Unit = { title, action ->
-        val validToken = com.example.security.AdminAccessSecurityManager.getActiveTokenForOfficer(officerBadgeId)
-        activeAdminToken = validToken
-        if (validToken != null) {
-            // Token Akses Sementara (5–15 menit) masih aktif: catat Audit Log pemakaian ulang & langsung buka
-            coroutineScope.launch {
-                com.example.security.AdminAccessSecurityManager.recordTokenReuseAttempt(
-                    context = context,
-                    officerNip = officerBadgeId,
-                    officerName = officerName,
-                    officerRole = officerRole,
-                    actionTitle = title,
-                    token = validToken
-                )
-            }
-            action()
+        if (!hasVerifiedOfficerSession || !officerAuthManager.isOfficerLoggedIn()) {
+            com.example.security.AdminAccessSecurityManager.revokeToken()
+            activeAdminToken = null
+            Toast.makeText(
+                context,
+                "Akses ditolak: Sesi login Petugas aktif diperlukan.",
+                Toast.LENGTH_SHORT
+            ).show()
+            onLogoutClick()
         } else {
-            adminAuthActionTitle = title
-            pendingAdminAction = action
-            isAdminAuthDialogVisible = true
+            val validToken = com.example.security.AdminAccessSecurityManager.getActiveTokenForOfficer(officerBadgeId)
+            activeAdminToken = validToken
+            if (validToken != null) {
+                // Token Akses Sementara (5–15 menit) masih aktif: catat Audit Log pemakaian ulang & langsung buka
+                coroutineScope.launch {
+                    com.example.security.AdminAccessSecurityManager.recordTokenReuseAttempt(
+                        context = context,
+                        officerNip = officerBadgeId,
+                        officerName = officerName,
+                        officerRole = officerRole,
+                        actionTitle = title,
+                        token = validToken
+                    )
+                }
+                action()
+            } else {
+                adminAuthActionTitle = title
+                pendingAdminAction = action
+                isAdminAuthDialogVisible = true
+            }
         }
     }
     val database = remember { AppDatabase.getInstance(context) }
@@ -438,6 +457,11 @@ fun OfficerDashboardConsoleView(
     }
 
     suspend fun runFullSecurityActivitySync() {
+        if (!hasVerifiedOfficerSession || !officerAuthManager.isOfficerLoggedIn()) {
+            securitySessionsList = emptyList()
+            loginActivitiesList = emptyList()
+            return
+        }
         isSyncingSecurityActivities = true
         try {
             if (isOfficerLoggedIn && officerBadgeId.isNotBlank()) {
@@ -481,50 +505,56 @@ fun OfficerDashboardConsoleView(
         }
     }
 
-    DisposableEffect(currentFirebaseUid, isOfficerLoggedIn, officerBadgeId) {
-        val sessionListener = securityManager.listenSecuritySessionsRealtime(
-            officerNipFilter = "",
-            activeOfficerNipForRevocation = officerBadgeId,
-            onActiveSessionRevoked = {
-                if (isOfficerLoggedIn && !isResettingOwnPin && !SecurityManager.isPinResetSuppressed(officerBadgeId)) {
-                    Toast.makeText(
-                        context,
-                        "Akses sesi perangkat Anda telah dicabut dari server. Logout paksa dijalankan.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    securityManager.clearLocalSession()
-                    com.example.data.auth.AuthManager.getInstance(context).signOut()
-                    officerAuthManager.logoutOfficer()
-                    onLogoutClick()
+    DisposableEffect(currentFirebaseUid, hasVerifiedOfficerSession, officerBadgeId) {
+        if (!hasVerifiedOfficerSession) {
+            securitySessionsList = emptyList()
+            loginActivitiesList = emptyList()
+            onDispose { }
+        } else {
+            val sessionListener = securityManager.listenSecuritySessionsRealtime(
+                officerNipFilter = "",
+                activeOfficerNipForRevocation = officerBadgeId,
+                onActiveSessionRevoked = {
+                    if (hasVerifiedOfficerSession && !isResettingOwnPin && !SecurityManager.isPinResetSuppressed(officerBadgeId)) {
+                        Toast.makeText(
+                            context,
+                            "Akses sesi perangkat Anda telah dicabut dari server. Logout paksa dijalankan.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        securityManager.clearLocalSession()
+                        com.example.data.auth.AuthManager.getInstance(context).signOut()
+                        officerAuthManager.logoutOfficer()
+                        onLogoutClick()
+                    }
+                }
+            ) { list ->
+                val currentHeartbeats = activeDevices
+                val currentRevoked = revokedNipsInSession
+                coroutineScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                    val reconciled = securityManager.reconcileWithActiveHeartbeats(
+                        sessions = list,
+                        heartbeats = currentHeartbeats,
+                        persistToCache = false
+                    ).filterNot {
+                        currentRevoked.contains(it.officerNip.trim().lowercase())
+                    }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        securitySessionsList = reconciled
+                    }
                 }
             }
-        ) { list ->
-            val currentHeartbeats = activeDevices
-            val currentRevoked = revokedNipsInSession
-            coroutineScope.launch(kotlinx.coroutines.Dispatchers.Default) {
-                val reconciled = securityManager.reconcileWithActiveHeartbeats(
-                    sessions = list,
-                    heartbeats = currentHeartbeats,
-                    persistToCache = false
-                ).filterNot {
-                    currentRevoked.contains(it.officerNip.trim().lowercase())
-                }
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    securitySessionsList = reconciled
-                }
+            val activityListener = securityManager.listenLoginActivitiesRealtime { activities ->
+                loginActivitiesList = activities
             }
-        }
-        val activityListener = securityManager.listenLoginActivitiesRealtime { activities ->
-            loginActivitiesList = activities
-        }
-        onDispose {
-            sessionListener?.remove()
-            activityListener?.remove()
+            onDispose {
+                sessionListener?.remove()
+                activityListener?.remove()
+            }
         }
     }
 
-    LaunchedEffect(activeDevices) {
-        if (activeDevices.isNotEmpty()) {
+    LaunchedEffect(activeDevices, hasVerifiedOfficerSession) {
+        if (hasVerifiedOfficerSession && activeDevices.isNotEmpty()) {
             val currentSessions = securitySessionsList
             val currentRevoked = revokedNipsInSession
             val reconciled = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
@@ -541,16 +571,16 @@ fun OfficerDashboardConsoleView(
     }
 
     // Initial sync on Ruang Kerja entry (does NOT re-run heavy Firestore queries on every sub-tab tap)
-    LaunchedEffect(currentFirebaseUid, isOfficerLoggedIn, officerBadgeId) {
-        onSyncReports?.invoke { _ -> }
-        if (isOfficerLoggedIn && officerBadgeId.isNotBlank()) {
+    LaunchedEffect(currentFirebaseUid, hasVerifiedOfficerSession, officerBadgeId) {
+        if (hasVerifiedOfficerSession && officerBadgeId.isNotBlank()) {
+            onSyncReports?.invoke { _ -> }
             syncController.sendHeartbeatNow()
         }
     }
 
     // Only run full security activity sync when Admin explicitly opens Pengaturan Sistem tab (with 30s cooldown)
-    LaunchedEffect(dashboardSubTab, currentFirebaseUid, isOfficerLoggedIn) {
-        if (dashboardSubTab == 3 && isOfficerLoggedIn) {
+    LaunchedEffect(dashboardSubTab, currentFirebaseUid, hasVerifiedOfficerSession) {
+        if (dashboardSubTab == 3 && hasVerifiedOfficerSession && canAccessSystemSettings) {
             val now = System.currentTimeMillis()
             if (now - lastSecuritySyncMs.get() >= 30_000L) {
                 lastSecuritySyncMs.set(now)
@@ -559,11 +589,18 @@ fun OfficerDashboardConsoleView(
         }
     }
 
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            personnelRepository.seedDefaultAsnPersonnelIfNeeded(context)
+    DisposableEffect(hasVerifiedOfficerSession) {
+        val officersReg = if (hasVerifiedOfficerSession) {
+            coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                personnelRepository.seedDefaultAsnPersonnelIfNeeded(context)
+            }
+            personnelRepository.startAutoSyncFromCloud(coroutineScope, context)
+        } else {
+            null
         }
-        personnelRepository.startAutoSyncFromCloud(this, context)
+        onDispose {
+            officersReg?.remove()
+        }
     }
 
     // Pusdalops Officer Roster Management State backed directly by Room Database & Session Manager
@@ -683,11 +720,21 @@ fun OfficerDashboardConsoleView(
         }
     }
 
+    if (!hasVerifiedOfficerSession) {
+        InternalModuleLockedScreen(
+            moduleTitle = "Ruang Kerja Konsol Pusdalops",
+            testTag = "officer_dashboard_locked",
+            onClose = onLoginClick,
+            modifier = modifier
+        )
+        return
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .testTag("officer_dashboard_console_view"),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // 0. REAL-TIME RED ALERT BANNER ("🚨 LAPORAN WARGA BARU! Segera Cek!")
@@ -1544,7 +1591,7 @@ fun OfficerDashboardConsoleView(
         }
 
         // 3C. PENGATURAN SISTEM & DIAGNOSTIK SINKRONISASI (TIER 1 MANAJER ONLY)
-        if (dashboardSubTab == 3 && canAccessSystemSettings) {
+        if (hasVerifiedOfficerSession && dashboardSubTab == 3 && canAccessSystemSettings) {
             item {
                 SyncDiagnosticsSection(
                     latencyMs = latencyMs,
@@ -2593,7 +2640,7 @@ fun OfficerDashboardConsoleView(
     }
 
     // 7A. DIALOG AUTENTIKASI ADMIN SERVER-SIDE (POST /api/verify-admin-pass + TOKEN SEMENTARA + AUDIT LOG)
-    if (isAdminAuthDialogVisible) {
+    if (hasVerifiedOfficerSession && isAdminAuthDialogVisible) {
         AdminAuthDialog(
             actionTitle = adminAuthActionTitle,
             officerNip = officerBadgeId,
@@ -2614,7 +2661,7 @@ fun OfficerDashboardConsoleView(
     }
 
     // 7B. DIALOG MANAJEMEN PERSONIL PUSDALOPS & TRC BPBD (WAJIB TEMPORARY ACCESS TOKEN AKTIF)
-    if (showRosterDialog && isManajerRole) {
+    if (hasVerifiedOfficerSession && showRosterDialog && isManajerRole) {
         val currentToken = com.example.security.AdminAccessSecurityManager.getActiveTokenForOfficer(officerBadgeId)
         if (currentToken == null) {
             LaunchedEffect(Unit) {
@@ -4348,12 +4395,12 @@ fun OfficerDashboardConsoleView(
     }
 
     // FULL SCREEN DIALOG DATABASE EXPLORER (PENGATURAN SISTEM - KHUSUS TIER 1 MANAJER)
-    if (showDatabaseExplorer && canAccessSystemSettings) {
+    if (hasVerifiedOfficerSession && showDatabaseExplorer && canAccessSystemSettings) {
         Dialog(
             onDismissRequest = { showDatabaseExplorer = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = true
+                decorFitsSystemWindows = false
             )
         ) {
             DatabaseExplorerScreen(
@@ -4416,12 +4463,12 @@ fun OfficerDashboardConsoleView(
     }
 
     // FULL SCREEN DIALOG FORM LAPORAN HARIAN
-    if (showFormLaporanHarian) {
+    if (hasVerifiedOfficerSession && showFormLaporanHarian) {
         Dialog(
             onDismissRequest = { showFormLaporanHarian = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = true
+                decorFitsSystemWindows = false
             )
         ) {
             FormLaporanHarianScreen(
@@ -4432,12 +4479,12 @@ fun OfficerDashboardConsoleView(
     }
 
     // FULL SCREEN DIALOG MODUL PASCA BENCANA / DALA (KAJI CEPAT)
-    if (showDalaModule) {
+    if (hasVerifiedOfficerSession && showDalaModule) {
         Dialog(
             onDismissRequest = { showDalaModule = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = true
+                decorFitsSystemWindows = false
             )
         ) {
             DalaAssessmentScreen(
@@ -4449,12 +4496,12 @@ fun OfficerDashboardConsoleView(
     }
 
     // FULL SCREEN DIALOG MODUL PENDATAAN & KOORDINASI RELAWAN
-    if (showVolunteerModule) {
+    if (hasVerifiedOfficerSession && showVolunteerModule) {
         Dialog(
             onDismissRequest = { showVolunteerModule = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = true
+                decorFitsSystemWindows = false
             )
         ) {
             VolunteerCoordinationScreen(
@@ -4468,12 +4515,12 @@ fun OfficerDashboardConsoleView(
     }
 
     // FULL SCREEN DIALOG MODUL MANAJEMEN POSKO, PENGUNGSI, & LOGISTIK DARURAT (MASTER PRD)
-    if (showPoskoLogisticsModule) {
+    if (hasVerifiedOfficerSession && showPoskoLogisticsModule) {
         Dialog(
             onDismissRequest = { showPoskoLogisticsModule = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = true
+                decorFitsSystemWindows = false
             )
         ) {
             PoskoLogisticsManagementScreen(
@@ -4831,1595 +4878,9 @@ fun OfficerDashboardConsoleView(
     }
 }
 
-/**
- * Visualisasi Grafik Batang Tren Bulanan Kategori Bencana
- */
-@Composable
-private fun DisasterMonthlyBarChartCard(
-    reports: List<CitizenDisasterReport>,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.BarChart,
-                        contentDescription = null,
-                        tint = Color(0xFF15803D),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Grafik Tren Kategori Bencana Bulanan",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
-                    )
-                }
-                Text(
-                    text = "Tahun 2026",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF64748B)
-                )
-            }
 
-            Spacer(modifier = Modifier.height(10.dp))
 
-            // Categories tally
-            val categories = listOf(
-                Triple("Banjir", reports.count { it.disasterType.contains("Banjir", true) }, Color(0xFF2563EB)),
-                Triple("Badai", reports.count { it.disasterType.contains("Angin", true) || it.disasterType.contains("Badai", true) }, Color(0xFFD97706)),
-                Triple("Abrasi", reports.count { it.disasterType.contains("Gelombang", true) || it.disasterType.contains("Abrasi", true) }, Color(0xFF0284C7)),
-                Triple("Longsor", reports.count { it.disasterType.contains("Longsor", true) }, Color(0xFFB45309)),
-                Triple("Gempa", reports.count { it.disasterType.contains("Gempa", true) }, Color(0xFFDC2626)),
-                Triple("Lainnya", reports.count { !it.disasterType.contains("Banjir", true) && !it.disasterType.contains("Angin", true) && !it.disasterType.contains("Gelombang", true) && !it.disasterType.contains("Longsor", true) && !it.disasterType.contains("Gempa", true) }, Color(0xFF64748B))
-            )
 
-            val maxCount = (categories.maxOfOrNull { it.second } ?: 1).coerceAtLeast(1)
 
-            // Canvas Bar Chart
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(90.dp)
-                    .padding(horizontal = 8.dp)
-            ) {
-                val barWidth = 24.dp.toPx()
-                val spacing = (size.width - (categories.size * barWidth)) / (categories.size + 1)
-                val chartHeight = size.height - 20f
 
-                categories.forEachIndexed { i, (_, count, color) ->
-                    val x = spacing + i * (barWidth + spacing)
-                    val barHeight = (count.toFloat() / maxCount) * chartHeight
-                    val y = size.height - barHeight
-
-                    // Draw bar
-                    drawRoundRect(
-                        color = color,
-                        topLeft = Offset(x, y),
-                        size = Size(barWidth, barHeight),
-                        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Legend labels
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                categories.forEach { (name, count, color) ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Surface(
-                            shape = CircleShape,
-                            color = color,
-                            modifier = Modifier.size(8.dp)
-                        ) {}
-                        Text(
-                            text = name,
-                            fontSize = 11.sp,
-                            color = Color(0xFF475569),
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                        Text(
-                            text = "$count",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Mini Map Canvas with Pin and Pulsing Radar Circle
- */
-@Composable
-private fun MiniMapWithPinCanvas(
-    latitude: Double,
-    longitude: Double,
-    disasterType: String
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pin_radar_anim")
-    val pulseRadius by infiniteTransition.animateFloat(
-        initialValue = 10f,
-        targetValue = 35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "pulse_radius"
-    )
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val centerX = size.width / 2f
-        val centerY = size.height / 2f
-
-        // Grid lines (GIS Map aesthetic)
-        val gridStep = 30f
-        var gx = 0f
-        while (gx <= size.width) {
-            drawLine(
-                color = Color(0xFF334155).copy(alpha = 0.5f),
-                start = Offset(gx, 0f),
-                end = Offset(gx, size.height),
-                strokeWidth = 1f
-            )
-            gx += gridStep
-        }
-        var gy = 0f
-        while (gy <= size.height) {
-            drawLine(
-                color = Color(0xFF334155).copy(alpha = 0.5f),
-                start = Offset(0f, gy),
-                end = Offset(size.width, gy),
-                strokeWidth = 1f
-            )
-            gy += gridStep
-        }
-
-        // Pulsing radar circles
-        drawCircle(
-            color = Color(0xFFEF4444).copy(alpha = (1f - (pulseRadius / 35f)).coerceIn(0f, 0.7f)),
-            radius = pulseRadius,
-            center = Offset(centerX, centerY),
-            style = Stroke(width = 2f)
-        )
-
-        // Center Pin
-        drawCircle(
-            color = Color(0xFFDC2626),
-            radius = 7f,
-            center = Offset(centerX, centerY)
-        )
-        drawCircle(
-            color = Color.White,
-            radius = 3f,
-            center = Offset(centerX, centerY)
-        )
-    }
-}
-
-/**
- * KPI Metric Card Component
- */
-@Composable
-private fun KpiMetricCard(
-    title: String,
-    count: Int,
-    badgeColor: Color,
-    bgColor: Color,
-    borderColor: Color,
-    subtitle: String,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = bgColor),
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
-        modifier = modifier.wrapContentHeight()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight()
-                .padding(horizontal = 8.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "$count",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = badgeColor
-            )
-            Text(
-                text = title,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1E293B),
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = subtitle,
-                fontSize = 11.sp,
-                color = Color(0xFF64748B),
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-/**
- * Kartu Insiden Petugas Responsif dengan Aksi Validasi & Auto-Pin
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun OfficerIncidentReportCard(
-    report: CitizenDisasterReport,
-    isOfficerLoggedIn: Boolean,
-    officerName: String,
-    officerRole: String = OfficerRoles.PETUGAS_JAGA,
-    onInspectMapPin: () -> Unit,
-    onUpdateStatus: (String) -> Unit,
-    onDeleteReport: (() -> Unit)? = null,
-    onOpenNoteEditor: () -> Unit,
-    onViewPhoto: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    val canValidate = UserRole.canValidateReports(officerRole)
-    val canComplete = UserRole.canCompleteReports(officerRole)
-    val canDelete = UserRole.canDeleteReports(officerRole) && onDeleteReport != null
-
-    val normalizedStatus = com.example.model.CitizenReportStatusHelper.normalizeStatus(report.status)
-    val statusColor = when (normalizedStatus) {
-        com.example.model.CitizenReportStatusHelper.STATUS_DIVALIDASI -> Color(0xFF16A34A)
-        com.example.model.CitizenReportStatusHelper.STATUS_SELESAI -> Color(0xFF2563EB)
-        else -> Color(0xFFD97706) // "Diproses"
-    }
-
-    val statusBg = when (normalizedStatus) {
-        com.example.model.CitizenReportStatusHelper.STATUS_DIVALIDASI -> Color(0xFFF0FDF4)
-        com.example.model.CitizenReportStatusHelper.STATUS_SELESAI -> Color(0xFFEFF6FF)
-        else -> Color(0xFFFFFBEB)
-    }
-
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("officer_incident_card_${report.id}")
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            // Header: Title with Badges in a single horizontal line below
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF0F172A),
-                        modifier = Modifier
-                            .heightIn(min = 24.dp)
-                            .wrapContentWidth()
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp)) {
-                            Text(
-                                text = "#${report.id.takeLast(7)}",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                softWrap = false
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = report.disasterType,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Badges in a single horizontal row below the title - Locked height 24.dp
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = statusBg,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.4f)),
-                        modifier = Modifier
-                            .heightIn(min = 24.dp)
-                            .wrapContentWidth()
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
-                            Text(
-                                text = normalizedStatus.uppercase(),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = statusColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                softWrap = false
-                            )
-                        }
-                    }
-
-                    // Status Sinkronisasi: "Synced" (Hijau) apabila laporan sudah ada di server Firestore
-                    val isSyncedServer = isReportSyncedWithServer(report)
-                    val syncIcon = if (isSyncedServer) Icons.Default.CheckCircle else Icons.Default.Schedule
-                    val syncColor = if (isSyncedServer) Color(0xFF16A34A) else Color(0xFFD97706)
-                    val syncText = if (isSyncedServer) "Synced" else "Menunggu Sync"
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = syncColor.copy(alpha = 0.12f),
-                        border = androidx.compose.foundation.BorderStroke(0.5.dp, syncColor.copy(alpha = 0.35f)),
-                        modifier = Modifier
-                            .heightIn(min = 24.dp)
-                            .wrapContentWidth()
-                            .testTag("officer_sync_status_badge")
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = syncIcon,
-                                contentDescription = syncText,
-                                tint = syncColor,
-                                modifier = Modifier.size(10.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = syncText,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = syncColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                softWrap = false
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFF1F5F9),
-                        modifier = Modifier
-                            .heightIn(min = 24.dp)
-                            .wrapContentWidth()
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 7.dp)) {
-                            Text(
-                                text = report.district,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF475569),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Location & Date
-            Row(verticalAlignment = Alignment.Top) {
-                Icon(
-                    imageVector = Icons.Default.LocationOn,
-                    contentDescription = null,
-                    tint = Color(0xFFDC2626),
-                    modifier = Modifier
-                        .size(15.dp)
-                        .padding(top = 1.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Column {
-                    Text(
-                        text = "${report.village}, Kecamatan ${report.district}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF0F172A)
-                    )
-                    if (report.incidentLocation.isNotBlank()) {
-                        Text(
-                            text = "Patokan: ${report.incidentLocation}",
-                            fontSize = 11.sp,
-                            color = Color(0xFF475569)
-                        )
-                    }
-                    Text(
-                        text = "Waktu Kejadian: ${report.incidentTime}",
-                        fontSize = 11.sp,
-                        color = Color(0xFF64748B)
-                    )
-                }
-            }
-
-            // Casualties banner if any
-            if (report.casualtiesDead > 0 || report.casualtiesInjured > 0 || report.casualtiesMissing > 0) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFFFEF2F2),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCA5A5)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = Color(0xFFDC2626),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Korban: ${report.casualtiesDead} Meninggal • ${report.casualtiesInjured} Luka • ${report.casualtiesMissing} Hilang",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF991B1B)
-                        )
-                    }
-                }
-            }
-
-            // Dedicated Photo Evidence Area (Wajib tampil jelas di Mode Petugas)
-            Spacer(modifier = Modifier.height(8.dp))
-            if (!report.photoUri.isNullOrBlank()) {
-                val thumbContext = LocalContext.current
-                val resolvedPhotoModel = remember(report.photoUri) {
-                    decodeCitizenPhotoModel(report.photoUri)
-                }
-                val fallbackOfficerBitmap = rememberCitizenReportPhotoBitmap(report.photoUri, report.id)
-                var isThumbError by remember(report.photoUri) {
-                    mutableStateOf(resolvedPhotoModel == null && fallbackOfficerBitmap == null)
-                }
-                if (fallbackOfficerBitmap != null && isThumbError) {
-                    isThumbError = false
-                }
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isThumbError && fallbackOfficerBitmap == null) Color(0xFFE5E7EB) else Color(0xFF0F172A),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                        .testTag("officer_report_photo_thumbnail")
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable(enabled = !isThumbError || fallbackOfficerBitmap != null) { onViewPhoto(report.photoUri) }
-                    ) {
-                        if (isThumbError && fallbackOfficerBitmap == null) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color(0xFFE5E7EB))
-                                    .testTag("officer_report_photo_error")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.BrokenImage,
-                                    contentDescription = "Foto tidak dapat dimuat",
-                                    tint = Color(0xFF6B7280),
-                                    modifier = Modifier.size(36.dp)
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "Foto tidak dapat dimuat",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF374151)
-                                )
-                            }
-                        } else {
-                            val activeBitmap = fallbackOfficerBitmap ?: (resolvedPhotoModel as? android.graphics.Bitmap)
-                            if (activeBitmap != null) {
-                                androidx.compose.foundation.Image(
-                                    bitmap = activeBitmap.asImageBitmap(),
-                                    contentDescription = "Foto Bukti Kejadian dari Warga",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                AsyncImage(
-                                    model = coil.request.ImageRequest.Builder(thumbContext)
-                                        .data(resolvedPhotoModel)
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = "Foto Bukti Kejadian dari Warga",
-                                    onSuccess = { isThumbError = false },
-                                    onError = {
-                                        if (fallbackOfficerBitmap == null) {
-                                            isThumbError = true
-                                        }
-                                    },
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-
-                            Surface(
-                                color = Color.Black.copy(alpha = 0.72f),
-                                shape = RoundedCornerShape(topStart = 8.dp),
-                                modifier = Modifier.align(Alignment.BottomEnd)
-                            ) {
-                                Text(
-                                    text = "🔍 Ketuk untuk layar penuh",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF86EFAC),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-
-                            IconButton(
-                                onClick = { onViewPhoto(report.photoUri) },
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(48.dp)
-                                    .testTag("officer_btn_zoom_report_photo")
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .background(Color.Black.copy(alpha = 0.68f), CircleShape)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ZoomIn,
-                                        contentDescription = "Perbesar Foto Layar Penuh",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("officer_placeholder_no_photo")
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.ImageNotSupported,
-                            contentDescription = "Warga tidak melampirkan foto",
-                            tint = Color(0xFF64748B),
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Warga tidak melampirkan foto",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF475569)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = if (!report.photoUri.isNullOrBlank()) "📷 Lampiran foto bukti tersedia" else "Tanpa lampiran foto",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (!report.photoUri.isNullOrBlank()) Color(0xFF15803D) else Color(0xFF64748B)
-                )
-
-                // Tap to pin on map
-                OutlinedButton(
-                    onClick = onInspectMapPin,
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.heightIn(min = 36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MyLocation,
-                        contentDescription = null,
-                        tint = Color(0xFF0284C7),
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text("Tinjau Peta", fontSize = 11.sp, color = Color(0xFF0284C7))
-                }
-            }
-
-            // Official notes if any
-            if (report.additionalNotes.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFFF0FDF4),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Assignment,
-                                contentDescription = null,
-                                tint = Color(0xFF16A34A),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Catatan Tindak Lanjut TRC:",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF166534)
-                            )
-                        }
-                        Text(
-                            text = report.additionalNotes,
-                            fontSize = 11.sp,
-                            color = Color(0xFF14532D)
-                        )
-                    }
-                }
-            }
-
-            // Active officer handling attribution banner
-            if (report.handledByOfficerName.isNotBlank() || report.handledByOfficerNip.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFFEFF6FF),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Badge,
-                            contentDescription = "Petugas Penangan",
-                            tint = Color(0xFF1D4ED8),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        val handlerText = buildString {
-                            append("Petugas Penangan: ")
-                            append(report.handledByOfficerName.ifBlank { "Petugas Pusdalops" })
-                            if (report.handledByOfficerRole.isNotBlank()) {
-                                append(" (${report.handledByOfficerRole})")
-                            }
-                            if (report.handledByOfficerNip.isNotBlank()) {
-                                append(" • NIP ${maskNipLast6(report.handledByOfficerNip)}")
-                            }
-                        }
-                        Text(
-                            text = handlerText,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1E40AF),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-            HorizontalDivider(color = Color(0xFFF1F5F9))
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Action Buttons (Multi-Tier RBAC BPBD Mukomuko):
-            // - Validasi Laporan & Selesai: HANYA Tier 1 (Manajer) & Tier 2 (Pengawas/Supervisor/Koord. Administrasi)
-            // - Hapus Laporan: HANYA Tier 1 (Manajer)
-            // - Catatan & Rute Maps: Operasional untuk semua Tier (1, 2, 3)
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                // Tombol Validasi Laporan (Tier 1 & Tier 2 ONLY; disembunyikan untuk Tier 3)
-                if (canValidate && !report.status.equals("Divalidasi", ignoreCase = true)) {
-                    Button(
-                        onClick = { onUpdateStatus("Divalidasi") },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        modifier = Modifier
-                            .heightIn(min = 40.dp)
-                            .testTag("btn_validate_report_${report.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Validasi Laporan",
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "Validasi Laporan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Tombol Selesai / Buka Kembali (Tier 1 & Tier 2 ONLY; disembunyikan untuk Tier 3)
-                if (canComplete) {
-                    if (!report.status.equals("Selesai", ignoreCase = true)) {
-                        Button(
-                            onClick = { onUpdateStatus("Selesai") },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                            modifier = Modifier
-                                .heightIn(min = 40.dp)
-                                .testTag("btn_complete_report_${report.id}")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Tandai Selesai",
-                                tint = Color.White,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(text = "Selesai", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                        OutlinedButton(
-                            onClick = { onUpdateStatus("Diproses") },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                            modifier = Modifier.heightIn(min = 40.dp)
-                        ) {
-                            Text(text = "Buka Kembali", fontSize = 11.sp)
-                        }
-                    }
-                }
-
-                // Tombol Hapus Laporan (KHUSUS Tier 1 Manajer - Full Access)
-                if (canDelete) {
-                    Button(
-                        onClick = { onDeleteReport?.invoke() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        modifier = Modifier
-                            .heightIn(min = 40.dp)
-                            .testTag("btn_delete_report_${report.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Hapus Laporan",
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "Hapus Laporan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Note editor (Operasional untuk Tier 1, 2, 3)
-                OutlinedButton(
-                    onClick = onOpenNoteEditor,
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    modifier = Modifier.heightIn(min = 40.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(13.dp))
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(text = "Catatan", fontSize = 11.sp)
-                }
-
-                // Google Maps route (Operasional untuk Tier 1, 2, 3)
-                Button(
-                    onClick = {
-                        GoogleMapsHelper.openNavigationRoute(
-                            context = context,
-                            destLat = report.latitude,
-                            destLon = report.longitude,
-                            destName = "Bencana ${report.disasterType} - ${report.village}"
-                        )
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    modifier = Modifier.heightIn(min = 40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Navigation,
-                        contentDescription = "Rute Google Maps",
-                        tint = Color.White,
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Diagnostik Sinkronisasi Multi-Perangkat BPBD:
- * Memantau latensi API Firestore, status detak jantung (heartbeat) 5 unit HP pengujian,
- * pemeriksaan integritas checksum (SHA-256), log resolusi konflik, dan akses Database Explorer.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SyncDiagnosticsSection(
-    latencyMs: Long,
-    isSlowNetwork: Boolean,
-    activeDevices: List<com.example.data.sync.DeviceHeartbeat>,
-    conflictLogs: List<com.example.data.local.SyncConflictLogEntity>,
-    integrityResult: com.example.data.sync.IntegrityCheckResult?,
-    isCheckingIntegrity: Boolean,
-    securitySessions: List<DeviceSecuritySession> = emptyList(),
-    loginActivities: List<OfficerLoginActivity> = emptyList(),
-    isSyncingSecurity: Boolean = false,
-    onSyncSecurityNow: () -> Unit = {},
-    onVerifySecuritySession: (DeviceSecuritySession, Boolean, String) -> Unit = { _, _, _ -> },
-    onRevokeSecuritySession: (DeviceSecuritySession) -> Unit = {},
-    onRunIntegrityCheck: () -> Unit,
-    onTestPing: () -> Unit,
-    onExportConflictLogsCsv: () -> Unit,
-    onOpenDatabaseExplorer: () -> Unit,
-    onOpenFormLaporanHarian: () -> Unit = {}
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // 0. PLAY INTEGRITY CLASSIC BACKEND SECURITY SESSIONS & ALL OFFICER LOGIN ACTIVITIES CARD
-        PlayIntegritySecuritySessionsCard(
-            securitySessions = securitySessions,
-            loginActivities = loginActivities,
-            isSyncing = isSyncingSecurity,
-            onSyncNow = onSyncSecurityNow,
-            onVerifySecuritySession = onVerifySecuritySession,
-            onRevokeSecuritySession = onRevokeSecuritySession
-        )
-
-        // 0B. SUPABASE STORAGE IMAGE UPLOAD PATH & BUCKET POLICY DIAGNOSTIC CARD
-        SupabaseStorageDiagnosticCard()
-
-        // 1. LATENCY METRIC CARD
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-            modifier = Modifier.fillMaxWidth().testTag("card_sync_latency")
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = (if (isSlowNetwork) Color(0xFFEF4444) else Color(0xFF10B981)).copy(alpha = 0.2f),
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.NetworkCheck,
-                                    contentDescription = null,
-                                    tint = if (isSlowNetwork) Color(0xFFEF4444) else Color(0xFF10B981),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text("Pemantauan Latensi Firestore", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text("Waktu bolak-balik respon API cloud", fontSize = 11.sp, color = Color(0xFF64748B))
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isSlowNetwork) Color(0xFFDC2626) else Color(0xFF059669),
-                        modifier = Modifier
-                            .heightIn(min = 24.dp)
-                            .wrapContentWidth()
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
-                            Text(
-                                text = if (isSlowNetwork) "JARINGAN LAMBAT" else "NORMAL",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text("Response Time", fontSize = 11.sp, color = Color(0xFF64748B))
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(
-                                text = if (latencyMs > 0) "$latencyMs" else "-",
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = if (isSlowNetwork) Color(0xFFEF4444) else Color(0xFF10B981),
-                                modifier = Modifier.weight(1f, fill = false),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "ms",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF94A3B8),
-                                modifier = Modifier.padding(bottom = 4.dp).weight(0.5f, fill = false),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Button(
-                        onClick = onTestPing,
-                        colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        modifier = Modifier.heightIn(min = 36.dp).testTag("btn_test_latency_ping")
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Uji Ping Sekarang",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            softWrap = false
-                        )
-                    }
-                }
-            }
-        }
-
-        // 2. ACTIVE CONNECTED DEVICES (HEARTBEAT TIMELINE)
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-            modifier = Modifier.fillMaxWidth().testTag("card_active_devices_heartbeat")
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Icon(Icons.Default.Devices, contentDescription = null, tint = OrangePrimary, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Detak Jantung Perangkat (${activeDevices.size} HP Aktif)",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Text(
-                        text = "5 HP Pengujian",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF64748B),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        softWrap = false,
-                        modifier = Modifier.align(Alignment.CenterVertically)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                if (activeDevices.isEmpty()) {
-                    Text(
-                        text = "Belum ada heartbeat perangkat lain terdeteksi dalam 5 menit terakhir.",
-                        fontSize = 11.sp,
-                        color = Color(0xFF94A3B8)
-                    )
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        activeDevices.forEach { dev ->
-                            val isGuest = dev.isGuestMode()
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isGuest) Color(0xFFFFFBEB) else Color(0xFFF8FAFC),
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    if (isGuest) Color(0xFFFDE68A) else Color(0xFFE2E8F0)
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Text(
-                                                text = dev.deviceModel,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF0F172A),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f, fill = false)
-                                            )
-                                            Surface(
-                                                shape = RoundedCornerShape(4.dp),
-                                                color = if (isGuest) Color(0xFFFEF3C7) else Color(0xFFDBEAFE)
-                                            ) {
-                                                Text(
-                                                    text = if (isGuest) "MODE WARGA" else "PETUGAS",
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.ExtraBold,
-                                                    color = if (isGuest) Color(0xFFB45309) else Color(0xFF1D4ED8),
-                                                    maxLines = 1,
-                                                    softWrap = false,
-                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = if (isGuest) {
-                                                "Pengunjung / Warga • ID: ${dev.deviceId.take(8)}"
-                                            } else {
-                                                "Petugas: ${dev.officerName} • ID: ${dev.deviceId.take(8)}"
-                                            },
-                                            fontSize = 11.sp,
-                                            color = if (isGuest) Color(0xFF92400E) else Color(0xFF64748B),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Surface(
-                                            shape = RoundedCornerShape(4.dp),
-                                            color = if (dev.status == "SLOW_NET") Color(0xFFFEF3C7) else Color(0xFFDCFCE7)
-                                        ) {
-                                            Text(
-                                                text = if (dev.status == "SLOW_NET") "SLOW NET" else "ONLINE",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (dev.status == "SLOW_NET") Color(0xFFB45309) else Color(0xFF15803D),
-                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                        Text(
-                                            text = "${dev.latencyMs} ms",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF334155)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. INTEGRITY CHECK (SHA-256 CHECKSUM COMPARISON)
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-            modifier = Modifier.fillMaxWidth().testTag("card_checksum_integrity")
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Shield, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Pemeriksaan Integritas Data (Checksum)",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Bandingkan hashing SHA-256 antara Room Database SQLite lokal dan Cloud Firestore untuk mendeteksi rekaman yang terlewat atau tidak konsisten.",
-                    fontSize = 11.sp,
-                    color = Color(0xFF64748B)
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                if (integrityResult != null) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (integrityResult.isConsistent) Color(0xFFF0FDF4) else Color(0xFFFFFBEB),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (integrityResult.isConsistent) Color(0xFF86EFAC) else Color(0xFFFDE68A)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = if (integrityResult.isConsistent) "✅ KONSISTEN (100% SINKRON)" else "⚠️ DITEMUKAN PERBEDAAN",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (integrityResult.isConsistent) Color(0xFF15803D) else Color(0xFFB45309)
-                                )
-                                Text(
-                                    text = "Lokal: ${integrityResult.localCount} | Cloud: ${integrityResult.remoteCount}",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF334155)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Checksum Lokal: ${integrityResult.localChecksum}\nChecksum Cloud: ${integrityResult.remoteChecksum}",
-                                fontSize = 11.sp,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                color = Color(0xFF475569)
-                            )
-                            if (integrityResult.discrepancies.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "Tindakan Resolusi Otomatis (${integrityResult.resolvedDiscrepancyCount} laporan diselaraskan):",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    color = Color(0xFFB45309)
-                                )
-                                integrityResult.discrepancies.take(3).forEach { d ->
-                                    Text("• $d", fontSize = 11.sp, color = Color(0xFF78350F))
-                                }
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                }
-
-                Button(
-                    onClick = onRunIntegrityCheck,
-                    enabled = !isCheckingIntegrity,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth().testTag("btn_run_integrity_check")
-                ) {
-                    if (isCheckingIntegrity) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Memeriksa Checksum...", fontSize = 11.sp)
-                    } else {
-                        Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Jalankan Pengecekan Integritas (Checksum)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // 4. CONFLICT RESOLUTION LOGS & TOOLS
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-            modifier = Modifier.fillMaxWidth().testTag("card_conflict_logs_section")
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.SyncProblem, contentDescription = null, tint = Color(0xFFEA580C), modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Log Resolusi Konflik (${conflictLogs.size})",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Riwayat resolusi otomatis saat dua perangkat petugas mengubah laporan yang sama secara bersamaan.",
-                    fontSize = 11.sp,
-                    color = Color(0xFF64748B)
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = onExportConflictLogsCsv,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f).testTag("btn_export_conflict_csv")
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Ekspor CSV Log", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                        onClick = onOpenDatabaseExplorer,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f).testTag("btn_open_database_explorer")
-                    ) {
-                        Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Database Explorer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Card Buat Laporan Harian (Navigasi ke FormLaporanActivity)
-                val localContext = LocalContext.current
-                val officerAuth = remember(localContext) { OfficerAuthManager(localContext) }
-                val isOfficerLoggedIn = officerAuth.isOfficerLoggedIn()
-                val officerRole = officerAuth.getOfficerRole()
-                val hasSpecialAssignment = officerRole.contains("Penugasan Khusus", ignoreCase = true)
-                if (
-                    isOfficerLoggedIn && (
-                        officerRole.contains("Manajer", ignoreCase = true) ||
-                        officerRole.contains("Administrasi", ignoreCase = true) ||
-                        officerRole.contains("Operator", ignoreCase = true) ||
-                        hasSpecialAssignment
-                    )
-                ) {
-                    Card(
-                        onClick = {
-                            val intent = Intent(localContext, com.example.FormLaporanActivity::class.java)
-                            localContext.startActivity(intent)
-                        },
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1976D2)),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("cardBuatLaporan")
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Assignment,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    "Buat Laporan Harian (Form Resmi)",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    "Buka FormLaporanActivity dengan 4 Tab (Kejadian, Dampak, Log, Simpan)",
-                                    fontSize = 11.sp,
-                                    color = Color.White.copy(alpha = 0.85f)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AdminAuthDialog(
-    actionTitle: String,
-    officerNip: String,
-    officerName: String,
-    officerRole: String,
-    onDismiss: () -> Unit,
-    onAuthorized: (com.example.security.AdminTemporaryAccessToken) -> Unit
-) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    var inputPassword by remember { mutableStateOf("") }
-    var isPasswordVisible by remember { mutableStateOf(false) }
-    var isVerifying by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var isRetryableError by remember { mutableStateOf(false) }
-
-    val executeVerification: () -> Unit = {
-        val trimmed = inputPassword.trim()
-        if (trimmed.isEmpty()) {
-            errorMessage = "Masukkan PIN Master Admin terlebih dahulu."
-            isRetryableError = false
-        } else {
-            isVerifying = true
-            errorMessage = null
-            isRetryableError = false
-            coroutineScope.launch {
-                val result = com.example.security.AdminAccessSecurityManager.verifyMasterPasswordAndIssueToken(
-                    context = context,
-                    masterPassword = trimmed,
-                    officerNip = officerNip,
-                    officerName = officerName,
-                    officerRole = officerRole,
-                    actionTitle = actionTitle
-                )
-                isVerifying = false
-                when (result) {
-                    is com.example.security.AdminVerificationResult.Authorized -> {
-                        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
-                        onAuthorized(result.accessToken)
-                    }
-                    is com.example.security.AdminVerificationResult.Denied -> {
-                        errorMessage = result.message
-                        isRetryableError = result.canRetry
-                    }
-                }
-            }
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = { if (!isVerifying) onDismiss() },
-        icon = {
-            Surface(
-                shape = CircleShape,
-                color = Color(0xFFFEF2F2),
-                modifier = Modifier.size(50.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.AdminPanelSettings,
-                        contentDescription = "Verifikasi Admin Server-Side",
-                        tint = Color(0xFFDC2626),
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-            }
-        },
-        title = {
-            Text(
-                text = "Otorisasi Master Admin",
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                textAlign = TextAlign.Center
-            )
-        },
-        text = {
-            val adminPinKeyboardActions = rememberFormKeyboardActions(onDoneCallback = executeVerification)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Text(
-                    text = "Akses ke \"$actionTitle\" diverifikasi langsung ke server Cloud Firestore (app_settings/admin_config). " +
-                        "Jika PIN valid, Token Akses Sementara (10 menit) diterbitkan dan setiap percobaan dicatat di Audit Log.",
-                    fontSize = 11.5.sp,
-                    color = Color(0xFF475569),
-                    lineHeight = 16.sp
-                )
-                if (officerNip.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Petugas: ${officerName.ifBlank { "-" }} (NIP: $officerNip)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF1E293B)
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = inputPassword,
-                    onValueChange = {
-                        inputPassword = it
-                        errorMessage = null
-                        isRetryableError = false
-                    },
-                    label = { Text("PIN Master Admin", fontSize = 11.sp) },
-                    placeholder = { Text("Masukkan PIN Master Admin", fontSize = 11.sp) },
-                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                    keyboardActions = adminPinKeyboardActions,
-                    trailingIcon = {
-                        IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
-                            Icon(
-                                imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (isPasswordVisible) "Sembunyikan PIN" else "Tampilkan PIN",
-                                tint = Color.Gray,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    },
-                    singleLine = true,
-                    enabled = !isVerifying,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .formScrollPadding()
-                        .testTag("input_master_admin_pin")
-                )
-                if (!errorMessage.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isRetryableError) Color(0xFFFFFBEB) else Color(0xFFFEF2F2),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (isRetryableError) Color(0xFFF59E0B) else Color(0xFFFECACA)
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("card_admin_auth_error")
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = errorMessage.orEmpty(),
-                                color = if (isRetryableError) Color(0xFF92400E) else Color(0xFFDC2626),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                lineHeight = 15.sp
-                            )
-                            if (isRetryableError) {
-                                OutlinedButton(
-                                    onClick = executeVerification,
-                                    enabled = !isVerifying,
-                                    shape = RoundedCornerShape(8.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD97706)),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 44.dp)
-                                        .testTag("btn_retry_admin_pin")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = "Coba Lagi verifikasi server",
-                                        tint = Color(0xFFB45309),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Coba Lagi",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFB45309)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = executeVerification,
-                enabled = !isVerifying,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRetryableError) Color(0xFFEA580C) else Color(0xFF15803D)
-                ),
-                modifier = Modifier.testTag("btn_verify_master_admin_pin")
-            ) {
-                if (isVerifying) {
-                    CircularProgressIndicator(
-                        color = Color.White,
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Memverifikasi...")
-                } else {
-                    Text(if (isRetryableError) "Coba Lagi" else "Verifikasi Server")
-                }
-            }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = onDismiss,
-                enabled = !isVerifying
-            ) {
-                Text("Batal")
-            }
-        }
-    )
-}
 

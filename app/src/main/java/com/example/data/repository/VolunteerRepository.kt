@@ -489,6 +489,9 @@ class VolunteerRepository private constructor(
     }
 
     private fun startRealtimeFirestoreListener() {
+        if (!com.example.data.local.OfficerAuthManager(appContext).isOfficerLoggedIn()) {
+            return
+        }
         if (firestoreListener != null || SandboxTrainingManager.isSandboxModeActive()) return
         try {
             val firestore = com.example.data.local.FirestoreHelper.getFirestoreOrThrow(appContext).getOrNull()
@@ -497,6 +500,7 @@ class VolunteerRepository private constructor(
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) return@addSnapshotListener
                     if (SandboxTrainingManager.isSandboxModeActive()) return@addSnapshotListener
+                    if (!com.example.data.local.OfficerAuthManager(appContext).isOfficerLoggedIn()) return@addSnapshotListener
                     scope.launch {
                         for (doc in snapshot.documents) {
                             try {
@@ -564,6 +568,17 @@ class VolunteerRepository private constructor(
                 }
         } catch (e: Exception) {
             Log.w(TAG, "Realtime listener Firestore bpbd_volunteers dilewati: ${e.message}")
+        }
+    }
+
+    fun syncModeWithOfficerSession() {
+        if (com.example.data.local.OfficerAuthManager(appContext).isOfficerLoggedIn()) {
+            if (_isOnline.value && !SandboxTrainingManager.isSandboxModeActive()) {
+                startRealtimeFirestoreListener()
+            }
+        } else {
+            firestoreListener?.remove()
+            firestoreListener = null
         }
     }
 

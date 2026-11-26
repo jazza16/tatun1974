@@ -202,13 +202,16 @@ fun PanduanEvakuasiScreen(
 
     // Menyimpan ID bencana yang sedang dibuka (default: buka item pertama agar pengguna langsung melihat contohnya)
     var expandedIds by remember { mutableStateOf(setOf("gempa_bumi")) }
+    val adaptiveInsets = rememberAdaptiveSystemBarInsets()
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = Modifier
             .fillMaxSize()
             .testTag("panduan_evakuasi_screen"),
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(top = adaptiveInsets.topBarInset),
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
@@ -264,7 +267,7 @@ fun PanduanEvakuasiScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding),
-            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 90.dp),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp + adaptiveInsets.effectiveBottomInset),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Header Banner Informasi Offline

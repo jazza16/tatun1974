@@ -115,9 +115,18 @@ fun PoskoLogisticsManagementScreen(
     officerRole: String,
     onClose: () -> Unit
 ) {
+    val context = LocalContext.current
+    val isOfficerSessionActive = com.example.data.local.OfficerAuthManager(context).isOfficerLoggedIn()
+    if (!isOfficerSessionActive) {
+        InternalModuleLockedScreen(
+            moduleTitle = "Manajemen Posko & Logistik",
+            testTag = "posko_screen_locked",
+            onClose = onClose
+        )
+        return
+    }
     BackHandler { onClose() }
 
-    val context = LocalContext.current
     val repository = remember { PoskoLogisticsRepository.getInstance(context) }
 
     val poskoUnits by repository.poskoUnits.collectAsStateWithLifecycle()
@@ -140,18 +149,21 @@ fun PoskoLogisticsManagementScreen(
     val adaptiveInsets = rememberAdaptiveSystemBarInsets()
 
     Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = CommandNavy,
         bottomBar = {
             // Menjamin ruang aman di bagian bawah layar baik untuk Navigasi 3 Tombol maupun Navigasi Penuh/Usap (Gesture)
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(if (adaptiveInsets.isThreeButtonNavigation) 16.dp else 8.dp)
-            )
+            Surface(color = CommandNavy) {
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(adaptiveInsets.effectiveBottomInset)
+                )
+            }
         },
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(top = adaptiveInsets.topBarInset),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF090E17),
                     titleContentColor = Color.White
@@ -231,8 +243,8 @@ fun PoskoLogisticsManagementScreen(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -273,21 +285,27 @@ fun PoskoLogisticsManagementScreen(
                                 text = "TOTAL PENGUNGSI",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF94A3B8)
+                                color = Color(0xFF94A3B8),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "$totalAllRefugees Jiwa",
-                            fontSize = 20.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Black,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Rentan: $totalAllVulnerable Jiwa (${poskoUnits.size} Posko)",
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFBBF24)
+                            color = Color(0xFFFBBF24),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -319,15 +337,19 @@ fun PoskoLogisticsManagementScreen(
                                 text = "LOGISTIK KRITIS (<10)",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color.White.copy(alpha = 0.85f)
+                                color = Color.White.copy(alpha = 0.85f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "$criticalStocksCount Komoditas",
-                            fontSize = 20.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Black,
-                            color = if (criticalStocksCount > 0) Color(0xFFFEE2E2) else Color.White
+                            color = if (criticalStocksCount > 0) Color(0xFFFEE2E2) else Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = if (fefoWarningCount > 0) {
@@ -337,7 +359,9 @@ fun PoskoLogisticsManagementScreen(
                             },
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFDE047)
+                            color = Color(0xFFFDE047),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -494,9 +518,10 @@ fun PoskoLogisticsManagementScreen(
 
                     HorizontalDivider(color = Color(0xFF334155))
 
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
                             onClick = {
@@ -514,7 +539,7 @@ fun PoskoLogisticsManagementScreen(
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 46.dp)
+                                .heightIn(min = 48.dp)
                                 .testTag("btn_confirm_export_stock_opname_pdf")
                         ) {
                             Icon(
@@ -528,8 +553,8 @@ fun PoskoLogisticsManagementScreen(
                                 text = "Unduh PDF Resmi",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1,
-                                softWrap = false
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -549,7 +574,7 @@ fun PoskoLogisticsManagementScreen(
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 46.dp)
+                                .heightIn(min = 48.dp)
                                 .testTag("btn_confirm_export_stock_opname_csv")
                         ) {
                             Icon(
@@ -563,8 +588,8 @@ fun PoskoLogisticsManagementScreen(
                                 text = "Unduh CSV/Excel",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1,
-                                softWrap = false
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -769,6 +794,7 @@ fun PoskoLogisticsManagementScreen(
 // =================================================================================================
 // SUB-TAB 1: STOK LOGISTIK POSKO & GUDANG (INDIKATOR STATUS KRITIS < 10 & FEFO EXPIRY)
 // =================================================================================================
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PoskoLogisticsStockTab(
     logisticStocks: List<PoskoLogisticCommodity>,
@@ -820,8 +846,8 @@ private fun PoskoLogisticsStockTab(
                                 fontSize = 9.5.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White,
-                                maxLines = 1,
-                                softWrap = false,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
@@ -840,7 +866,7 @@ private fun PoskoLogisticsStockTab(
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 44.dp)
+                            .heightIn(min = 48.dp)
                             .testTag("btn_open_stock_opname_export_dialog")
                     ) {
                         Icon(
@@ -855,8 +881,8 @@ private fun PoskoLogisticsStockTab(
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White,
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -864,12 +890,12 @@ private fun PoskoLogisticsStockTab(
         }
 
         item {
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(end = 8.dp)) {
                     Text(
                         text = "MONITOR STOK LOGISTIK DARURAT (PRD BAB 1)",
                         fontSize = 12.sp,
@@ -882,14 +908,13 @@ private fun PoskoLogisticsStockTab(
                         color = Color(0xFF94A3B8)
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = onAddCommodityClick,
                     colors = ButtonDefaults.buttonColors(containerColor = BpbdOrange),
                     shape = RoundedCornerShape(10.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     modifier = Modifier
-                        .heightIn(min = 42.dp)
+                        .heightIn(min = 48.dp)
                         .testTag("btn_add_custom_logistic")
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -898,8 +923,8 @@ private fun PoskoLogisticsStockTab(
                         text = "Tambah",
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -976,8 +1001,8 @@ private fun PoskoLogisticsStockTab(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White,
-                                maxLines = 1,
-                                softWrap = false,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
@@ -985,13 +1010,13 @@ private fun PoskoLogisticsStockTab(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Column(
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.padding(end = 8.dp)
                         ) {
                             Text(
                                 text = "Sisa Stok: ${item.currentStock} ${item.unit}",
@@ -1019,15 +1044,13 @@ private fun PoskoLogisticsStockTab(
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(10.dp))
-
                         OutlinedButton(
                             onClick = { onEditStock(item) },
                             shape = RoundedCornerShape(10.dp),
                             border = BorderStroke(1.dp, Color(0xFF38BDF8)),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                             modifier = Modifier
-                                .heightIn(min = 42.dp)
+                                .heightIn(min = 48.dp)
                                 .testTag("btn_edit_stock_${item.code}")
                         ) {
                             Icon(
@@ -1042,8 +1065,8 @@ private fun PoskoLogisticsStockTab(
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF38BDF8),
-                                maxLines = 1,
-                                softWrap = false
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -1319,8 +1342,8 @@ private fun PoskoRefugeeValidationTab(
                                 fontSize = 9.5.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White,
-                                maxLines = 1,
-                                softWrap = false,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
@@ -1379,7 +1402,7 @@ private fun PoskoRefugeeValidationTab(
 // =================================================================================================
 // SUB-TAB 3: DISTRIBUSI BANTUAN WARGA (ANTI-DATA GANDA NIK 16 DIGIT)
 // =================================================================================================
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun PoskoNikAidDistributionTab(
     logisticStocks: List<PoskoLogisticCommodity>,
@@ -1522,7 +1545,7 @@ private fun PoskoNikAidDistributionTab(
                         OutlinedTextField(
                             value = selectedVuln,
                             onValueChange = { selectedVuln = it },
-                            label = { Text("Kategori Rentan") },
+                            label = { Text("Kategori Rentan", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
@@ -1614,25 +1637,23 @@ private fun PoskoNikAidDistributionTab(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
                             text = "NIK PK: ${log.recipientNik}",
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF38BDF8),
-                            modifier = Modifier.weight(1f)
+                            color = Color(0xFF38BDF8)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = log.timestampIso,
                             fontSize = 10.5.sp,
                             color = Color(0xFF94A3B8),
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))

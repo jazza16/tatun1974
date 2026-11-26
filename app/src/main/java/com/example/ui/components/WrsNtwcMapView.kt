@@ -115,14 +115,22 @@ fun WrsNtwcMapView(
     }
 
     if (isFullscreen) {
+        val adaptiveInsets = rememberAdaptiveSystemBarInsets()
         Dialog(
             onDismissRequest = { isFullscreen = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
+                    .padding(
+                        top = adaptiveInsets.topBarInset,
+                        bottom = adaptiveInsets.effectiveBottomInset
+                    )
                     .testTag("wrs_ntwc_map_fullscreen")
             ) {
                 WrsMapInnerContent(

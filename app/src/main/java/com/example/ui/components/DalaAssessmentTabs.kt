@@ -681,26 +681,26 @@ fun DalaCasualtiesTab(
                     verticalAlignment = Alignment.Top
                 ) {
                     DalaNumericField(
-                        label = "Jumlah Pengungsi",
+                        label = "Jml Pengungsi",
                         valueText = newSiteEvacuees,
                         onDigitsChanged = { newSiteEvacuees = it },
                         unitSuffix = "Jiwa",
                         helperTooltip = "Di titik ini",
                         testTag = "input_new_evacuation_site_count",
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1.05f),
                         imeAction = ImeAction.Next
                     )
                     OutlinedTextField(
                         value = newSiteNotes,
                         onValueChange = { newSiteNotes = it },
-                        label = { Text("Catatan Singkat") },
+                        label = { Text("Catatan Singkat", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         placeholder = { Text("Fasilitas / kondisi") },
                         singleLine = true,
                         keyboardOptions = formDoneKeyboardOptions(),
                         keyboardActions = keyboardActions,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
-                            .weight(1.2f)
+                            .weight(1.15f)
                             .formScrollPadding()
                     )
                 }

@@ -1083,13 +1083,34 @@ object FirestoreHelper {
         }
 
         // 2. Fallback path: document already exists in Firestore with a different authorUid -> in-place .update(mutableFields)
-        return suspendCancellableCoroutine { cont ->
+        val updateResult = suspendCancellableCoroutine<Result<Unit>> { cont ->
             try {
                 db.collection(COLLECTION_CITIZEN_REPORTS)
                     .document(safeId)
                     .update(mutableFields)
                     .addOnSuccessListener {
                         Log.d(TAG, "Report $safeId updated in Firestore (authorUid preserved)")
+                        if (cont.isActive) cont.resume(Result.success(Unit))
+                    }
+                    .addOnFailureListener { e ->
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
+        if (updateResult.isSuccess) {
+            return Result.success(Unit)
+        }
+
+        // 3. Legacy backfill path: existing document lacks id/authorUid (or has legacy extra fields) -> merge fullCreateData without wiping untouched keys
+        return suspendCancellableCoroutine { cont ->
+            try {
+                db.collection(COLLECTION_CITIZEN_REPORTS)
+                    .document(safeId)
+                    .set(fullCreateData, SetOptions.merge())
+                    .addOnSuccessListener {
+                        Log.d(TAG, "Report $safeId merged/backfilled in Firestore")
                         if (cont.isActive) cont.resume(Result.success(Unit))
                     }
                     .addOnFailureListener { e ->
@@ -1131,8 +1152,16 @@ object FirestoreHelper {
                         .addOnSuccessListener {
                             Log.d(TAG, "Report $safeId updated in Firestore")
                         }
-                        .addOnFailureListener { updateErr ->
-                            logFirestoreError("syncReportToCloud($safeId)", updateErr)
+                        .addOnFailureListener { _ ->
+                            db.collection(COLLECTION_CITIZEN_REPORTS)
+                                .document(safeId)
+                                .set(createData, SetOptions.merge())
+                                .addOnSuccessListener {
+                                    Log.d(TAG, "Report $safeId merged/backfilled in Firestore")
+                                }
+                                .addOnFailureListener { mergeErr ->
+                                    logFirestoreError("syncReportToCloud($safeId)", mergeErr)
+                                }
                         }
                 }
         } catch (e: Exception) {

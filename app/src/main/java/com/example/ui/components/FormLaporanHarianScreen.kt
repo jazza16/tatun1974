@@ -22,14 +22,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -139,6 +134,17 @@ fun FormLaporanHarianScreen(
     onSavedSuccess: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val guardContext = LocalContext.current
+    val isOfficerSessionActive = com.example.data.local.OfficerAuthManager(guardContext).isOfficerLoggedIn()
+    if (!isOfficerSessionActive) {
+        InternalModuleLockedScreen(
+            moduleTitle = "Form Laporan Harian",
+            testTag = "form_laporan_screen_locked",
+            onClose = onClose,
+            modifier = modifier
+        )
+        return
+    }
     val scope = rememberCoroutineScope()
     var currentStep by remember { mutableIntStateOf(0) }
     val stepTitles = listOf(
@@ -371,14 +377,16 @@ fun FormLaporanHarianScreen(
     )
 
     val weatherOptions = listOf("Cerah", "Cerah Berawan", "Berawan", "Hujan Ringan", "Hujan Lebat", "Angin Kencang")
+    val adaptiveInsets = rememberAdaptiveSystemBarInsets()
 
     Scaffold(
-        contentWindowInsets = WindowInsets.systemBars,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier
             .fillMaxSize()
             .testTag("form_laporan_harian_screen"),
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(top = adaptiveInsets.topBarInset),
                 title = {
                     Text(
                         text = "Form Laporan Harian",
@@ -407,7 +415,7 @@ fun FormLaporanHarianScreen(
             )
         },
         bottomBar = {
-            // Tombol Navigasi Bawah dengan Safe Area (navigationBarsPadding + imePadding) agar tidak tertutup area gestur HP
+            // Tombol Navigasi Bawah dengan Safe Area Adaptif agar tidak tertutup navigation bar / area gestur HP
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = Color.White,
@@ -416,7 +424,7 @@ fun FormLaporanHarianScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+                        .padding(bottom = adaptiveInsets.effectiveBottomInset)
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically

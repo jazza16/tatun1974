@@ -151,6 +151,54 @@ test("Citizen disaster reports allow cross-device officer read and status update
       photoUri: oversizedDataUri,
     })
   );
+
+  // Legacy dummy report missing id & authorUid (and carrying legacy extra field) can be synced via merge backfill
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().collection("citizen_disaster_reports").doc("LAP-MMK-20261025-001").set({
+      disasterType: "Gelombang Pasang / Rob",
+      district: "Ipuh",
+      status: "Divalidasi",
+      legacyExtraField: true,
+    });
+  });
+  await assertSucceeds(
+    bob.collection("citizen_disaster_reports").doc("LAP-MMK-20261025-001").set(
+      {
+        id: "LAP-MMK-20261025-001",
+        authorUid: BOB_UID,
+        disasterType: "Gelombang Pasang / Rob",
+        district: "Ipuh",
+        status: "Divalidasi",
+        photoUri: "android.resource://com.example/drawable/citizen_report_coastal_surge",
+        fotoUrl: "android.resource://com.example/drawable/citizen_report_coastal_surge",
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    )
+  );
+  // Once authorUid is set, another caller still cannot overwrite authorUid
+  await assertFails(
+    unauth.collection("citizen_disaster_reports").doc("LAP-MMK-20261025-001").set(
+      {
+        id: "LAP-MMK-20261025-001",
+        authorUid: "PUBLIC_CITIZEN_MUKOMUKO",
+        disasterType: "Gelombang Pasang / Rob",
+        district: "Ipuh",
+        status: "Divalidasi",
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    )
+  );
+  // Yet full mutable-fields update preserving existing authorUid succeeds
+  await assertSucceeds(
+    unauth.collection("citizen_disaster_reports").doc("LAP-MMK-20261025-001").update({
+      disasterType: "Gelombang Pasang / Rob",
+      district: "Ipuh",
+      status: "Divalidasi",
+      updatedAt: Date.now(),
+    })
+  );
 });
 
 // 3. Officer credentials: single-doc NIP lookup allowed for Cloud PIN verification, block list, plaintext initialSecurePin & cross-user overwrite
@@ -576,3 +624,229 @@ test("Heartbeats, pings, officers, and ID poisoning checks", async () => {
     })
   );
 });
+
+// 6. Hardened rules: app_settings, bpbd_volunteers, officers anti-hijack, officer_sessions, admin audit logs & safe URIs
+test("Hardened rules block unauthenticated config tampering, anonymous deletes, ghost fields, NIK mismatches, and unsafe URIs", async () => {
+  const unauth = testEnv.unauthenticatedContext().firestore();
+  const alice = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bob = testEnv.authenticatedContext(BOB_UID).firestore();
+
+  // A. app_settings: arbitrary doc blocked, unauthenticated supabase_storage_config write blocked, non-supabase URL blocked
+  await assertFails(unauth.collection("app_settings").doc("secret_backdoor").get());
+  await assertSucceeds(unauth.collection("app_settings").doc("document_settings").get());
+  await assertFails(
+    unauth.collection("app_settings").doc("supabase_storage_config").set({
+      supabaseUrl: "https://evil-attacker.supabase.co",
+      supabaseKey: "attacker_fake_key_123456",
+      bucketName: "citizen_reports",
+      updatedAt: Date.now(),
+    })
+  );
+  await assertFails(
+    alice.collection("app_settings").doc("supabase_storage_config").set({
+      supabaseUrl: "http://not-https-evil.com",
+      supabaseKey: "valid_length_key_123456",
+      bucketName: "citizen_reports",
+      updatedAt: Date.now(),
+    })
+  );
+  await assertSucceeds(
+    alice.collection("app_settings").doc("supabase_storage_config").set({
+      supabaseUrl: "https://mukomukobpbd.supabase.co",
+      supabaseKey: "sb_publishable_valid_key_123456",
+      bucketName: "citizen_reports",
+      updatedAt: Date.now(),
+    })
+  );
+
+  // B. bpbd_volunteers: 16-digit NIK PK enforced, ghost fields blocked, immutable registeredAt/nik, unsafe URI blocked
+  const validVolunteer = {
+    nik: "1706011408910099",
+    id: "REL-MMK-00099",
+    fullName: "Budi Santoso",
+    phoneNumber: "081234567890",
+    organization: "PMI Mukomuko",
+    skillsCsv: "SAR|Medis",
+    homeDistrict: "Kota Mukomuko",
+    assignedDistrict: "",
+    assignedPoskoName: "",
+    assignedShift: "",
+    status: "Pending",
+    isActive: true,
+    needsAssistance: false,
+    assistanceNote: "",
+    selfiePhotoUri: "https://mukomukobpbd.supabase.co/storage/v1/object/public/selfie.jpg",
+    certificatePhotoUri: null,
+    waktu_checkin: null,
+    waktu_checkout: null,
+    suratTugasNumber: "",
+    suratTugasPdfPath: null,
+    registeredAt: 1700000000000,
+    updatedAt: 1700000000000,
+    verifiedByOfficer: "",
+    isSyncedToCloud: true,
+  };
+  await assertSucceeds(
+    unauth.collection("bpbd_volunteers").doc("1706011408910099").set(validVolunteer)
+  );
+  // Reject doc ID != nik or invalid NIK length
+  await assertFails(
+    unauth.collection("bpbd_volunteers").doc("1706011408910000").set(validVolunteer)
+  );
+  await assertFails(
+    unauth.collection("bpbd_volunteers").doc("12345").set({ ...validVolunteer, nik: "12345" })
+  );
+  // Reject ghost field
+  await assertFails(
+    unauth.collection("bpbd_volunteers").doc("1706011408910088").set({
+      ...validVolunteer,
+      nik: "1706011408910088",
+      ghostAdmin: true,
+    })
+  );
+  // Reject javascript: URI
+  await assertFails(
+    unauth.collection("bpbd_volunteers").doc("1706011408910077").set({
+      ...validVolunteer,
+      nik: "1706011408910077",
+      selfiePhotoUri: "javascript:alert(1)",
+    })
+  );
+  // Reject tampering with registeredAt on update; allow valid status update
+  await assertFails(
+    alice.collection("bpbd_volunteers").doc("1706011408910099").update({
+      registeredAt: 1800000000000,
+      updatedAt: Date.now(),
+    })
+  );
+  await assertSucceeds(
+    alice.collection("bpbd_volunteers").doc("1706011408910099").update({
+      status: "Verified",
+      verifiedByOfficer: "Admin Pusdalops",
+      updatedAt: Date.now(),
+    })
+  );
+
+  // C. officers: unauthenticated caller cannot delete or hijack Google-owned officer doc
+  await assertSucceeds(
+    alice.collection("officers").doc("198001012005011001").set({
+      id: "officer_198001012005011001",
+      ownerUid: ALICE_UID,
+      fullName: "Petugas Google",
+      nip: "198001012005011001",
+      role: "Operator Pusdalops",
+      updatedAt: Date.now(),
+    })
+  );
+  await assertFails(
+    unauth.collection("officers").doc("198001012005011001").delete()
+  );
+  await assertFails(
+    unauth.collection("officers").doc("198001012005011001").set(
+      {
+        ownerUid: "officer_nip_198001012005011001",
+        fullName: "Dibajak",
+        nip: "198001012005011001",
+        role: "Manajer",
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    )
+  );
+
+  // D. officer_sessions: NIP-only session still works normally, ghost fields & unauth delete of Google session blocked
+  await assertSucceeds(
+    unauth.collection("officer_sessions").doc("199807202025061002").set({
+      sessionId: "sess-nip-1",
+      ownerUid: "199807202025061002",
+      nip: "199807202025061002",
+      officerNip: "199807202025061002",
+      officerName: "YUDHA SOFRIANTO",
+      device_name: "Samsung Galaxy A55",
+      os_version: "Android 14",
+      login_time: Date.now(),
+      is_active: true,
+      accessGranted: true,
+      timestamp: Date.now(),
+    })
+  );
+  await assertSucceeds(
+    unauth.collection("officer_sessions").doc("199807202025061002").get()
+  );
+  await assertFails(
+    unauth.collection("officer_sessions").doc("199807202025061002").set({
+      nip: "199807202025061002",
+      device_name: "Pixel",
+      os_version: "Android 14",
+      login_time: Date.now(),
+      is_active: true,
+      extraInjectedField: "hack",
+    })
+  );
+  await assertSucceeds(
+    alice.collection("officer_sessions").doc("197906072006041011").set({
+      ownerUid: ALICE_UID,
+      nip: "197906072006041011",
+      device_name: "Pixel 8",
+      os_version: "Android 14",
+      login_time: Date.now(),
+      is_active: true,
+      accessGranted: true,
+      timestamp: Date.now(),
+    })
+  );
+  await assertFails(
+    unauth.collection("officer_sessions").doc("197906072006041011").delete()
+  );
+  await assertSucceeds(
+    alice.collection("officer_sessions").doc("197906072006041011").delete()
+  );
+
+  // E. admin_access_audit_logs: rejects missing/invalid schema, accepts valid audit log, blocks update
+  await assertFails(
+    alice.collection("admin_access_audit_logs").doc("log_bad").set({ random: "data" })
+  );
+  await assertSucceeds(
+    alice.collection("admin_access_audit_logs").doc("log_ok").set({
+      officerNip: "197906072006041011",
+      officerName: "Manajer Pusdalops",
+      officerRole: "Manajer Pusdalops-PB",
+      actionCode: "ADMIN_GRANTED",
+      actionTitle: "Kelola Personil",
+      success: true,
+      detail: "Verifikasi berhasil",
+      timestamp: Date.now(),
+      deviceModel: "Pixel 8",
+    })
+  );
+  await assertFails(
+    alice.collection("admin_access_audit_logs").doc("log_ok").update({ success: false })
+  );
+
+  // F. device_heartbeats & network_pings: stranger cannot delete another user's telemetry
+  await assertSucceeds(
+    alice.collection("device_heartbeats").doc("dev_alice").set({
+      deviceId: "dev_alice",
+      ownerUid: ALICE_UID,
+      status: "ONLINE",
+      lastSeen: Date.now(),
+    })
+  );
+  await assertFails(bob.collection("device_heartbeats").doc("dev_alice").delete());
+  await assertFails(unauth.collection("device_heartbeats").doc("dev_alice").delete());
+
+  // G. citizen_disaster_reports: unsafe javascript: URI & timestamp tampering blocked
+  await assertFails(
+    unauth.collection("citizen_disaster_reports").doc("LAP-BAD-URI").set({
+      id: "LAP-BAD-URI",
+      authorUid: "PUBLIC_CITIZEN_MUKOMUKO",
+      disasterType: "Banjir",
+      district: "Kota Mukomuko",
+      status: "Diproses",
+      fotoUrl: "javascript:alert(1)",
+      timestamp: 1700000000000,
+      updatedAt: 1700000000000,
+    })
+  );
+});
+

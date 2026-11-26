@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -18,19 +19,26 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -109,6 +117,7 @@ class MapActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
                 MukomukoInteractiveMapScreen(
@@ -150,6 +159,7 @@ data class MukomukoMapMarker(
     val phoneContact: String = "117"
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MukomukoInteractiveMapScreen(
     onBackClick: () -> Unit,
@@ -402,14 +412,15 @@ fun MukomukoInteractiveMapScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0F172A)),
+            .background(Color(0xFF0F172A))
+            .windowInsetsPadding(WindowInsets.safeDrawing),
         contentAlignment = Alignment.TopCenter
     ) {
         Column(
             modifier = modifier
                 .fillMaxHeight()
                 .fillMaxWidth()
-                .widthIn(max = 840.dp)
+                .widthIn(max = 960.dp)
                 .testTag("map_activity_screen")
         ) {
             // 1. TOP APP BAR HEADER
@@ -425,10 +436,13 @@ fun MukomukoInteractiveMapScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     IconButton(
                         onClick = onBackClick,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -439,36 +453,42 @@ fun MukomukoInteractiveMapScreen(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Peta Interaktif 15 Kecamatan",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "PUSDALOPS BPBD • GOOGLE MAPS GIS",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFFFBBF24),
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 0.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 // Action to open full Google Maps Navigation
                 Button(
                     onClick = { GoogleMapsHelper.openMukomukoDisasterMap(context) },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.heightIn(min = 32.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.heightIn(min = 48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Place,
                         contentDescription = "Google Maps",
                         tint = Color.White,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
@@ -476,8 +496,7 @@ fun MukomukoInteractiveMapScreen(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        softWrap = false
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -683,7 +702,7 @@ fun MukomukoInteractiveMapScreen(
                     color = Color(0xFF1E293B).copy(alpha = 0.9f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF475569)),
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(48.dp)
                         .clickable { zoomScale = (zoomScale * 1.3f).coerceAtMost(4.0f) }
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -697,7 +716,7 @@ fun MukomukoInteractiveMapScreen(
                     color = Color(0xFF1E293B).copy(alpha = 0.9f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF475569)),
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(48.dp)
                         .clickable { zoomScale = (zoomScale / 1.3f).coerceAtLeast(0.85f) }
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -710,7 +729,7 @@ fun MukomukoInteractiveMapScreen(
                     shape = CircleShape,
                     color = OrangePrimary,
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(48.dp)
                         .clickable {
                             zoomScale = 1.0f
                             panOffsetX = 0f
@@ -794,9 +813,9 @@ fun MukomukoInteractiveMapScreen(
 
                             IconButton(
                                 onClick = { selectedMarker = null },
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
-                                Icon(Icons.Default.Close, contentDescription = "Tutup", tint = Color.Gray, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Close, contentDescription = "Tutup", tint = Color.Gray, modifier = Modifier.size(20.dp))
                             }
                         }
 
@@ -805,8 +824,8 @@ fun MukomukoInteractiveMapScreen(
                         Text(
                             text = marker.description,
                             fontSize = 11.sp,
-                            color = Color(0xFF64748B),
-                            lineHeight = 15.sp
+                            color = Color(0xFFCBD5E1),
+                            lineHeight = 16.sp
                         )
 
                         Spacer(modifier = Modifier.height(6.dp))
@@ -814,15 +833,16 @@ fun MukomukoInteractiveMapScreen(
                         Text(
                             text = "Koordinat GPS: %.4f, %.4f".format(marker.latitude, marker.longitude),
                             fontSize = 11.sp,
-                            color = Color(0xFF64748B)
+                            color = Color(0xFF94A3B8)
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // Actions: Rute Google Maps & Hubungi
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
                                 onClick = {
@@ -833,13 +853,23 @@ fun MukomukoInteractiveMapScreen(
                                         label = marker.name
                                     )
                                 },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                                modifier = Modifier.weight(1f).height(36.dp)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .widthIn(min = 140.dp)
+                                    .heightIn(min = 48.dp)
                             ) {
-                                Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Rute Google Maps", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Rute Google Maps",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center
+                                )
                             }
 
                             Button(
@@ -851,13 +881,23 @@ fun MukomukoInteractiveMapScreen(
                                         android.widget.Toast.makeText(context, "Kontak: ${marker.phoneContact}", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                                modifier = Modifier.weight(0.9f).height(36.dp)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .widthIn(min = 140.dp)
+                                    .heightIn(min = 48.dp)
                             ) {
-                                Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Kontak Posko", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Kontak Posko",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center
+                                )
                             }
                         }
                     }

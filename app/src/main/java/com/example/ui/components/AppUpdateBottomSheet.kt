@@ -296,13 +296,13 @@ fun AppUpdateBottomSheet(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Landscape,
-                                contentDescription = "Info Lanskap & Wallpaper HD",
+                                contentDescription = "Poster Edukasi & Lanskap HD",
                                 modifier = Modifier.size(18.dp),
                                 tint = OrangePrimary
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Info Lanskap & Wallpaper HD",
+                                text = "Poster Edukasi & Lanskap HD",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = OrangePrimary

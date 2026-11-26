@@ -127,7 +127,7 @@ fun CitizenEmergencyContactsView(
                 .fillMaxSize()
                 .testTag("public_emergency_contacts_list"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(bottom = 32.dp)
+            contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             // Header Banner Darurat Publik + Tombol Sinkronisasi API
             item(key = "header_emergency_banner") {

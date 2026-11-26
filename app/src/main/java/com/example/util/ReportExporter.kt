@@ -1653,10 +1653,15 @@ object ReportExporter {
             emptyList()
         }
         val currentMonthIndex = Calendar.getInstance().get(Calendar.MONTH)
-        val allMonths = buildMonthlyDisasterSummaries(reports, selectedYear, districtFilter)
+        val allMonths = buildMonthlyDisasterSummaries(
+            reports = reports,
+            selectedYear = selectedYear,
+            districtFilter = districtFilter,
+            includeHistoricalBaseline = false
+        )
         val activeMonths = allMonths.filter { it.monthIndex <= currentMonthIndex }
             .ifEmpty { allMonths.take(currentMonthIndex + 1) }
-        val pieSlices = buildPieSlices(activeMonths, reports, pieMode = 0)
+        val pieSlices = buildPieSlices(activeMonths, reports, pieMode = 0, includeHistoricalBaseline = false)
         return Pair(activeMonths, pieSlices)
     }
 
@@ -1673,7 +1678,8 @@ object ReportExporter {
         monthlyData: List<MonthlyDisasterSummary>,
         pieSlices: List<PieSliceData>,
         selectedYear: Int,
-        scopeLabel: String
+        scopeLabel: String,
+        isHistoricalBaselineIncluded: Boolean = false
     ): File? {
         if (monthlyData.isEmpty()) {
             Toast.makeText(context, "Tidak ada data ringkasan bencana bulanan untuk diunduh", Toast.LENGTH_SHORT).show()
@@ -1697,7 +1703,8 @@ object ReportExporter {
                     monthlyData = monthlyData,
                     pieSlices = pieSlices,
                     selectedYear = selectedYear,
-                    scopeLabel = scopeLabel
+                    scopeLabel = scopeLabel,
+                    isHistoricalBaselineIncluded = isHistoricalBaselineIncluded
                 )
                 pdfDoc.finishPage(page)
 
@@ -1783,12 +1790,19 @@ object ReportExporter {
         pieSlices: List<PieSliceData>,
         selectedYear: Int,
         scopeLabel: String,
-        documentSettings: DocumentSettings? = null
+        documentSettings: DocumentSettings? = null,
+        isHistoricalBaselineIncluded: Boolean = false
     ) {
-        val currentMonthIndex = Calendar.getInstance().get(Calendar.MONTH)
-        val activeMonthlyData = monthlyData
-            .filter { it.monthIndex <= currentMonthIndex }
-            .ifEmpty { monthlyData.take(currentMonthIndex + 1) }
+        val nowCal = Calendar.getInstance()
+        val currentYear = nowCal.get(Calendar.YEAR)
+        val currentMonthIndex = nowCal.get(Calendar.MONTH)
+        val activeMonthlyData = when {
+            selectedYear < currentYear -> monthlyData
+            selectedYear == currentYear -> monthlyData
+                .filter { it.monthIndex <= currentMonthIndex }
+                .ifEmpty { monthlyData.take(currentMonthIndex + 1) }
+            else -> emptyList()
+        }
         if (activeMonthlyData.isEmpty()) return
 
         val lastMonthNameUpper = activeMonthlyData.last().monthFull.uppercase(Locale.getDefault())
@@ -1877,14 +1891,19 @@ object ReportExporter {
             minFontSize = settings.minFontSize
         )
         y += 10.5f
+        val sourceLabel = if (isHistoricalBaselineIncluded) {
+            "Referensi Baseline Historis (Estimasi) + Laporan Riil"
+        } else {
+            "Data Riil Laporan Tercatat Pusdalops BPBD"
+        }
         PdfTextAutoShrinkHelper.drawAutoShrinkText(
             canvas = canvas,
-            text = "Petugas: $rawOfficerName",
+            text = "Petugas: $rawOfficerName  |  Sumber: $sourceLabel",
             x = pageWidth / 2f,
             y = y,
             maxWidth = usableWidth,
             basePaint = metaPaint,
-            initialFontSize = 7.8f,
+            initialFontSize = 7.6f,
             minFontSize = settings.minFontSize
         )
         y += 15f
@@ -1893,12 +1912,12 @@ object ReportExporter {
         val totalAnnual = activeMonthlyData.sumOf { it.totalIncidents }
         val totalAffected = activeMonthlyData.sumOf { it.casualtiesAffected }
         val totalResolved = activeMonthlyData.sumOf { it.resolvedCount }
-        val resolvedPct = if (totalAnnual > 0) ((totalResolved * 100f) / totalAnnual).roundToInt().coerceIn(0, 100) else 100
+        val resolvedPct = if (totalAnnual > 0) ((totalResolved * 100f) / totalAnnual).roundToInt().coerceIn(0, 100) else 0
         val avgMonthly = totalAnnual / activeMonthlyData.size.coerceAtLeast(1).toFloat()
-        val peakMonth = activeMonthlyData.maxByOrNull { it.totalIncidents } ?: activeMonthlyData.first()
+        val peakMonth = activeMonthlyData.filter { it.totalIncidents > 0 }.maxByOrNull { it.totalIncidents }
         val domCatEntry = DisasterChartCategory.entries.associateWith { cat ->
             activeMonthlyData.sumOf { it.countsByCategory[cat] ?: 0 }
-        }.maxByOrNull { it.value }
+        }.maxByOrNull { it.value }?.takeIf { it.value > 0 }
 
         val kpiPad = 10f
         val kpiGap = 12f
@@ -1906,11 +1925,17 @@ object ReportExporter {
         val kpiBodyPaint = Paint(textPaint).apply {
             textSize = 7.0f
         }
+        val peakLabel = if (peakMonth != null) {
+            "${peakMonth.monthFull} (${peakMonth.totalIncidents} kejadian - Dominan Kec. ${peakMonth.topDistrict})"
+        } else {
+            "Nihil (0 kejadian tercatat)"
+        }
         val leftKpiText =
             "• Total Kejadian: $totalAnnual kejadian (Rata-rata ${String.format(Locale.getDefault(), "%.1f", avgMonthly)}/bln)\n" +
-            "• Bulan Puncak Kejadian: ${peakMonth.monthFull} (${peakMonth.totalIncidents} kejadian - Dominan Kec. ${peakMonth.topDistrict})"
+            "• Bulan Puncak Kejadian: $peakLabel"
+        val domText = if (domCatEntry != null) "${domCatEntry.key.shortLabel} (${domCatEntry.value} kejadian)" else "Nihil (0 kejadian)"
         val rightKpiText =
-            "• Bencana Dominan: ${domCatEntry?.key?.shortLabel ?: "Banjir"} (${domCatEntry?.value ?: 0} kejadian)\n" +
+            "• Bencana Dominan: $domText\n" +
             "• Penanganan Tuntas TRC: $totalResolved/$totalAnnual selesai ($resolvedPct%) • Terdampak: $totalAffected jiwa"
 
         val leftKpiLayout = buildAutoFitStaticLayout(

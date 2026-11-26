@@ -105,15 +105,26 @@ fun ZoomableShakemapViewer(
 
     // Fullscreen Dialog Modal for maximum zoomability
     if (isFullscreenOpen) {
+        val adaptiveInsets = rememberAdaptiveSystemBarInsets()
         Dialog(
             onDismissRequest = { isFullscreenOpen = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
         ) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = Color.Black
             ) {
-                Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(
+                            top = adaptiveInsets.topBarInset,
+                            bottom = adaptiveInsets.effectiveBottomInset
+                        )
+                ) {
                     ShakemapContent(
                         earthquake = earthquake,
                         modifier = Modifier.fillMaxSize(),
@@ -128,7 +139,7 @@ fun ZoomableShakemapViewer(
                             .padding(16.dp)
                             .align(Alignment.TopEnd)
                             .background(Color.Black.copy(alpha = 0.6f), CircleShape)
-                            .size(42.dp)
+                            .size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,

@@ -996,6 +996,10 @@ class SecurityManager private constructor(private val context: Context) {
         onActiveSessionRevoked: (() -> Unit)? = null,
         onUpdate: (List<DeviceSecuritySession>) -> Unit
     ): ListenerRegistration? {
+        if (!isOfficerDataSyncPermitted()) {
+            onUpdate(emptyList())
+            return null
+        }
         val cleanFilterNip = officerNipFilter.trim()
         val revocationTargetNip = activeOfficerNipForRevocation.trim().ifBlank { cleanFilterNip }
         fun filterForOfficer(list: List<DeviceSecuritySession>): List<DeviceSecuritySession> {
@@ -1097,6 +1101,10 @@ class SecurityManager private constructor(private val context: Context) {
     fun listenLoginActivitiesRealtime(
         onUpdate: (List<OfficerLoginActivity>) -> Unit
     ): ListenerRegistration? {
+        if (!isOfficerDataSyncPermitted()) {
+            onUpdate(emptyList())
+            return null
+        }
         val db = firestore ?: run {
             listenerScope.launch {
                 val local = getLocalCachedLoginActivities()
@@ -1261,6 +1269,9 @@ class SecurityManager private constructor(private val context: Context) {
         knownOfficialNips: List<String> = emptyList(),
         officerNipFilter: String = ""
     ): List<DeviceSecuritySession> = withContext(Dispatchers.IO) {
+        if (!isOfficerDataSyncPermitted()) {
+            return@withContext emptyList()
+        }
         val cleanFilterNip = officerNipFilter.trim()
         fun filterByNip(list: List<DeviceSecuritySession>): List<DeviceSecuritySession> {
             return if (cleanFilterNip.isNotBlank()) {
@@ -1369,6 +1380,9 @@ class SecurityManager private constructor(private val context: Context) {
      * and merges with local cached login activities (works with or without Google Sign-In).
      */
     suspend fun fetchLoginActivities(): List<OfficerLoginActivity> = withContext(Dispatchers.IO) {
+        if (!isOfficerDataSyncPermitted()) {
+            return@withContext emptyList()
+        }
         val localList = getLocalCachedLoginActivities()
         val db = firestore ?: return@withContext localList
 
@@ -1408,6 +1422,9 @@ class SecurityManager private constructor(private val context: Context) {
         officerNipFilter: String = "",
         activeDeviceHeartbeats: List<com.example.data.sync.DeviceHeartbeat> = emptyList()
     ): Pair<List<DeviceSecuritySession>, List<OfficerLoginActivity>> = withContext(Dispatchers.IO) {
+        if (!isOfficerDataSyncPermitted()) {
+            return@withContext emptyList<DeviceSecuritySession>() to emptyList()
+        }
         val existingCachedActivities = getLocalCachedLoginActivities()
         val existingIds = existingCachedActivities.map { it.activityId }.toHashSet()
         val hw = collectHardwareTelemetry()
@@ -2186,6 +2203,32 @@ class SecurityManager private constructor(private val context: Context) {
 
     fun hasActiveVerifiedLocalSession(officerNip: String): Boolean {
         return isLocalSessionValid(officerNip)
+    }
+
+    /**
+     * Memeriksa apakah perangkat memiliki sesi lokal terverifikasi atau sesi OfficerAuthManager aktif.
+     * Digunakan untuk memblokir penarikan/caching data aktivitas login & sesi petugas saat Mode Warga aktif.
+     */
+    fun hasAnyActiveLocalVerifiedSession(): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
+        val savedNip = SecureStorageHelper.getDecrypted(prefs, KEY_LAST_VERIFIED_NIP)
+        if (savedNip.isNullOrBlank()) return false
+        val accessGranted = prefs.getBoolean(KEY_ACCESS_GRANTED, false)
+        val verdict = prefs.getString("last_verdict", "UNVERIFIED") ?: "UNVERIFIED"
+        if (verdict == "INTEGRITY_VERIFICATION_FAILED" || verdict == "UNVERIFIED") {
+            return false
+        }
+        val timestamp = prefs.getLong(KEY_VERIFICATION_TIMESTAMP, 0L)
+        return accessGranted && timestamp > 0L
+    }
+
+    fun isOfficerDataSyncPermitted(): Boolean {
+        val officerLoggedIn = try {
+            com.example.data.local.OfficerAuthManager(context).isOfficerLoggedIn()
+        } catch (_: Exception) {
+            false
+        }
+        return officerLoggedIn || hasAnyActiveLocalVerifiedSession()
     }
 
     private fun isLocalSessionValid(officerNip: String): Boolean {

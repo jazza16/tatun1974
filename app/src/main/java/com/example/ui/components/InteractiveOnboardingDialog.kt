@@ -107,6 +107,7 @@ fun InteractiveOnboardingDialog(
 ) {
     val pagerState = rememberPagerState(pageCount = { 4 })
     val coroutineScope = rememberCoroutineScope()
+    val adaptiveInsets = rememberAdaptiveSystemBarInsets()
 
     Dialog(
         onDismissRequest = onComplete,
@@ -125,7 +126,10 @@ fun InteractiveOnboardingDialog(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .systemBarsPadding()
+                    .padding(
+                        top = adaptiveInsets.topBarInset,
+                        bottom = adaptiveInsets.effectiveBottomInset
+                    )
                     .padding(horizontal = 20.dp, vertical = 20.dp)
                     .widthIn(max = 600.dp)
             ) {

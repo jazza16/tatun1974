@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -110,6 +109,16 @@ fun DatabaseExplorerScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isOfficerSessionActive = com.example.data.local.OfficerAuthManager(context).isOfficerLoggedIn()
+    if (!isOfficerSessionActive) {
+        InternalModuleLockedScreen(
+            moduleTitle = "Database Explorer",
+            testTag = "database_explorer_locked",
+            onClose = onClose,
+            modifier = modifier
+        )
+        return
+    }
     val smartOfficerAuthRepo = remember(context) { SmartOfficerAuthRepository(context) }
     var selectedTable by remember { mutableStateOf(RoomTable.PERSONNEL) }
     var searchQuery by remember { mutableStateOf("") }
@@ -171,6 +180,8 @@ fun DatabaseExplorerScreen(
         return
     }
 
+    val adaptiveInsets = rememberAdaptiveSystemBarInsets()
+
     Surface(
         modifier = modifier
             .fillMaxSize()
@@ -178,15 +189,14 @@ fun DatabaseExplorerScreen(
         color = MaterialTheme.colorScheme.background
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding()
+            modifier = Modifier.fillMaxSize()
         ) {
             // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF0F172A))
+                    .padding(top = adaptiveInsets.topBarInset)
                     .padding(horizontal = 12.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -394,7 +404,7 @@ fun DatabaseExplorerScreen(
                         } else {
                             LazyColumn(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                                contentPadding = PaddingValues(vertical = 8.dp)
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp + adaptiveInsets.effectiveBottomInset)
                             ) {
                                 items(filtered, key = { it.id }) { p ->
                                     val (badgeBg, badgeText) = OfficialAsnBpbdPersonnel.getRoleBadgeColor(p.role)
@@ -499,7 +509,7 @@ fun DatabaseExplorerScreen(
                         } else {
                             LazyColumn(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
-                                contentPadding = PaddingValues(vertical = 8.dp)
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp + adaptiveInsets.effectiveBottomInset)
                             ) {
                                 items(filtered, key = { it.laporan.id }) { item ->
                                     val lap = item.laporan
@@ -681,7 +691,7 @@ fun DatabaseExplorerScreen(
                         } else {
                             LazyColumn(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                                contentPadding = PaddingValues(vertical = 8.dp)
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp + adaptiveInsets.effectiveBottomInset)
                             ) {
                                 items(filtered, key = { it.id }) { r ->
                                     val (repBg, repColor) = when {
@@ -759,7 +769,7 @@ fun DatabaseExplorerScreen(
                         } else {
                             LazyColumn(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                                contentPadding = PaddingValues(vertical = 8.dp)
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp + adaptiveInsets.effectiveBottomInset)
                             ) {
                                 items(filtered, key = { it.id }) { a ->
                                     val dateStr = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date(a.timestamp))
@@ -823,7 +833,7 @@ fun DatabaseExplorerScreen(
                         } else {
                             LazyColumn(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                                contentPadding = PaddingValues(vertical = 8.dp)
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp + adaptiveInsets.effectiveBottomInset)
                             ) {
                                 items(filtered, key = { it.id }) { c ->
                                     val dateStr = SimpleDateFormat("HH:mm:ss • dd MMM yyyy", Locale.getDefault()).format(Date(c.timestamp))

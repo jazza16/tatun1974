@@ -190,15 +190,16 @@ class SyncController(
         setupNetworkCallback()
         attachRealtimeReportsListener()
         startHeartbeatAndLatencyMonitoring()
-        attachRealtimeHeartbeatsListener()
+        if (OfficerAuthManager(context).isOfficerLoggedIn()) {
+            attachRealtimeHeartbeatsListener()
+        }
         try {
             val firebaseAuth = com.google.firebase.auth.FirebaseAuth.getInstance()
-            val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { auth ->
+            val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { _ ->
                 OfficerPushNotificationHelper.syncOfficerTopicSubscription(context)
                 startHeartbeatAndLatencyMonitoring()
                 attachRealtimeReportsListener()
-                attachRealtimeHeartbeatsListener()
-                sendHeartbeatNow()
+                syncModeWithOfficerSession()
             }
             authStateListener = listener
             firebaseAuth.addAuthStateListener(listener)
@@ -312,10 +313,31 @@ class SyncController(
      */
     fun sendHeartbeatNow() {
         scope.launch {
-            if (heartbeatsListener == null) {
-                attachRealtimeHeartbeatsListener()
+            if (OfficerAuthManager(context).isOfficerLoggedIn()) {
+                if (heartbeatsListener == null) {
+                    attachRealtimeHeartbeatsListener()
+                }
+                sendHeartbeat()
+            } else {
+                heartbeatsListener?.remove()
+                heartbeatsListener = null
+                _activeDevices.value = emptyList()
             }
-            sendHeartbeat()
+        }
+    }
+
+    /**
+     * Menyelaraskan listener perangkat internal dengan status login petugas.
+     * Saat berada di Mode Warga, listener `device_heartbeats` dilepas agar data perangkat petugas tidak ditarik ke HP warga.
+     */
+    fun syncModeWithOfficerSession() {
+        if (OfficerAuthManager(context).isOfficerLoggedIn()) {
+            attachRealtimeHeartbeatsListener()
+            sendHeartbeatNow()
+        } else {
+            heartbeatsListener?.remove()
+            heartbeatsListener = null
+            _activeDevices.value = emptyList()
         }
     }
 
@@ -380,6 +402,12 @@ class SyncController(
     }
 
     private fun attachRealtimeHeartbeatsListener() {
+        if (!OfficerAuthManager(context).isOfficerLoggedIn()) {
+            heartbeatsListener?.remove()
+            heartbeatsListener = null
+            _activeDevices.value = emptyList()
+            return
+        }
         val db = firestore ?: return
         heartbeatsListener?.remove()
         heartbeatsListener = db.collection("device_heartbeats")

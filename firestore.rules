@@ -28,6 +28,21 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isSafeMediaUri(val) {
+      return val == null || (
+        val is string
+        && val.size() <= 400000
+        && (
+          val == ''
+          || val.matches('^https://.*')
+          || val.matches('^data:image/.*')
+          || val.matches('^android\\.resource://.*')
+          || val.matches('^content://.*')
+          || val.matches('^file://.*')
+        )
+      );
+    }
+
     // --- VALIDATION HELPERS ---
 
     function isValidUserPreferences(data) {
@@ -60,7 +75,7 @@ service cloud.firestore {
           && data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128
           && data.disasterType is string && data.disasterType.size() >= 1 && data.disasterType.size() <= 120
           && data.district is string && data.district.size() >= 1 && data.district.size() <= 100
-          && data.status is string && data.status.size() >= 1 && data.status.size() <= 64
+          && data.status is string && data.status in ['Diproses', 'Divalidasi', 'Selesai', 'DIHAPUS_RESET_V110']
           && (!('incidentTime' in data) || (data.incidentTime is string && data.incidentTime.size() <= 80))
           && (!('incidentLocation' in data) || (data.incidentLocation is string && data.incidentLocation.size() <= 300))
           && (!('village' in data) || (data.village is string && data.village.size() <= 120))
@@ -71,9 +86,9 @@ service cloud.firestore {
           && (!('casualtiesDead' in data) || (data.casualtiesDead is int && data.casualtiesDead >= 0 && data.casualtiesDead <= 100000))
           && (!('casualtiesInjured' in data) || (data.casualtiesInjured is int && data.casualtiesInjured >= 0 && data.casualtiesInjured <= 100000))
           && (!('casualtiesMissing' in data) || (data.casualtiesMissing is int && data.casualtiesMissing >= 0 && data.casualtiesMissing <= 100000))
-          && (!('photoUri' in data) || data.photoUri == null || (data.photoUri is string && data.photoUri.size() <= 400000))
-          && (!('fotoUrl' in data) || data.fotoUrl == null || (data.fotoUrl is string && data.fotoUrl.size() <= 400000))
-          && (!('fotoLampiran' in data) || data.fotoLampiran == null || (data.fotoLampiran is string && data.fotoLampiran.size() <= 400000))
+          && (!('photoUri' in data) || isSafeMediaUri(data.photoUri))
+          && (!('fotoUrl' in data) || isSafeMediaUri(data.fotoUrl))
+          && (!('fotoLampiran' in data) || isSafeMediaUri(data.fotoLampiran))
           && (!('reporterName' in data) || (data.reporterName is string && data.reporterName.size() <= 120))
           && (!('reporterPhone' in data) || (data.reporterPhone is string && data.reporterPhone.size() <= 40))
           && (!('additionalNotes' in data) || (data.additionalNotes is string && data.additionalNotes.size() <= 2000))
@@ -100,11 +115,12 @@ service cloud.firestore {
     }
 
     function isValidOfficerCredential(data) {
-      return data.nip is string && data.nip.size() >= 1 && data.nip.size() <= 64
+      return data.nip is string && data.nip.matches('^[0-9A-Za-z_\\-]{4,64}$')
           && data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128
           && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 150
-          && data.pinHash is string && data.pinHash.size() >= 32 && data.pinHash.size() <= 256
-          && data.salt is string && data.salt.size() >= 16 && data.salt.size() <= 128
+          && data.pinHash is string
+          && (data.pinHash.matches('^pbkdf2\\$[0-9]+\\$[a-fA-F0-9]{32,}$') || data.pinHash.matches('^[a-fA-F0-9]{64}$'))
+          && data.salt is string && data.salt.matches('^[a-zA-Z0-9_\\-+=]{16,128}$')
           && (!('role' in data) || (data.role is string && data.role.size() <= 80))
           && (!('unit' in data) || (data.unit is string && data.unit.size() <= 150))
           && (!('shift' in data) || (data.shift is string && data.shift.size() <= 80))
@@ -116,6 +132,18 @@ service cloud.firestore {
           && (!('lastLoginAt' in data) || data.lastLoginAt is int)
           && (!('lastLoginDevice' in data) || (data.lastLoginDevice is string && data.lastLoginDevice.size() <= 150))
           && (!('updatedAt' in data) || data.updatedAt is int);
+    }
+
+    function isValidAdminAccessAuditLog(data) {
+      return data.officerNip is string && data.officerNip.size() >= 1 && data.officerNip.size() <= 64
+          && data.officerName is string && data.officerName.size() >= 1 && data.officerName.size() <= 150
+          && data.officerRole is string && data.officerRole.size() >= 1 && data.officerRole.size() <= 80
+          && data.actionCode is string && data.actionCode.size() >= 1 && data.actionCode.size() <= 80
+          && data.actionTitle is string && data.actionTitle.size() >= 1 && data.actionTitle.size() <= 160
+          && data.success is bool
+          && data.detail is string && data.detail.size() <= 500
+          && data.timestamp is int
+          && (!('deviceModel' in data) || (data.deviceModel is string && data.deviceModel.size() <= 120));
     }
 
     function isValidDatabaseBackup(data) {
@@ -318,19 +346,21 @@ service cloud.firestore {
     match /citizen_disaster_reports/{reportId} {
       allow read: if true;
       allow create: if isValidId(reportId)
+                    && incoming().id == reportId
                     && incoming().keys().hasAll(['id', 'authorUid', 'disasterType', 'district', 'status'])
                     && incoming().keys().hasOnly([
                          'id', 'authorUid', 'disasterType', 'incidentTime', 'incidentLocation',
                          'district', 'village', 'latitude', 'longitude', 'gpsAccuracyMeters',
                          'isGpsVerified', 'casualtiesDead', 'casualtiesInjured', 'casualtiesMissing',
-                          'photoUri', 'fotoUrl', 'fotoLampiran', 'reporterName', 'reporterPhone', 'additionalNotes',
+                         'photoUri', 'fotoUrl', 'fotoLampiran', 'reporterName', 'reporterPhone', 'additionalNotes',
                          'timestamp', 'updatedAt', 'status',
                          'handledByOfficerName', 'handledByOfficerNip', 'handledByOfficerRole'
                        ])
                     && isValidCitizenDisasterReport(incoming());
       allow update: if isValidId(reportId)
-                    && (!('id' in existing()) || incoming().id == existing().id)
-                    && (!('authorUid' in existing()) || incoming().authorUid == existing().authorUid)
+                    && (!('id' in existing()) || existing().id == '' || incoming().id == existing().id)
+                    && (!('authorUid' in existing()) || existing().authorUid == '' || incoming().authorUid == existing().authorUid)
+                    && (!('timestamp' in existing()) || !('timestamp' in incoming()) || incoming().timestamp == existing().timestamp)
                     && (
                       // Action: Officer status / follow-up / tombstone update
                       (
@@ -338,17 +368,19 @@ service cloud.firestore {
                           'status', 'additionalNotes', 'updatedAt',
                           'handledByOfficerName', 'handledByOfficerNip', 'handledByOfficerRole'
                         ])
-                        && incoming().status is string && incoming().status.size() >= 1 && incoming().status.size() <= 64
+                        && incoming().status is string
+                        && incoming().status in ['Diproses', 'Divalidasi', 'Selesai', 'DIHAPUS_RESET_V110']
                         && (!('additionalNotes' in incoming()) || (incoming().additionalNotes is string && incoming().additionalNotes.size() <= 2000))
                         && (!('updatedAt' in incoming()) || incoming().updatedAt is int)
                         && (!('handledByOfficerName' in incoming()) || (incoming().handledByOfficerName is string && incoming().handledByOfficerName.size() <= 150))
                         && (!('handledByOfficerNip' in incoming()) || (incoming().handledByOfficerNip is string && incoming().handledByOfficerNip.size() <= 64))
                         && (!('handledByOfficerRole' in incoming()) || (incoming().handledByOfficerRole is string && incoming().handledByOfficerRole.size() <= 80))
                       )
-                      // Action: Full report sync update (preserving id & authorUid)
+                      // Action: Full report sync update (preserving existing non-empty id, authorUid & timestamp)
                       || (
                         isValidCitizenDisasterReport(incoming())
                         && incoming().diff(existing()).affectedKeys().hasOnly([
+                             'id', 'authorUid',
                              'disasterType', 'incidentTime', 'incidentLocation', 'district', 'village',
                              'latitude', 'longitude', 'gpsAccuracyMeters', 'isGpsVerified',
                              'casualtiesDead', 'casualtiesInjured', 'casualtiesMissing',
@@ -369,18 +401,25 @@ service cloud.firestore {
                     && incoming().keys().hasAll(['ownerUid', 'fullName', 'nip', 'role'])
                     && incoming().keys().hasOnly(['id', 'ownerUid', 'fullName', 'nip', 'role', 'unit', 'shift', 'phone', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedReason'])
                     && isValidOfficerProfile(incoming())
+                    && incoming().nip.matches('^[0-9A-Za-z_\\-]{3,64}$')
                     && (
                       (isSignedIn() && incoming().ownerUid == request.auth.uid)
                       || (!isSignedIn() && incoming().ownerUid == ('officer_nip_' + incoming().nip))
                     );
       allow update: if isValidId(officerId)
                     && isValidOfficerProfile(incoming())
+                    && incoming().nip == existing().nip
                     && incoming().diff(existing()).affectedKeys().hasOnly(['id', 'ownerUid', 'fullName', 'nip', 'role', 'unit', 'shift', 'phone', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedReason'])
+                    && (!('ownerUid' in existing()) || existing().ownerUid == incoming().ownerUid || existing().ownerUid.matches('^officer_nip_.*'))
                     && (
-                      (isSignedIn() && incoming().ownerUid == request.auth.uid)
+                      (isSignedIn() && (incoming().ownerUid == request.auth.uid || incoming().ownerUid == existing().ownerUid))
                       || (!isSignedIn() && incoming().ownerUid == ('officer_nip_' + incoming().nip))
                     );
-      allow delete: if isValidId(officerId);
+      allow delete: if isValidId(officerId)
+                    && (
+                      (isSignedIn() && (!('ownerUid' in existing()) || existing().ownerUid == request.auth.uid || existing().ownerUid.matches('^officer_nip_.*')))
+                      || (!isSignedIn() && (!('ownerUid' in existing()) || existing().ownerUid == ('officer_nip_' + existing().nip)))
+                    );
     }
 
     // 5. Pusdalops & TRC Individual Officer Credentials & Custom PIN Sync (No plaintext initial PIN)
@@ -419,11 +458,17 @@ service cloud.firestore {
                               && (!('pinHash' in existing()) || existing().pinHash == '' || !('salt' in existing()) || existing().salt == '')
                             )
                          || (
-                              // Allow officer or Admin to update PIN hash & salt while preserving existing ownerUid
+                              // Allow officer or Admin to update PIN hash & salt while preserving existing ownerUid,
+                              // and strictly prevent downgrading an already-customized PIN (isCustomPinSet == true) back to false.
                               incoming().ownerUid == existing().ownerUid
                               && incoming().pinHash != ''
                               && incoming().salt != ''
                               && incoming().initialSecurePin == ''
+                              && (
+                                   !('isCustomPinSet' in existing())
+                                   || existing().isCustomPinSet == false
+                                   || (incoming().isCustomPinSet == true && (!('isPinChanged' in incoming()) || incoming().isPinChanged == true))
+                                 )
                             )
                          || (
                               incoming().ownerUid == existing().ownerUid
@@ -463,27 +508,38 @@ service cloud.firestore {
     match /device_heartbeats/{deviceId} {
       allow read: if true;
       allow create, update: if isValidId(deviceId)
+                    && incoming().deviceId == deviceId
                     && incoming().keys().hasAll(['deviceId', 'ownerUid', 'status'])
                     && incoming().keys().hasOnly(['deviceId', 'ownerUid', 'deviceModel', 'officerName', 'lastSeen', 'latencyMs', 'status'])
                     && isValidDeviceHeartbeat(incoming());
-      allow delete: if isValidId(deviceId);
+      allow delete: if isValidId(deviceId)
+                    && (
+                         (isSignedIn() && existing().ownerUid == request.auth.uid)
+                         || (!isSignedIn() && existing().ownerUid == deviceId)
+                       );
     }
 
     // 8. Network Latency Pings
     match /network_pings/{deviceId} {
       allow read: if true;
       allow create, update: if isValidId(deviceId)
+                    && incoming().deviceId == deviceId
                     && incoming().keys().hasAll(['deviceId', 'ownerUid', 'pingTimestamp'])
                     && incoming().keys().hasOnly(['deviceId', 'ownerUid', 'pingTimestamp'])
                     && isValidNetworkPing(incoming());
-      allow delete: if isValidId(deviceId);
+      allow delete: if isValidId(deviceId)
+                    && (
+                         (isSignedIn() && existing().ownerUid == request.auth.uid)
+                         || (!isSignedIn() && existing().ownerUid == deviceId)
+                       );
     }
 
     // 9. Play Integrity Classic Device Security Sessions (Ruang Kerja Access Gating)
     match /device_security_sessions/{officerNip} {
       allow get: if isValidId(officerNip);
       allow list: if isSignedIn();
-      allow create, update: if isValidId(officerNip)
+      allow create: if isValidId(officerNip)
+                    && incoming().officerNip == officerNip
                     && incoming().keys().hasAll(['sessionId', 'ownerUid', 'officerNip', 'accessGranted', 'timestamp'])
                     && incoming().keys().hasOnly([
                          'sessionId', 'ownerUid', 'nip', 'officerNip', 'officerName', 'officerRole',
@@ -497,6 +553,28 @@ service cloud.firestore {
                          'device_name', 'os_version', 'login_time', 'is_active'
                        ])
                     && isValidDeviceSecuritySession(incoming());
+      allow update: if isValidId(officerNip)
+                    && (!('officerNip' in existing()) || incoming().officerNip == existing().officerNip)
+                    && incoming().keys().hasAll(['sessionId', 'ownerUid', 'officerNip', 'accessGranted', 'timestamp'])
+                    && incoming().keys().hasOnly([
+                         'sessionId', 'ownerUid', 'nip', 'officerNip', 'officerName', 'officerRole',
+                         'integrityToken', 'tokenHash', 'tokenLength', 'tokenSource', 'classicNonce',
+                         'verdict', 'deviceVerdict', 'deviceId', 'deviceModel', 'deviceBrand',
+                         'deviceManufacturer', 'deviceHardware', 'deviceFingerprintHash', 'isEmulator',
+                         'osVersion', 'sdkInt', 'appVersion', 'loginMethod', 'loginStatus',
+                         'loginAction', 'loginCount', 'lastActivityDetail',
+                         'isVerified', 'accessGranted', 'adminVerified', 'adminVerifiedBy',
+                         'adminVerifiedAt', 'adminVerificationNote', 'targetModule', 'timestamp',
+                         'device_name', 'os_version', 'login_time', 'is_active'
+                       ])
+                    && isValidDeviceSecuritySession(incoming())
+                    && (
+                         isSignedIn()
+                         || !('ownerUid' in existing())
+                         || existing().ownerUid == incoming().ownerUid
+                         || existing().ownerUid == officerNip
+                         || existing().ownerUid == ('officer_nip_' + officerNip)
+                       );
       allow delete: if isValidId(officerNip)
                     && (
                          (isSignedIn() && existing().ownerUid == request.auth.uid)
@@ -507,10 +585,49 @@ service cloud.firestore {
     // 9b. Firestore-Backed Officer Sessions (Session Management replacing Play Integrity)
     match /officer_sessions/{sessionId} {
       allow get, list: if true;
-      allow create, update: if isValidId(sessionId)
+      allow create: if isValidId(sessionId)
                     && incoming().keys().hasAll(['nip', 'device_name', 'os_version', 'login_time', 'is_active'])
+                    && incoming().keys().hasOnly([
+                         'sessionId', 'ownerUid', 'nip', 'officerNip', 'officerName', 'officerRole',
+                         'integrityToken', 'tokenHash', 'tokenLength', 'tokenSource', 'classicNonce',
+                         'verdict', 'deviceVerdict', 'deviceId', 'deviceModel', 'deviceBrand',
+                         'deviceManufacturer', 'deviceHardware', 'deviceFingerprintHash', 'isEmulator',
+                         'osVersion', 'sdkInt', 'appVersion', 'loginMethod', 'loginStatus',
+                         'loginAction', 'loginCount', 'lastActivityDetail',
+                         'isVerified', 'accessGranted', 'adminVerified', 'adminVerifiedBy',
+                         'adminVerifiedAt', 'adminVerificationNote', 'targetModule', 'timestamp',
+                         'device_name', 'os_version', 'login_time', 'is_active'
+                       ])
                     && isValidOfficerSession(incoming());
-      allow delete: if isValidId(sessionId);
+      allow update: if isValidId(sessionId)
+                    && (!('nip' in existing()) || incoming().nip == existing().nip)
+                    && incoming().keys().hasAll(['nip', 'device_name', 'os_version', 'login_time', 'is_active'])
+                    && incoming().keys().hasOnly([
+                         'sessionId', 'ownerUid', 'nip', 'officerNip', 'officerName', 'officerRole',
+                         'integrityToken', 'tokenHash', 'tokenLength', 'tokenSource', 'classicNonce',
+                         'verdict', 'deviceVerdict', 'deviceId', 'deviceModel', 'deviceBrand',
+                         'deviceManufacturer', 'deviceHardware', 'deviceFingerprintHash', 'isEmulator',
+                         'osVersion', 'sdkInt', 'appVersion', 'loginMethod', 'loginStatus',
+                         'loginAction', 'loginCount', 'lastActivityDetail',
+                         'isVerified', 'accessGranted', 'adminVerified', 'adminVerifiedBy',
+                         'adminVerifiedAt', 'adminVerificationNote', 'targetModule', 'timestamp',
+                         'device_name', 'os_version', 'login_time', 'is_active'
+                       ])
+                    && isValidOfficerSession(incoming())
+                    && (
+                         isSignedIn()
+                         || !('ownerUid' in existing())
+                         || existing().ownerUid == incoming().ownerUid
+                         || existing().ownerUid == existing().nip
+                         || existing().ownerUid == ('officer_nip_' + existing().nip)
+                       );
+      allow delete: if isValidId(sessionId)
+                    && (
+                         isSignedIn()
+                         || !('ownerUid' in existing())
+                         || existing().ownerUid == existing().nip
+                         || existing().ownerUid == ('officer_nip_' + existing().nip)
+                       );
     }
 
     // 10. Play Integrity Security Audit & Validation Failures Logging (Append-Only)
@@ -533,12 +650,13 @@ service cloud.firestore {
 
     // 11. Cloud Master Admin Configuration & Public Storage Endpoint Discovery
     match /app_settings/{docId} {
-      allow get: if isValidId(docId);
-      allow create, update: if docId == 'supabase_storage_config'
+      allow get: if docId in ['admin_config', 'supabase_storage_config', 'document_settings'];
+      allow create, update: if isSignedIn()
+                    && docId == 'supabase_storage_config'
                     && incoming().keys().hasAll(['supabaseUrl', 'supabaseKey', 'bucketName', 'updatedAt'])
                     && incoming().keys().hasOnly(['supabaseUrl', 'supabaseKey', 'bucketName', 'updatedAt'])
                     && incoming().supabaseUrl is string
-                    && incoming().supabaseUrl.size() >= 12
+                    && incoming().supabaseUrl.matches('^https://[a-zA-Z0-9.-]+\\.supabase\\.co/?$')
                     && incoming().supabaseUrl.size() <= 256
                     && incoming().supabaseKey is string
                     && incoming().supabaseKey.size() >= 16
@@ -550,9 +668,20 @@ service cloud.firestore {
       allow list, delete: if false;
     }
 
-    // 12. Admin Access Audit Logs (Purgeable for test simulation records)
+    // 12. Admin Access Audit Logs (Append-only with schema validation, purgeable by signed-in admin)
     match /admin_access_audit_logs/{logId} {
-      allow read, create, delete: if isSignedIn() && isValidId(logId);
+      allow read, delete: if isSignedIn() && isValidId(logId);
+      allow create: if isSignedIn()
+                    && isValidId(logId)
+                    && incoming().keys().hasAll([
+                         'officerNip', 'officerName', 'officerRole',
+                         'actionCode', 'actionTitle', 'success', 'detail', 'timestamp'
+                       ])
+                    && incoming().keys().hasOnly([
+                         'officerNip', 'officerName', 'officerRole',
+                         'actionCode', 'actionTitle', 'success', 'detail', 'timestamp', 'deviceModel'
+                       ])
+                    && isValidAdminAccessAuditLog(incoming());
       allow update: if false;
     }
 
@@ -591,11 +720,11 @@ service cloud.firestore {
     function isValidBpbdVolunteer(data) {
       return data.id is string && data.id.size() >= 1 && data.id.size() <= 128
           && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 150
-          && data.nik is string && data.nik.size() >= 4 && data.nik.size() <= 32
-          && data.phoneNumber is string && data.phoneNumber.size() >= 4 && data.phoneNumber.size() <= 40
+          && data.nik is string && data.nik.matches('^[0-9]{16}$')
+          && data.phoneNumber is string && data.phoneNumber.size() >= 6 && data.phoneNumber.size() <= 40
           && data.organization is string && data.organization.size() >= 1 && data.organization.size() <= 120
           && data.skillsCsv is string && data.skillsCsv.size() >= 1 && data.skillsCsv.size() <= 500
-          && data.status is string && data.status.size() >= 1 && data.status.size() <= 40
+          && data.status is string && data.status in ['Pending', 'Verified', 'Assigned', 'Done', 'Rejected']
           && (!('homeDistrict' in data) || (data.homeDistrict is string && data.homeDistrict.size() <= 100))
           && (!('assignedDistrict' in data) || (data.assignedDistrict is string && data.assignedDistrict.size() <= 100))
           && (!('assignedPoskoName' in data) || (data.assignedPoskoName is string && data.assignedPoskoName.size() <= 200))
@@ -603,8 +732,8 @@ service cloud.firestore {
           && (!('isActive' in data) || data.isActive is bool)
           && (!('needsAssistance' in data) || data.needsAssistance is bool)
           && (!('assistanceNote' in data) || (data.assistanceNote is string && data.assistanceNote.size() <= 500))
-          && (!('selfiePhotoUri' in data) || data.selfiePhotoUri == null || (data.selfiePhotoUri is string && data.selfiePhotoUri.size() <= 400000))
-          && (!('certificatePhotoUri' in data) || data.certificatePhotoUri == null || (data.certificatePhotoUri is string && data.certificatePhotoUri.size() <= 400000))
+          && (!('selfiePhotoUri' in data) || isSafeMediaUri(data.selfiePhotoUri))
+          && (!('certificatePhotoUri' in data) || isSafeMediaUri(data.certificatePhotoUri))
           && (!('waktu_checkin' in data) || data.waktu_checkin == null || data.waktu_checkin is int)
           && (!('waktu_checkout' in data) || data.waktu_checkout == null || data.waktu_checkout is int)
           && (!('suratTugasNumber' in data) || data.suratTugasNumber == null || (data.suratTugasNumber is string && data.suratTugasNumber.size() <= 120))
@@ -617,8 +746,31 @@ service cloud.firestore {
 
     match /bpbd_volunteers/{volunteerId} {
       allow read: if true;
-      allow create, update: if isValidId(volunteerId)
+      allow create: if isValidId(volunteerId)
+                    && incoming().nik == volunteerId
                     && incoming().keys().hasAll(['id', 'fullName', 'nik', 'phoneNumber', 'organization', 'skillsCsv', 'status'])
+                    && incoming().keys().hasOnly([
+                         'nik', 'id', 'fullName', 'phoneNumber', 'organization', 'skillsCsv',
+                         'homeDistrict', 'assignedDistrict', 'assignedPoskoName', 'assignedShift',
+                         'status', 'isActive', 'needsAssistance', 'assistanceNote',
+                         'selfiePhotoUri', 'certificatePhotoUri', 'waktu_checkin', 'waktu_checkout',
+                         'suratTugasNumber', 'suratTugasPdfPath', 'registeredAt', 'updatedAt',
+                         'verifiedByOfficer', 'isSyncedToCloud'
+                       ])
+                    && isValidBpbdVolunteer(incoming());
+      allow update: if isValidId(volunteerId)
+                    && incoming().nik == volunteerId
+                    && incoming().nik == existing().nik
+                    && (!('registeredAt' in existing()) || incoming().registeredAt == existing().registeredAt)
+                    && incoming().keys().hasAll(['id', 'fullName', 'nik', 'phoneNumber', 'organization', 'skillsCsv', 'status'])
+                    && incoming().keys().hasOnly([
+                         'nik', 'id', 'fullName', 'phoneNumber', 'organization', 'skillsCsv',
+                         'homeDistrict', 'assignedDistrict', 'assignedPoskoName', 'assignedShift',
+                         'status', 'isActive', 'needsAssistance', 'assistanceNote',
+                         'selfiePhotoUri', 'certificatePhotoUri', 'waktu_checkin', 'waktu_checkout',
+                         'suratTugasNumber', 'suratTugasPdfPath', 'registeredAt', 'updatedAt',
+                         'verifiedByOfficer', 'isSyncedToCloud'
+                       ])
                     && isValidBpbdVolunteer(incoming());
       allow delete: if isSignedIn() && isValidId(volunteerId);
     }
