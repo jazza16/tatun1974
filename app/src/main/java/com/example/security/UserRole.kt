@@ -184,5 +184,143 @@ enum class UserRole(
          * Menu operasional (Laporan Warga, Input Form Harian/DALA, Peta) tersedia untuk semua tier petugas.
          */
         fun canAccessOperationalMenus(role: String?): Boolean = fromRoleString(role).canAccessOperationalMenus
+
+        /**
+         * Hak membuat draf aktivasi Sirene Otoritas Berlapis (Four-Eyes Principle):
+         * Tersedia untuk seluruh petugas BPBD (Operator Pusdalops, Manajer, Pengawas, Kalaksa).
+         */
+        fun canCreateSirenDraft(role: String?): Boolean {
+            return PrdOperationalRole.fromRoleString(role).canCreateSirenDraft
+        }
+
+        /**
+         * Hak menyetujui & mengaktifkan Sirene Otoritas Berlapis (Four-Eyes Principle):
+         * HANYA untuk Kepala Pusdalops / Manajer (Tier 1) atau Kalaksa / Pengawas / Supervisor (Tier 2).
+         * Operator / TRC / Logistik / Warga TIDAK dapat menyetujui aktivasi sirene.
+         */
+        fun canApproveSirenActivation(role: String?): Boolean {
+            val tier = fromRoleString(role)
+            if (tier == MANAJER || tier == PENGAWAS_KOORDINATOR) return true
+            return PrdOperationalRole.fromRoleString(role).canApproveSirenActivation
+        }
+    }
+}
+
+/**
+ * Pemetaan 8 Role Operasional sesuai Master PRD SIPAGAR KITA (BAB 1):
+ * `warga`, `operator_pusdalops`, `kepala_pusdalops`, `kalak`, `trc`,
+ * `petugas_posko`, `petugas_dala`, dan `relawan`.
+ *
+ * Setiap role operasional dipetakan ke salah satu tier RBAC [UserRole] agar
+ * kompatibel penuh dengan kontrol akses ruang kerja serta otoritas Four-Eyes.
+ */
+enum class PrdOperationalRole(
+    val code: String,
+    val displayName: String,
+    val isOfficerTier: Boolean,
+    val mappedTier: UserRole?,
+    val canCreateSirenDraft: Boolean,
+    val canApproveSirenActivation: Boolean,
+    val canManagePoskoLogistics: Boolean,
+    val canManageDalaAssessment: Boolean
+) {
+    WARGA(
+        code = "warga",
+        displayName = "Warga / Masyarakat Umum",
+        isOfficerTier = false,
+        mappedTier = null,
+        canCreateSirenDraft = false,
+        canApproveSirenActivation = false,
+        canManagePoskoLogistics = false,
+        canManageDalaAssessment = false
+    ),
+    OPERATOR_PUSDALOPS(
+        code = "operator_pusdalops",
+        displayName = "Operator Pusdalops-PB",
+        isOfficerTier = true,
+        mappedTier = UserRole.OPERATOR_LAPANGAN,
+        canCreateSirenDraft = true,
+        canApproveSirenActivation = false,
+        canManagePoskoLogistics = true,
+        canManageDalaAssessment = true
+    ),
+    KEPALA_PUSDALOPS(
+        code = "kepala_pusdalops",
+        displayName = "Kepala / Manajer Pusdalops-PB",
+        isOfficerTier = true,
+        mappedTier = UserRole.MANAJER,
+        canCreateSirenDraft = true,
+        canApproveSirenActivation = true,
+        canManagePoskoLogistics = true,
+        canManageDalaAssessment = true
+    ),
+    KALAK(
+        code = "kalak",
+        displayName = "Kalaksa / Pengawas BPBD",
+        isOfficerTier = true,
+        mappedTier = UserRole.PENGAWAS_KOORDINATOR,
+        canCreateSirenDraft = true,
+        canApproveSirenActivation = true,
+        canManagePoskoLogistics = true,
+        canManageDalaAssessment = true
+    ),
+    TRC(
+        code = "trc",
+        displayName = "Tim Reaksi Cepat (TRC)",
+        isOfficerTier = true,
+        mappedTier = UserRole.OPERATOR_LAPANGAN,
+        canCreateSirenDraft = true,
+        canApproveSirenActivation = false,
+        canManagePoskoLogistics = true,
+        canManageDalaAssessment = true
+    ),
+    PETUGAS_POSKO(
+        code = "petugas_posko",
+        displayName = "Petugas Posko & Logistik",
+        isOfficerTier = true,
+        mappedTier = UserRole.OPERATOR_LAPANGAN,
+        canCreateSirenDraft = false,
+        canApproveSirenActivation = false,
+        canManagePoskoLogistics = true,
+        canManageDalaAssessment = false
+    ),
+    PETUGAS_DALA(
+        code = "petugas_dala",
+        displayName = "Petugas Kaji Cepat (DaLA)",
+        isOfficerTier = true,
+        mappedTier = UserRole.OPERATOR_LAPANGAN,
+        canCreateSirenDraft = false,
+        canApproveSirenActivation = false,
+        canManagePoskoLogistics = false,
+        canManageDalaAssessment = true
+    ),
+    RELAWAN(
+        code = "relawan",
+        displayName = "Relawan Kebencanaan",
+        isOfficerTier = false,
+        mappedTier = null,
+        canCreateSirenDraft = false,
+        canApproveSirenActivation = false,
+        canManagePoskoLogistics = false,
+        canManageDalaAssessment = false
+    );
+
+    companion object {
+        fun fromRoleString(rawRole: String?): PrdOperationalRole {
+            val clean = rawRole?.trim().orEmpty().lowercase()
+            if (clean.isBlank()) return OPERATOR_PUSDALOPS
+            return when {
+                clean.contains("warga") || clean.contains("tamu") || clean.contains("masyarakat") -> WARGA
+                clean.contains("relawan") || clean.contains("volunteer") -> RELAWAN
+                clean == "kepala_pusdalops" || clean.contains("manajer") || clean.contains("kepala pusdalops") -> KEPALA_PUSDALOPS
+                clean == "kalak" || clean.contains("kalaksa") || clean.contains("pengawas") ||
+                    clean.contains("sekretaris") || clean.contains("kabid") || clean.contains("supervisor") ||
+                    clean.contains("koord") -> KALAK
+                clean == "petugas_posko" || clean.contains("posko") || clean.contains("logistik") -> PETUGAS_POSKO
+                clean == "petugas_dala" || clean.contains("dala") || clean.contains("kaji cepat") -> PETUGAS_DALA
+                clean == "trc" || clean.contains("reaksi cepat") -> TRC
+                else -> OPERATOR_PUSDALOPS
+            }
+        }
     }
 }

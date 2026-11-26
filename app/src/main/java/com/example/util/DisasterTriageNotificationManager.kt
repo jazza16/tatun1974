@@ -528,39 +528,58 @@ object DisasterTriageNotificationManager {
     }
 
     fun evaluateEarthquake(earthquake: BmkgEarthquake): DisasterTriageSignal {
+        // FILTER WILAYAH LOKAL PROVINSI BENGKULU:
+        // Notifikasi Gempa Bumi HANYA berlaku untuk gempa lokal yang terjadi di Provinsi Bengkulu
+        // atau tercatat dirasakan oleh masyarakat Provinsi Bengkulu. Gempa luar Bengkulu (global Indonesia)
+        // selalu dikembalikan sebagai HIJAU_AMAN agar tidak mengganggu pengguna.
+        if (!earthquake.isBengkuluProvinceAffected) {
+            return safeSignal(
+                source = TriageFeatureSource.GEMPA_TSUNAMI,
+                districtOrLocation = earthquake.region,
+                summary = "Gempa M ${earthquake.magnitude} di luar Provinsi Bengkulu (${earthquake.region}) — notifikasi dibisukan (filter lokal Provinsi Bengkulu)."
+            )
+        }
+
         val hasTsunamiPotential = earthquake.potentialTsunami.contains("BERPOTENSI TSUNAMI", ignoreCase = true) &&
             !earthquake.potentialTsunami.contains("tidak berpotensi", ignoreCase = true)
+        val hasFeltInBengkulu = com.example.model.BengkuluEarthquakeScope.containsBengkuluKeyword(earthquake.feltDescription)
 
         val (level, headline, advice, targetTab) = when {
             hasTsunamiPotential -> QuadTab(
                 DisasterTriageLevel.MERAH_AWAS,
-                "AWAS TSUNAMI! Gempa M ${earthquake.magnitude}",
+                "AWAS TSUNAMI BENGKULU! Gempa M ${earthquake.magnitude}",
                 "Segera evakuasi mandiri ke dataran tinggi (>= 20m dpl / >= 2 km dari pantai). Rumus 20-20-20!",
                 6
             )
-            earthquake.urgencyLevel == EarthquakeUrgency.CRITICAL || (earthquake.isNearMukomuko && earthquake.magnitude >= 6.0) -> QuadTab(
+            earthquake.magnitude >= 6.0 || (earthquake.isNearMukomuko && earthquake.magnitude >= 5.0) -> QuadTab(
                 DisasterTriageLevel.MERAH_AWAS,
-                "Gempa Kuat M ${earthquake.magnitude} Dekat Mukomuko",
+                "Gempa Kuat M ${earthquake.magnitude} Wilayah Bengkulu",
                 "Lakukan Drop-Cover-Hold On, keluar bangunan secara tertib setelah guncangan reda, waspada gempa susulan.",
                 4
             )
-            earthquake.urgencyLevel == EarthquakeUrgency.WARNING || (earthquake.isNearMukomuko && earthquake.magnitude >= 5.0) -> QuadTab(
+            earthquake.magnitude >= 5.0 || (earthquake.isNearMukomuko && earthquake.magnitude >= 4.5) -> QuadTab(
                 DisasterTriageLevel.ORANYE_SIAGA,
-                "Siaga Gempa M ${earthquake.magnitude} (${earthquake.depth})",
-                "Periksa kondisi bangunan sekitar dan pantau rilis resmi BMKG serta arahan Pusdalops BPBD.",
+                "Siaga Gempa Lokal Bengkulu M ${earthquake.magnitude} (${earthquake.depth})",
+                "Periksa kondisi bangunan sekitar dan pantau rilis resmi BMKG serta arahan Pusdalops BPBD Bengkulu/Mukomuko.",
                 4
             )
-            earthquake.isNearMukomuko && earthquake.magnitude >= 4.0 -> QuadTab(
+            earthquake.magnitude >= 3.0 || hasFeltInBengkulu -> QuadTab(
                 DisasterTriageLevel.KUNING_WASPADA,
-                "Waspada Gempa Terasa M ${earthquake.magnitude}",
+                "Waspada Gempa Lokal Terasa M ${earthquake.magnitude} (Bengkulu)",
                 "Tetap tenang, pantau informasi resmi BMKG dan hindari bangunan retak.",
                 4
             )
             else -> return safeSignal(
                 source = TriageFeatureSource.GEMPA_TSUNAMI,
                 districtOrLocation = earthquake.region,
-                summary = "Gempa M ${earthquake.magnitude} (${earthquake.distanceKmToMukomuko} km dari Mukomuko) — tidak berdampak signifikan."
+                summary = "Gempa mikro lokal M ${earthquake.magnitude} (${earthquake.region}) — tidak berdampak signifikan."
             )
+        }
+
+        val feltSuffix = if (earthquake.feltDescription.isNotBlank() && earthquake.feltDescription != "-") {
+            " • Dirasakan: ${earthquake.feltDescription}"
+        } else {
+            ""
         }
 
         return DisasterTriageSignal(
@@ -568,11 +587,31 @@ object DisasterTriageNotificationManager {
             level = level,
             districtOrLocation = earthquake.region,
             headline = headline,
-            metricSummary = "M ${earthquake.magnitude} • Kedalaman ${earthquake.depth} • ${earthquake.timeWib} • Jarak ~${earthquake.distanceKmToMukomuko} km",
+            metricSummary = "M ${earthquake.magnitude} • Kedalaman ${earthquake.depth} • ${earthquake.timeWib} • Jarak ~${earthquake.distanceKmToMukomuko} km$feltSuffix",
             safetyAdvice = advice,
             signatureKey = "eq_${earthquake.id}_${level.code}",
             targetTabOverride = targetTab
         )
+    }
+
+    /**
+     * Memilih kejadian gempa lokal Provinsi Bengkulu dengan tingkat triase tertinggi dari daftar gempa
+     * BMKG (gabungan autogempa + gempadirasakan). Mengembalikan HIJAU_AMAN bila tidak ada gempa
+     * yang terjadi atau dirasakan di Wilayah Provinsi Bengkulu.
+     */
+    fun evaluateEarthquakesForBengkulu(
+        earthquakes: List<BmkgEarthquake>,
+        fallbackLocation: String = "Provinsi Bengkulu"
+    ): DisasterTriageSignal {
+        val localSignals = earthquakes
+            .filter { it.isBengkuluProvinceAffected }
+            .map { evaluateEarthquake(it) }
+        return localSignals.maxByOrNull { it.level.priorityScore }
+            ?: safeSignal(
+                source = TriageFeatureSource.GEMPA_TSUNAMI,
+                districtOrLocation = fallbackLocation,
+                summary = "Tidak ada gempa lokal atau dirasakan di Wilayah Provinsi Bengkulu saat ini."
+            )
     }
 
     fun evaluateKarhutlaHotspots(

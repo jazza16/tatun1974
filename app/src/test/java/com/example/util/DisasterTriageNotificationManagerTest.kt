@@ -428,4 +428,210 @@ class DisasterTriageNotificationManagerTest {
         assertEquals(DisasterTriageNotificationManager.CHANNEL_TRIAGE_MERAH, redNotif.channelId)
         assertEquals(DisasterTriageLevel.MERAH_AWAS.colorInt, redNotif.color)
     }
+
+    @Test
+    fun globalIndonesiaEarthquakesOutsideBengkulu_areStrictlySuppressedAndNeverNotify() {
+        val outsideEarthquakes = listOf(
+            // Gempa besar & berpotensi tsunami di Papua (luar Bengkulu) -> HARUS dibisukan
+            BmkgEarthquake(
+                id = "eq_papua_68",
+                date = "26 Nov 2026",
+                timeWib = "09:10:00 WIB",
+                dateTimeIso = "2026-11-26T09:10:00+07:00",
+                latitude = -2.53,
+                longitude = 140.71,
+                magnitude = 6.8,
+                depth = "10 km",
+                region = "82 km Timur Laut JAYAPURA-PAPUA",
+                potentialTsunami = "BERPOTENSI TSUNAMI",
+                feltDescription = "V MMI Jayapura, IV MMI Sarmi",
+                shakemapUrl = null,
+                distanceKmToMukomuko = 4380,
+                isNearMukomuko = false,
+                urgencyLevel = EarthquakeUrgency.CRITICAL
+            ),
+            // Gempa M 6.2 di Maluku -> HARUS dibisukan
+            BmkgEarthquake(
+                id = "eq_maluku_62",
+                date = "26 Nov 2026",
+                timeWib = "10:15:00 WIB",
+                dateTimeIso = "2026-11-26T10:15:00+07:00",
+                latitude = -3.69,
+                longitude = 128.18,
+                magnitude = 6.2,
+                depth = "25 km",
+                region = "95 km Barat Daya AMBON-MALUKU",
+                potentialTsunami = "Tidak berpotensi tsunami",
+                feltDescription = "IV MMI Ambon",
+                shakemapUrl = null,
+                distanceKmToMukomuko = 2990,
+                isNearMukomuko = false,
+                urgencyLevel = EarthquakeUrgency.CRITICAL
+            ),
+            // Gempa M 5.6 di Jawa Barat -> HARUS dibisukan
+            BmkgEarthquake(
+                id = "eq_jabar_56",
+                date = "26 Nov 2026",
+                timeWib = "11:20:00 WIB",
+                dateTimeIso = "2026-11-26T11:20:00+07:00",
+                latitude = -7.35,
+                longitude = 107.12,
+                magnitude = 5.6,
+                depth = "15 km",
+                region = "52 km Barat Daya GARUT-JABAR",
+                potentialTsunami = "Tidak berpotensi tsunami",
+                feltDescription = "III-IV MMI Bandung, III MMI Garut",
+                shakemapUrl = null,
+                distanceKmToMukomuko = 850,
+                isNearMukomuko = false,
+                urgencyLevel = EarthquakeUrgency.WARNING
+            ),
+            // Gempa provinsi tetangga (Lubuklinggau Sumsel) yang TIDAK dirasakan di Bengkulu -> HARUS dibisukan
+            BmkgEarthquake(
+                id = "eq_sumsel_48",
+                date = "26 Nov 2026",
+                timeWib = "11:45:00 WIB",
+                dateTimeIso = "2026-11-26T11:45:00+07:00",
+                latitude = -3.29,
+                longitude = 102.86,
+                magnitude = 4.8,
+                depth = "12 km",
+                region = "18 km Timur Laut LUBUKLINGGAU-SUMSEL",
+                potentialTsunami = "Tidak berpotensi tsunami",
+                feltDescription = "III MMI Lubuklinggau",
+                shakemapUrl = null,
+                distanceKmToMukomuko = 205,
+                isNearMukomuko = true,
+                urgencyLevel = EarthquakeUrgency.ADVISORY
+            )
+        )
+
+        DisasterTriageNotificationManager.saveSettings(
+            context,
+            TriageNotificationSettings(minimumLevel = DisasterTriageLevel.KUNING_WASPADA)
+        )
+
+        outsideEarthquakes.forEach { eq ->
+            org.junit.Assert.assertFalse(
+                "Gempa luar Bengkulu (${eq.region}) tidak boleh ditandai sebagai terdampak Provinsi Bengkulu",
+                eq.isBengkuluProvinceAffected
+            )
+            val signal = DisasterTriageNotificationManager.evaluateEarthquake(eq)
+            assertEquals(DisasterTriageLevel.HIJAU_AMAN, signal.level)
+            assertEquals(
+                TriageDispatchResult.SKIPPED_SAFE_GREEN,
+                DisasterTriageNotificationManager.evaluateAndNotify(context, signal)
+            )
+            org.junit.Assert.assertFalse(
+                EarthquakeNotificationHelper.postEarthquakeNotification(context, eq)
+            )
+            org.junit.Assert.assertFalse(
+                EarthquakeNotificationHelper.postTsunamiWarningNotification(context, eq)
+            )
+        }
+
+        assertEquals(
+            "Tidak boleh ada satu pun notifikasi gempa yang muncul untuk gempa luar Provinsi Bengkulu",
+            0,
+            Shadows.shadowOf(notificationManager).allNotifications.size
+        )
+    }
+
+    @Test
+    fun bengkuluLocalAndFeltEarthquakes_postTriageAndDirectNotificationsAccurately() {
+        DisasterTriageNotificationManager.saveSettings(
+            context,
+            TriageNotificationSettings(minimumLevel = DisasterTriageLevel.KUNING_WASPADA)
+        )
+
+        // 1. Gempa lokal di Pulau Enggano / Bengkulu Utara (M 5.3) -> ORANYE / MERAH dan memicu notifikasi
+        val engganoEq = BmkgEarthquake(
+            id = "eq_enggano_53",
+            date = "26 Nov 2026",
+            timeWib = "12:00:00 WIB",
+            dateTimeIso = "2026-11-26T12:00:00+07:00",
+            latitude = -5.35,
+            longitude = 102.25,
+            magnitude = 5.3,
+            depth = "16 km",
+            region = "24 km Barat Daya ENGGANO-BENGKULU",
+            potentialTsunami = "Tidak berpotensi tsunami",
+            feltDescription = "III-IV MMI Enggano, II-III MMI Kota Bengkulu",
+            shakemapUrl = null,
+            distanceKmToMukomuko = 330,
+            isNearMukomuko = false,
+            urgencyLevel = EarthquakeUrgency.WARNING
+        )
+        assertTrue(engganoEq.isBengkuluProvinceAffected)
+        val engganoSignal = DisasterTriageNotificationManager.evaluateEarthquake(engganoEq)
+        assertEquals(DisasterTriageLevel.ORANYE_SIAGA, engganoSignal.level)
+        assertEquals(
+            TriageDispatchResult.POSTED,
+            DisasterTriageNotificationManager.evaluateAndNotify(context, engganoSignal)
+        )
+        assertTrue(EarthquakeNotificationHelper.postEarthquakeNotification(context, engganoEq))
+
+        // 2. Gempa episenter di luar (Mentawai Sumbar) TETAPI dirasakan masyarakat di Mukomuko & Curup -> LOLOS!
+        val feltFromMentawai = BmkgEarthquake(
+            id = "eq_mentawai_felt_mmk",
+            date = "26 Nov 2026",
+            timeWib = "12:30:00 WIB",
+            dateTimeIso = "2026-11-26T12:30:00+07:00",
+            latitude = -2.05,
+            longitude = 99.65,
+            magnitude = 5.4,
+            depth = "20 km",
+            region = "65 km Tenggara KEP-MENTAWAI-SUMBAR",
+            potentialTsunami = "Tidak berpotensi tsunami",
+            feltDescription = "IV MMI Tuapejat, III MMI Mukomuko, II MMI Curup",
+            shakemapUrl = null,
+            distanceKmToMukomuko = 175,
+            isNearMukomuko = true,
+            urgencyLevel = EarthquakeUrgency.WARNING
+        )
+        assertTrue(feltFromMentawai.isBengkuluProvinceAffected)
+        val feltSignal = DisasterTriageNotificationManager.evaluateEarthquake(feltFromMentawai)
+        assertEquals(DisasterTriageLevel.MERAH_AWAS, feltSignal.level)
+
+        // 3. Evaluasi daftar gabungan (autogempa Papua + gempa dirasakan lokal Rejang Lebong Curup M 4.1)
+        val papuaEq = BmkgEarthquake(
+            id = "eq_papua_latest",
+            date = "26 Nov 2026",
+            timeWib = "12:40:00 WIB",
+            dateTimeIso = "2026-11-26T12:40:00+07:00",
+            latitude = -2.53,
+            longitude = 140.71,
+            magnitude = 6.5,
+            depth = "10 km",
+            region = "70 km Timur Laut JAYAPURA-PAPUA",
+            potentialTsunami = "Tidak berpotensi tsunami",
+            feltDescription = "IV MMI Jayapura",
+            shakemapUrl = null,
+            distanceKmToMukomuko = 4380,
+            isNearMukomuko = false,
+            urgencyLevel = EarthquakeUrgency.CRITICAL
+        )
+        val curupLocalEq = BmkgEarthquake(
+            id = "eq_curup_41",
+            date = "26 Nov 2026",
+            timeWib = "12:35:00 WIB",
+            dateTimeIso = "2026-11-26T12:35:00+07:00",
+            latitude = -3.47,
+            longitude = 102.52,
+            magnitude = 4.1,
+            depth = "10 km",
+            region = "14 km Barat Daya REJANG LEBONG-BENGKULU",
+            potentialTsunami = "Tidak berpotensi tsunami",
+            feltDescription = "III MMI Curup, II MMI Kepahiang",
+            shakemapUrl = null,
+            distanceKmToMukomuko = 185,
+            isNearMukomuko = false,
+            urgencyLevel = EarthquakeUrgency.ADVISORY
+        )
+        val combinedSignal = DisasterTriageNotificationManager.evaluateEarthquakesForBengkulu(
+            listOf(papuaEq, curupLocalEq)
+        )
+        assertEquals(DisasterTriageLevel.KUNING_WASPADA, combinedSignal.level)
+        assertTrue(combinedSignal.districtOrLocation.contains("REJANG LEBONG", ignoreCase = true))
+    }
 }

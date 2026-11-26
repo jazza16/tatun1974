@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.media.AudioAttributes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -18,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,11 +30,21 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.local.OfflineEvacuationSopEntity
+import com.example.data.repository.CitizenPreparednessRepository
 import com.example.ui.theme.OrangePrimary
+import com.example.util.EmergencyTonePlayer
+import com.example.util.IndonesianTtsHelper
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
  * Model data statis untuk setiap item bencana pada SOP Evakuasi Mandiri (100% Offline).
@@ -188,8 +200,37 @@ val DAFTAR_PANDUAN_EVAKUASI: List<PanduanEvakuasiBencana> = listOf(
     )
 )
 
+private fun OfflineEvacuationSopEntity.toPanduanEvakuasiBencana(): PanduanEvakuasiBencana {
+    val (icon, accentColor) = when (id) {
+        "gempa_bumi" -> Icons.Default.Public to Color(0xFFEA580C)
+        "tsunami" -> Icons.Default.Tsunami to Color(0xFFD97706)
+        "banjir" -> Icons.Default.Flood to Color(0xFFEA580C)
+        "tanah_longsor" -> Icons.Default.Landscape to Color(0xFFC2410C)
+        else -> Icons.Default.HealthAndSafety to OrangePrimary
+    }
+    val parsedSteps = CitizenPreparednessRepository.parseSopSteps(langkahJson).map {
+        LangkahEvakuasi(
+            nomor = it.nomor,
+            judulLangkah = it.judulLangkah,
+            deskripsi = it.deskripsi
+        )
+    }
+    return PanduanEvakuasiBencana(
+        id = id,
+        namaBencana = namaBencana,
+        subJudul = subJudul,
+        rumusUtama = rumusUtama,
+        icon = icon,
+        warnaAksen = accentColor,
+        langkahEvakuasi = parsedSteps,
+        catatanPenting = catatanPenting
+    )
+}
+
 /**
  * Layar Panduan SOP Evakuasi Mandiri (100% Offline) — Fase Pra-Bencana.
+ * Terintegrasi penuh dengan SQLite Room (`offline_evacuation_sop`), Text-to-Speech Bahasa Indonesia,
+ * dan tombol Tes Alarm Sirene Lokal.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -199,6 +240,38 @@ fun PanduanEvakuasiScreen(
 ) {
     // Pastikan tombol Back sistem Android menutup layar panduan ini
     BackHandler(onBack = onBackClick)
+
+    val context = LocalContext.current
+    val preparednessRepo = remember(context) { CitizenPreparednessRepository.fromContext(context) }
+    val dbSops by preparednessRepo.evacuationSopsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    LaunchedEffect(preparednessRepo) {
+        preparednessRepo.ensureSeeded()
+    }
+
+    val daftarPanduan = remember(dbSops) {
+        if (dbSops.isNotEmpty()) {
+            dbSops.map { it.toPanduanEvakuasiBencana() }
+        } else {
+            DAFTAR_PANDUAN_EVAKUASI
+        }
+    }
+
+    // Text-to-Speech Bahasa Indonesia 100% Offline
+    val ttsHelper = remember(context) { IndonesianTtsHelper(context) }
+    val activeSpeakingKey by ttsHelper.activeSpeakingKey.collectAsStateWithLifecycle()
+
+    // Tes Alarm Sirene Lokal
+    val coroutineScope = rememberCoroutineScope()
+    var isTestingLocalSiren by remember { mutableStateOf(false) }
+    var sirenTestJob by remember { mutableStateOf<Job?>(null) }
+
+    DisposableEffect(ttsHelper) {
+        onDispose {
+            sirenTestJob?.cancel()
+            EmergencyTonePlayer.stop()
+            ttsHelper.shutdown()
+        }
+    }
 
     // Menyimpan ID bencana yang sedang dibuka (default: buka item pertama agar pengguna langsung melihat contohnya)
     var expandedIds by remember { mutableStateOf(setOf("gempa_bumi")) }
@@ -339,22 +412,123 @@ fun PanduanEvakuasiScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Ketuk salah satu kartu bencana di bawah untuk membuka atau menutup langkah-langkah penyelamatan diri standar BNPB/BPBD.",
+                                text = "Tersimpan di basis data SQLite lokal (100% offline). Ketuk kartu bencana untuk membaca atau tekan ikon Speaker untuk mendengarkan panduan suara Bahasa Indonesia.",
                                 fontSize = 12.sp,
                                 color = Color.White.copy(alpha = 0.95f),
                                 lineHeight = 17.sp
                             )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (isTestingLocalSiren) {
+                                            isTestingLocalSiren = false
+                                            sirenTestJob?.cancel()
+                                            sirenTestJob = null
+                                            EmergencyTonePlayer.stop()
+                                        } else {
+                                            ttsHelper.stop()
+                                            isTestingLocalSiren = true
+                                            sirenTestJob?.cancel()
+                                            sirenTestJob = coroutineScope.launch {
+                                                try {
+                                                    while (isActive) {
+                                                        EmergencyTonePlayer.playToneSuspend(
+                                                            freqHz1 = 920.0,
+                                                            freqHz2 = 1240.0,
+                                                            durationMs = 550,
+                                                            usage = AudioAttributes.USAGE_ALARM,
+                                                            volume = 0.85f
+                                                        )
+                                                        delay(180L)
+                                                        EmergencyTonePlayer.playToneSuspend(
+                                                            freqHz1 = 680.0,
+                                                            freqHz2 = 960.0,
+                                                            durationMs = 450,
+                                                            usage = AudioAttributes.USAGE_ALARM,
+                                                            volume = 0.85f
+                                                        )
+                                                        delay(220L)
+                                                    }
+                                                } finally {
+                                                    EmergencyTonePlayer.stop()
+                                                }
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isTestingLocalSiren) Color(0xFFB91C1C) else Color.White,
+                                        contentColor = if (isTestingLocalSiren) Color.White else OrangePrimary
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier
+                                        .heightIn(min = 48.dp)
+                                        .testTag("btn_test_local_siren_sop")
+                                ) {
+                                    Icon(
+                                        imageVector = if (isTestingLocalSiren) Icons.Default.StopCircle else Icons.Default.Campaign,
+                                        contentDescription = if (isTestingLocalSiren) "Hentikan Tes Alarm Sirene" else "Tes Alarm Sirene Lokal",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isTestingLocalSiren) "Hentikan Tes Sirene" else "Tes Alarm Sirene",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
+
+                                if (activeSpeakingKey != null) {
+                                    OutlinedButton(
+                                        onClick = { ttsHelper.stop() },
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.8f)),
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                        modifier = Modifier
+                                            .heightIn(min = 48.dp)
+                                            .testTag("btn_stop_tts_global")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.VolumeOff,
+                                            contentDescription = "Hentikan Pembacaan Suara",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Stop Suara",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // Daftar Accordion / ExpandableCard Bencana
-            items(DAFTAR_PANDUAN_EVAKUASI, key = { it.id }) { itemBencana ->
+            // Daftar Accordion / ExpandableCard Bencana (Bersumber dari SQLite offline_evacuation_sop)
+            items(daftarPanduan, key = { it.id }) { itemBencana ->
                 val isExpanded = expandedIds.contains(itemBencana.id)
                 ExpandablePanduanBencanaCard(
                     bencana = itemBencana,
                     isExpanded = isExpanded,
+                    activeSpeakingKey = activeSpeakingKey,
+                    onSpeakToggle = { key, text ->
+                        if (isTestingLocalSiren) {
+                            isTestingLocalSiren = false
+                            sirenTestJob?.cancel()
+                            sirenTestJob = null
+                            EmergencyTonePlayer.stop()
+                        }
+                        ttsHelper.toggleSpeak(key, text)
+                    },
                     onToggle = {
                         expandedIds = if (isExpanded) {
                             expandedIds - itemBencana.id
@@ -426,12 +600,16 @@ fun PanduanEvakuasiScreen(
 private fun ExpandablePanduanBencanaCard(
     bencana: PanduanEvakuasiBencana,
     isExpanded: Boolean,
+    activeSpeakingKey: String?,
+    onSpeakToggle: (key: String, text: String) -> Unit,
     onToggle: () -> Unit
 ) {
     val rotationAngle by animateFloatAsState(
         targetValue = if (isExpanded) 180f else 0f,
         label = "accordion_arrow_rotation"
     )
+    val fullSpeechKey = "sop_all_${bencana.id}"
+    val isReadingAll = activeSpeakingKey == fullSpeechKey
 
     Card(
         modifier = Modifier
@@ -541,7 +719,60 @@ private fun ExpandablePanduanBencanaCard(
                 ) {
                     HorizontalDivider(color = OrangePrimary.copy(alpha = 0.2f))
 
+                    // Tombol Bacakan Seluruh SOP Bencana via TTS Bahasa Indonesia
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Panduan Audio Offline (TTS Bahasa Indonesia)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        FilledTonalButton(
+                            onClick = {
+                                val fullScript = buildString {
+                                    append("Panduan Evakuasi ")
+                                    append(bencana.namaBencana)
+                                    append(". ")
+                                    append(bencana.rumusUtama)
+                                    append(". ")
+                                    bencana.langkahEvakuasi.forEach { step ->
+                                        append("Langkah ${step.nomor}: ${step.judulLangkah}. ${step.deskripsi} ")
+                                    }
+                                    append("Catatan penting: ${bencana.catatanPenting}")
+                                }
+                                onSpeakToggle(fullSpeechKey, fullScript)
+                            },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = if (isReadingAll) Color(0xFFB91C1C) else OrangePrimary.copy(alpha = 0.15f),
+                                contentColor = if (isReadingAll) Color.White else OrangePrimary
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("btn_tts_all_${bencana.id}")
+                        ) {
+                            Icon(
+                                imageVector = if (isReadingAll) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = if (isReadingAll) "Hentikan Pembacaan ${bencana.namaBencana}" else "Bacakan Semua Langkah ${bencana.namaBencana}",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isReadingAll) "Hentikan" else "Bacakan Semua",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
                     bencana.langkahEvakuasi.forEach { langkah ->
+                        val stepSpeechKey = "sop_step_${bencana.id}_${langkah.nomor}"
+                        val isStepSpeaking = activeSpeakingKey == stepSpeechKey
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.Top
@@ -550,7 +781,9 @@ private fun ExpandablePanduanBencanaCard(
                             Surface(
                                 shape = CircleShape,
                                 color = OrangePrimary,
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier
+                                    .padding(top = 4.dp)
+                                    .size(26.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(
@@ -577,6 +810,29 @@ private fun ExpandablePanduanBencanaCard(
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     lineHeight = 18.sp
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    onSpeakToggle(
+                                        stepSpeechKey,
+                                        "Langkah ${langkah.nomor}: ${langkah.judulLangkah}. ${langkah.deskripsi}"
+                                    )
+                                },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("btn_tts_step_${bencana.id}_${langkah.nomor}")
+                            ) {
+                                Icon(
+                                    imageVector = if (isStepSpeaking) Icons.Default.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = if (isStepSpeaking) {
+                                        "Hentikan suara langkah ${langkah.nomor}"
+                                    } else {
+                                        "Bacakan langkah ${langkah.nomor}: ${langkah.judulLangkah}"
+                                    },
+                                    tint = if (isStepSpeaking) Color(0xFFB91C1C) else OrangePrimary,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }

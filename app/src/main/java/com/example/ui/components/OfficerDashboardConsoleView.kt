@@ -49,6 +49,7 @@ import coil.compose.AsyncImage
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -428,6 +429,7 @@ fun OfficerDashboardConsoleView(
     var showDalaModule by remember { mutableStateOf(false) }
     var showVolunteerModule by remember { mutableStateOf(false) }
     var showPoskoLogisticsModule by remember { mutableStateOf(false) }
+    var showFourEyesSirenModule by remember { mutableStateOf(false) }
     var showDownloadVolunteerArchiveDialog by remember { mutableStateOf(false) }
     var showSandboxPanel by remember { mutableStateOf(false) }
     var integrityCheckResult by remember { mutableStateOf<com.example.data.sync.IntegrityCheckResult?>(null) }
@@ -1329,6 +1331,54 @@ fun OfficerDashboardConsoleView(
                                         "Manajemen Posko & Logistik ($criticalLogisticCount Stok Kritis <10)"
                                     } else {
                                         "Manajemen Posko & Logistik (FEFO & NIK)"
+                                    },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            // BARIS 2C: Modul Sirene Otoritas Berlapis (Four-Eyes Principle — Master PRD BAB 4)
+                            val fourEyesSirenManager = remember(context) {
+                                com.example.siren.FourEyesSirenManager.getInstance(context)
+                            }
+                            val sirenDrafts by fourEyesSirenManager.drafts.collectAsStateWithLifecycle()
+                            val pendingSirenCount = remember(sirenDrafts) {
+                                sirenDrafts.count { it.status == com.example.siren.FourEyesSirenState.MENUNGGU_PERSETUJUAN }
+                            }
+                            val activeSirenCount = remember(sirenDrafts) {
+                                sirenDrafts.count { it.status == com.example.siren.FourEyesSirenState.DIAKTIFKAN }
+                            }
+                            Button(
+                                onClick = { showFourEyesSirenModule = true },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = when {
+                                        activeSirenCount > 0 -> Color(0xFF991B1B)
+                                        pendingSirenCount > 0 -> Color(0xFFD97706)
+                                        else -> Color(0xFF7C2D12)
+                                    }
+                                ),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp)
+                                    .testTag("btn_open_four_eyes_siren_module")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Campaign,
+                                    contentDescription = "Buka Modul Sirene Otoritas Berlapis Four-Eyes",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = when {
+                                        activeSirenCount > 0 -> "Sirene Four-Eyes ($activeSirenCount AKTIF • $pendingSirenCount Menunggu)"
+                                        pendingSirenCount > 0 -> "Sirene Four-Eyes ($pendingSirenCount Menunggu Persetujuan)"
+                                        else -> "Sirene Peringatan Dini (Otoritas Berlapis Four-Eyes)"
                                     },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
@@ -4320,6 +4370,24 @@ fun OfficerDashboardConsoleView(
                 officerNip = officerBadgeId,
                 officerRole = officerRole,
                 onClose = { showPoskoLogisticsModule = false }
+            )
+        }
+    }
+
+    // FULL SCREEN DIALOG MODUL SIRENE OTORITAS BERLAPIS (FOUR-EYES PRINCIPLE — MASTER PRD BAB 4)
+    if (hasVerifiedOfficerSession && showFourEyesSirenModule) {
+        Dialog(
+            onDismissRequest = { showFourEyesSirenModule = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            FourEyesSirenControlScreen(
+                officerName = officerName,
+                officerNip = officerBadgeId,
+                officerRole = officerRole,
+                onClose = { showFourEyesSirenModule = false }
             )
         }
     }

@@ -28,11 +28,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CrisisAlert
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsRun
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.HealthAndSafety
@@ -49,6 +52,7 @@ import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -58,20 +62,23 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -87,7 +94,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
+import com.example.data.local.EmergencyGoBagItemEntity
+import com.example.data.repository.CitizenPreparednessRepository
+import com.example.data.repository.GoBagExpiryStatus
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import com.example.ui.theme.OrangeSecondary
@@ -844,35 +855,44 @@ private fun PhaseGuideItem(
 }
 
 /**
- * Checklist Interaktif Tas Siaga Bencana (TSB)
+ * Checklist Interaktif Tas Siaga Bencana (Emergency Go-Bag) Persisten SQLite Room (Master PRD BAB 2).
+ * Mendukung 10 barang wajib, `+ Tambah Barang Kustom`, penghapusan item kustom, serta
+ * pelacakan tanggal kedaluwarsa (obat-obatan, makanan, air minum).
  */
-data class EmergencyBagItem(
-    val id: String,
-    val title: String,
-    val description: String,
-    var isChecked: Boolean = false
-)
-
 @Composable
 private fun EmergencyBagChecklistCard() {
-    val items = remember {
-        mutableStateListOf(
-            EmergencyBagItem("1", "Dokumen Penting", "KTP, KK, Akta Lahir, Surat Tanah, Ijazah dalam plastik tahan air."),
-            EmergencyBagItem("2", "Kotak P3K & Obat Rutin", "Betadine, perban, plester, parasetamol, dan obat pribadi."),
-            EmergencyBagItem("3", "Air Bersih Minum", "Minimal 3 botol besar (3 liter per orang untuk 3 hari)."),
-            EmergencyBagItem("4", "Makanan Tahan Lama", "Biskuit gandum, kurma, abon, rendang kering, atau kornet kaleng."),
-            EmergencyBagItem("5", "Senter & Baterai Cadangan", "Lampu senter LED atau lampu kepala darurat."),
-            EmergencyBagItem("6", "Peluit Darurat", "Sinyal bunyi untuk memandu regu penolong jika terjebak."),
-            EmergencyBagItem("7", "Powerbank Penuh & Kabel", "Untuk menjaga ponsel tetap aktif memantau informasi BPBD."),
-            EmergencyBagItem("8", "Uang Tunai Pecahan Kecil", "Uang kas secukupnya karena ATM kemungkinan mati listrik."),
-            EmergencyBagItem("9", "Pakaian Ganti & Jas Hujan", "1-2 set baju, celana panjang, selimut hangat, dan ponco."),
-            EmergencyBagItem("10", "Masker & Hand Sanitizer", "Perlindungan saluran pernapasan dari debu reruntuhan.")
-        )
+    val context = LocalContext.current
+    val repo = remember(context) { CitizenPreparednessRepository.fromContext(context) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val dbItems by repo.goBagItemsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    LaunchedEffect(repo) {
+        repo.ensureSeeded()
     }
+
+    val items = remember(dbItems) {
+        if (dbItems.isNotEmpty()) dbItems else CitizenPreparednessRepository.DEFAULT_GO_BAG_ITEMS
+    }
+
+    var showAddDialog by remember { mutableStateOf(false) }
+    var customTitle by remember { mutableStateOf("") }
+    var customDesc by remember { mutableStateOf("") }
+    var customExpiry by remember { mutableStateOf("") }
+    var customError by remember { mutableStateOf<String?>(null) }
+
+    var editingExpiryItem by remember { mutableStateOf<EmergencyGoBagItemEntity?>(null) }
+    var editingExpiryInput by remember { mutableStateOf("") }
+    var editingExpiryError by remember { mutableStateOf<String?>(null) }
 
     val checkedCount = items.count { it.isChecked }
     val progress = if (items.isNotEmpty()) checkedCount.toFloat() / items.size else 0f
     val percent = (progress * 100).toInt()
+
+    val expiryEvaluations = remember(items) {
+        items.associate { it.id to CitizenPreparednessRepository.evaluateExpiry(it.expiryDateIso) }
+    }
+    val expiredCount = expiryEvaluations.values.count { it.status == GoBagExpiryStatus.EXPIRED }
+    val expiringSoonCount = expiryEvaluations.values.count { it.status == GoBagExpiryStatus.EXPIRING_SOON }
 
     Card(
         modifier = Modifier
@@ -888,7 +908,10 @@ private fun EmergencyBagChecklistCard() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -911,7 +934,7 @@ private fun EmergencyBagChecklistCard() {
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Tandai perlengkapan darurat yang sudah Anda siapkan",
+                            text = "Tersimpan otomatis di SQLite • Pantau kedaluwarsa obat & pangan",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
@@ -919,7 +942,48 @@ private fun EmergencyBagChecklistCard() {
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Peringatan Kedaluwarsa Logistik Tas Siaga
+            if (expiredCount > 0 || expiringSoonCount > 0) {
+                val isCriticalExpiry = expiredCount > 0
+                Surface(
+                    color = if (isCriticalExpiry) Color(0xFFDC2626).copy(alpha = 0.12f) else Color(0xFFD97706).copy(alpha = 0.14f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isCriticalExpiry) Color(0xFFDC2626).copy(alpha = 0.4f) else Color(0xFFD97706).copy(alpha = 0.4f)
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("banner_gobag_expiry_alert")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Peringatan Kedaluwarsa Tas Siaga",
+                            tint = if (isCriticalExpiry) Color(0xFFB91C1C) else Color(0xFFB45309),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = buildString {
+                                if (expiredCount > 0) append("$expiredCount item sudah KEDALUWARSA. ")
+                                if (expiringSoonCount > 0) append("$expiringSoonCount item segera kedaluwarsa (≤30 hari). ")
+                                append("Segera perbarui isi Tas Siaga Anda.")
+                            },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isCriticalExpiry) Color(0xFFB91C1C) else Color(0xFF92400E),
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
             // Progress Bar
             Surface(
@@ -958,24 +1022,64 @@ private fun EmergencyBagChecklistCard() {
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Checklist Items
+            // Tombol + Tambah Barang Kustom
+            OutlinedButton(
+                onClick = {
+                    customTitle = ""
+                    customDesc = ""
+                    customExpiry = ""
+                    customError = null
+                    showAddDialog = true
+                },
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, Color(0xFF0D9488)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0D9488)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("btn_add_custom_gobag_item")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Tambah Barang Kustom Tas Siaga",
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "+ Tambah Barang Kustom (Obat/Bayi/Lansia)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Checklist Items (Persisten SQLite Room)
             items.forEachIndexed { index, item ->
+                val expiryEval = expiryEvaluations[item.id]
+                    ?: CitizenPreparednessRepository.evaluateExpiry(item.expiryDateIso)
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
-                            items[index] = item.copy(isChecked = !item.isChecked)
+                            coroutineScope.launch {
+                                repo.setItemChecked(item.id, !item.isChecked)
+                            }
                         }
-                        .padding(vertical = 4.dp, horizontal = 2.dp),
+                        .padding(vertical = 6.dp, horizontal = 2.dp)
+                        .testTag("gobag_item_row_${item.id}"),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(
                         checked = item.isChecked,
                         onCheckedChange = { isChecked ->
-                            items[index] = item.copy(isChecked = isChecked)
+                            coroutineScope.launch {
+                                repo.setItemChecked(item.id, isChecked)
+                            }
                         },
                         colors = CheckboxDefaults.colors(
                             checkedColor = OrangePrimary,
@@ -987,18 +1091,103 @@ private fun EmergencyBagChecklistCard() {
                     Spacer(modifier = Modifier.width(10.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = item.title,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (item.isChecked) WeatherGoodGreen else MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = item.title,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (item.isChecked) WeatherGoodGreen else MaterialTheme.colorScheme.onSurface
+                            )
+                            if (item.isCustom) {
+                                Surface(
+                                    color = Color(0xFF0D9488).copy(alpha = 0.14f),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "KUSTOM",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFF0F766E),
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
                         Text(
                             text = item.description,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                            lineHeight = 13.sp
+                            lineHeight = 14.sp
                         )
+
+                        if (expiryEval.status != GoBagExpiryStatus.NONE) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val (badgeBg, badgeFg) = when (expiryEval.status) {
+                                GoBagExpiryStatus.EXPIRED -> Color(0xFFDC2626).copy(alpha = 0.14f) to Color(0xFFB91C1C)
+                                GoBagExpiryStatus.EXPIRING_SOON -> Color(0xFFD97706).copy(alpha = 0.16f) to Color(0xFFB45309)
+                                GoBagExpiryStatus.SAFE -> WeatherGoodGreen.copy(alpha = 0.14f) to Color(0xFF15803D)
+                                GoBagExpiryStatus.NONE -> Color.Transparent to Color.Transparent
+                            }
+                            Surface(
+                                color = badgeBg,
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.testTag("gobag_expiry_badge_${item.id}")
+                            ) {
+                                Text(
+                                    text = expiryEval.label,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = badgeFg,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Tombol Atur / Ubah Tanggal Kedaluwarsa
+                    IconButton(
+                        onClick = {
+                            editingExpiryItem = item
+                            editingExpiryInput = item.expiryDateIso.orEmpty()
+                            editingExpiryError = null
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("btn_edit_expiry_${item.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Event,
+                            contentDescription = "Atur tanggal kedaluwarsa ${item.title}",
+                            tint = when (expiryEval.status) {
+                                GoBagExpiryStatus.EXPIRED -> Color(0xFFDC2626)
+                                GoBagExpiryStatus.EXPIRING_SOON -> Color(0xFFD97706)
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    if (item.isCustom) {
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    repo.deleteCustomItem(item.id)
+                                }
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("btn_delete_custom_gobag_${item.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Hapus barang kustom ${item.title}",
+                                tint = Color(0xFFDC2626),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
                 if (index < items.size - 1) {
@@ -1010,6 +1199,161 @@ private fun EmergencyBagChecklistCard() {
                 }
             }
         }
+    }
+
+    // Dialog Tambah Barang Kustom Tas Siaga
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddDialog = false },
+            title = {
+                Text(
+                    text = "Tambah Barang Kustom Tas Siaga",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = customTitle,
+                        onValueChange = {
+                            customTitle = it
+                            customError = null
+                        },
+                        label = { Text("Nama Barang (mis. Susu Bayi / Inhaler)") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("input_custom_gobag_title")
+                    )
+                    OutlinedTextField(
+                        value = customDesc,
+                        onValueChange = { customDesc = it },
+                        label = { Text("Catatan / Jumlah (Opsional)") },
+                        maxLines = 2,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("input_custom_gobag_desc")
+                    )
+                    OutlinedTextField(
+                        value = customExpiry,
+                        onValueChange = {
+                            customExpiry = it
+                            customError = null
+                        },
+                        label = { Text("Tanggal Kedaluwarsa YYYY-MM-DD (Opsional)") },
+                        placeholder = { Text("Contoh: 2027-06-30") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("input_custom_gobag_expiry")
+                    )
+                    if (customError != null) {
+                        Text(
+                            text = customError.orEmpty(),
+                            color = Color(0xFFDC2626),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            val result = repo.addCustomItem(
+                                title = customTitle,
+                                description = customDesc,
+                                expiryDateIso = customExpiry.takeIf { it.isNotBlank() }
+                            )
+                            result.fold(
+                                onSuccess = { showAddDialog = false },
+                                onFailure = { customError = it.message ?: "Gagal menyimpan barang kustom." }
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D9488)),
+                    modifier = Modifier.testTag("btn_save_custom_gobag_item")
+                ) {
+                    Text("Simpan", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Dialog Atur / Perbarui Tanggal Kedaluwarsa Item Tas Siaga
+    val targetExpiryItem = editingExpiryItem
+    if (targetExpiryItem != null) {
+        AlertDialog(
+            onDismissRequest = { editingExpiryItem = null },
+            title = {
+                Text(
+                    text = "Tanggal Kedaluwarsa",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = targetExpiryItem.title,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    OutlinedTextField(
+                        value = editingExpiryInput,
+                        onValueChange = {
+                            editingExpiryInput = it
+                            editingExpiryError = null
+                        },
+                        label = { Text("Format YYYY-MM-DD (kosongkan untuk hapus)") },
+                        placeholder = { Text("Contoh: 2027-08-15") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("input_edit_gobag_expiry")
+                    )
+                    if (editingExpiryError != null) {
+                        Text(
+                            text = editingExpiryError.orEmpty(),
+                            color = Color(0xFFDC2626),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            val res = repo.updateItemExpiry(
+                                itemId = targetExpiryItem.id,
+                                expiryDateIso = editingExpiryInput.takeIf { it.isNotBlank() }
+                            )
+                            res.fold(
+                                onSuccess = { editingExpiryItem = null },
+                                onFailure = { editingExpiryError = it.message ?: "Format tanggal tidak valid." }
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                    modifier = Modifier.testTag("btn_save_gobag_expiry")
+                ) {
+                    Text("Simpan", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingExpiryItem = null }) {
+                    Text("Batal")
+                }
+            }
+        )
     }
 }
 

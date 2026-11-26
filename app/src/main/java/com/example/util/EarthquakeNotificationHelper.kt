@@ -20,8 +20,8 @@ import com.example.model.EarthquakeUrgency
 object EarthquakeNotificationHelper {
 
     const val CHANNEL_ID = "bmkg_earthquake_channel"
-    private const val CHANNEL_NAME = "Peringatan Dini Gempa Bumi BMKG"
-    private const val CHANNEL_DESC = "Notifikasi real-time rilis gempa bumi resmi dari BMKG Indonesia"
+    private const val CHANNEL_NAME = "Peringatan Dini Gempa Lokal Provinsi Bengkulu"
+    private const val CHANNEL_DESC = "Notifikasi real-time khusus gempa bumi lokal yang terjadi dan dirasakan di Wilayah Provinsi Bengkulu (BMKG)"
 
     fun initNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -50,7 +50,17 @@ object EarthquakeNotificationHelper {
         }
     }
 
-    fun postEarthquakeNotification(context: Context, earthquake: BmkgEarthquake): Boolean {
+    fun postEarthquakeNotification(
+        context: Context,
+        earthquake: BmkgEarthquake,
+        allowOutsideBengkuluForManualTest: Boolean = false
+    ): Boolean {
+        // GUARD WILAYAH LOKAL PROVINSI BENGKULU:
+        // Blokir notifikasi gempa global se-Indonesia yang tidak terjadi atau dirasakan di Provinsi Bengkulu.
+        if (!allowOutsideBengkuluForManualTest && !earthquake.isBengkuluProvinceAffected) {
+            return false
+        }
+
         initNotificationChannel(context)
 
         if (!hasNotificationPermission(context)) {
@@ -118,7 +128,16 @@ object EarthquakeNotificationHelper {
         }
     }
 
-    fun postTsunamiWarningNotification(context: Context, earthquake: BmkgEarthquake): Boolean {
+    fun postTsunamiWarningNotification(
+        context: Context,
+        earthquake: BmkgEarthquake,
+        allowOutsideBengkuluForManualTest: Boolean = false
+    ): Boolean {
+        // GUARD WILAYAH LOKAL PROVINSI BENGKULU:
+        if (!allowOutsideBengkuluForManualTest && !earthquake.isBengkuluProvinceAffected) {
+            return false
+        }
+
         initNotificationChannel(context)
 
         if (!hasNotificationPermission(context)) {

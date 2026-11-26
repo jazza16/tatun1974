@@ -84,7 +84,21 @@ data class BmkgEarthquake(
     val distanceKmToMukomuko: Int,
     val isNearMukomuko: Boolean,
     val urgencyLevel: EarthquakeUrgency
-)
+) {
+    /**
+     * Bernilai `true` HANYA apabila gempa terjadi di wilayah Provinsi Bengkulu (darat maupun perairan
+     * pesisir Bengkulu) ATAU tercatat dirasakan oleh masyarakat di Provinsi Bengkulu (kolom `Dirasakan` BMKG).
+     * Gempa global Indonesia lainnya (Papua, Maluku, Sulawesi, Jawa, NTT, Aceh, dll.) yang tidak
+     * berdampak/dirasakan di Provinsi Bengkulu akan bernilai `false` sehingga tidak memicu notifikasi.
+     */
+    val isBengkuluProvinceAffected: Boolean
+        get() = BengkuluEarthquakeScope.isBengkuluLocalOrFelt(
+            region = region,
+            feltDescription = feltDescription,
+            latitude = latitude,
+            longitude = longitude
+        )
+}
 
 enum class EarthquakeUrgency {
     CRITICAL, // >= 6.0 or close & > 5.0
@@ -164,5 +178,116 @@ object BmkgEarthquakeMapper {
                 sin(dLon / 2) * sin(dLon / 2)
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return (r * c).toInt()
+    }
+}
+
+/**
+ * Penyaring Wilayah Lokal Provinsi Bengkulu untuk Notifikasi Gempa Bumi SIPAGAR KITA.
+ *
+ * Memastikan notifikasi Gempa Bumi HANYA dipicu apabila kejadian gempa:
+ * 1. Berpusat di salah satu dari 10 Kabupaten/Kota atau perairan pesisir Provinsi Bengkulu, ATAU
+ * 2. Tercatat dirasakan oleh masyarakat di wilayah Provinsi Bengkulu (kolom `Dirasakan` / MMI BMKG), ATAU
+ * 3. Koordinat episenter berada langsung di dalam kotak geografis Provinsi Bengkulu & pesisirnya
+ *    (selama teks wilayah BMKG tidak secara eksplisit menandakan provinsi luar tanpa rasa di Bengkulu).
+ */
+object BengkuluEarthquakeScope {
+    // 10 Kabupaten/Kota, ibu kota kabupaten, pulau, dan kecamatan utama Provinsi Bengkulu
+    private val BENGKULU_TERRITORY_KEYWORDS = listOf(
+        "bengkulu",
+        "mukomuko",
+        "muko-muko",
+        "muko muko",
+        "ipuh",
+        "air rami",
+        "pondok suguh",
+        "teramang jaya",
+        "lubuk pinang",
+        "penarik",
+        "selagan",
+        "enggano",
+        "arga makmur",
+        "argamakmur",
+        "ketahun",
+        "lais",
+        "putri hijau",
+        "manna",
+        "seluma",
+        "tais",
+        "kaur",
+        "bintuhan",
+        "rejang lebong",
+        "curup",
+        "kepahiang",
+        "lebong",
+        "muara aman",
+        "tubei",
+        "karang tinggi"
+    )
+
+    // Penanda wilayah luar Provinsi Bengkulu agar episenter perbatasan darat (Sumsel/Jambi/Lampung/Sumbar)
+    // tidak lolos hanya karena bounding box bila tidak benar-benar dirasakan di Bengkulu.
+    private val OUTSIDE_PROVINCE_MARKERS = listOf(
+        "sumsel", "sumatera selatan", "lubuklinggau", "lubuk linggau", "lahat", "pagar alam", "pagaralam", "empat lawang", "musi rawas", "palembang",
+        "jambi", "kerinci", "sungai penuh", "merangin", "sarolangun",
+        "sumbar", "sumatera barat", "padang", "painan", "pesisir selatan", "mentawai", "solok",
+        "lampung", "pesisir barat", "liwa", "tanggamus", "bandar lampung",
+        "aceh", "sumut", "sumatera utara", "nias", "riau", "kepri", "babel", "bangka",
+        "banten", "jabar", "jawa barat", "jateng", "jawa tengah", "jatim", "jawa timur", "jakarta", "diy", "yogyakarta",
+        "bali", "ntb", "ntt", "lombok", "sumbawa", "flores", "kupang", "timor",
+        "kalimantan", "sulawesi", "palu", "manado", "gorontalo", "makassar", "kendari", "mamuju", "halmahera",
+        "maluku", "ambon", "ternate", "tobelo", "banda", "tanimbar",
+        "papua", "jayapura", "sorong", "manokwari", "biak", "nabire", "merauke", "sarmi", "wamena"
+    )
+
+    // Bounding box Provinsi Bengkulu & perairan pesisir Samudra Hindia Bengkulu (termasuk Enggano & Mukomuko)
+    private const val MIN_LAT_BENGKULU = -5.65
+    private const val MAX_LAT_BENGKULU = -2.25
+    private const val MIN_LON_BENGKULU = 100.40
+    private const val MAX_LON_BENGKULU = 103.65
+
+    fun containsBengkuluKeyword(text: String?): Boolean {
+        if (text.isNullOrBlank() || text.trim() == "-") return false
+        val normalized = text.lowercase(Locale.ROOT)
+        return BENGKULU_TERRITORY_KEYWORDS.any { keyword ->
+            normalized.contains(keyword)
+        }
+    }
+
+    private fun explicitlyMentionsOutsideProvince(region: String?): Boolean {
+        if (region.isNullOrBlank()) return false
+        val normalized = region.lowercase(Locale.ROOT)
+        if (containsBengkuluKeyword(normalized)) return false
+        return OUTSIDE_PROVINCE_MARKERS.any { marker -> normalized.contains(marker) }
+    }
+
+    fun isInsideBengkuluGeoBox(latitude: Double, longitude: Double): Boolean {
+        if (latitude == 0.0 && longitude == 0.0) return false
+        return latitude in MIN_LAT_BENGKULU..MAX_LAT_BENGKULU &&
+            longitude in MIN_LON_BENGKULU..MAX_LON_BENGKULU
+    }
+
+    /**
+     * Menentukan apakah suatu kejadian gempa bumi merupakan event lokal Provinsi Bengkulu
+     * (terjadi di Provinsi Bengkulu ATAU dirasakan masyarakat di Provinsi Bengkulu).
+     */
+    fun isBengkuluLocalOrFelt(
+        region: String?,
+        feltDescription: String?,
+        latitude: Double,
+        longitude: Double
+    ): Boolean {
+        // 1. Episenter secara eksplisit berada di wilayah Provinsi Bengkulu (10 Kab/Kota & Enggano)
+        if (containsBengkuluKeyword(region)) return true
+
+        // 2. Gempa tercatat dirasakan masyarakat di Provinsi Bengkulu pada laporan MMI BMKG
+        if (containsBengkuluKeyword(feltDescription)) return true
+
+        // 3. Episenter di luar nama wilayah Bengkulu tetapi berada di dalam koordinat Provinsi Bengkulu
+        //    (selama teks wilayah BMKG tidak secara eksplisit menyatakan provinsi lain).
+        if (isInsideBengkuluGeoBox(latitude, longitude) && !explicitlyMentionsOutsideProvince(region)) {
+            return true
+        }
+
+        return false
     }
 }

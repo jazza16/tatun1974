@@ -1767,6 +1767,26 @@ class WeatherRepository(
         }
     }
 
+    /**
+     * Mengambil daftar gempa dirasakan (`gempadirasakan.json` BMKG) untuk mendeteksi
+     * gempa lokal yang terasa di Wilayah Provinsi Bengkulu meskipun bermagnitudo < 5.0.
+     */
+    suspend fun fetchFeltEarthquakes(): List<com.example.model.BmkgEarthquake> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = bmkgApi.getFeltEarthquakes()
+                val list = response.infoGempa?.gempaList
+                if (!list.isNullOrEmpty()) {
+                    list.map { com.example.model.BmkgEarthquakeMapper.fromRaw(it) }
+                } else {
+                    emptyList()
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+    }
+
     fun getFallbackMukomukoEarthquake(): com.example.model.BmkgEarthquake {
         return com.example.model.BmkgEarthquake(
             id = "gempa_mukomuko_latest",

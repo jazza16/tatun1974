@@ -46,7 +46,7 @@ class ExampleRobolectricTest {
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
     val channel = notificationManager.getNotificationChannel(com.example.util.EarthquakeNotificationHelper.CHANNEL_ID)
     assertNotNull(channel)
-    assertEquals("Peringatan Dini Gempa Bumi BMKG", channel.name)
+    assertEquals("Peringatan Dini Gempa Lokal Provinsi Bengkulu", channel.name)
   }
 
   @Test

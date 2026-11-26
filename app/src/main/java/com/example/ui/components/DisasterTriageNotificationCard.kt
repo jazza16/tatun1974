@@ -144,7 +144,7 @@ fun DisasterTriageNotificationCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Otomatis aktif saat fitur mencatat status warna siaga di ${currentDistrict.name}",
+                            text = "Aktif di ${currentDistrict.name} • Notifikasi gempa khusus lokal & dirasakan di Provinsi Bengkulu",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,

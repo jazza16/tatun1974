@@ -22,9 +22,11 @@ import androidx.room.RoomDatabase
         OfficerNoteEntity::class,
         OfficerCredentialEntity::class,
         DistribusiLogistikEntity::class,
-        KarhutlaHotspotEntity::class
+        KarhutlaHotspotEntity::class,
+        EmergencyGoBagItemEntity::class,
+        OfflineEvacuationSopEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -37,6 +39,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
     abstract fun credentialDao(): OfficerCredentialDao
     abstract fun karhutlaHotspotDao(): KarhutlaHotspotDao
+    abstract fun citizenPreparednessDao(): CitizenPreparednessDao
 
     companion object {
         private const val TAG = "AppDatabase"

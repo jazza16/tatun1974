@@ -5,7 +5,7 @@
 **Arsitektur:** Two-Tier Frontend (`sipagar-warga` & `sipagar-petugas`), Offline-First Local Storage, RBAC Ketat (8 Role), & Anti-Data Ganda (`NIK 16 Digit` sebagai Primary Key)  
 **Tanggal Pembaruan Status:** 26 November 2026
 
-> **Keterangan Checklist:** `[x]` = **Selesai Diterapkan & Terverifikasi**
+> **Keterangan Checklist:** `[x]` = **Selesai Diterapkan & Terverifikasi** | `[ ]` = *Ditunda Sementara / Antrean Berikutnya*
 
 ---
 
@@ -31,10 +31,10 @@
   - [x] Checklist 10 barang wajib (Air Minum, P3K, Dokumen, Senter, Peluit, Makanan Tahan Lama, Powerbank, Uang Tunai, Pakaian, Radio).
   - [x] Fitur **`+ Tambah Barang Kustom`** sesuai kebutuhan spesifik keluarga.
   - [x] Pencatatan & peringatan **Tanggal Kedaluwarsa** untuk makanan/obat di memori lokal.
-- [x] **Modul Tombol Darurat SOS (*Hold 3 Seconds*)**:
-  - [x] Mekanisme tahan 3 detik untuk mencegah kepanikan/salah tekan.
-  - [x] Pengambilan otomatis **Koordinat GPS**, **Level Baterai HP**, dan **Timestamp**.
-  - [x] Penyimpanan ke tabel antrean lokal (`sos_offline_queue`) saat tidak ada sinyal dan pengiriman otomatis oleh *Sync Worker* dengan **`Idempotency-Key`** unik saat sinyal kembali.
+- [ ] **Modul Tombol Darurat SOS (*Hold 3 Seconds*) — [DITUNDA SEMENTARA SESUAI ARAHAN]**:
+  - [ ] Mekanisme tahan 3 detik untuk mencegah kepanikan/salah tekan.
+  - [ ] Pengambilan otomatis **Koordinat GPS**, **Level Baterai HP**, dan **Timestamp**.
+  - [ ] Penyimpanan ke tabel antrean lokal (`sos_offline_queue`) saat tidak ada sinyal dan pengiriman otomatis oleh *Sync Worker* dengan **`Idempotency-Key`** unik saat sinyal kembali.
 
 ---
 
@@ -67,12 +67,12 @@
 
 ## BAB 4: PETA KOMANDO SOS & SIRENE OTORITAS BERLAPIS (TAHAP 3B)
 
-- [x] **Peta Komando SOS (TRC & Operator Pusdalops)**:
-  - [x] Menampilkan sinyal SOS masuk beserta detail Nama/NIK, Koordinat GPS, Level Baterai HP, dan Waktu Kejadian.
-  - [x] Aksi verifikasi untuk mengubah status tiket dari `BARU` menjadi `DITUGASKAN` ke regu TRC lapangan.
+- [ ] **Peta Komando SOS Tiket Baterai HP (TRC & Operator Pusdalops) — [DITUNDA SEMENTARA, TERKAIT TOMBOL SOS BAB 2]**:
+  - [ ] Menampilkan sinyal SOS masuk beserta detail Nama/NIK, Koordinat GPS, Level Baterai HP, dan Waktu Kejadian (menunggu aktivasi Modul Tombol Darurat SOS Warga).
+  - [ ] Aksi verifikasi khusus tiket SOS dari `BARU` menjadi `DITUGASKAN` ke regu TRC lapangan *(catatan: alur laporan cepat warga & validasi Konsol Pusdalops sudah berjalan normal)*.
 - [x] **Sirene Otoritas Berlapis (*Four-Eyes Principle*)**:
   - [x] Pemisahan pembuatan draf sirene (`operator_pusdalops`) dan persetujuan aktivasi sirene (`kepala_pusdalops` / `kalak`).
-  - [x] Penolakan otomatis jika pembuat draf mencoba menyetujui drafnya sendiri, dengan alur state **`DRAFT -> MENUNGGU PERSETUJUAN -> DIAKTIFKAN`**.
+  - [x] Penolakan otomatis jika pembuat draf mencoba menyetujui drafnya sendiri, dengan alur state **`DRAFT -> MENUNGGU PERSETUJUAN -> DIAKTIFKAN`** melalui `FourEyesSirenManager` & `FourEyesSirenControlScreen`.
 
 ---
 

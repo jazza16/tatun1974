@@ -344,7 +344,7 @@ private fun WrsConsoleHeaderCard(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Alarm Dering",
+                                text = "Alarm Bengkulu",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF9A3412)

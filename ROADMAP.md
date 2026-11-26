@@ -17,11 +17,11 @@ Dokumen ini memuat daftar rencana pengembangan fitur (*product backlog*) beserta
   - [x] **Distribusi Bantuan Anti-Data Ganda (`NIK 16 Digit Primary Key`)**: Memvalidasi NIK 16 digit penerima bantuan, menolak duplikasi penerimaan komoditas yang sama untuk NIK yang sama, dan otomatis mengurangi saldo stok Posko.
   - [x] **Integrasi Auto-Populate & Kunci Snapshot ke Modul DaLA**: Data agregat pengungsi Posko otomatis tampil secara *Read-Only* di bagian atas formulir Pasca-Bencana (DaLA) lengkap dengan tombol **"Ambil Snapshot Data Posko"**.
 
-- [x] **Sirene Digital & Suara Peringatan (*Text-to-Speech / TTS*) — [SELESAI DITERAPKAN]**
-  Membunyikan alarm sirene berfrekuensi khusus disertai pembacaan suara otomatis (TTS Bahasa Indonesia) saat peringatan dini gempa bumi berpotensi tsunami atau cuaca ekstrem diterima. Fitur ini membantu warga dan petugas piket segera menyadari bahaya tanpa harus melihat layar ponsel terlebih dahulu.
+- [x] **Sirene Digital Otoritas Berlapis (*Four-Eyes Principle*) & Suara Peringatan (*Text-to-Speech / TTS*) — [SELESAI DITERAPKAN]**
+  Membunyikan alarm sirene berfrekuensi khusus disertai pembacaan suara otomatis (TTS Bahasa Indonesia) dan kendali otoritas berlapis (`DRAFT -> MENUNGGU PERSETUJUAN -> DIAKTIFKAN` dengan penolakan otomatis *self-approval*). Fitur ini membantu warga dan petugas piket segera menyadari bahaya secara akurat dan aman dari kesalahan aktivasi tunggal.
 
-- [x] **Tombol Darurat SOS (*One-Tap / 3-Second Hold Emergency SOS*) — [SELESAI DITERAPKAN]**
-  Memungkinkan warga yang terjebak di lokasi bencana mengirim sinyal darurat beserta titik koordinat GPS presisi, level baterai ponsel, dan kondisi singkat ke konsol Pusdalops BPBD. Sinyal SOS dilengkapi antrean lokal *Offline-First* serta `Idempotency-Key` anti-duplikat dan langsung diprioritaskan di peta komando Tim Reaksi Cepat (TRC).
+- [ ] **Tombol Darurat SOS (*One-Tap / 3-Second Hold Emergency SOS*) — [DITUNDA SEMENTARA SESUAI ARAHAN]**
+  Memungkinkan warga yang terjebak di lokasi bencana mengirim sinyal darurat beserta titik koordinat GPS presisi, level baterai ponsel, dan kondisi singkat ke konsol Pusdalops BPBD melalui antrean lokal *Offline-First* (`sos_offline_queue`) serta `Idempotency-Key` anti-duplikat.
 
 ---
 

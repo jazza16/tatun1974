@@ -297,8 +297,17 @@ class WeatherViewModel(
             }
             val tidal = com.example.model.TidalDataHelper.getTidalForecastForDistrict(district)
             add(com.example.util.DisasterTriageNotificationManager.evaluateTidalRob(tidal, district.name))
-            state.latestEarthquake?.let { eq ->
-                add(com.example.util.DisasterTriageNotificationManager.evaluateEarthquake(eq))
+            val bengkuluEarthquakeCandidates = listOfNotNull(
+                latestBengkuluLocalEarthquake,
+                state.latestEarthquake
+            ).distinctBy { it.id }
+            if (bengkuluEarthquakeCandidates.isNotEmpty()) {
+                add(
+                    com.example.util.DisasterTriageNotificationManager.evaluateEarthquakesForBengkulu(
+                        earthquakes = bengkuluEarthquakeCandidates,
+                        fallbackLocation = district.name
+                    )
+                )
             }
             add(
                 com.example.util.DisasterTriageNotificationManager.evaluateDisasterReportSurge(
@@ -695,27 +704,39 @@ class WeatherViewModel(
     }
 
     private var lastNotifiedEarthquakeId: String? = null
+    private var latestBengkuluLocalEarthquake: com.example.model.BmkgEarthquake? = null
 
     fun loadEarthquakeData(context: Context? = null) {
         _uiState.value = _uiState.value.copy(isLoadingEarthquakes = true)
         viewModelScope.launch {
             try {
                 val latest = repository.fetchLatestEarthquake()
+                val feltList = repository.fetchFeltEarthquakes()
                 val recents = repository.fetchRecentEarthquakes()
 
-                // Check if this is a newly observed earthquake and notification is enabled
-                if (_uiState.value.isEarthquakeNotificationEnabled && context != null) {
+                // FILTER WILAYAH LOKAL PROVINSI BENGKULU:
+                // Hanya pilih kejadian gempa yang terjadi di Provinsi Bengkulu ATAU dirasakan masyarakat Bengkulu.
+                // Gempa global se-Indonesia (Papua, Maluku, Sulawesi, Jawa, NTT, dll.) TIDAK boleh memicu notifikasi.
+                val bengkuluCandidate = (listOf(latest) + feltList)
+                    .firstOrNull { it.isBengkuluProvinceAffected }
+                latestBengkuluLocalEarthquake = bengkuluCandidate
+
+                if (_uiState.value.isEarthquakeNotificationEnabled && context != null && bengkuluCandidate != null) {
                     if (lastNotifiedEarthquakeId == null) {
-                        // First load, don't spam unless near Mukomuko and M >= 5.0
-                        if (latest.isNearMukomuko && latest.magnitude >= 5.0) {
-                            EarthquakeNotificationHelper.postEarthquakeNotification(context, latest)
+                        // Pemuatan pertama: hanya notifikasi jika gempa lokal Bengkulu cukup signifikan (M >= 4.5 / Kritis)
+                        if (bengkuluCandidate.magnitude >= 4.5 ||
+                            bengkuluCandidate.urgencyLevel == com.example.model.EarthquakeUrgency.CRITICAL
+                        ) {
+                            EarthquakeNotificationHelper.postEarthquakeNotification(context, bengkuluCandidate)
                         }
-                    } else if (lastNotifiedEarthquakeId != latest.id) {
-                        // New earthquake arrived from BMKG feed
-                        EarthquakeNotificationHelper.postEarthquakeNotification(context, latest)
+                    } else if (lastNotifiedEarthquakeId != bengkuluCandidate.id) {
+                        // Event gempa baru yang terjadi / dirasakan di Provinsi Bengkulu
+                        EarthquakeNotificationHelper.postEarthquakeNotification(context, bengkuluCandidate)
                     }
                 }
-                lastNotifiedEarthquakeId = latest.id
+                if (bengkuluCandidate != null) {
+                    lastNotifiedEarthquakeId = bengkuluCandidate.id
+                }
 
                 _uiState.value = _uiState.value.copy(
                     latestEarthquake = latest,
@@ -738,12 +759,20 @@ class WeatherViewModel(
     }
 
     fun triggerTestEarthquakeNotification(context: Context) {
-        val currentEq = _uiState.value.latestEarthquake ?: repository.getFallbackMukomukoEarthquake()
-        EarthquakeNotificationHelper.postEarthquakeNotification(context, currentEq)
+        val currentEq = latestBengkuluLocalEarthquake
+            ?: _uiState.value.latestEarthquake?.takeIf { it.isBengkuluProvinceAffected }
+            ?: repository.getFallbackMukomukoEarthquake()
+        EarthquakeNotificationHelper.postEarthquakeNotification(
+            context = context,
+            earthquake = currentEq,
+            allowOutsideBengkuluForManualTest = true
+        )
     }
 
     fun triggerTestTsunamiNotification(context: Context) {
-        val currentEq = _uiState.value.latestEarthquake ?: repository.getFallbackMukomukoEarthquake()
+        val currentEq = latestBengkuluLocalEarthquake
+            ?: _uiState.value.latestEarthquake?.takeIf { it.isBengkuluProvinceAffected }
+            ?: repository.getFallbackMukomukoEarthquake()
         val tsunamiEq = currentEq.copy(
             id = "tsunami_test_alert_${System.currentTimeMillis()}",
             magnitude = 7.6,
@@ -753,7 +782,11 @@ class WeatherViewModel(
             isNearMukomuko = true,
             urgencyLevel = com.example.model.EarthquakeUrgency.CRITICAL
         )
-        EarthquakeNotificationHelper.postTsunamiWarningNotification(context, tsunamiEq)
+        EarthquakeNotificationHelper.postTsunamiWarningNotification(
+            context = context,
+            earthquake = tsunamiEq,
+            allowOutsideBengkuluForManualTest = true
+        )
     }
 
     private var lastNotifiedWeatherWarningId: String? = null
@@ -830,13 +863,25 @@ class WeatherViewModel(
                 delay(60_000) // Poll BMKG live feed every 60 seconds
                 try {
                     val latest = repository.fetchLatestEarthquake()
+                    val feltList = repository.fetchFeltEarthquakes()
+                    val bengkuluCandidate = (listOf(latest) + feltList)
+                        .firstOrNull { it.isBengkuluProvinceAffected }
+
+                    _uiState.value = _uiState.value.copy(latestEarthquake = latest)
+                    latestBengkuluLocalEarthquake = bengkuluCandidate
+
                     if (_uiState.value.isEarthquakeNotificationEnabled &&
+                        bengkuluCandidate != null &&
                         lastNotifiedEarthquakeId != null &&
-                        lastNotifiedEarthquakeId != latest.id
+                        lastNotifiedEarthquakeId != bengkuluCandidate.id
                     ) {
-                        _uiState.value = _uiState.value.copy(latestEarthquake = latest)
-                        lastNotifiedEarthquakeId = latest.id
+                        lastNotifiedEarthquakeId = bengkuluCandidate.id
+                        appContext?.let { ctx ->
+                            EarthquakeNotificationHelper.postEarthquakeNotification(ctx, bengkuluCandidate)
+                        }
                         evaluateAllModuleTriageAndNotify()
+                    } else if (bengkuluCandidate != null && lastNotifiedEarthquakeId == null) {
+                        lastNotifiedEarthquakeId = bengkuluCandidate.id
                     }
                 } catch (_: Exception) {
                     // Ignore background polling glitches
