@@ -444,7 +444,6 @@ fun OfficerDashboardConsoleView(
     var isSyncingSecurityActivities by remember { mutableStateOf(false) }
     var showSecuritySessionsDialog by remember { mutableStateOf(false) }
     var revokedNipsInSession by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var isResettingOwnPin by remember { mutableStateOf(false) }
     val lastSecuritySyncMs = remember { java.util.concurrent.atomic.AtomicLong(0L) }
     var currentFirebaseUid by remember {
         mutableStateOf(
@@ -515,7 +514,7 @@ fun OfficerDashboardConsoleView(
                 officerNipFilter = "",
                 activeOfficerNipForRevocation = officerBadgeId,
                 onActiveSessionRevoked = {
-                    if (hasVerifiedOfficerSession && !isResettingOwnPin && !SecurityManager.isPinResetSuppressed(officerBadgeId)) {
+                    if (hasVerifiedOfficerSession && !SecurityManager.isPinResetSuppressed(officerBadgeId)) {
                         Toast.makeText(
                             context,
                             "Akses sesi perangkat Anda telah dicabut dari server. Logout paksa dijalankan.",
@@ -2256,17 +2255,14 @@ fun OfficerDashboardConsoleView(
         }
     }
 
-    // 7. DIALOG GANTI & RESET PIN PETUGAS PUSDALOPS (DILENGKAPI PLAY INTEGRITY CLASSIC)
+    // 7. DIALOG GANTI PIN PRIBADI PETUGAS PUSDALOPS (TANPA OPSI RESET KE PIN DEFAULT)
     if (showChangePinDialog) {
-        var pinDialogMode by remember { mutableIntStateOf(0) } // 0 = Ganti PIN, 1 = Reset PIN
         var oldPinInput by remember { mutableStateOf("") }
         var newPinInput by remember { mutableStateOf("") }
         var confirmPinInput by remember { mutableStateOf("") }
-        var resetAdminInput by remember { mutableStateOf("") }
         var isOldPinVisible by remember { mutableStateOf(false) }
         var isNewPinVisible by remember { mutableStateOf(false) }
         var isConfirmPinVisible by remember { mutableStateOf(false) }
-        var isResetAdminVisible by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
         var isProcessingSecurity by remember { mutableStateOf(false) }
 
@@ -2275,14 +2271,14 @@ fun OfficerDashboardConsoleView(
             icon = {
                 Surface(
                     shape = CircleShape,
-                    color = if (pinDialogMode == 0) Color(0xFFFEF3C7) else Color(0xFFEFF6FF),
+                    color = Color(0xFFFEF3C7),
                     modifier = Modifier.size(50.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = if (pinDialogMode == 0) Icons.Default.Lock else Icons.Default.Shield,
+                            imageVector = Icons.Default.Lock,
                             contentDescription = null,
-                            tint = if (pinDialogMode == 0) Color(0xFFD97706) else Color(0xFF2563EB),
+                            tint = Color(0xFFD97706),
                             modifier = Modifier.size(26.dp)
                         )
                     }
@@ -2290,7 +2286,7 @@ fun OfficerDashboardConsoleView(
             },
             title = {
                 Text(
-                    text = if (pinDialogMode == 0) "Ganti PIN / Sandi Petugas" else "Reset PIN Petugas BPBD",
+                    text = "Ganti PIN / Sandi Petugas",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     textAlign = TextAlign.Center
@@ -2311,189 +2307,101 @@ fun OfficerDashboardConsoleView(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Dilindungi Play Integrity API (Mode Classic) untuk mencegah pembajakan sesi dan pemalsuan kredensial akun dinas.",
+                        text = "PIN pribadi tersimpan terenkripsi di server Cloud Firestore dan tidak pernah dikembalikan ke PIN default.",
                         fontSize = 11.sp,
                         color = Color(0xFF475569),
                         lineHeight = 14.sp
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Tab Selector: Ganti PIN vs Reset PIN
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
-                            .padding(3.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = if (pinDialogMode == 0) Color.White else Color.Transparent,
-                            shadowElevation = if (pinDialogMode == 0) 2.dp else 0.dp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    pinDialogMode = 0
-                                    errorMessage = null
-                                }
-                        ) {
-                            Text(
-                                text = "Ganti PIN",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (pinDialogMode == 0) Color(0xFF0F172A) else Color(0xFF64748B),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(vertical = 6.dp)
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = if (pinDialogMode == 1) Color.White else Color.Transparent,
-                            shadowElevation = if (pinDialogMode == 1) 2.dp else 0.dp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    pinDialogMode = 1
-                                    errorMessage = null
-                                }
-                        ) {
-                            Text(
-                                text = "Reset PIN",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (pinDialogMode == 1) Color(0xFFDC2626) else Color(0xFF64748B),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(vertical = 6.dp)
-                            )
-                        }
-                    }
-
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    if (pinDialogMode == 0) {
-                        // MODE GANTI PIN
-                        OutlinedTextField(
-                            value = oldPinInput,
-                            onValueChange = {
-                                oldPinInput = it
-                                errorMessage = null
-                            },
-                            label = { Text("PIN / Sandi Lama", fontSize = 11.sp) },
-                            placeholder = { Text("Masukkan PIN lama Anda", fontSize = 11.sp) },
-                            visualTransformation = if (isOldPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
-                            keyboardActions = pinKeyboardActions,
-                            trailingIcon = {
-                                IconButton(onClick = { isOldPinVisible = !isOldPinVisible }) {
-                                    Icon(
-                                        imageVector = if (isOldPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = null,
-                                        tint = Color.Gray,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .formScrollPadding()
-                        )
+                    OutlinedTextField(
+                        value = oldPinInput,
+                        onValueChange = {
+                            oldPinInput = it
+                            errorMessage = null
+                        },
+                        label = { Text("PIN / Sandi Lama", fontSize = 11.sp) },
+                        placeholder = { Text("Masukkan PIN lama Anda", fontSize = 11.sp) },
+                        visualTransformation = if (isOldPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+                        keyboardActions = pinKeyboardActions,
+                        trailingIcon = {
+                            IconButton(onClick = { isOldPinVisible = !isOldPinVisible }) {
+                                Icon(
+                                    imageVector = if (isOldPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (isOldPinVisible) "Sembunyikan PIN lama" else "Tampilkan PIN lama",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .formScrollPadding()
+                            .testTag("input_old_pin")
+                    )
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                        OutlinedTextField(
-                            value = newPinInput,
-                            onValueChange = {
-                                newPinInput = it
-                                errorMessage = null
-                            },
-                            label = { Text("PIN / Sandi Baru (Min. 4 Digit)", fontSize = 11.sp) },
-                            placeholder = { Text("Buat PIN baru yang aman", fontSize = 11.sp) },
-                            visualTransformation = if (isNewPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
-                            keyboardActions = pinKeyboardActions,
-                            trailingIcon = {
-                                IconButton(onClick = { isNewPinVisible = !isNewPinVisible }) {
-                                    Icon(
-                                        imageVector = if (isNewPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = null,
-                                        tint = Color.Gray,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .formScrollPadding()
-                        )
+                    OutlinedTextField(
+                        value = newPinInput,
+                        onValueChange = {
+                            newPinInput = it
+                            errorMessage = null
+                        },
+                        label = { Text("PIN / Sandi Baru (Min. 4 Digit)", fontSize = 11.sp) },
+                        placeholder = { Text("Buat PIN baru yang aman", fontSize = 11.sp) },
+                        visualTransformation = if (isNewPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+                        keyboardActions = pinKeyboardActions,
+                        trailingIcon = {
+                            IconButton(onClick = { isNewPinVisible = !isNewPinVisible }) {
+                                Icon(
+                                    imageVector = if (isNewPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (isNewPinVisible) "Sembunyikan PIN baru" else "Tampilkan PIN baru",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .formScrollPadding()
+                            .testTag("input_new_pin")
+                    )
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                        OutlinedTextField(
-                            value = confirmPinInput,
-                            onValueChange = {
-                                confirmPinInput = it
-                                errorMessage = null
-                            },
-                            label = { Text("Konfirmasi PIN Baru", fontSize = 11.sp) },
-                            placeholder = { Text("Ulangi PIN baru", fontSize = 11.sp) },
-                            visualTransformation = if (isConfirmPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                            keyboardActions = pinKeyboardActions,
-                            trailingIcon = {
-                                IconButton(onClick = { isConfirmPinVisible = !isConfirmPinVisible }) {
-                                    Icon(
-                                        imageVector = if (isConfirmPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = null,
-                                        tint = Color.Gray,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .formScrollPadding()
-                        )
-                    } else {
-                        // MODE RESET PIN
-                        Text(
-                            text = "Reset PIN mengembalikan sandi otorisasi ke kunci individual awal 6-digit NIP Anda (tanpa melalui PIN default umum '117'). Masukkan Sandi Administrator atau PIN lama untuk konfirmasi.",
-                            fontSize = 11.sp,
-                            color = Color(0xFF475569),
-                            lineHeight = 15.sp
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        OutlinedTextField(
-                            value = resetAdminInput,
-                            onValueChange = {
-                                resetAdminInput = it
-                                errorMessage = null
-                            },
-                            label = { Text("Sandi Administrator / PIN Lama", fontSize = 11.sp) },
-                            placeholder = { Text("Masukkan sandi admin / PIN lama", fontSize = 11.sp) },
-                            visualTransformation = if (isResetAdminVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                            keyboardActions = pinKeyboardActions,
-                            trailingIcon = {
-                                IconButton(onClick = { isResetAdminVisible = !isResetAdminVisible }) {
-                                    Icon(
-                                        imageVector = if (isResetAdminVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = null,
-                                        tint = Color.Gray,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .formScrollPadding()
-                        )
-                    }
+                    OutlinedTextField(
+                        value = confirmPinInput,
+                        onValueChange = {
+                            confirmPinInput = it
+                            errorMessage = null
+                        },
+                        label = { Text("Konfirmasi PIN Baru", fontSize = 11.sp) },
+                        placeholder = { Text("Ulangi PIN baru", fontSize = 11.sp) },
+                        visualTransformation = if (isConfirmPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardActions = pinKeyboardActions,
+                        trailingIcon = {
+                            IconButton(onClick = { isConfirmPinVisible = !isConfirmPinVisible }) {
+                                Icon(
+                                    imageVector = if (isConfirmPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (isConfirmPinVisible) "Sembunyikan konfirmasi PIN" else "Tampilkan konfirmasi PIN",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .formScrollPadding()
+                            .testTag("input_confirm_new_pin")
+                    )
 
                     if (errorMessage != null) {
                         Spacer(modifier = Modifier.height(6.dp))
@@ -2510,121 +2418,69 @@ fun OfficerDashboardConsoleView(
                 Button(
                     onClick = {
                         if (isProcessingSecurity) return@Button
-                        if (pinDialogMode == 0) {
-                            if (oldPinInput.isBlank()) {
-                                errorMessage = "Mohon isi PIN / sandi lama Anda saat ini."
-                                return@Button
-                            }
-                            if (newPinInput.length < 4) {
-                                errorMessage = "PIN baru harus minimal 4 karakter / angka."
-                                return@Button
-                            }
-                            if (newPinInput != confirmPinInput) {
-                                errorMessage = "Konfirmasi PIN baru tidak sama."
-                                return@Button
-                            }
-                            if (SmartOfficerAuthRepository.FORBIDDEN_DEFAULT_PINS.any { it.equals(newPinInput.trim(), ignoreCase = true) }) {
-                                errorMessage = "PIN baru dilarang menggunakan PIN default umum (117 / TRC2026 / dsb)."
-                                return@Button
-                            }
-                            isProcessingSecurity = true
-                            coroutineScope.launch {
-                                try {
-                                    val (integrityResult, result) = kotlinx.coroutines.withTimeout(25_000L) {
-                                        val integrity = PlayIntegritySecurityManager.getInstance(context)
-                                            .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "CHANGE_PIN")
-                                        val smartRepo = SmartOfficerAuthRepository.getInstance(context)
-                                        val res = smartRepo.changePersonalPin(officerBadgeId, oldPinInput, newPinInput)
-                                        integrity to res
-                                    }
-                                    result.onSuccess { msg ->
-                                        officerAuthManager.markCloudCustomPinStatus(true)
-                                        hasCustomPin = true
-                                        showChangePinDialog = false
-                                        Toast.makeText(context, "$msg (${integrityResult.verdict})", Toast.LENGTH_LONG).show()
-                                    }.onFailure { err ->
-                                        errorMessage = err.message ?: "Gagal memperbarui PIN."
-                                    }
-                                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                                    errorMessage = "Waktu koneksi ke server Firebase habis. Periksa sinyal internet lalu coba lagi."
-                                } catch (e: kotlinx.coroutines.CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    errorMessage = e.localizedMessage ?: "Gagal memperbarui PIN."
-                                } finally {
-                                    isProcessingSecurity = false
+                        val trimmedNew = newPinInput.trim()
+                        val defaultNipPin = com.example.data.local.OfficerCredentialEntity.generateInitialPinForNip(officerBadgeId)
+                        if (oldPinInput.isBlank()) {
+                            errorMessage = "Mohon isi PIN / sandi lama Anda saat ini."
+                            return@Button
+                        }
+                        if (trimmedNew.length < 4) {
+                            errorMessage = "PIN baru harus minimal 4 karakter / angka."
+                            return@Button
+                        }
+                        if (newPinInput != confirmPinInput) {
+                            errorMessage = "Konfirmasi PIN baru tidak sama."
+                            return@Button
+                        }
+                        if (SmartOfficerAuthRepository.FORBIDDEN_DEFAULT_PINS.any { it.equals(trimmedNew, ignoreCase = true) }) {
+                            errorMessage = "PIN baru dilarang menggunakan PIN default umum (117 / TRC2026 / dsb)."
+                            return@Button
+                        }
+                        if (trimmedNew.equals(defaultNipPin, ignoreCase = true) ||
+                            trimmedNew.equals(officerBadgeId.trim().takeLast(6), ignoreCase = true)
+                        ) {
+                            errorMessage = "PIN baru dilarang menggunakan 6 digit terakhir NIP (PIN default)."
+                            return@Button
+                        }
+                        isProcessingSecurity = true
+                        coroutineScope.launch {
+                            try {
+                                val (integrityResult, result) = kotlinx.coroutines.withTimeout(25_000L) {
+                                    val integrity = PlayIntegritySecurityManager.getInstance(context)
+                                        .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "CHANGE_PIN")
+                                    val smartRepo = SmartOfficerAuthRepository.getInstance(context)
+                                    val res = smartRepo.changePersonalPin(officerBadgeId, oldPinInput, trimmedNew)
+                                    integrity to res
                                 }
-                            }
-                        } else {
-                            val trimmedResetInput = resetAdminInput.trim()
-                            if (trimmedResetInput.isBlank()) {
-                                errorMessage = "Ketikkan Sandi Administrator atau PIN lama untuk reset."
-                                return@Button
-                            }
-                            isProcessingSecurity = true
-                            isResettingOwnPin = true
-                            SecurityManager.markPinResetInProgress(officerBadgeId, durationMs = 25_000L)
-                            coroutineScope.launch {
-                                try {
-                                    val result = kotlinx.coroutines.withTimeout(25_000L) {
-                                        PlayIntegritySecurityManager.getInstance(context)
-                                            .verifyCriticalAction(officerBadgeId.ifBlank { "OFFICER" }, "RESET_PIN")
-                                        val smartRepo = SmartOfficerAuthRepository.getInstance(context)
-                                        val isAdminAuthorized = securityManager.verifyMasterAdminPin(
-                                            inputPin = trimmedResetInput,
-                                            officerNip = officerBadgeId,
-                                            officerName = officerName,
-                                            officerRole = officerRole,
-                                            actionTitle = "Reset PIN Petugas ($officerBadgeId)"
-                                        ).getOrDefault(false)
-                                        val isSelfPinAuthorized = if (!isAdminAuthorized) {
-                                            smartRepo.verifyOfficerPinAgainstCloud(officerBadgeId, trimmedResetInput)
-                                        } else {
-                                            false
-                                        }
-                                        if (!isAdminAuthorized && !isSelfPinAuthorized) {
-                                            Result.failure(
-                                                SecurityException("Verifikasi Sandi Administrator ke server atau PIN pribadi lama ditolak. Percobaan dicatat di Audit Log.")
-                                            )
-                                        } else {
-                                            smartRepo.resetToInitialNipSecret(officerBadgeId)
-                                        }
-                                    }
-                                    result.onSuccess { msg ->
-                                        officerAuthManager.markCloudCustomPinStatus(false)
-                                        hasCustomPin = false
-                                        showChangePinDialog = false
-                                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                                        // Cleanly return officer to Landing Page so they can immediately login with 6-digit NIP PIN
-                                        onLogoutClick()
-                                    }.onFailure { err ->
-                                        SecurityManager.clearPinResetInProgress(officerBadgeId)
-                                        errorMessage = err.message ?: "Otorisasi reset PIN gagal."
-                                    }
-                                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                                    SecurityManager.clearPinResetInProgress(officerBadgeId)
-                                    errorMessage = "Waktu proses Reset PIN ke server habis. Periksa koneksi internet lalu coba lagi."
-                                } catch (e: kotlinx.coroutines.CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    SecurityManager.clearPinResetInProgress(officerBadgeId)
-                                    errorMessage = e.localizedMessage ?: "Otorisasi reset PIN gagal."
-                                } finally {
-                                    isProcessingSecurity = false
-                                    isResettingOwnPin = false
+                                result.onSuccess { msg ->
+                                    officerAuthManager.markCloudCustomPinStatus(true)
+                                    hasCustomPin = true
+                                    showChangePinDialog = false
+                                    Toast.makeText(context, "$msg (${integrityResult.verdict})", Toast.LENGTH_LONG).show()
+                                }.onFailure { err ->
+                                    errorMessage = err.message ?: "Gagal memperbarui PIN."
                                 }
+                            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                                errorMessage = "Waktu koneksi ke server Firebase habis. Periksa sinyal internet lalu coba lagi."
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                errorMessage = e.localizedMessage ?: "Gagal memperbarui PIN."
+                            } finally {
+                                isProcessingSecurity = false
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = if (pinDialogMode == 0) Color(0xFF15803D) else Color(0xFFDC2626)),
-                    enabled = !isProcessingSecurity
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                    enabled = !isProcessingSecurity,
+                    modifier = Modifier.testTag("btn_save_changed_pin")
                 ) {
                     if (isProcessingSecurity) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Memverifikasi...")
                     } else {
-                        Text(if (pinDialogMode == 0) "Simpan PIN Baru" else "Reset ke Kunci NIP")
+                        Text("Simpan PIN Baru")
                     }
                 }
             },
@@ -2768,8 +2624,23 @@ fun OfficerDashboardConsoleView(
         val submitEditPersonnel: () -> Unit = {
             if (!isSavingEdit) {
                 val validationError = personnelRepository.validatePersonnelInput(editFullName, editNip)
+                val trimmedCustomPin = editCustomPin.trim()
+                val cleanTargetNip = editNip.trim().replace(Regex("[\\s\\-]+"), "")
+                val defaultNipPin = com.example.data.local.OfficerCredentialEntity.generateInitialPinForNip(cleanTargetNip)
+                val pinError = when {
+                    trimmedCustomPin.isBlank() -> null
+                    trimmedCustomPin.length < 4 -> "PIN khusus baru minimal 4 digit/karakter."
+                    SmartOfficerAuthRepository.FORBIDDEN_DEFAULT_PINS.any { it.equals(trimmedCustomPin, ignoreCase = true) } ->
+                        "PIN khusus tidak boleh menggunakan PIN default umum (117 / TRC2026 / dsb)."
+                    trimmedCustomPin.equals(defaultNipPin, ignoreCase = true) ||
+                        trimmedCustomPin.equals(cleanTargetNip.takeLast(6), ignoreCase = true) ->
+                        "PIN petugas dilarang dikembalikan ke 6 digit terakhir NIP (PIN default)."
+                    else -> null
+                }
                 if (validationError != null) {
                     editError = validationError
+                } else if (pinError != null) {
+                    editError = pinError
                 } else {
                     isSavingEdit = true
                     coroutineScope.launch {
@@ -3617,9 +3488,9 @@ fun OfficerDashboardConsoleView(
                                 )
                             }
                         } else {
-                            // MODE 2: FORM EDIT DATA PERSONIL BPBD (KOREKSI TYPO NAMA/NIP, JABATAN, UNIT, SHIFT, PIN)
+                            // MODE 2: FORM EDIT DATA PERSONIL BPBD (KOREKSI TYPO NAMA/NIP, JABATAN, UNIT, SHIFT, PIN KHUSUS)
                             Text(
-                                text = "Perbarui nama, NIP/No. Reg TRC, jabatan, unit, shift, kontak, atau reset PIN personil. Perubahan NIP otomatis memperbarui data lama tanpa duplikat.",
+                                text = "Perbarui nama, NIP/No. Reg TRC, jabatan, unit, shift, kontak, atau tetapkan PIN khusus baru. Kosongkan kolom PIN agar PIN pribadi petugas tetap aman dan tidak berubah.",
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 16.sp
@@ -3669,8 +3540,8 @@ fun OfficerDashboardConsoleView(
                                     editCustomPin = it
                                     editError = null
                                 },
-                                label = { Text("Reset / Ubah PIN Login (Opsional)", fontSize = 11.sp) },
-                                placeholder = { Text("Kosongkan jika PIN tidak diubah", fontSize = 11.sp) },
+                                label = { Text("PIN Khusus Baru (Opsional)", fontSize = 11.sp) },
+                                placeholder = { Text("Kosongkan agar PIN petugas tetap aman (tidak berubah)", fontSize = 11.sp) },
                                 singleLine = true,
                                 keyboardOptions = formNextKeyboardOptions(),
                                 keyboardActions = rosterKeyboardActions,
@@ -4140,18 +4011,10 @@ fun OfficerDashboardConsoleView(
         )
     }
 
-    // DIALOG PULIHKAN AKSES & RESET SESI SATU KLIK DARI DIREKTORI PERSONIL
+    // DIALOG PULIHKAN AKSES SESI SATU KLIK DARI DIREKTORI PERSONIL (TANPA MERESET PIN)
     if (restoringPersonnel != null) {
         val targetOfficer = restoringPersonnel!!
         val cleanTargetNip = targetOfficer.nip.trim().replace(Regex("[\\s\\-]+"), "")
-        val initialSixDigitPin = remember(cleanTargetNip) {
-            val rawLastSix = cleanTargetNip.takeLast(6)
-            if (rawLastSix.length in 4..6 && rawLastSix.all { it.isDigit() }) {
-                rawLastSix
-            } else {
-                com.example.data.local.OfficerCredentialEntity.generateInitialPinForNip(cleanTargetNip)
-            }
-        }
         var isRestoringSession by remember(targetOfficer) { mutableStateOf(false) }
         var restoreError by remember(targetOfficer) { mutableStateOf<String?>(null) }
 
@@ -4164,14 +4027,14 @@ fun OfficerDashboardConsoleView(
             icon = {
                 Icon(
                     imageVector = Icons.Default.VerifiedUser,
-                    contentDescription = "Pulihkan Akses & Reset Sesi",
+                    contentDescription = "Pulihkan Akses Sesi",
                     tint = Color(0xFF15803D),
                     modifier = Modifier.size(32.dp)
                 )
             },
             title = {
                 Text(
-                    text = "Pulihkan Akses & Reset Sesi Petugas",
+                    text = "Pulihkan Akses Sesi Petugas",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
@@ -4206,13 +4069,12 @@ fun OfficerDashboardConsoleView(
                     }
 
                     Text(
-                        text = "Pilih tindakan pemulihan satu klik untuk petugas di atas:",
+                        text = "Pemulihan ini membuka kembali akses perangkat/sesi yang diblokir atau dicabut tanpa mengubah maupun mereset PIN pribadi petugas.",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp
                     )
 
-                    // Opsi 1: Pulihkan Akses Sesi Saja (Tetap Gunakan PIN Pribadi)
                     Button(
                         onClick = {
                             if (isRestoringSession) return@Button
@@ -4238,7 +4100,7 @@ fun OfficerDashboardConsoleView(
                                             restoringPersonnel = null
                                             Toast.makeText(
                                                 context,
-                                                "Akses & sesi ${targetOfficer.fullName} (NIP: $cleanTargetNip) berhasil dipulihkan (AKSES DIIZINKAN). Petugas dapat langsung login kembali.",
+                                                "Akses & sesi ${targetOfficer.fullName} (NIP: $cleanTargetNip) berhasil dipulihkan (PIN tetap aman). Petugas dapat langsung login kembali.",
                                                 Toast.LENGTH_LONG
                                             ).show()
                                         },
@@ -4260,7 +4122,7 @@ fun OfficerDashboardConsoleView(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 46.dp)
+                            .heightIn(min = 48.dp)
                             .testTag("btn_confirm_restore_session_only")
                     ) {
                         Column(
@@ -4268,83 +4130,13 @@ fun OfficerDashboardConsoleView(
                             modifier = Modifier.padding(vertical = 4.dp)
                         ) {
                             Text(
-                                text = "1. Pulihkan Akses Sesi (PIN Tetap)",
+                                text = "Pulihkan Akses Sesi (PIN Tetap)",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
                             Text(
-                                text = "Aktifkan kembali sesi yang tercabut/diblokir tanpa mengubah PIN",
-                                fontSize = 10.sp,
-                                color = Color.White.copy(alpha = 0.9f)
-                            )
-                        }
-                    }
-
-                    // Opsi 2: Pulihkan Akses Sesi + Reset PIN ke 6 Digit Terakhir NIP
-                    Button(
-                        onClick = {
-                            if (isRestoringSession) return@Button
-                            isRestoringSession = true
-                            restoreError = null
-                            coroutineScope.launch {
-                                try {
-                                    val normalizedTarget = cleanTargetNip.lowercase()
-                                    revokedNipsInSession = revokedNipsInSession - normalizedTarget
-                                    val resetRes = smartOfficerAuthRepo.resetToInitialNipSecret(cleanTargetNip)
-                                    val sessionRes = securityManager.restoreAndVerifyOfficerSessionByAdmin(
-                                        officerNip = cleanTargetNip,
-                                        officerName = targetOfficer.fullName,
-                                        officerRole = targetOfficer.role,
-                                        adminName = officerName.ifBlank { "Admin Pusdalops" }
-                                    )
-                                    if (resetRes.isSuccess) {
-                                        sessionRes.getOrNull()?.let { restoredSess ->
-                                            securitySessionsList = listOf(restoredSess) + securitySessionsList.filterNot {
-                                                it.officerNip.trim().equals(cleanTargetNip, ignoreCase = true)
-                                            }
-                                        }
-                                        loginActivitiesList = securityManager.fetchLoginActivities()
-                                        isRestoringSession = false
-                                        restoringPersonnel = null
-                                        Toast.makeText(
-                                            context,
-                                            "Akses dipulihkan & PIN ${targetOfficer.fullName} berhasil di-reset ke 6 digit terakhir NIP ($initialSixDigitPin).",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                    } else {
-                                        isRestoringSession = false
-                                        restoreError = resetRes.exceptionOrNull()?.message
-                                            ?: "Gagal mereset PIN ke server Firebase. Periksa koneksi internet."
-                                    }
-                                } catch (e: kotlinx.coroutines.CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    isRestoringSession = false
-                                    restoreError = e.localizedMessage ?: "Gagal memulihkan akses & reset PIN."
-                                }
-                            }
-                        },
-                        enabled = !isRestoringSession,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 46.dp)
-                            .testTag("btn_confirm_restore_and_reset_pin")
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "2. Pulihkan Akses + Reset PIN ke $initialSixDigitPin",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "Buka blokir sesi & kembalikan PIN ke 6 digit terakhir NIP ($initialSixDigitPin)",
+                                text = "Aktifkan kembali sesi yang tercabut tanpa menyentuh PIN pribadi",
                                 fontSize = 10.sp,
                                 color = Color.White.copy(alpha = 0.9f)
                             )

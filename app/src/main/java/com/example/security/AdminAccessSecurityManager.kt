@@ -336,15 +336,15 @@ object AdminAccessSecurityManager {
     ): AdminVerificationResult {
         val debugPath = "$FIRESTORE_ADMIN_CONFIG_PATH (field: $FIRESTORE_FIELD_MASTER_PIN)"
         logDebug("Path Firestore diakses : $debugPath (Force Source.SERVER)")
-        logDebug("PIN diketik pengguna   : '$inputPin'")
+        logDebug("Input PIN diterima     : [REDACTED, panjang=${inputPin.length}]")
 
         val lookupResult = fetchMasterPinFromFirestoreServer(context)
 
         when (lookupResult) {
             is FirestoreMasterPinLookup.Found -> {
                 val firestoreMasterPin = lookupResult.masterPin
-                logDebug("Nilai masterPin Firestore (${lookupResult.sourceLabel}) : '$firestoreMasterPin'")
-                logDebug("Metode verifikasi : Perbandingan teks asli (plaintext) tanpa mengubah data Firestore")
+                logDebug("Status masterPin Firestore (${lookupResult.sourceLabel}) : Ditemukan [REDACTED]")
+                logDebug("Metode verifikasi : Perbandingan nilai server tanpa menulis ke log atau mengubah data Firestore")
 
                 val isPlaintextMatch = inputPin == firestoreMasterPin
 
@@ -552,7 +552,7 @@ object AdminAccessSecurityManager {
         actionTitle: String
     ): AdminVerificationResult {
         logDebug("Path verifikasi : REST API POST /api/verify-admin-pass")
-        logDebug("PIN diketik pengguna : '$trimmedPassword'")
+        logDebug("Input PIN diterima : [REDACTED, panjang=${trimmedPassword.length}]")
 
         val requestPayload = JSONObject().apply {
             put("officerNip", safeNip)

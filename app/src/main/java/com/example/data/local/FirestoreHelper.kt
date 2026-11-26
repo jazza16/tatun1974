@@ -1765,6 +1765,107 @@ object FirestoreHelper {
     }
 
     /**
+     * Updates ONLY non-secret login metadata (`role`, `lastLoginAt`, `lastLoginDevice`, `updatedAt`,
+     * and backfills `isPinChanged = true` ONLY when `isCustomPinSet` is already true).
+     * NEVER touches `pinHash`, `salt`, `isCustomPinSet`, or `initialSecurePin`, eliminating
+     * any race-condition overwrite that could revert an officer's PIN.
+     */
+    fun updateCredentialLoginMetadata(
+        credential: OfficerCredentialEntity,
+        context: Context? = null
+    ) {
+        val trimmedNip = credential.nip.trim()
+        if (trimmedNip.isBlank()) return
+
+        overrideCloudCredentialWriterForTesting?.let { writer ->
+            try {
+                kotlinx.coroutines.runBlocking {
+                    writer(credential)
+                }
+            } catch (_: Exception) {
+            }
+            return
+        }
+
+        val db = getFirestoreOrThrow(context).getOrNull() ?: return
+        ensureAppCheckTokenAttached()
+        try {
+            val metadataUpdate = mutableMapOf<String, Any>(
+                "role" to credential.role,
+                "lastLoginAt" to credential.lastLoginAt,
+                "lastLoginDevice" to credential.lastLoginDevice,
+                "updatedAt" to credential.updatedAt
+            )
+            if (credential.isCustomPinSet) {
+                metadataUpdate["isPinChanged"] = true
+            }
+            db.collection(COLLECTION_OFFICER_CREDENTIALS)
+                .document(trimmedNip)
+                .update(metadataUpdate)
+                .addOnSuccessListener {
+                    Log.d(TAG, "Login metadata updated safely (officer_credentials/$trimmedNip)")
+                }
+                .addOnFailureListener { e ->
+                    logFirestoreError("updateCredentialLoginMetadata(officer_credentials/$trimmedNip)", e)
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during credential login metadata update", e)
+        }
+    }
+
+    /**
+     * Updates ONLY non-secret profile fields (`fullName`, `role`, `unit`, `shift`, `phone`, `updatedAt`)
+     * on an existing `officer_credentials/{nip}` document via partial `.update(...)`.
+     * NEVER touches `pinHash`, `salt`, `isCustomPinSet`, or `isPinChanged`.
+     */
+    suspend fun updateCredentialProfileMetadataSuspend(
+        existingCredential: OfficerCredentialEntity,
+        context: Context? = null
+    ): Result<Unit> {
+        val trimmedNip = existingCredential.nip.trim()
+        if (trimmedNip.isBlank()) {
+            return Result.failure(IllegalArgumentException("NIP tidak boleh kosong."))
+        }
+        overrideCloudCredentialWriterForTesting?.let { writer ->
+            return writer(existingCredential)
+        }
+        val dbResult = getFirestoreOrThrow(context)
+        val db = dbResult.getOrNull() ?: return Result.failure(
+            dbResult.exceptionOrNull() ?: IllegalStateException("FirebaseFirestore instance null")
+        )
+        ensureAppCheckTokenAttached()
+        return withTimeoutOrNull(12_000L) {
+            suspendCancellableCoroutine { cont ->
+                try {
+                    val profileUpdate = mapOf<String, Any>(
+                        "fullName" to existingCredential.fullName,
+                        "role" to existingCredential.role,
+                        "unit" to existingCredential.unit,
+                        "shift" to existingCredential.shift,
+                        "phone" to existingCredential.phone,
+                        "updatedAt" to existingCredential.updatedAt
+                    )
+                    db.collection(COLLECTION_OFFICER_CREDENTIALS)
+                        .document(trimmedNip)
+                        .update(profileUpdate)
+                        .addOnSuccessListener {
+                            Log.d(TAG, "Credential profile metadata updated safely (officer_credentials/$trimmedNip)")
+                            if (cont.isActive) cont.resume(Result.success(Unit))
+                        }
+                        .addOnFailureListener { e ->
+                            logFirestoreError("updateCredentialProfileMetadataSuspend(officer_credentials/$trimmedNip)", e)
+                            if (cont.isActive) cont.resume(Result.failure(e))
+                        }
+                } catch (e: Exception) {
+                    if (cont.isActive) cont.resume(Result.failure(e))
+                }
+            }
+        } ?: Result.failure(
+            IllegalStateException("Waktu pembaruan profil kredensial ke server Firebase habis (DEADLINE_EXCEEDED).")
+        )
+    }
+
+    /**
      * Purges any simulation login session and admin audit trace documents in Cloud Firestore for the target NIP.
      */
     suspend fun purgeOfficerCloudLoginTracesSuspend(

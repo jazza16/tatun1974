@@ -317,6 +317,7 @@ class SecurityManager private constructor(private val context: Context) {
     }
 
     private val listenerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val recentLoginCoalesceMap = ConcurrentHashMap<String, Pair<Long, DeviceSecuritySession>>()
 
     private val firestore: FirebaseFirestore? by lazy {
         try {
@@ -350,7 +351,6 @@ class SecurityManager private constructor(private val context: Context) {
         private const val ACTIVE_SESSION_MAX_AGE_MS = 24L * 60 * 60 * 1000L
         private const val LOGIN_COALESCE_WINDOW_MS = 3_000L
 
-        private val recentLoginCoalesceMap = ConcurrentHashMap<String, Pair<Long, DeviceSecuritySession>>()
         // Tracks NIPs currently undergoing intentional PIN Reset / account normalization so realtime
         // listeners never falsely emit a "session revoked" toast or force-kick mid-reset.
         private val pinResetSuppressionUntilMs = ConcurrentHashMap<String, Long>()
@@ -417,8 +417,18 @@ class SecurityManager private constructor(private val context: Context) {
         private var INSTANCE: SecurityManager? = null
 
         fun getInstance(context: Context): SecurityManager {
-            return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: SecurityManager(context.applicationContext).also { INSTANCE = it }
+            val appContext = context.applicationContext ?: context
+            val current = INSTANCE
+            if (current != null && current.context === appContext) {
+                return current
+            }
+            return synchronized(this) {
+                val synced = INSTANCE
+                if (synced != null && synced.context === appContext) {
+                    synced
+                } else {
+                    SecurityManager(appContext).also { INSTANCE = it }
+                }
             }
         }
     }
@@ -2223,12 +2233,11 @@ class SecurityManager private constructor(private val context: Context) {
     }
 
     fun isOfficerDataSyncPermitted(): Boolean {
-        val officerLoggedIn = try {
+        return try {
             com.example.data.local.OfficerAuthManager(context).isOfficerLoggedIn()
         } catch (_: Exception) {
             false
         }
-        return officerLoggedIn || hasAnyActiveLocalVerifiedSession()
     }
 
     private fun isLocalSessionValid(officerNip: String): Boolean {

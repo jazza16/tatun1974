@@ -444,42 +444,66 @@ service cloud.firestore {
       allow update: if isValidId(nip)
                     && isValidOfficerCredential(incoming())
                     && incoming().nip == nip
+                    && (!('nip' in existing()) || incoming().nip == existing().nip)
                     && incoming().diff(existing()).affectedKeys().hasOnly([
                          'ownerUid', 'fullName', 'role', 'unit', 'shift', 'phone',
                          'pinHash', 'salt', 'isCustomPinSet', 'isPinChanged',
                          'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
                        ])
+                    // Preserve ownership identity (or bind initial legacy unowned record to officer_nip_<nip>)
                     && (
-                         (isSignedIn() && existing().ownerUid == request.auth.uid && incoming().ownerUid == existing().ownerUid)
-                         || (existing().ownerUid == ('officer_nip_' + nip) && incoming().ownerUid == existing().ownerUid)
+                         (('ownerUid' in existing()) && incoming().ownerUid == existing().ownerUid)
                          || (!('ownerUid' in existing()) && incoming().ownerUid == ('officer_nip_' + nip))
+                       )
+                    // UNCONDITIONAL GLOBAL ANTI-DOWNGRADE: applies to ALL callers regardless of auth or ownerUid.
+                    && (
+                         !('isCustomPinSet' in existing())
+                         || existing().isCustomPinSet == false
+                         || (incoming().isCustomPinSet == true && (!('isPinChanged' in incoming()) || incoming().isPinChanged == true))
+                       )
+                    && (
+                         !('isPinChanged' in existing())
+                         || existing().isPinChanged == false
+                         || (incoming().isPinChanged == true && incoming().isCustomPinSet == true)
+                       )
+                    && (
+                         // Path A: Non-secret metadata/profile/login timestamp update ONLY (pinHash, salt, isCustomPinSet untouched)
+                         (
+                           incoming().pinHash == existing().pinHash
+                           && incoming().salt == existing().salt
+                           && !incoming().diff(existing()).affectedKeys().hasAny(['pinHash', 'salt', 'isCustomPinSet'])
+                           && (
+                                !incoming().diff(existing()).affectedKeys().hasAny(['isPinChanged'])
+                                || (('isCustomPinSet' in existing()) && existing().isCustomPinSet == true && incoming().isPinChanged == true)
+                              )
+                           && incoming().diff(existing()).affectedKeys().hasOnly([
+                                'ownerUid', 'fullName', 'role', 'unit', 'shift', 'phone',
+                                'isPinChanged', 'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
+                              ])
+                         )
+                         // Path B: First-time hash activation ONLY when pinHash or salt is genuinely uninitialized/empty
                          || (
-                              incoming().ownerUid == existing().ownerUid
-                              && (!('pinHash' in existing()) || existing().pinHash == '' || !('salt' in existing()) || existing().salt == '')
-                            )
-                         || (
-                              // Allow officer or Admin to update PIN hash & salt while preserving existing ownerUid,
-                              // and strictly prevent downgrading an already-customized PIN (isCustomPinSet == true) back to false.
-                              incoming().ownerUid == existing().ownerUid
+                              (!('pinHash' in existing()) || existing().pinHash == '' || !('salt' in existing()) || existing().salt == '')
+                              && (!('isCustomPinSet' in existing()) || existing().isCustomPinSet == false)
+                              && (!('isPinChanged' in existing()) || existing().isPinChanged == false)
                               && incoming().pinHash != ''
                               && incoming().salt != ''
-                              && incoming().initialSecurePin == ''
+                              && (!('initialSecurePin' in incoming()) || incoming().initialSecurePin == '')
+                            )
+                         // Path C: Personal custom PIN upgrade/change ONLY (NEVER allowed to leave isCustomPinSet == false)
+                         || (
+                              incoming().pinHash != ''
+                              && incoming().salt != ''
+                              && (!('initialSecurePin' in incoming()) || incoming().initialSecurePin == '')
+                              && incoming().isCustomPinSet == true
+                              && incoming().isPinChanged == true
                               && (
                                    !('isCustomPinSet' in existing())
                                    || existing().isCustomPinSet == false
-                                   || (incoming().isCustomPinSet == true && (!('isPinChanged' in incoming()) || incoming().isPinChanged == true))
+                                   || !isSignedIn()
+                                   || existing().ownerUid == request.auth.uid
+                                   || existing().ownerUid.matches('^officer_nip_.*')
                                  )
-                            )
-                         || (
-                              incoming().ownerUid == existing().ownerUid
-                              && incoming().pinHash == existing().pinHash
-                              && incoming().salt == existing().salt
-                              && incoming().isCustomPinSet == (('isCustomPinSet' in existing()) ? existing().isCustomPinSet : false)
-                              && incoming().isPinChanged == (('isPinChanged' in existing()) ? existing().isPinChanged : (('isCustomPinSet' in existing()) ? existing().isCustomPinSet : false))
-                              && incoming().diff(existing()).affectedKeys().hasOnly([
-                                   'fullName', 'role', 'unit', 'shift', 'phone',
-                                   'isPinChanged', 'initialSecurePin', 'lastLoginAt', 'lastLoginDevice', 'updatedAt'
-                                 ])
                             )
                        );
       allow delete: if false;

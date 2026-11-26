@@ -1355,7 +1355,7 @@ fun WeatherAppScreen(
                     context
                 )
             },
-            onSimulatePublishNextVersion = { viewModel.simulatePublishNextVersion("1.1.0", context) },
+            onSimulatePublishNextVersion = { viewModel.simulatePublishNextVersion("1.2.0", context) },
             onResetLatestRelease = { viewModel.resetToLatestReleaseState() },
             onOpenOnboarding = { viewModel.setOnboardingOpen(true) },
             onOpenCompass = { viewModel.setCompassSheetOpen(true) },

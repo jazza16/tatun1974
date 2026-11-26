@@ -1,8 +1,9 @@
 # MASTER DOKUMEN PRD (Product Requirements Document) — SIPAGAR KITA
 
 **Instansi:** Pusdalops-PB Badan Penanggulangan Bencana Daerah (BPBD) Kabupaten Mukomuko  
+**Versi Rilis Aktif:** `v1.2.0` (`versionCode = 13`)  
 **Arsitektur:** Two-Tier Frontend (`sipagar-warga` & `sipagar-petugas`), Offline-First Local Storage, RBAC Ketat (8 Role), & Anti-Data Ganda (`NIK 16 Digit` sebagai Primary Key)  
-**Tanggal Pembaruan Status:** 25 November 2026
+**Tanggal Pembaruan Status:** 26 November 2026
 
 > **Keterangan Checklist:** `[x]` = **Selesai Diterapkan & Terverifikasi**
 
@@ -85,3 +86,19 @@
 - [x] **Manajemen & Koordinasi Relawan**:
   - [x] Registrasi dengan proteksi **NIK 16 Digit (Anti-Data Ganda)**.
   - [x] Alur status **`Pending -> Verified -> Assigned`** beserta pemilihan Posko penugasan dan unduh arsip data seluruh relawan.
+
+---
+
+## BAB 6: PENGUATAN KEAMANAN PIN, ISOLASI MODE WARGA, & NOTIFIKASI TRIASE (RILIS v1.2.0 — SELESAI)
+
+- [x] **Perlindungan Anti-Reset PIN Sepihak & Anti-Downgrade Cloud Firestore**:
+  - [x] Menonaktifkan seluruh API/tombol reset PIN sepihak dan mewajibkan ubah PIN pribadi langsung melalui verifikasi Cloud Firestore.
+  - [x] Pembaruan profil maupun pasca-login/biometrik hanya menulis metadata parsial tanpa menimpa `pinHash`, `salt`, atau `isCustomPinSet`.
+  - [x] Menegakkan aturan anti-downgrade di `firestore.rules` serta menyensor nilai PIN pada log diagnostik keamanan.
+- [x] **Penguncian Ketat Modul Internal & Isolasi Mode Warga**:
+  - [x] Mengunci seluruh modul internal petugas (*DatabaseExplorer*, DALA, Manajemen Posko/Logistik, Form Laporan Harian, Panel Keamanan) hanya saat sesi petugas terverifikasi aktif (`isOfficerLoggedIn`).
+  - [x] Menghentikan penarikan/penyimpanan data sensitif internal petugas ketika berada di Mode Warga.
+- [x] **Notifikasi Triase Pewarnaan Siaga Bencana**:
+  - [x] Evaluasi tingkat siaga berwarna (**Hijau / Kuning / Oranye / Merah**) dengan kanal notifikasi terpisah antara Warga dan Petugas serta peredam pengulangan (*cooldown*) dan eskalasi prioritas tinggi.
+- [x] **Fokus Darurat Beranda Warga, Kepatuhan Izin Minimalis, & Desain Adaptif**:
+  - [x] Menonjolkan 4 aksi darurat cepat di beranda warga (117/112, Lapor Cepat, Peringatan Dini, Evakuasi Offline), melepas kunci orientasi layar pada `MapActivity`, memisahkan *Data Baseline Historis* dari *LIVE DATA*, dan menghapus izin `SET_WALLPAPER`.

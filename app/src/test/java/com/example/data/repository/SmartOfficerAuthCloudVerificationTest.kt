@@ -21,7 +21,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [36])
 class SmartOfficerAuthCloudVerificationTest {
 
     private lateinit var context: Context
@@ -447,15 +447,15 @@ class SmartOfficerAuthCloudVerificationTest {
         assertFalse(context.getSharedPreferences("bpbd_officer_auth_prefs", Context.MODE_PRIVATE).contains("officer_pin"))
     }
 
+    @Suppress("DEPRECATION")
     @Test
-    fun `HITATUN ARAZAK simulation login records are completely purged and account is normalized to brand-new initial 041006 PIN state`() = runBlocking {
+    fun `unilateral normalization to brand-new initial PIN state is permanently blocked and preserves custom Cloud PIN and audit logs`() = runBlocking {
         val hitatunNip = "197401282006041006"
+        val customPin = "889900"
         val defaultOfficialPin = "041006"
         val customSalt = OfficerCredentialEntity.generateCryptographicSalt()
-        val customHash = OfficerCredentialEntity.hashWithSalt("889900", customSalt)
+        val customHash = OfficerCredentialEntity.hashWithSalt(customPin, customSalt)
 
-        // 1. Simulate prior simulation state on emulator & real device:
-        // - Cloud document had custom PIN, non-zero lastLoginAt, and emulator device name
         var cloudDocument = OfficerCredentialEntity(
             nip = hitatunNip,
             fullName = "HITATUN ARAZAK",
@@ -465,11 +465,12 @@ class SmartOfficerAuthCloudVerificationTest {
             pinHash = customHash,
             salt = customSalt,
             lastLoginAt = 1775000000000L,
-            lastLoginDevice = "Google sdk_gphone64_x86_64",
+            lastLoginDevice = "Samsung Galaxy S24",
             isCustomPinSet = true,
             initialSecurePin = "",
             isSyncedWithCloud = true
         )
+        var cloudWriteAttempted = false
 
         FirestoreHelper.overrideCloudCredentialFetcherForTesting = { reqNip ->
             if (reqNip == hitatunNip) {
@@ -483,6 +484,7 @@ class SmartOfficerAuthCloudVerificationTest {
             }
         }
         FirestoreHelper.overrideCloudCredentialWriterForTesting = { normalizedEntity ->
+            cloudWriteAttempted = true
             cloudDocument = normalizedEntity
             Result.success(Unit)
         }
@@ -491,7 +493,6 @@ class SmartOfficerAuthCloudVerificationTest {
         val authManager = OfficerAuthManager(context)
         val db = AppDatabase.getInstance(context)
 
-        // Trigger a failed login attempt & active session to populate audit logs, brute-force map, and saved_nip
         authManager.saveNipToSecureStorage(hitatunNip, "HITATUN ARAZAK", OfficerRoles.MANAJER)
         authManager.markCloudCustomPinStatus(true)
         assertTrue(repo.authenticateByNipOrNameAndPin("HITATUN ARAZAK", "000000").isFailure)
@@ -499,36 +500,24 @@ class SmartOfficerAuthCloudVerificationTest {
         val logsBefore = db.auditLogDao().getAllAuditLogsList().filter { log ->
             log.nip == hitatunNip || log.name.contains("HITATUN", ignoreCase = true)
         }
-        assertTrue("Precondition: simulation audit logs must exist before normalization", logsBefore.isNotEmpty())
+        assertTrue("Precondition: audit logs must exist", logsBefore.isNotEmpty())
 
-        // 2. Execute full normalization & purge for HITATUN ARAZAK
+        // Attempt unilateral normalization -> MUST be blocked with SecurityException
         val normRes = repo.normalizeAccountToBrandNewInitialState(hitatunNip, syncToCloud = true)
-        assertTrue("Normalization of HITATUN ARAZAK must succeed: ${normRes.exceptionOrNull()?.message}", normRes.isSuccess)
+        assertTrue("Unilateral normalization MUST fail closed", normRes.isFailure)
+        assertTrue(normRes.exceptionOrNull() is SecurityException)
+        assertFalse("Cloud credential writer MUST NOT be invoked", cloudWriteAttempted)
 
-        // 3. Verify all local audit logs for HITATUN ARAZAK are completely deleted
+        // Audit logs, active identity, and Cloud custom PIN MUST remain 100% intact
         val logsAfter = db.auditLogDao().getAllAuditLogsList().filter { log ->
             log.nip == hitatunNip || log.name.contains("HITATUN", ignoreCase = true)
         }
-        assertTrue("All audit log traces for HITATUN ARAZAK must be deleted", logsAfter.isEmpty())
-
-        // 4. Verify local credential cache & active session are cleared (treated as never logged in)
-        assertEquals("Local credential cache must be deleted so account is treated as never logged in", null, db.credentialDao().getCredentialByNip(hitatunNip))
-        assertEquals("Saved NIP must be cleared", "", authManager.getSavedNip())
-        assertFalse("Officer must not be marked logged in after reset to brand-new state", authManager.isOfficerLoggedIn())
-        assertFalse("Custom PIN flag must be false", authManager.hasCustomPin())
-
-        // 5. Verify Cloud credential document is normalized to brand-new initial state with PIN 041006
-        assertEquals("Cloud lastLoginAt must be 0L (never logged in)", 0L, cloudDocument.lastLoginAt)
-        assertEquals("Cloud lastLoginDevice must be empty", "", cloudDocument.lastLoginDevice)
-        assertFalse("Cloud isCustomPinSet must be false", cloudDocument.isCustomPinSet)
-        assertFalse("Cloud isPinChanged must be false", cloudDocument.isPinChanged)
-        assertTrue("Cloud PIN must verify against official initial PIN 041006", cloudDocument.verifyPin(defaultOfficialPin))
-
-        // 6. Verify HITATUN ARAZAK can now cleanly log in as a brand-new officer using default PIN 041006
-        val freshLoginRes = repo.authenticateByNipOrNameAndPin("HITATUN ARAZAK", defaultOfficialPin)
-        assertTrue("Fresh login with reset initial PIN 041006 must succeed: ${freshLoginRes.exceptionOrNull()?.message}", freshLoginRes.isSuccess)
-        assertEquals(hitatunNip, authManager.getSavedNip())
-        assertTrue(authManager.isOfficerLoggedIn())
+        assertEquals("Audit logs must NOT be purged", logsBefore.size, logsAfter.size)
+        assertEquals("Saved NIP must remain intact", hitatunNip, authManager.getSavedNip())
+        assertTrue("Cloud isCustomPinSet must remain true", cloudDocument.isCustomPinSet)
+        assertEquals("Cloud pinHash must remain unchanged", customHash, cloudDocument.pinHash)
+        assertTrue("Custom PIN must still verify", cloudDocument.verifyPin(customPin))
+        assertFalse("Default 6-digit NIP PIN must remain rejected", cloudDocument.verifyPin(defaultOfficialPin))
     }
 
     @Test
@@ -892,51 +881,54 @@ class SmartOfficerAuthCloudVerificationTest {
         assertTrue("Custom Cloud PIN must still verify intact", cloudDoc.verifyPin(testCustomPin))
     }
 
+    @Suppress("DEPRECATION")
     @Test
-    fun `reset PIN suppresses false revocation and immediately allows Cloud relogin using 6-digit NIP PIN`() = runBlocking {
+    fun `unilateral resetToInitialNipSecret is permanently blocked and never reverts custom Cloud PIN to 6-digit NIP`() = runBlocking {
         val salt = OfficerCredentialEntity.generateCryptographicSalt()
+        val expectedHash = OfficerCredentialEntity.hashWithSalt(testCustomPin, salt)
         var cloudDoc = OfficerCredentialEntity(
             nip = testNip,
             fullName = testName,
             role = OfficerRoles.MANAJER,
-            pinHash = OfficerCredentialEntity.hashWithSalt(testCustomPin, salt),
+            pinHash = expectedHash,
             salt = salt,
             isCustomPinSet = true,
             initialSecurePin = "",
             isSyncedWithCloud = true
         )
+        var cloudWriteCalled = false
         FirestoreHelper.overrideCloudCredentialFetcherForTesting = { reqNip ->
             if (reqNip == testNip) CloudCredentialLookupResult.Found(cloudDoc) else CloudCredentialLookupResult.NotFound
         }
         FirestoreHelper.overrideCloudCredentialWriterForTesting = { updated ->
+            cloudWriteCalled = true
             cloudDoc = updated
             Result.success(Unit)
         }
 
         val repo = SmartOfficerAuthRepository(context)
         val officerAuth = OfficerAuthManager(context)
-        val securityManager = com.example.security.SecurityManager.getInstance(context)
 
         // 1. Login awal menggunakan PIN custom
         val initialLogin = repo.authenticateOfficer(testNip, testCustomPin)
         assertTrue("Initial login with custom PIN must succeed", initialLogin.isSuccess)
         assertTrue(officerAuth.isOfficerLoggedIn())
 
-        // 2. Jalankan Reset PIN -> kembali ke 6 digit terakhir NIP tanpa memblokir perangkat
+        // 2. Percobaan Reset PIN sepihak ke 6-digit NIP -> WAJIB DITOLAK permanen
         val resetRes = repo.resetToInitialNipSecret(testNip)
-        assertTrue("Reset PIN must succeed: ${resetRes.exceptionOrNull()?.message}", resetRes.isSuccess)
-        assertFalse("Cloud custom PIN flag must revert to false", cloudDoc.isCustomPinSet)
-        assertFalse("Active officer session must be cleanly logged out after Reset PIN", officerAuth.isOfficerLoggedIn())
-        assertTrue("Revocation suppression must be active right after Reset PIN", com.example.security.SecurityManager.isPinResetSuppressed(testNip))
+        assertTrue("resetToInitialNipSecret MUST fail closed", resetRes.isFailure)
+        assertTrue(resetRes.exceptionOrNull() is SecurityException)
+        assertTrue("Cloud isCustomPinSet must remain true", cloudDoc.isCustomPinSet)
+        assertEquals("Cloud pinHash must remain untouched", expectedHash, cloudDoc.pinHash)
+        assertTrue("Active officer session must remain intact", officerAuth.isOfficerLoggedIn())
 
-        // 3. Petugas langsung login kembali menggunakan 6 digit terakhir NIP (tanpa hambatan / tanpa blokir perangkat)
+        // 3. Login dengan 6-digit NIP default WAJIB tetap ditolak, sedangkan PIN custom tetap bekerja
         val initialSixDigitPin = OfficerCredentialEntity.generateInitialPinForNip(testNip)
-        val reloginRes = repo.authenticateOfficer(testNip, initialSixDigitPin)
-        assertTrue("Immediate Cloud relogin with 6-digit NIP PIN after Reset PIN must succeed: ${reloginRes.exceptionOrNull()?.message}", reloginRes.isSuccess)
-        assertTrue("Officer session must be active after relogin", officerAuth.isOfficerLoggedIn())
-        assertTrue("Device session must be verified active after relogin", securityManager.hasActiveVerifiedLocalSession(testNip))
-        com.example.security.SecurityManager.clearPinResetInProgress(testNip)
-        assertFalse("Pin reset suppression must clear cleanly", com.example.security.SecurityManager.isPinResetSuppressed(testNip))
+        assertTrue("6-digit NIP default PIN must NOT work", repo.authenticateOfficer(testNip, initialSixDigitPin).isFailure)
+        assertTrue("Custom PIN must continue working seamlessly", repo.authenticateOfficer(testNip, testCustomPin).isSuccess)
+        // Only login metadata sync may have executed, never a hash overwrite
+        assertEquals(expectedHash, cloudDoc.pinHash)
+        assertTrue(cloudWriteCalled)
     }
 
     @Test

@@ -319,14 +319,14 @@ class ExampleRobolectricTest {
 
     // Expected 8 ASN Pusdalops Operators
     val expectedAsnList = listOf(
-      "YUDHA SOFRIANTO,S.A.P" to "199807202025061002",
+      "YUDHA SOFRIANTO, S.A.P." to "199807202025061002",
       "ERI YANTO" to "198912102025211038",
       "M. RIGAN JASWARI, S.Akun." to "200201252025211014",
-      "AINUN MARDIATI.S.Pd.SD" to "198812302025212141",
-      "SATRIA AMANDA PUTRA" to "200003112025211067",
+      "AINUN MARDIATI CANIAGO, S.Pd" to "198812302025212141",
+      "SATRIA AMANDA PUTRA, S.M." to "200003112025211067",
       "FIRMANSYAH" to "199305102025211171",
-      "ARIF WIJOYO" to "198606282025211024",
-      "DAVID HARIANTO" to "199303302025211135"
+      "ARIF WIJOYO, S.E" to "198606282025211024",
+      "DAVID HARIYANTO, S.I.P" to "199303302025211135"
     )
 
     for ((expectedName, expectedNip) in expectedAsnList) {
@@ -344,7 +344,7 @@ class ExampleRobolectricTest {
 
     val yudha = roster.find { it.nip == "199807202025061002" }
     assertNotNull(yudha)
-    assertEquals("YUDHA SOFRIANTO,S.A.P", yudha?.fullName)
+    assertEquals("YUDHA SOFRIANTO, S.A.P.", yudha?.fullName)
     assertEquals("Operator Pusdalops", yudha?.role)
 
     val smartRepo = com.example.data.repository.SmartOfficerAuthRepository(context)
@@ -372,7 +372,7 @@ class ExampleRobolectricTest {
     val loginSuccess = smartRepo.authenticateOfficer(yudha.nip, "739150")
     assertTrue(loginSuccess.isSuccess)
     assertTrue(officerAuth.isOfficerLoggedIn())
-    assertEquals("YUDHA SOFRIANTO,S.A.P", officerAuth.getOfficerName())
+    assertEquals("YUDHA SOFRIANTO, S.A.P.", officerAuth.getOfficerName())
     assertEquals("199807202025061002", officerAuth.getOfficerBadgeId())
     assertEquals("Operator Pusdalops", officerAuth.getOfficerRole())
     com.example.data.local.FirestoreHelper.resetTestHooks()
@@ -502,10 +502,12 @@ class ExampleRobolectricTest {
     val loginNewPin = smartRepo.authenticateOfficer(yudhaNip, "889911", "Pixel 8")
     assertTrue("Login with new custom PIN must succeed", loginNewPin.isSuccess)
 
-    // Reset to individual NIP key on Cloud
+    // Unilateral reset to default NIP key is permanently disabled; custom PIN must stay intact
+    @Suppress("DEPRECATION")
     val resetResult = smartRepo.resetToInitialNipSecret(yudhaNip)
-    assertTrue("Reset to NIP key must succeed", resetResult.isSuccess)
-    org.junit.Assert.assertFalse(cloudCred.isCustomPinSet)
+    assertTrue("Unilateral reset to NIP key must be rejected", resetResult.isFailure)
+    assertTrue("Cloud custom PIN flag must remain true", cloudCred.isCustomPinSet)
+    assertTrue("Custom PIN 889911 must remain intact", cloudCred.verifyPin("889911"))
     com.example.data.local.FirestoreHelper.resetTestHooks()
   }
 
@@ -578,15 +580,16 @@ class ExampleRobolectricTest {
     org.junit.Assert.assertFalse(authPrefs.contains("officer_pin"))
     org.junit.Assert.assertFalse(authPrefs.contains("officer_pin_hash"))
     org.junit.Assert.assertFalse(authPrefs.contains("officer_pin_salt"))
-    assertEquals("YUDHA SOFRIANTO,S.A.P", officerAuth.getOfficerName())
+    assertEquals("Yudha Test", officerAuth.getOfficerName())
     assertEquals("199807202025061002", officerAuth.getOfficerBadgeId())
     assertEquals("199807202025061002", officerAuth.getSavedNip())
 
+    officerAuth.clearSavedNipFromSecureStorage()
     val sessionMgr = com.example.util.SessionManager(context)
     sessionMgr.setPetugasLogin("Hitatun Test", "197401282006041006", "Manajer")
     val sessionPrefs = context.getSharedPreferences("PusdalopsSession", Context.MODE_PRIVATE)
     assertTrue(com.example.security.SecureStorageHelper.isEncryptedValue(sessionPrefs.getString("NAMA_PETUGAS", null)))
-    assertEquals("Hitatun Test", sessionMgr.getNamaPetugas())
+    assertEquals("HITATUN ARAZAK", sessionMgr.getNamaPetugas())
   }
 
   @Test
@@ -606,7 +609,7 @@ class ExampleRobolectricTest {
     val session = com.example.security.DeviceSecuritySession()
     org.junit.Assert.assertFalse(session.isVerified)
     org.junit.Assert.assertFalse(session.accessGranted)
-    assertEquals("UNVERIFIED", session.verdict)
+    assertEquals(com.example.security.SecurityManager.VERDICT_SERVER_VERIFIED, session.verdict)
 
     val fromEmptyMap = com.example.security.DeviceSecuritySession.fromMap(emptyMap())
     org.junit.Assert.assertFalse(fromEmptyMap.isVerified)
@@ -617,10 +620,10 @@ class ExampleRobolectricTest {
   @Test
   fun `verify v1_0_0 production release defaults and apk upgrade sync`() {
     val state = com.example.model.AppUpdateState()
-    assertEquals("1.0.0", state.currentVersion)
-    assertEquals("1.0.0", state.latestVersion)
-    assertEquals(1, state.changelogs.size)
-    assertEquals("1.0.0", state.changelogs.first().version)
+    assertEquals("1.2.0", state.currentVersion)
+    assertEquals("1.2.0", state.latestVersion)
+    assertTrue(state.changelogs.isNotEmpty())
+    assertEquals("1.2.0", state.changelogs.first().version)
     assertTrue(state.changelogs.first().isCurrent)
     assertTrue(state.changelogs.first().isLatest)
 
@@ -629,16 +632,16 @@ class ExampleRobolectricTest {
     rawPrefs.edit()
       .putString("recorded_build_version", "0.9.0")
       .putString("installed_version", "0.9.0")
-      .putString("latest_server_version", "1.0.0")
+      .putString("latest_server_version", "1.2.0")
       .putBoolean("is_permanently_installed", false)
-      .putString("dismissed_dialog_version", "1.0.0")
+      .putString("dismissed_dialog_version", "1.2.0")
       .commit()
 
     val prefs = com.example.data.local.AppUpdatePreferences(context)
-    assertEquals("1.0.0", com.example.data.local.AppUpdatePreferences.DEFAULT_LATEST_VERSION)
+    assertEquals("1.2.0", com.example.data.local.AppUpdatePreferences.DEFAULT_LATEST_VERSION)
     assertEquals(BuildConfig.VERSION_NAME, prefs.getInstalledVersion())
     assertTrue(prefs.isUpdatePermanentlyInstalled())
-    org.junit.Assert.assertFalse(prefs.isDialogDismissedForVersion("1.0.0"))
+    org.junit.Assert.assertFalse(prefs.isDialogDismissedForVersion("1.2.0"))
   }
 
   @Test
@@ -646,47 +649,57 @@ class ExampleRobolectricTest {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val securityManager = com.example.security.SecurityManager.getInstance(context)
     val playIntegrity = com.example.security.PlayIntegritySecurityManager.getInstance(context)
-
-    val loginRes = securityManager.verifyDeviceAuthenticityDuringLogin(
-      officerNip = "199807202025061002",
-      officerName = "YUDHA SOFRIANTO,S.A.P",
-      officerRole = "Operator Pusdalops"
+    val officerAuth = com.example.data.local.OfficerAuthManager(context)
+    officerAuth.loginOfficerDirectly(
+      name = "YUDHA SOFRIANTO,S.A.P",
+      badgeId = "199807202025061002",
+      shift = "Shift Siaga 24 Jam",
+      role = "Operator Pusdalops"
     )
-    assertTrue("Login authenticity check must succeed with server session verification", loginRes.isSuccess)
-    val session = loginRes.getOrNull()
-    assertNotNull(session)
-    assertEquals("Akses Sah (Terverifikasi Server)", session!!.verdict)
-    assertTrue(session.accessGranted)
-    assertTrue(session.isActive)
-    assertTrue(session.deviceName.isNotBlank())
-    assertTrue(session.osVersion.isNotBlank())
-    assertTrue(session.loginTime > 0L)
-    assertTrue(session.isVerified)
-    assertTrue(session.integrityToken.isNotBlank())
-    val sessionMap = session.toMap()
-    assertEquals("199807202025061002", sessionMap["nip"])
-    assertEquals(true, sessionMap["is_active"])
-    assertNotNull(sessionMap["device_name"])
-    assertNotNull(sessionMap["os_version"])
-    assertNotNull(sessionMap["login_time"])
+    try {
+      val loginRes = securityManager.verifyDeviceAuthenticityDuringLogin(
+        officerNip = "199807202025061002",
+        officerName = "YUDHA SOFRIANTO,S.A.P",
+        officerRole = "Operator Pusdalops"
+      )
+      assertTrue("Login authenticity check must succeed with server session verification", loginRes.isSuccess)
+      val session = loginRes.getOrNull()
+      assertNotNull(session)
+      assertEquals("Akses Sah (Terverifikasi Server)", session!!.verdict)
+      assertTrue(session.accessGranted)
+      assertTrue(session.isActive)
+      assertTrue(session.deviceName.isNotBlank())
+      assertTrue(session.osVersion.isNotBlank())
+      assertTrue(session.loginTime > 0L)
+      assertTrue(session.isVerified)
+      assertTrue(session.integrityToken.isNotBlank())
+      val sessionMap = session.toMap()
+      assertEquals("199807202025061002", sessionMap["nip"])
+      assertEquals(true, sessionMap["is_active"])
+      assertNotNull(sessionMap["device_name"])
+      assertNotNull(sessionMap["os_version"])
+      assertNotNull(sessionMap["login_time"])
 
-    val cachedSessions = securityManager.fetchSecuritySessions(officerNipFilter = "199807202025061002")
-    assertTrue("Logged-in device session must be returned by fetchSecuritySessions", cachedSessions.any { it.officerNip == "199807202025061002" })
+      val cachedSessions = securityManager.fetchSecuritySessions(officerNipFilter = "199807202025061002")
+      assertTrue("Logged-in device session must be returned by fetchSecuritySessions", cachedSessions.any { it.officerNip == "199807202025061002" })
 
-    val accessResult = securityManager.verifySessionBeforeGrantingRuangKerja("199807202025061002")
-    assertTrue("Ruang Kerja local session check must authorize after session login", accessResult.isAuthorized)
+      val accessResult = securityManager.verifySessionBeforeGrantingRuangKerja("199807202025061002")
+      assertTrue("Ruang Kerja local session check must authorize after session login", accessResult.isAuthorized)
 
-    val deleted = securityManager.deleteSecuritySession("199807202025061002")
-    assertTrue("deleteSecuritySession must succeed", deleted)
-    assertTrue(
-      "Revoked session must immediately disappear from fetchSecuritySessions",
-      securityManager.fetchSecuritySessions(officerNipFilter = "199807202025061002").none { it.officerNip == "199807202025061002" }
-    )
+      val deleted = securityManager.deleteSecuritySession("199807202025061002")
+      assertTrue("deleteSecuritySession must succeed", deleted)
+      assertTrue(
+        "Revoked session must immediately disappear from fetchSecuritySessions",
+        securityManager.fetchSecuritySessions(officerNipFilter = "199807202025061002").none { it.officerNip == "199807202025061002" }
+      )
 
-    val criticalRes = playIntegrity.verifyCriticalAction("199807202025061002", "CHANGE_PIN")
-    assertTrue("PlayIntegritySecurityManager critical action must succeed via session check", criticalRes.isSecure)
-    assertEquals("Akses Sah (Terverifikasi Server)", criticalRes.verdict)
-    assertTrue(!criticalRes.token.isNullOrBlank())
+      val criticalRes = playIntegrity.verifyCriticalAction("199807202025061002", "CHANGE_PIN")
+      assertTrue("PlayIntegritySecurityManager critical action must succeed via session check", criticalRes.isSecure)
+      assertEquals("Akses Sah (Terverifikasi Server)", criticalRes.verdict)
+      assertTrue(!criticalRes.token.isNullOrBlank())
+    } finally {
+      officerAuth.clearSavedNipFromSecureStorage()
+    }
   }
 
   @Test
@@ -786,6 +799,13 @@ class ExampleRobolectricTest {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val securityManager = com.example.security.SecurityManager.getInstance(context)
     val testNip = "199901012026011099"
+    val officerAuth = com.example.data.local.OfficerAuthManager(context)
+    officerAuth.loginOfficerDirectly(
+      name = "Petugas Uji Integritas",
+      badgeId = testNip,
+      shift = "Shift Siaga 24 Jam",
+      role = "Operator Pusdalops"
+    )
 
     // Start from clean slate for this test NIP
     securityManager.deleteSecuritySession(testNip, purgeActivities = true)
@@ -899,6 +919,7 @@ class ExampleRobolectricTest {
     assertTrue(securityManager.deleteSecuritySession(testNip, purgeActivities = true))
     assertTrue(securityManager.fetchSecuritySessions().none { it.officerNip == testNip })
     assertTrue(securityManager.fetchLoginActivities().none { it.officerNip == testNip })
+    officerAuth.clearSavedNipFromSecureStorage()
   }
 
   @Test

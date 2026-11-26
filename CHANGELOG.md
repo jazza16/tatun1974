@@ -6,6 +6,22 @@ Dokumen ini mencatat seluruh **penambahan fitur**, **fungsi baru**, **peningkata
 
 ---
 
+## [1.2.0] - 26 November 2026 (Build 13)
+
+### ✨ Penambahan Fitur & Fungsi Baru
+- **Notifikasi Triase Pewarnaan Siaga Bencana (Hijau / Kuning / Oranye / Merah)**: Menambahkan evaluasi tingkat siaga otomatis berbasis triase pewarnaan serta fitur uji preview notifikasi dan pemisahan kanal khusus Warga vs Petugas.
+- **Beranda Aksi Darurat Cepat Warga**: Menambahkan tombol aksi cepat darurat (Call Center 117/112, Lapor Bencana Cepat, Peringatan Dini/Gempa, Panduan Evakuasi Offline) di atas lipatan layar beranda warga.
+
+### ⚡ Peningkatan & Optimalisasi
+- **Kepatuhan Izin Minimalis & Desain Adaptif**: Mengganti izin `SET_WALLPAPER` dengan simpan/bagikan poster edukasi, melepas kunci orientasi potret pada `MapActivity`, dan memisahkan *Data Baseline Historis* secara transparan dari data langsung.
+- **Pembaruan Versi In-Place (v1.2.0 / versionCode 13)**: Memastikan perangkat petugas dan warga dapat memperbarui aplikasi secara langsung tanpa menghapus data maupun PIN Cloud pribadi.
+
+### 🐛 Perbaikan Bug & Keamanan
+- **Perlindungan Anti-Reset PIN Sepihak & Anti-Downgrade Cloud Firestore**: Menutup seluruh jalur reset PIN sepihak, mengganti pembaruan profil dan pasca-login menjadi metadata parsial, dan menegakkan aturan anti-downgrade di Cloud Firestore.
+- **Penguncian Ketat Modul Internal & Isolasi Mode Warga**: Mengunci seluruh modul internal petugas di balik sesi petugas terverifikasi dan mencegah kebocoran sinkronisasi maupun PIN pada log diagnostik.
+
+---
+
 ## [1.1.0] - 24 November 2026
 
 ### ✨ Penambahan Fitur & Fungsi Baru

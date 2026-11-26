@@ -252,6 +252,19 @@ test("Officer credentials allow single-doc NIP lookup while blocking list, plain
       { merge: true }
     )
   );
+  // Regression guard: once upgraded to custom PIN, self-service officer_nip_{nip} owner CANNOT downgrade back to isCustomPinSet: false
+  await assertFails(
+    unauth.collection("officer_credentials").doc(selfNip).set(
+      {
+        ...selfCred,
+        pinHash: "pbkdf2$10000$" + "0".repeat(64),
+        isCustomPinSet: false,
+        isPinChanged: false,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    )
+  );
 
   // Reject non-empty initialSecurePin
   await assertFails(
@@ -309,8 +322,8 @@ test("Officer credentials allow single-doc NIP lookup while blocking list, plain
     )
   );
 
-  // Full fresh-state normalization of uncustomized initial HITATUN ARAZAK record succeeds
-  await assertSucceeds(
+  // Already-hashed record CANNOT be unilaterally overwritten/reset to another hash while staying isCustomPinSet: false
+  await assertFails(
     unauth.collection("officer_credentials").doc(hitatunNip).set({
       nip: hitatunNip,
       ownerUid: ALICE_UID,
@@ -431,12 +444,49 @@ test("Officer credentials allow single-doc NIP lookup while blocking list, plain
     )
   );
 
-  // Bob cannot overwrite Alice's Google-owned credential, and nobody can delete it
+  // Even signed-in owner (Alice) CANNOT downgrade an already-custom PIN doc back to isCustomPinSet: false
+  await assertFails(
+    alice.collection("officer_credentials").doc("197906072006041011").update({
+      pinHash: "pbkdf2$10000$" + "0".repeat(64),
+      isCustomPinSet: false,
+      isPinChanged: false,
+      updatedAt: Date.now(),
+    })
+  );
+
+  // Partial login-metadata and profile-metadata updates (matching updateCredentialLoginMetadata & updateCredentialProfileMetadataSuspend) succeed without touching pinHash/salt/isCustomPinSet
+  await assertSucceeds(
+    unauth.collection("officer_credentials").doc("197906072006041011").update({
+      role: "Operator Pusdalops",
+      lastLoginAt: Date.now(),
+      lastLoginDevice: "Safe Partial Device",
+      updatedAt: Date.now(),
+      isPinChanged: true,
+    })
+  );
+  await assertSucceeds(
+    alice.collection("officer_credentials").doc("197906072006041011").update({
+      fullName: "Petugas Resmi Terverifikasi",
+      phone: "08120000117",
+      updatedAt: Date.now(),
+    })
+  );
+
+  // Bob cannot overwrite Alice's Google-owned credential (neither changing ownerUid nor tampering pinHash), and nobody can delete it
   await assertFails(
     bob.collection("officer_credentials").doc("197906072006041011").set({
       ...validCred,
       ownerUid: BOB_UID,
       pinHash: "pbkdf2$10000$" + "b".repeat(64),
+    })
+  );
+  await assertFails(
+    bob.collection("officer_credentials").doc("197906072006041011").update({
+      pinHash: "pbkdf2$10000$" + "b".repeat(64),
+      salt: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      isCustomPinSet: true,
+      isPinChanged: true,
+      updatedAt: Date.now(),
     })
   );
   await assertFails(alice.collection("officer_credentials").doc("197906072006041011").delete());

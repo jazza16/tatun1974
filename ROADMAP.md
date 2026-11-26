@@ -2,7 +2,7 @@
 
 Dokumen ini memuat daftar rencana pengembangan fitur (*product backlog*) beserta status realisasi implementasi aplikasi **SIPAGAR KITA (Sistem Informasi & Mitigasi Kebencanaan Terpadu)** Pusdalops-PB BPBD Kabupaten Mukomuko.
 
-> **Status Pembaruan Terakhir:** 25 November 2026  
+> **Status Pembaruan Terakhir:** 26 November 2026 (`v1.2.0` / `Build 13`)  
 > **Keterangan Status:** `[x]` = **Selesai Diterapkan & Terverifikasi** | `[ ]` = *Dalam Antrean Rilis Berikutnya*
 
 ---
@@ -58,3 +58,9 @@ Dokumen ini memuat daftar rencana pengembangan fitur (*product backlog*) beserta
 
 - [x] **Sandbox Training Mode (*Mode Latihan Petugas*) — [SELESAI DITERAPKAN]**
   Menyediakan lingkungan simulasi terisolasi bagi operator Pusdalops dan personil TRC untuk berlatih menangani pelaporan darurat, validasi insiden, serta pencetakan laporan harian tanpa mencemari basis data produksi (*production database*) atau memicu notifikasi publik ke masyarakat.
+
+- [x] **Notifikasi Triase Pewarnaan Siaga Bencana (`v1.2.0`) — [SELESAI DITERAPKAN]**
+  Menilai tingkat siaga secara otomatis menggunakan triase berwarna (Hijau, Kuning, Oranye, Merah) serta memisahkan kanal notifikasi antara warga umum dan petugas Pusdalops BPBD.
+
+- [x] **Penguatan Anti-Reset PIN, Isolasi Mode Warga, & Desain Adaptif (`v1.2.0`) — [SELESAI DITERAPKAN]**
+  Menutup seluruh jalur pengembalian PIN sepihak dengan aturan anti-downgrade Cloud Firestore, mengunci modul internal di balik sesi petugas aktif, menghapus izin `SET_WALLPAPER`, melepas kunci orientasi peta, serta menonjolkan 4 aksi darurat instan di beranda warga.

@@ -993,8 +993,18 @@ fun DatabaseExplorerScreen(
                         OutlinedTextField(
                             value = fPin,
                             onValueChange = { fPin = it; fError = null },
-                            label = { Text("PIN Login Awal / Reset (Opsional)", fontSize = 11.sp) },
-                            placeholder = { Text("Kosongkan untuk otomatis / pertahankan PIN", fontSize = 11.sp) },
+                            label = {
+                                Text(
+                                    if (isEdit) "PIN Khusus Baru (Opsional)" else "PIN Login Awal Khusus (Opsional)",
+                                    fontSize = 11.sp
+                                )
+                            },
+                            placeholder = {
+                                Text(
+                                    if (isEdit) "Kosongkan agar PIN petugas tetap aman (tidak berubah)" else "Kosongkan untuk aktivasi NIP awal",
+                                    fontSize = 11.sp
+                                )
+                            },
                             singleLine = true,
                             keyboardOptions = formDoneKeyboardOptions(),
                             keyboardActions = kbActions,
@@ -1024,6 +1034,25 @@ fun DatabaseExplorerScreen(
                         Button(
                             onClick = {
                                 if (!isSaving) {
+                                    val trimmedPin = fPin.trim()
+                                    val cleanNip = fNip.trim().replace(Regex("[\\s\\-]+"), "")
+                                    val defaultNipPin = com.example.data.local.OfficerCredentialEntity.generateInitialPinForNip(cleanNip)
+                                    if (isEdit && trimmedPin.isNotBlank()) {
+                                        if (trimmedPin.length < 4) {
+                                            fError = "PIN khusus baru minimal 4 digit/karakter."
+                                            return@Button
+                                        }
+                                        if (SmartOfficerAuthRepository.FORBIDDEN_DEFAULT_PINS.any { it.equals(trimmedPin, ignoreCase = true) }) {
+                                            fError = "PIN khusus dilarang menggunakan PIN default umum (117 / TRC2026 / dsb)."
+                                            return@Button
+                                        }
+                                        if (trimmedPin.equals(defaultNipPin, ignoreCase = true) ||
+                                            trimmedPin.equals(cleanNip.takeLast(6), ignoreCase = true)
+                                        ) {
+                                            fError = "PIN petugas dilarang dikembalikan ke 6 digit terakhir NIP (PIN default)."
+                                            return@Button
+                                        }
+                                    }
                                     isSaving = true
                                     scope.launch {
                                         val res = smartOfficerAuthRepo.registerOrUpdateManualOfficer(
@@ -1033,7 +1062,7 @@ fun DatabaseExplorerScreen(
                                             unit = fUnit.trim(),
                                             shift = fShift.trim(),
                                             phone = fPhone.trim(),
-                                            customInitialPin = fPin.trim().ifBlank { null },
+                                            customInitialPin = trimmedPin.ifBlank { null },
                                             existingId = target?.let { "officer_${it.nip.trim()}" },
                                             previousNip = target?.nip,
                                             existingRoomId = target?.id
