@@ -372,7 +372,10 @@ fun InaRiskBnpbSection(
                                 text = "Indeks Risiko Bencana Indonesia (IRBI 2025)",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF991B1B)
+                                color = Color(0xFF991B1B),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp)
                             )
                             Surface(
                                 color = Color(0xFF16A34A).copy(alpha = 0.14f),
@@ -383,6 +386,8 @@ fun InaRiskBnpbSection(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFF15803D),
+                                    maxLines = 1,
+                                    softWrap = false,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }

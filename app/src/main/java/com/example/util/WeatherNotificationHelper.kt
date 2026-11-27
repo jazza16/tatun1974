@@ -72,10 +72,10 @@ object WeatherNotificationHelper {
             return false
         }
 
-        // Intent to open app directly on Peringatan & Gempa WRS tab (index 4)
+        // Intent to open app directly on Peringatan & Gempa WRS tab (index 5)
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("EXTRA_NAVIGATE_TAB", 4)
+            putExtra("EXTRA_NAVIGATE_TAB", 5)
             putExtra("EXTRA_WARNING_ID", warning.id)
         }
 
@@ -161,7 +161,7 @@ object WeatherNotificationHelper {
 
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("EXTRA_NAVIGATE_TAB", 4)
+            putExtra("EXTRA_NAVIGATE_TAB", 5)
         }
 
         val openAppPendingIntent = PendingIntent.getActivity(

@@ -343,6 +343,9 @@ class WeatherViewModel(
             isDistrictSheetOpen = false,
             districtSearchQuery = ""
         )
+        appContext?.let { ctx ->
+            com.example.util.DisasterTriageNotificationManager.saveSelectedDistrictForBackground(ctx, district.id)
+        }
         loadWeatherForDistrict(district)
         loadHistoricalWeather(district, _uiState.value.selectedHistoricalDate)
         loadEarlyWarnings(district)

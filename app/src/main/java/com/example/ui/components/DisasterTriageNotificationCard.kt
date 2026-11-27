@@ -173,6 +173,121 @@ fun DisasterTriageNotificationCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Indikator Pemantauan Latar Belakang 24 Jam (Aktif Meski Aplikasi Ditutup & Tanpa Login)
+            val effectivePortion = remember(settings.rolePortion) {
+                DisasterTriageNotificationManager.resolveEffectiveRolePortion(context, settings)
+            }
+            Surface(
+                color = Color(0xFF16A34A).copy(alpha = 0.10f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color(0xFF16A34A).copy(alpha = 0.40f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("background_24h_monitoring_badge")
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF16A34A))
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Pemantauan Latar Belakang 24 Jam Aktif (Tanpa Perlu Login)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF15803D)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Notifikasi laporan warga masuk, potensi ancaman cuaca/maritim/karhutla, dan kejadian gempa/tsunami tetap muncul otomatis di HP meski aplikasi ditutup (WorkManager 15 Menit + Boot Receiver + Topik FCM).",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Pilihan Porsi Kegunaan Notifikasi (Mode Warga vs Mode Petugas Tanpa Login)
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, headerAccentColor.copy(alpha = 0.35f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "Porsi Kegunaan Notifikasi (Tanpa Harus Login):",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Pilih porsi informasi yang ditampilkan pada notifikasi HP Anda:",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val roleOptions = listOf(
+                            com.example.util.NotificationRolePortion.AUTO_DETECT to "🔄 Otomatis",
+                            com.example.util.NotificationRolePortion.CITIZEN_PUBLIC to "👥 Mode Warga (Publik)",
+                            com.example.util.NotificationRolePortion.OFFICER_OPERATIONAL to "🛡️ Mode Petugas / TRC",
+                            com.example.util.NotificationRolePortion.DUAL_COMBINED to "⚡ Gabungan (Warga + TRC)"
+                        )
+                        roleOptions.forEach { (portion, chipLabel) ->
+                            val isSelected = settings.rolePortion == portion
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    onUpdateSettings(settings.copy(rolePortion = portion))
+                                },
+                                label = {
+                                    Text(
+                                        text = chipLabel,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                },
+                                leadingIcon = if (isSelected) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                } else null,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = OrangePrimary.copy(alpha = 0.16f),
+                                    selectedLabelColor = OrangePrimary,
+                                    selectedLeadingIconColor = OrangePrimary
+                                ),
+                                modifier = Modifier.testTag("chip_triage_role_${portion.code.lowercase()}")
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Aktif: ${effectivePortion.badgeHeader} — ${effectivePortion.description}",
+                        fontSize = 10.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             // 4-Color Triage Standard Strip
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -377,7 +492,7 @@ fun DisasterTriageNotificationCard(
 
             // Quick Preview / Test Buttons per Triage Color
             Text(
-                text = "Uji Coba Notifikasi per Warna Triase:",
+                text = "Uji Coba Notifikasi Ancaman & Kejadian per Warna Triase:",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -424,6 +539,109 @@ fun DisasterTriageNotificationCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Uji Coba Notifikasi Laporan Warga Masuk (Tanpa Login • Porsi Warga vs Petugas):",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        val sampleReport = com.example.model.CitizenDisasterReport(
+                            id = "LAP-TES-WARGA-${System.currentTimeMillis() % 10000}",
+                            disasterType = "Banjir & Luapan Sungai",
+                            incidentTime = "Baru saja",
+                            incidentLocation = "Sekitar Jembatan Utama Kec. ${currentDistrict.name}",
+                            district = currentDistrict.name,
+                            village = "Desa Pusat ${currentDistrict.name}",
+                            latitude = currentDistrict.latitude,
+                            longitude = currentDistrict.longitude,
+                            isGpsVerified = true,
+                            reporterName = "Warga Pelapor",
+                            reporterPhone = "0812000000",
+                            additionalNotes = "Debit air naik ke badan jalan, mohon warga sekitar waspada.",
+                            status = "Diproses"
+                        )
+                        com.example.data.sync.OfficerPushNotificationHelper.notifyCitizenPublicForNewReport(
+                            context = context,
+                            report = sampleReport,
+                            bypassDuplicateCheck = true
+                        )
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .testTag("btn_test_report_citizen_portion"),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF0284C7),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(
+                        text = "Tes Laporan (Porsi Warga)",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        val sampleReport = com.example.model.CitizenDisasterReport(
+                            id = "LAP-TES-TRC-${System.currentTimeMillis() % 10000}",
+                            disasterType = "Banjir Bandang & Longsor",
+                            incidentTime = "Baru saja",
+                            incidentLocation = "Jalur Lintas Kec. ${currentDistrict.name}",
+                            district = currentDistrict.name,
+                            village = "Desa Rawang ${currentDistrict.name}",
+                            latitude = currentDistrict.latitude,
+                            longitude = currentDistrict.longitude,
+                            isGpsVerified = true,
+                            casualtiesInjured = 2,
+                            photoUri = "https://sipagarkita.mukomukokab.go.id/sample.jpg",
+                            reporterName = "Warga Siaga",
+                            reporterPhone = "081277889900",
+                            additionalNotes = "Akses jalan tertutup material longsor & genangan.",
+                            status = "Diproses"
+                        )
+                        com.example.data.sync.OfficerPushNotificationHelper.notifyOfficerStandbyForNewReport(
+                            context = context,
+                            report = sampleReport,
+                            includeCitizenSection = false,
+                            bypassDuplicateCheck = true
+                        )
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .testTag("btn_test_report_officer_portion"),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFB91C1C),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(
+                        text = "Tes Laporan (Porsi Petugas)",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }

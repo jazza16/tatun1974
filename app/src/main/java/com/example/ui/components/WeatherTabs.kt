@@ -71,6 +71,7 @@ fun WeatherTabs(
     val tabs = listOf(
         TabItem("Hari Ini", Icons.Default.WbSunny),
         TabItem("Laporan Warga", Icons.Default.Edit, badgeCount = if (reportCount > 0) reportCount else null),
+        TabItem("KRB & RTRW", Icons.Default.Shield),
         TabItem("Statistik Bencana", Icons.Default.BarChart),
         TabItem("Prakiraan Cuaca", Icons.Default.CalendarMonth),
         TabItem("Peringatan & Gempa WRS", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),
@@ -184,6 +185,7 @@ fun WeatherNavigationRail(
     val tabs = listOf(
         TabItem("Hari Ini", Icons.Default.WbSunny),
         TabItem("Laporan", Icons.Default.Edit, badgeCount = if (reportCount > 0) reportCount else null),
+        TabItem("KRB & RTRW", Icons.Default.Shield),
         TabItem("Statistik", Icons.Default.BarChart),
         TabItem("Prakiraan", Icons.Default.CalendarMonth),
         TabItem("Peringatan", Icons.Default.Campaign, badgeCount = if (warningCount > 0) warningCount else null, isWarningBadge = true),

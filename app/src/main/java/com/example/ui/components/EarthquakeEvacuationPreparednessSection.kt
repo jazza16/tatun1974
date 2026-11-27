@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -660,7 +661,7 @@ fun EarthquakeEvacuationPreparednessSection(
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Mulai Latihan Evakuasi", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Mulai Latihan Evakuasi", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                         }
                     } else {
                         Button(
@@ -673,7 +674,7 @@ fun EarthquakeEvacuationPreparednessSection(
                         ) {
                             Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Hentikan Latihan", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Hentikan Latihan", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                         }
                     }
 
@@ -688,7 +689,7 @@ fun EarthquakeEvacuationPreparednessSection(
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Reset", fontSize = 12.sp)
+                        Text("Reset", fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
                 }
             }
@@ -732,9 +733,9 @@ fun EarthquakeEvacuationPreparednessSection(
                             color = Color.White
                         )
                         Spacer(modifier = Modifier.height(3.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Surface(
                                 color = Color(0xFFEF4444),
@@ -754,8 +755,8 @@ fun EarthquakeEvacuationPreparednessSection(
                             Text(
                                 text = "Khas Zona Pesisir Samudra Hindia Mukomuko",
                                 fontSize = 11.sp,
-                                color = Color(0xFF64748B),
-                                maxLines = 1
+                                color = Color(0xFF94A3B8),
+                                lineHeight = 15.sp
                             )
                         }
                     }
@@ -1119,9 +1120,9 @@ fun EarthquakeEvacuationPreparednessSection(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(3.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Surface(
                                 color = if (readyPercentage >= 80) Color(0xFF16A34A) else OrangePrimary,
@@ -1132,14 +1133,16 @@ fun EarthquakeEvacuationPreparednessSection(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                             Text(
                                 text = "Cek perlengkapan wajib penyelamatan keluarga",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                maxLines = 1
+                                lineHeight = 15.sp
                             )
                         }
                     }
@@ -1252,13 +1255,14 @@ fun EarthquakeEvacuationPreparednessSection(
                         onClick = { onTestTsunamiAlert(context) },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
                         shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                         modifier = Modifier
                             .weight(1f)
                             .testTag("btn_test_tsunami_notification")
                     ) {
                         Icon(Icons.Default.Campaign, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Tes Alarm Tsunami", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Tes Alarm Tsunami", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                     }
 
                     // Test Severe Weather Alert (Orange Theme)
@@ -1266,13 +1270,14 @@ fun EarthquakeEvacuationPreparednessSection(
                         onClick = { onTestSevereWeatherAlert(context) },
                         colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                         shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                         modifier = Modifier
                             .weight(1f)
                             .testTag("btn_test_orange_weather_alert")
                     ) {
                         Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Tes Notifikasi Oranye", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Tes Notifikasi Oranye", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                     }
                 }
             }

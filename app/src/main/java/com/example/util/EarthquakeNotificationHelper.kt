@@ -111,7 +111,7 @@ object EarthquakeNotificationHelper {
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("EXTRA_NAVIGATE_TAB", 4) // Tab 4: Peringatan & Gempa WRS
+            putExtra("EXTRA_NAVIGATE_TAB", 5) // Tab 5: Peringatan & Gempa WRS
             putExtra("EXTRA_EARTHQUAKE_ID", earthquake.id)
         }
 
@@ -211,10 +211,10 @@ object EarthquakeNotificationHelper {
             return false
         }
 
-        // Navigate directly to Tab 6 (Peta & SOP Evakuasi)
+        // Navigate directly to Tab 7 (Peta & SOP Evakuasi)
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("EXTRA_NAVIGATE_TAB", 6)
+            putExtra("EXTRA_NAVIGATE_TAB", 7)
             putExtra("EXTRA_EARTHQUAKE_ID", earthquake.id)
             putExtra("EXTRA_SHOW_TSUNAMI_GUIDE", true)
         }

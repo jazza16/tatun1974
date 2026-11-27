@@ -390,7 +390,9 @@ fun PanduanEvakuasiScreen(
                                             text = "TERSEDIA TANPA INTERNET",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = OrangePrimary
+                                            color = OrangePrimary,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
@@ -399,7 +401,9 @@ fun PanduanEvakuasiScreen(
                                     text = "Fase Pra-Bencana",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
 
@@ -479,7 +483,9 @@ fun PanduanEvakuasiScreen(
                                     Text(
                                         text = if (isTestingLocalSiren) "Hentikan Tes Sirene" else "Tes Alarm Sirene",
                                         fontSize = 12.sp,
-                                        fontWeight = FontWeight.ExtraBold
+                                        fontWeight = FontWeight.ExtraBold,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
 
@@ -503,7 +509,9 @@ fun PanduanEvakuasiScreen(
                                         Text(
                                             text = "Stop Suara",
                                             fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
@@ -586,7 +594,9 @@ fun PanduanEvakuasiScreen(
                             Text(
                                 text = "117",
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 13.sp
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -629,77 +639,100 @@ private fun ExpandablePanduanBencanaCard(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Header Kartu (Selalu Tampil)
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
                         if (isExpanded) OrangePrimary.copy(alpha = 0.08f)
                         else Color.Transparent
                     )
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(16.dp)
             ) {
-                // Ikon Bencana dengan Latar Oranye/Putih
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isExpanded) OrangePrimary else OrangePrimary.copy(alpha = 0.12f),
-                    modifier = Modifier.size(48.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = bencana.icon,
-                            contentDescription = bencana.namaBencana,
-                            tint = if (isExpanded) Color.White else OrangePrimary,
-                            modifier = Modifier.size(26.dp)
+                    // Ikon Bencana dengan Latar Oranye/Putih
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isExpanded) OrangePrimary else OrangePrimary.copy(alpha = 0.12f),
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = bencana.icon,
+                                contentDescription = bencana.namaBencana,
+                                tint = if (isExpanded) Color.White else OrangePrimary,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = bencana.namaBencana,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = bencana.subJudul,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 16.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    // Ikon Panah Buka/Tutup
+                    Surface(
+                        shape = CircleShape,
+                        color = OrangePrimary.copy(alpha = 0.1f),
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.ExpandMore,
+                                contentDescription = if (isExpanded) "Tutup panduan" else "Buka panduan",
+                                tint = OrangePrimary,
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .rotate(rotationAngle)
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = bencana.namaBencana,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = bencana.subJudul,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Surface(
-                        color = OrangePrimary.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(6.dp)
+                // Badge Rumus / Prinsip Utama Full-Width agar tidak terhimpit di antara ikon & tombol panah
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = OrangePrimary.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.25f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.VerifiedUser,
+                            contentDescription = null,
+                            tint = OrangePrimary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = bencana.rumusUtama,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
                             color = OrangePrimary,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Ikon Panah Buka/Tutup
-                Surface(
-                    shape = CircleShape,
-                    color = OrangePrimary.copy(alpha = 0.1f),
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.ExpandMore,
-                            contentDescription = if (isExpanded) "Tutup panduan" else "Buka panduan",
-                            tint = OrangePrimary,
-                            modifier = Modifier
-                                .size(22.dp)
-                                .rotate(rotationAngle)
+                            lineHeight = 15.sp
                         )
                     }
                 }
@@ -727,9 +760,13 @@ private fun ExpandablePanduanBencanaCard(
                     ) {
                         Text(
                             text = "Panduan Audio Offline (TTS Bahasa Indonesia)",
-                            fontSize = 11.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 15.sp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 10.dp)
                         )
                         FilledTonalButton(
                             onClick = {
@@ -753,19 +790,21 @@ private fun ExpandablePanduanBencanaCard(
                             shape = RoundedCornerShape(10.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                             modifier = Modifier
-                                .heightIn(min = 48.dp)
+                                .heightIn(min = 44.dp)
                                 .testTag("btn_tts_all_${bencana.id}")
                         ) {
                             Icon(
                                 imageVector = if (isReadingAll) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = if (isReadingAll) "Hentikan Pembacaan ${bencana.namaBencana}" else "Bacakan Semua Langkah ${bencana.namaBencana}",
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = if (isReadingAll) "Hentikan" else "Bacakan Semua",
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }

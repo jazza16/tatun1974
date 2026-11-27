@@ -562,19 +562,17 @@ class SyncController(
     }
 
     /**
-     * Dispatches high-priority push notification with alert sound and screen wake-up to devices logged in as Officer/Pusdalops.
+     * Dispatches high-priority push notification to user devices WITHOUT requiring login,
+     * differentiating utility portions between Mode Warga (Kewaspadaan & Evakuasi Publik)
+     * and Mode Petugas / TRC (Operasional & Tindak Lanjut Lapangan).
      * Compatible across Android 7.0 (Nougat, API 24) to Android 16 (API 36).
      */
     private fun triggerSimultaneousDisasterAlert(report: CitizenDisasterReport) {
         try {
-            if (!OfficerPushNotificationHelper.isDeviceLoggedInAsOfficer(context)) {
-                Log.d(TAG, "Skipping officer push alert on citizen-only device for report ${report.id}")
-                return
-            }
-            val dispatched = OfficerPushNotificationHelper.notifyOfficerForNewReport(context, report)
+            val dispatched = OfficerPushNotificationHelper.dispatchRoleAwareNewReportNotification(context, report)
             if (!dispatched) return
 
-            // Wake device screen momentarily so field officers/Pusdalops immediately notice incoming alert
+            // Wake device screen momentarily so users/field officers immediately notice incoming alert
             try {
                 val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                 @Suppress("DEPRECATION")

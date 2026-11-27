@@ -267,16 +267,19 @@ class MainActivity : FragmentActivity() {
             Log.w("MainActivity", "Seed ASN skipped: ${e.message}")
         }
 
-        // Jadwalkan WorkManager sinkronisasi periodik titik panas FIRMS (1-3 jam) & BMKG (3-6 jam)
+        // Jadwalkan WorkManager sinkronisasi periodik titik panas FIRMS (1-3 jam), BMKG (3-6 jam),
+        // serta Pemantauan Latar Belakang 24 Jam SIPAGAR KITA (Laporan Warga, Potensi Ancaman & Kejadian Bencana tanpa perlu login)
         try {
             com.example.service.KarhutlaSyncScheduler.schedulePeriodicSync(this)
+            com.example.service.SipagarBackgroundAlertScheduler.scheduleBackgroundMonitoring(this)
         } catch (e: Throwable) {
-            Log.w("MainActivity", "KarhutlaSyncScheduler skipped: ${e.message}")
+            Log.w("MainActivity", "Background Scheduler skipped: ${e.message}")
         }
 
-        // Initialize BMKG Earthquake, Severe Weather, and Real-Time Officer Push Notification Channels
+        // Initialize BMKG Earthquake, Severe Weather, and Real-Time Citizen/Officer Push Notification Channels
         try {
             com.example.util.DisasterTriageNotificationManager.initNotificationChannels(this)
+            com.example.data.sync.OfficerPushNotificationHelper.ensureNotificationChannels(this)
             com.example.util.EarthquakeNotificationHelper.initNotificationChannel(this)
             com.example.util.WeatherNotificationHelper.initNotificationChannel(this)
             com.example.util.WeatherNotificationHelper.initAppUpdateNotificationChannel(this)
@@ -374,7 +377,14 @@ fun WeatherAppScreen(
 
     LaunchedEffect(pendingNotificationIntent) {
         val notifIntent = pendingNotificationIntent ?: return@LaunchedEffect
-        val navTab = notifIntent.getIntExtra("EXTRA_NAVIGATE_TAB", -1)
+        val explicitNavTab = notifIntent.getIntExtra("EXTRA_NAVIGATE_TAB", -1)
+        val openReportId = notifIntent.getStringExtra("extra_open_report_id")
+        val openOfficerReports = notifIntent.getBooleanExtra("extra_open_officer_reports", false)
+        val navTab = when {
+            explicitNavTab >= 0 -> explicitNavTab
+            !openReportId.isNullOrBlank() || openOfficerReports -> 1
+            else -> -1
+        }
         val openUpdate = notifIntent.getBooleanExtra("EXTRA_OPEN_UPDATE_SHEET", false)
         val autoStartUpdate = notifIntent.getBooleanExtra("EXTRA_AUTO_START_UPDATE", false)
         val hasValidUpdate = uiState.updateState.isUpdateAvailable && !uiState.updateState.isUpdated
@@ -384,6 +394,8 @@ fun WeatherAppScreen(
         if (navTab >= 0) {
             viewModel.selectTab(navTab)
             notifIntent.removeExtra("EXTRA_NAVIGATE_TAB")
+            notifIntent.removeExtra("extra_open_report_id")
+            notifIntent.removeExtra("extra_open_officer_reports")
         }
         if (openUpdate) {
             notifIntent.removeExtra("EXTRA_OPEN_UPDATE_SHEET")
@@ -740,7 +752,7 @@ fun WeatherAppScreen(
                                                 item(span = { GridItemSpan(maxLineSpan) }) {
                                                     ActiveAlertCard(
                                                         alert = report.alert,
-                                                        onViewDetail = { viewModel.selectTab(4) }
+                                                        onViewDetail = { viewModel.selectTab(5) }
                                                     )
                                                 }
                                             }
@@ -757,16 +769,7 @@ fun WeatherAppScreen(
                                                 }
                                             }
 
-                                            // Real-Time WRS-NTWC BMKG Earthquake Quick Banner
                                             val latestEq = uiState.latestEarthquake
-                                            if (latestEq != null) {
-                                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                                    WrsLiveEarthquakeQuickCard(
-                                                        earthquake = latestEq,
-                                                        onClick = { viewModel.selectTab(4) }
-                                                    )
-                                                }
-                                            }
 
                                             // 4 Aksi Darurat 1-Ketuk untuk Kondisi Panik / Aksesibilitas Warga
                                             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -775,14 +778,27 @@ fun WeatherAppScreen(
                                                     hasNearEarthquake = latestEq?.isNearMukomuko == true,
                                                     onCall117 = { EmergencyDialer.dial(context, "117") },
                                                     onOpenQuickReport = { viewModel.selectTab(1) },
-                                                    onOpenEarlyWarning = { viewModel.selectTab(4) },
+                                                    onOpenEarlyWarning = { viewModel.selectTab(5) },
                                                     onOpenEvacuationGuide = { isPanduanEvakuasiOpen = true }
                                                 )
                                             }
 
-                                            // Hero Weather Overview Card with Dynamic Animated Weather Icon
+                                            // Hero Weather Overview Card with Dynamic Animated Weather Icon (Diposisikan tepat di bawah Card Aksi Cepat Tanggap Darurat)
                                             item(span = { GridItemSpan(maxLineSpan) }) {
                                                 HeroWeatherCard(report = report)
+                                            }
+
+                                            // Banner Sinkronisasi Cepat Profil KRB 2026-2030 & Perda RTRW No. 12/2025 Kecamatan Aktif
+                                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                                com.example.ui.components.KrbRtrwModuleContextBanner(
+                                                    currentDistrict = currentDistrict,
+                                                    moduleTag = "hari_ini",
+                                                    moduleTitle = "Beranda Hari Ini",
+                                                    krbAlignmentNote = "Pemantauan cuaca harian diselaraskan dengan 6 bahaya Prioritas 1 KRB 2026–2030 (Banjir, Banjir Bandang, Cuaca Ekstrem, Gelombang Ekstrem & Abrasi, Karhutla, Tanah Longsor).",
+                                                    rtrwRegulationNote = "Mengacu pada ketentuan khusus Kawasan Rawan Bencana (Pasal 92) & Sempadan Pantai/Sungai (Pasal 93) Perda RTRW No. 12 Tahun 2025.",
+                                                    isDark = isActuallyDark,
+                                                    onOpenKrbRtrwTab = { viewModel.selectTab(2) }
+                                                )
                                             }
 
                                             // Feature: Edukasi & Makna Akronim SIPAGAR KITA (Otomatis disembunyikan bila sudah dibaca/ditutup, tersimpan di Menu Info)
@@ -929,7 +945,26 @@ fun WeatherAppScreen(
                         }
 
                         2 -> {
-                            // Tab 2: Statistik & Tren Bencana Bulanan + Kajian Risiko Bencana (KRB) Resmi 2026-2030
+                            // Tab 2 (TAB KHUSUS): Dokumen KRB 2026–2030 & Perda RTRW No. 12 Tahun 2025 (2025–2045)
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("tab_krb_rtrw_dedicated_list"),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                item {
+                                    com.example.ui.components.KrbMukomuko2026Section(
+                                        currentDistrict = currentDistrict,
+                                        isDark = isActuallyDark,
+                                        onNavigateToTab = { targetTab -> viewModel.selectTab(targetTab) }
+                                    )
+                                }
+                            }
+                        }
+
+                        3 -> {
+                            // Tab 3: Statistik & Tren Bencana Bulanan (Selaras Baseline KRB 2026-2030 & Perda RTRW)
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -938,9 +973,14 @@ fun WeatherAppScreen(
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 item {
-                                    com.example.ui.components.KrbMukomuko2026Section(
+                                    com.example.ui.components.KrbRtrwModuleContextBanner(
                                         currentDistrict = currentDistrict,
-                                        isDark = isActuallyDark
+                                        moduleTag = "statistik_bencana",
+                                        moduleTitle = "Statistik & Tren Bencana Bulanan",
+                                        krbAlignmentNote = "Distribusi kejadian bulanan dievaluasi terhadap baseline 12 ancaman KRB 2026–2030 (Total potensi kerugian multibahaya Rp 6,74 Triliun; 205.602 jiwa terpapar).",
+                                        rtrwRegulationNote = "Menjadi dasar evaluasi pengendalian pemanfaatan ruang & prioritas program mitigasi BPBD (Lampiran XII Program A.2.5.5).",
+                                        isDark = isActuallyDark,
+                                        onOpenKrbRtrwTab = { viewModel.selectTab(2) }
                                     )
                                 }
 
@@ -955,8 +995,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        3 -> {
-                            // Tab 3: Prakiraan Cuaca
+                        4 -> {
+                            // Tab 4: Prakiraan Cuaca
                             val report = uiState.report
                             if (report != null) {
                                 LazyColumn(
@@ -999,8 +1039,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        4 -> {
-                            // Tab 4: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Push Notification + Profil KRB 2026-2030
+                        5 -> {
+                            // Tab 5: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Push Notification
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1008,6 +1048,18 @@ fun WeatherAppScreen(
                                 contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
+                                item {
+                                    com.example.ui.components.KrbRtrwModuleContextBanner(
+                                        currentDistrict = currentDistrict,
+                                        moduleTag = "peringatan_wrs",
+                                        moduleTitle = "Peringatan Dini & Gempa WRS-BMKG",
+                                        krbAlignmentNote = "Selaras KRB 2026–2030: Tsunami Prioritas 2 (7.523,90 Ha; tinggi rendaman s/d 13 m di 6 kecamatan pesisir) & Gempa Bumi Prioritas 3 (bahaya PGA tinggi di 100% wilayah, risiko sedang karena struktur bangunan mayoritas 1 lantai).",
+                                        rtrwRegulationNote = "Pasal 92 ayat (4) & (6) Perda RTRW No. 12/2025: Wajib EWS, struktur bangunan tahan gempa SNI, dan larangan fasilitas kritis baru di zona bahaya tinggi tsunami.",
+                                        isDark = isActuallyDark,
+                                        onOpenKrbRtrwTab = { viewModel.selectTab(2) }
+                                    )
+                                }
+
                                 item {
                                     EarlyWarningSection(
                                         warnings = uiState.earlyWarnings,
@@ -1026,21 +1078,14 @@ fun WeatherAppScreen(
                                         onRefreshEarthquake = { viewModel.refreshEarthquakeData(context) },
                                         onCall117 = { EmergencyDialer.dial(context, "117") },
                                         onOpenCallCenterInfo = { isCallCenter117SheetOpen = true },
-                                        onOpenEvacuationGuide = { viewModel.selectTab(6) }
-                                    )
-                                }
-
-                                item {
-                                    com.example.ui.components.KrbMukomuko2026Section(
-                                        currentDistrict = currentDistrict,
-                                        isDark = isActuallyDark
+                                        onOpenEvacuationGuide = { viewModel.selectTab(7) }
                                     )
                                 }
                             }
                         }
 
-                        5 -> {
-                            // Tab 5: Monitoring Karhutla (VIIRS FIRMS & BMKG Hotspot Sync + OpenStreetMap + Rilis Resmi BMKG 2025-Kini)
+                        6 -> {
+                            // Tab 6: Monitoring Karhutla (VIIRS FIRMS & BMKG Hotspot Sync + OpenStreetMap + Rilis Resmi BMKG 2025-Kini)
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1048,6 +1093,18 @@ fun WeatherAppScreen(
                                 contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
+                                item {
+                                    com.example.ui.components.KrbRtrwModuleContextBanner(
+                                        currentDistrict = currentDistrict,
+                                        moduleTag = "monitoring_karhutla",
+                                        moduleTitle = "Monitoring Titik Panas & Karhutla",
+                                        krbAlignmentNote = "Prioritas 1 KRB 2026–2030: Luas risiko Karhutla tertinggi mencapai 404.993,70 Ha (validasi ROC/AUC = 0,932) dengan potensi kerugian ekonomi Rp 699,61 Miliar di lahan gambut & perkebunan.",
+                                        rtrwRegulationNote = "Pasal 92 ayat (5) & Pasal 83 ayat (4) Perda RTRW No. 12/2025: Larangan pembukaan lahan dengan cara membakar (Zero Burning) & wajib sekat bakar/menara pantau api.",
+                                        isDark = isActuallyDark,
+                                        onOpenKrbRtrwTab = { viewModel.selectTab(2) }
+                                    )
+                                }
+
                                 item {
                                     FirmsHotspotOsmMapSection(
                                         currentDistrict = currentDistrict,
@@ -1065,8 +1122,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        6 -> {
-                            // Tab 6: Modul Peta Interaktif Bencana & SOP Evakuasi Mandiri
+                        7 -> {
+                            // Tab 7: Modul Peta Interaktif Bencana & SOP Evakuasi Mandiri
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1074,12 +1131,24 @@ fun WeatherAppScreen(
                                 contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
+                                item {
+                                    com.example.ui.components.KrbRtrwModuleContextBanner(
+                                        currentDistrict = currentDistrict,
+                                        moduleTag = "peta_sop_evakuasi",
+                                        moduleTitle = "Peta Risiko & Sistem Jaringan Evakuasi",
+                                        krbAlignmentNote = "Peta zonasi bahaya dan titik kumpul mengacu pada peta risiko multibahaya KRB 2026–2030 (Skala 1:50.000) di 15 Kecamatan dan 151 Desa/Kelurahan.",
+                                        rtrwRegulationNote = "Pasal 42 & Lampiran XII Perda RTRW No. 12/2025: Penetapan Jaringan Jalur Evakuasi Bencana, Tempat Evakuasi Sementara (TES), dan Tempat Evakuasi Akhir (TEA) di seluruh kecamatan.",
+                                        isDark = isActuallyDark,
+                                        onOpenKrbRtrwTab = { viewModel.selectTab(2) }
+                                    )
+                                }
+
                                 // Interactive Map Module with Disaster Prone Points & Evacuation Routes
                                 item {
                                     InteractiveDisasterMapSection(
                                         currentDistrict = currentDistrict,
                                         onCall117 = { EmergencyDialer.dial(context, "117") },
-                                        onOpenSopEvacuation = { /* View SOP below */ },
+                                        onOpenSopEvacuation = { isPanduanEvakuasiOpen = true },
                                         isDark = isActuallyDark
                                     )
                                 }
@@ -1097,8 +1166,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        7 -> {
-                            // Tab 7: inaRISK BNPB - Sinkronisasi KRB Kabupaten Mukomuko 2026-2030 & Perda RTRW No. 12 Tahun 2025
+                        8 -> {
+                            // Tab 8: inaRISK BNPB (Tersinkronisasi dengan KRB 2026-2030 & terhubung ke Tab Khusus KRB & RTRW)
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1107,24 +1176,29 @@ fun WeatherAppScreen(
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 item {
-                                    InaRiskBnpbSection(
+                                    com.example.ui.components.KrbRtrwModuleContextBanner(
                                         currentDistrict = currentDistrict,
-                                        onOpenEvacuationGuide = { viewModel.selectTab(6) },
-                                        onCall117 = { EmergencyDialer.dial(context, "117") }
+                                        moduleTag = "inarisk_bnpb",
+                                        moduleTitle = "Portal Risiko inaRISK BNPB",
+                                        krbAlignmentNote = "Indikator inaRISK telah disinkronkan 100% dengan KRB 2026–2030: Skor IRBI 2025 = 164,32 (Tinggi), IKD 2025 = 0,29 (Rendah), IKM = 0,348 (Sedang), dan 12 matriks bahaya.",
+                                        rtrwRegulationNote = "Rincian lengkap pasal demi pasal Perda RTRW No. 12 Tahun 2025 (Pasal 42, 83, 92, 93, 94 & Sanksi KKPR Pasal 95–108) tersedia di Tab Khusus KRB & RTRW.",
+                                        isDark = isActuallyDark,
+                                        onOpenKrbRtrwTab = { viewModel.selectTab(2) }
                                     )
                                 }
 
                                 item {
-                                    com.example.ui.components.KrbMukomuko2026Section(
+                                    InaRiskBnpbSection(
                                         currentDistrict = currentDistrict,
-                                        isDark = isActuallyDark
+                                        onOpenEvacuationGuide = { viewModel.selectTab(7) },
+                                        onCall117 = { EmergencyDialer.dial(context, "117") }
                                     )
                                 }
                             }
                         }
 
-                        8 -> {
-                            // Tab 8: Cuaca Historis
+                        9 -> {
+                            // Tab 9: Cuaca Historis
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1146,8 +1220,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        9 -> {
-                            // Tab 9: Maritim & Pesisir Pantai
+                        10 -> {
+                            // Tab 10: Maritim & Pesisir Pantai
                             val report = uiState.report
                             if (report != null) {
                                 LazyColumn(
@@ -1157,6 +1231,18 @@ fun WeatherAppScreen(
                                     contentPadding = PaddingValues(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
+                                    item {
+                                        com.example.ui.components.KrbRtrwModuleContextBanner(
+                                            currentDistrict = currentDistrict,
+                                            moduleTag = "maritim_pesisir",
+                                            moduleTitle = "Maritim, Gelombang & Pesisir Samudra Hindia",
+                                            krbAlignmentNote = "Prioritas 1 KRB 2026–2030: Gelombang Ekstrem dan Abrasi mengancam 2.892,69 Ha (tinggi gelombang signifikan s/d 2,7 m; 25.008 jiwa terpapar) di 7 kecamatan pesisir.",
+                                            rtrwRegulationNote = "Pasal 92 ayat (9) & Pasal 93 ayat (2) Perda RTRW No. 12/2025: Garis Sempadan Pantai minimal 100 meter dari titik pasang tertinggi (KDB 0%, KDH min 80%) & sabuk hijau mangrove/cemara laut.",
+                                            isDark = isActuallyDark,
+                                            onOpenKrbRtrwTab = { viewModel.selectTab(2) }
+                                        )
+                                    }
+
                                     item {
                                         MarinePesisirCard(
                                             district = currentDistrict,
@@ -1176,8 +1262,8 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        10 -> {
-                            // Tab 10: Kualitas Udara Lengkap BMKG & Himbauan Kesehatan Masyarakat + Grafik Harian UV
+                        11 -> {
+                            // Tab 11: Kualitas Udara Lengkap BMKG & Himbauan Kesehatan Masyarakat + Grafik Harian UV
                             val report = uiState.report
                             if (report != null) {
                                 val maxUv = report.daily.firstOrNull()?.uvIndexMax ?: 8.0
@@ -1199,13 +1285,13 @@ fun WeatherAppScreen(
                             }
                         }
 
-                        11 -> {
-                            // Tab 11: 15 Kecamatan
+                        12 -> {
+                            // Tab 12: 15 Kecamatan (Lengkap dengan Profil KRB 2026-2030 & Hierarki RTRW)
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .testTag("tab_all_districts_list"),
-                                    contentPadding = PaddingValues(16.dp),
+                                contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 item {
@@ -1216,6 +1302,10 @@ fun WeatherAppScreen(
                                         onSelectDistrict = { dist ->
                                             viewModel.selectDistrict(dist)
                                             viewModel.selectTab(0)
+                                        },
+                                        onOpenKrbRtrwDistrict = { dist ->
+                                            viewModel.selectDistrict(dist)
+                                            viewModel.selectTab(2)
                                         }
                                     )
                                 }
@@ -1255,11 +1345,11 @@ fun WeatherAppScreen(
             },
             onSelectForecast = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(3)
+                viewModel.selectTab(4)
             },
             onSelectMaritimeGuide = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(9)
+                viewModel.selectTab(10)
             },
             onSelectEvacuationProcedures = {
                 isQuickActionsFabExpanded = false
@@ -1267,7 +1357,7 @@ fun WeatherAppScreen(
             },
             onSelectDisasterMap = {
                 isQuickActionsFabExpanded = false
-                viewModel.selectTab(6)
+                viewModel.selectTab(7)
             },
             onCall117 = {
                 isQuickActionsFabExpanded = false
@@ -1504,7 +1594,7 @@ fun WeatherAppScreen(
     if (uiState.isCompassSheetOpen) {
         com.example.ui.components.DigitalCompassBottomSheet(
             onDismiss = { viewModel.setCompassSheetOpen(false) },
-            onOpenEvacuationMap = { viewModel.selectTab(6) },
+            onOpenEvacuationMap = { viewModel.selectTab(7) },
             onCall117 = { EmergencyDialer.dial(context, "117") }
         )
     }
@@ -1539,7 +1629,7 @@ fun WeatherAppScreen(
             },
             onCall117 = { EmergencyDialer.dial(context, "117") },
             onOpenEvacuationMap = {
-                viewModel.selectTab(6)
+                viewModel.selectTab(7)
             }
         )
     }

@@ -70,6 +70,7 @@ import java.util.Locale
 fun KrbMukomuko2026Section(
     currentDistrict: District,
     isDark: Boolean,
+    onNavigateToTab: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // 0 = Profil KRB & RTRW Kecamatan, 1 = Matriks 12 Bencana KRB, 2 = 7 Fokus IKD & IRBI,
@@ -124,34 +125,38 @@ fun KrbMukomuko2026Section(
                     .padding(16.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Surface(
-                            color = Color(0xFFFF6D00),
-                            shape = RoundedCornerShape(8.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            Surface(
+                                color = Color(0xFFFF6D00),
+                                shape = RoundedCornerShape(8.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Verified,
-                                    contentDescription = "Dokumen Resmi KRB",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = "DOKUMEN KRB 2026–2030",
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Verified,
+                                        contentDescription = "Dokumen Resmi KRB",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "DOKUMEN KRB 2026–2030",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
                             }
                         }
 
@@ -174,7 +179,9 @@ fun KrbMukomuko2026Section(
                                     text = "PERDA RTRW NO. 12 TAHUN 2025 (2025–2045)",
                                     color = Color.White,
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold
+                                    fontWeight = FontWeight.ExtraBold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -376,6 +383,89 @@ fun KrbMukomuko2026Section(
 
             HorizontalDivider(color = cardBorder)
 
+            // Bar Sinkronisasi Lintas Tab & Modul Operasional SIPAGAR KITA
+            Surface(
+                color = subCardBg,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Sinkronisasi Modul Operasional Terkait (Kec. ${districtProfile.districtName})",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = accentNavy,
+                            lineHeight = 14.sp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
+                        )
+                        Surface(
+                            color = accentTeal.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "Tab Khusus KRB & RTRW",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = accentTeal,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val linkedModules = listOf(
+                            Triple(1, "Laporan Warga (Verifikasi Zona KRB)", accentOrange),
+                            Triple(3, "Statistik Bencana vs Baseline KRB", accentNavy),
+                            Triple(5, "Peringatan & Gempa WRS (PGA & Tsunami)", highRiskRed),
+                            Triple(6, "Monitoring Karhutla (Pasal 92 ayat 5)", medRiskAmber),
+                            Triple(7, "Peta & SOP Evakuasi (TES/TEA Pasal 42)", accentTeal),
+                            Triple(8, "inaRISK BNPB (IRBI 164,32 • IKD 0,29)", accentNavy),
+                            Triple(10, "Maritim & Pesisir (Sempadan 100m Pasal 93)", accentTeal),
+                            Triple(12, "15 Kecamatan (Profil Risiko & Peran RTRW)", lowRiskGreen)
+                        )
+                        linkedModules.forEach { (tabIdx, label, chipColor) ->
+                            Surface(
+                                color = chipColor.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, chipColor.copy(alpha = 0.35f)),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onNavigateToTab(tabIdx) }
+                                    .testTag("krb_jump_module_tab_$tabIdx")
+                            ) {
+                                Text(
+                                    text = "↗ $label",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = chipColor,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = cardBorder)
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -556,29 +646,31 @@ private fun KrbDistrictProfileContent(
                         color = Color.White,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                     )
                 }
             }
 
-            // Badges Zona Khusus (Hierarki RTRW, Tsunami Pesisir & Banjir Bandang)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Badges Zona Khusus (Hierarki RTRW, Tsunami Pesisir & Banjir Bandang) — Ditumpuk vertikal lebar penuh agar tidak pernah terpotong di tepi kanan
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Surface(
                     color = accentTeal.copy(alpha = 0.15f),
                     shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, accentTeal.copy(alpha = 0.45f))
+                    border = BorderStroke(1.dp, accentTeal.copy(alpha = 0.45f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = "${rtrwProfile.settlementHierarchyCode}: ${rtrwProfile.urbanOrRuralCenterName} (${rtrwProfile.article10Reference})",
                         color = accentTeal,
-                        fontSize = 10.sp,
+                        fontSize = 10.5.sp,
+                        lineHeight = 14.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                     )
                 }
 
@@ -586,23 +678,25 @@ private fun KrbDistrictProfileContent(
                     Surface(
                         color = Color(0xFFD32F2F).copy(alpha = 0.14f),
                         shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Color(0xFFD32F2F).copy(alpha = 0.45f))
+                        border = BorderStroke(1.dp, Color(0xFFD32F2F).copy(alpha = 0.45f)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Water,
                                 contentDescription = null,
                                 tint = Color(0xFFD32F2F),
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                             Text(
                                 text = "Zona Tsunami Pesisir (KRB & Pasal 92 ayat 8)",
                                 color = if (isDark) Color(0xFFFF8A80) else Color(0xFFB71C1C),
-                                fontSize = 10.sp,
+                                fontSize = 10.5.sp,
+                                lineHeight = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -613,23 +707,25 @@ private fun KrbDistrictProfileContent(
                     Surface(
                         color = Color(0xFFE65100).copy(alpha = 0.14f),
                         shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Color(0xFFE65100).copy(alpha = 0.45f))
+                        border = BorderStroke(1.dp, Color(0xFFE65100).copy(alpha = 0.45f)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = null,
                                 tint = Color(0xFFE65100),
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                             Text(
                                 text = "Zona Banjir Bandang (KRB & Pasal 92 ayat 3)",
                                 color = if (isDark) Color(0xFFFFB74D) else Color(0xFFE65100),
-                                fontSize = 10.sp,
+                                fontSize = 10.5.sp,
+                                lineHeight = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -836,6 +932,8 @@ private fun KrbDistrictProfileContent(
                                 color = badgeColor,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 11.sp,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
                             )
                         }
@@ -903,6 +1001,8 @@ private fun KrbDistrictProfileContent(
                         color = Color.White,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 11.sp,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                     )
                 }
@@ -987,20 +1087,24 @@ private fun KrbDistrictProfileContent(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Shield,
                     contentDescription = null,
                     tint = if (isDark) Color(0xFF64B5F6) else Color(0xFF0D47A1),
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier
+                        .padding(top = 1.dp)
+                        .size(16.dp)
                 )
                 Text(
                     text = "Rekomendasi Fokus Penanganan KRB 2026–2030 (${profile.districtName})",
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 12.sp,
-                    color = if (isDark) Color(0xFF90CAF9) else Color(0xFF0D47A1)
+                    lineHeight = 16.sp,
+                    color = if (isDark) Color(0xFF90CAF9) else Color(0xFF0D47A1),
+                    modifier = Modifier.weight(1f)
                 )
             }
             Text(
@@ -1254,16 +1358,25 @@ private fun KrbTwelveHazardsMatrixContent(
                         )
                     }
 
-                    // Ringkasan Cepat 3 Pilar KRB
+                    // Ringkasan Cepat 3 Pilar KRB — Label di atas Nilai agar tidak terpotong di layar sempit
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        KrbMiniTag("Bahaya: ${hazard.hazardClass}", Modifier.weight(1f))
-                        KrbMiniTag("Kerentanan: ${hazard.vulnerabilityClass}", Modifier.weight(1f))
-                        KrbMiniTag(
-                            "Kapasitas: ${String.format(Locale.US, "%.3f", hazard.capacityIndex)}",
-                            Modifier.weight(1f)
+                        KrbMiniMetricTag(
+                            label = "Kelas Bahaya",
+                            value = hazard.hazardClass,
+                            modifier = Modifier.weight(1f)
+                        )
+                        KrbMiniMetricTag(
+                            label = "Kerentanan",
+                            value = hazard.vulnerabilityClass,
+                            modifier = Modifier.weight(1f)
+                        )
+                        KrbMiniMetricTag(
+                            label = "Kapasitas",
+                            value = String.format(Locale.US, "%.3f", hazard.capacityIndex),
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
@@ -1279,16 +1392,19 @@ private fun KrbTwelveHazardsMatrixContent(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                KrbMiniTag(
-                                    text = "Terpapar: ${formatIdInt(hazard.exposedPopulation)} jiwa",
+                                KrbMiniMetricTag(
+                                    label = "Jiwa Terpapar",
+                                    value = "${formatIdInt(hazard.exposedPopulation)} jiwa",
                                     modifier = Modifier.weight(1f)
                                 )
-                                KrbMiniTag(
-                                    text = "Rugi: ${formatRupiahMillions(hazard.totalLossMillionRp)}",
+                                KrbMiniMetricTag(
+                                    label = "Potensi Rugi",
+                                    value = formatRupiahMillions(hazard.totalLossMillionRp),
                                     modifier = Modifier.weight(1f)
                                 )
-                                KrbMiniTag(
-                                    text = "Lingk: ${formatIdNumber(hazard.envDamageHa)} Ha",
+                                KrbMiniMetricTag(
+                                    label = "Lingk. Rusak",
+                                    value = "${formatIdNumber(hazard.envDamageHa)} Ha",
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -1319,24 +1435,38 @@ private fun KrbTwelveHazardsMatrixContent(
 }
 
 @Composable
-private fun KrbMiniTag(
-    text: String,
+private fun KrbMiniMetricTag(
+    label: String,
+    value: String,
     modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(7.dp),
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Text(
-            text = text,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp)
-        )
+        Column(
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp)
+        ) {
+            Text(
+                text = label,
+                fontSize = 9.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = value,
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -1392,6 +1522,8 @@ private fun KrbIkdAndIrbiContent(
                             color = highRiskRed,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
@@ -1421,7 +1553,9 @@ private fun KrbIkdAndIrbiContent(
                                 text = "${String.format(Locale.US, "%.2f", item.score)} (${item.categoryLabel})",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = barColor
+                                color = barColor,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                         LinearProgressIndicator(
@@ -1496,7 +1630,9 @@ private fun KrbIkdAndIrbiContent(
                                 text = "-26,88 Poin",
                                 color = lowRiskGreen,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -1676,23 +1812,28 @@ private fun RtrwPasal92And93Content(
                             ) {
                                 Column(
                                     modifier = Modifier.padding(10.dp),
-                                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.Top,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.CheckCircle,
                                             contentDescription = null,
                                             tint = lowRiskGreen,
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier
+                                                .padding(top = 1.dp)
+                                                .size(14.dp)
                                         )
                                         Text(
                                             text = "Kegiatan Diperbolehkan (Huruf a):",
                                             fontSize = 11.sp,
+                                            lineHeight = 15.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = lowRiskGreen
+                                            color = lowRiskGreen,
+                                            modifier = Modifier.weight(1f)
                                         )
                                     }
                                     rule.allowedActivities.forEach { act ->
@@ -1714,23 +1855,28 @@ private fun RtrwPasal92And93Content(
                             ) {
                                 Column(
                                     modifier = Modifier.padding(10.dp),
-                                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.Top,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Warning,
                                             contentDescription = null,
                                             tint = medRiskAmber,
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier
+                                                .padding(top = 1.dp)
+                                                .size(14.dp)
                                         )
                                         Text(
-                                            text = "Diperbolehkan dengan Syarat Wajib Mitigasi (Huruf b):",
+                                            text = "Diperbolehkan Bersyarat Wajib Mitigasi (Huruf b):",
                                             fontSize = 11.sp,
+                                            lineHeight = 15.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = medRiskAmber
+                                            color = medRiskAmber,
+                                            modifier = Modifier.weight(1f)
                                         )
                                     }
                                     rule.conditionalActivities.forEach { act ->
@@ -1752,23 +1898,28 @@ private fun RtrwPasal92And93Content(
                             ) {
                                 Column(
                                     modifier = Modifier.padding(10.dp),
-                                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.Top,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Gavel,
                                             contentDescription = null,
                                             tint = highRiskRed,
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier
+                                                .padding(top = 1.dp)
+                                                .size(14.dp)
                                         )
                                         Text(
                                             text = "Kegiatan Tidak Diperbolehkan / Dilarang (Huruf c):",
                                             fontSize = 11.sp,
+                                            lineHeight = 15.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = highRiskRed
+                                            color = highRiskRed,
+                                            modifier = Modifier.weight(1f)
                                         )
                                     }
                                     rule.prohibitedActivities.forEach { act ->
@@ -1890,9 +2041,9 @@ private fun RtrwPatternsBpbdAndSanctionsContent(
                     ) {
                         Column(
                             modifier = Modifier.padding(11.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
-                            // Baris Badge Pasal & Luas Ha di atas, diikuti Nama Zona Pola Ruang penuh di bawahnya
+                            // Baris Atas: Kategori di kiri & Luas Ha di kanan (tanpa teks Pasal panjang agar badge Luas Ha tidak pernah tergencet vertikal)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1903,11 +2054,13 @@ private fun RtrwPatternsBpbdAndSanctionsContent(
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
-                                        text = "${pattern.category} • ${pattern.articleReference}",
+                                        text = pattern.category,
                                         color = badgeColor,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.ExtraBold,
                                         fontSize = 10.sp,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
                                 Surface(
@@ -1919,6 +2072,8 @@ private fun RtrwPatternsBpbdAndSanctionsContent(
                                         color = Color.White,
                                         fontWeight = FontWeight.ExtraBold,
                                         fontSize = 10.sp,
+                                        maxLines = 1,
+                                        softWrap = false,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
@@ -1927,6 +2082,14 @@ private fun RtrwPatternsBpbdAndSanctionsContent(
                                 text = pattern.zoneName,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 13.sp,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                text = "Dasar Hukum Perda RTRW: ${pattern.articleReference}",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = badgeColor,
+                                lineHeight = 14.sp,
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Text(
@@ -1973,12 +2136,12 @@ private fun RtrwPatternsBpbdAndSanctionsContent(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
-                            modifier = Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            modifier = Modifier.padding(11.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
+                            // Badge Kode Program dan Periode ditata bertingkat lebar penuh agar tidak pernah bertabrakan
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Surface(
@@ -1990,21 +2153,33 @@ private fun RtrwPatternsBpbdAndSanctionsContent(
                                         color = accentNavy,
                                         fontWeight = FontWeight.ExtraBold,
                                         fontSize = 10.sp,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
+                            }
+                            Surface(
+                                color = accentTeal.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(0.5.dp, accentTeal.copy(alpha = 0.35f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Text(
-                                    text = prog.period,
-                                    fontSize = 10.sp,
+                                    text = "Periode & Dasar: ${prog.period}",
+                                    fontSize = 10.5.sp,
+                                    lineHeight = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = accentTeal
+                                    color = accentTeal,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
                             Text(
                                 text = prog.programName,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp
+                                fontSize = 12.5.sp,
+                                lineHeight = 17.sp,
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Text(
                                 text = "Lokasi: ${prog.location}",
@@ -2014,7 +2189,8 @@ private fun RtrwPatternsBpbdAndSanctionsContent(
                             )
                             Text(
                                 text = "Pelaksana: ${prog.executor}  •  Sumber Dana: ${prog.fundingSource}",
-                                fontSize = 10.sp,
+                                fontSize = 10.5.sp,
+                                lineHeight = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = accentTeal
                             )
@@ -2110,3 +2286,146 @@ private fun formatRupiahMillions(millionRp: Double): String {
         }
     }
 }
+
+/**
+ * Banner ringkas penyelarasan KRB 2026–2030 & Perda RTRW No. 12 Tahun 2025
+ * untuk ditempatkan pada Tab/Modul operasional terkait (Statistik Bencana, Peringatan & Gempa WRS,
+ * Monitoring Karhutla, Peta & SOP Evakuasi, inaRISK BNPB, Maritim & Pesisir)
+ * tanpa mencampur isi penuh Tab Khusus "KRB & RTRW".
+ */
+@Composable
+fun KrbRtrwModuleContextBanner(
+    currentDistrict: District,
+    moduleTag: String,
+    moduleTitle: String,
+    krbAlignmentNote: String,
+    rtrwRegulationNote: String,
+    isDark: Boolean,
+    onOpenKrbRtrwTab: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val districtProfile = remember(currentDistrict.id, currentDistrict.name) {
+        MukomukoKrb2026Catalog.getDistrictProfile(currentDistrict)
+    }
+    val districtRtrw = remember(currentDistrict.id, currentDistrict.name) {
+        MukomukoRtrw2025Catalog.getDistrictSpatialProfile(currentDistrict)
+    }
+
+    val cardBg = if (isDark) Color(0xFF132238) else Color(0xFFF3F7FE)
+    val borderCol = if (isDark) Color(0xFF2B466B) else Color(0xFFC5D8F6)
+    val accentNavy = if (isDark) Color(0xFF60A5FA) else Color(0xFF0D47A1)
+    val accentTeal = if (isDark) Color(0xFF4DB6AC) else Color(0xFF00695C)
+    val accentOrange = Color(0xFFE65100)
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("krb_rtrw_context_banner_$moduleTag"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        border = BorderStroke(1.2.dp, borderCol),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = null,
+                        tint = accentOrange,
+                        modifier = Modifier
+                            .padding(top = 1.dp)
+                            .size(18.dp)
+                    )
+                    Text(
+                        text = "Selaras KRB 2026–2030 & Perda RTRW 12/2025 • $moduleTitle",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = accentNavy,
+                        lineHeight = 16.sp
+                    )
+                }
+
+                Surface(
+                    color = accentOrange,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onOpenKrbRtrwTab() }
+                        .testTag("btn_open_krb_rtrw_from_$moduleTag")
+                ) {
+                    Text(
+                        text = "Buka Tab KRB & RTRW ↗",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Surface(
+                    color = accentNavy.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Kec. ${districtProfile.districtName}: Multibahaya ${districtProfile.multiHazardRiskClass} (${formatIdNumber(districtProfile.areaHa)} Ha)",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accentNavy,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+                Surface(
+                    color = accentTeal.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "IKD: ${String.format(Locale.US, "%.3f", districtProfile.multiHazardCapacityIndex)} (${districtProfile.multiHazardCapacityClass}) • ${districtRtrw.settlementHierarchyCode}: ${districtRtrw.urbanOrRuralCenterName}",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accentTeal,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = "• Kajian Risiko (KRB 2026–2030): $krbAlignmentNote",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                lineHeight = 15.sp
+            )
+            Text(
+                text = "• Regulasi Tata Ruang (Perda RTRW No. 12/2025): $rtrwRegulationNote (Hierarki Kec. ${districtProfile.districtName}: ${districtRtrw.settlementHierarchyTitle} • ${districtRtrw.article10Reference})",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 15.sp
+            )
+        }
+    }
+}
+

@@ -999,6 +999,7 @@ class OfficerAuthManager(private val context: Context) {
     fun clearSavedOfficerIdentity() {
         sharedPrefs.edit()
             .putBoolean(PREF_IS_OFFICER_LOGGED_IN, false)
+            .putBoolean(PREF_IS_ADMIN_LOGGED_IN, false)
             .remove(PREF_SAVED_NIP)
             .remove(PREF_OFFICER_NAME)
             .remove(PREF_OFFICER_BADGE_ID)
@@ -1016,6 +1017,7 @@ class OfficerAuthManager(private val context: Context) {
     fun logoutOfficer() {
         sharedPrefs.edit()
             .putBoolean(PREF_IS_OFFICER_LOGGED_IN, false)
+            .putBoolean(PREF_IS_ADMIN_LOGGED_IN, false)
             .commit()
         com.example.util.SessionManager(context).clearSession()
         SecurityManager.getInstance(context).clearLocalSession()
@@ -1074,6 +1076,22 @@ class OfficerAuthManager(private val context: Context) {
      */
     fun isAdminLoggedIn(): Boolean {
         return sharedPrefs.getBoolean(PREF_IS_ADMIN_LOGGED_IN, false)
+    }
+
+    /**
+     * Returns true ONLY when an active Administrator login session is verified:
+     * - An officer is actively logged in (`isOfficerLoggedIn() == true`) with Tier 1 / Manajer / SuperAdmin / Admin authority, OR
+     * - Application Administrator is actively logged in (`isAdminLoggedIn() == true`).
+     * In Mode Warga (Guest Mode) or non-Administrator sessions, this strictly returns false.
+     */
+    fun isAdministratorSessionActive(): Boolean {
+        if (isAdminLoggedIn()) return true
+        if (!isOfficerLoggedIn()) return false
+        val currentRole = getOfficerRole().trim()
+        return com.example.security.UserRole.isManajer(currentRole) ||
+            com.example.security.UserRole.canAccessSystemSettings(currentRole) ||
+            isSuperAdmin() ||
+            currentRole.contains("Admin", ignoreCase = true)
     }
 
     /**

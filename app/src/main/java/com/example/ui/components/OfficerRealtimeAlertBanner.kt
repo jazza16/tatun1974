@@ -134,7 +134,7 @@ class OfficerRealtimeNewReportDetector {
         val effectiveContext = context?.applicationContext ?: OfficerPushNotificationHelper.getAppContext()
         if (effectiveContext != null) {
             try {
-                OfficerPushNotificationHelper.notifyOfficerForNewReport(effectiveContext, report)
+                OfficerPushNotificationHelper.dispatchRoleAwareNewReportNotification(effectiveContext, report)
             } catch (_: Throwable) {
             }
         }

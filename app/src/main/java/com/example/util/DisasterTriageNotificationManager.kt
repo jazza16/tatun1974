@@ -102,14 +102,14 @@ enum class TriageFeatureSource(
     val targetTabIndex: Int,
     val requiresOfficerSession: Boolean = false
 ) {
-    PERINGATAN_CUACA("peringatan_cuaca", "Peringatan Dini Cuaca", targetTabIndex = 4),
-    CUACA_EKSTREM("cuaca_ekstrem", "Telemetri Cuaca Ekstrem", targetTabIndex = 4),
-    GEMPA_TSUNAMI("gempa_tsunami", "Gempa Bumi & Tsunami WRS", targetTabIndex = 4),
-    MARITIM_GELOMBANG("maritim_gelombang", "Maritim & Gelombang Laut", targetTabIndex = 9),
-    PASANG_ROB("pasang_rob", "Pasang Surut & Banjir Rob", targetTabIndex = 9),
-    KARHUTLA_HOTSPOT("karhutla_hotspot", "Monitoring Karhutla (FIRMS/BMKG)", targetTabIndex = 5),
-    KUALITAS_UDARA("kualitas_udara", "Kualitas Udara & Kabut Asap", targetTabIndex = 10),
-    LAPORAN_DARURAT_WARGA("laporan_darurat_warga", "Eskalasi Laporan Bencana", targetTabIndex = 2),
+    PERINGATAN_CUACA("peringatan_cuaca", "Peringatan Dini Cuaca", targetTabIndex = 5),
+    CUACA_EKSTREM("cuaca_ekstrem", "Telemetri Cuaca Ekstrem", targetTabIndex = 5),
+    GEMPA_TSUNAMI("gempa_tsunami", "Gempa Bumi & Tsunami WRS", targetTabIndex = 5),
+    MARITIM_GELOMBANG("maritim_gelombang", "Maritim & Gelombang Laut", targetTabIndex = 10),
+    PASANG_ROB("pasang_rob", "Pasang Surut & Banjir Rob", targetTabIndex = 10),
+    KARHUTLA_HOTSPOT("karhutla_hotspot", "Monitoring Karhutla (FIRMS/BMKG)", targetTabIndex = 6),
+    KUALITAS_UDARA("kualitas_udara", "Kualitas Udara & Kabut Asap", targetTabIndex = 11),
+    LAPORAN_DARURAT_WARGA("laporan_darurat_warga", "Eskalasi Laporan Bencana", targetTabIndex = 3),
     POSKO_LOGISTIK_KRITIS(
         key = "posko_logistik_kritis",
         displayName = "Logistik & FEFO Posko (Petugas)",
@@ -139,6 +139,49 @@ data class DisasterTriageSignal(
 }
 
 /**
+ * Porsi kegunaan notifikasi SIPAGAR KITA yang dapat berjalan otomatis di latar belakang
+ * TANPA HARUS LOGIN, baik untuk masyarakat umum (Mode Warga) maupun personel BPBD/TRC (Mode Petugas).
+ */
+enum class NotificationRolePortion(
+    val code: String,
+    val shortLabel: String,
+    val badgeHeader: String,
+    val description: String
+) {
+    AUTO_DETECT(
+        code = "AUTO",
+        shortLabel = "Otomatis (Deteksi Warga / Petugas)",
+        badgeHeader = "DETEKSI OTOMATIS PORSI PENGGUNA",
+        description = "Tanpa login: Otomatis menyajikan Porsi Warga pada perangkat publik, atau Porsi Operasional Petugas bila perangkat terdaftar identitas petugas/TRC."
+    ),
+    CITIZEN_PUBLIC(
+        code = "WARGA",
+        shortLabel = "Porsi Mode Warga (Kewaspadaan & Evakuasi)",
+        badgeHeader = "PORSI WARGA • PERLINDUNGAN & EVAKUASI MANDIRI",
+        description = "Tanpa login: Fokus keselamatan diri & keluarga, info lokasi kejadian sekitar yang harus dihindari, panduan evakuasi mandiri, & Call 117 (privasi pelapor terlindungi)."
+    ),
+    OFFICER_OPERATIONAL(
+        code = "PETUGAS",
+        shortLabel = "Porsi Mode Petugas / TRC (Operasional & Respon)",
+        badgeHeader = "PORSI PETUGAS BPBD • KOMANDO & RESPON LAPANGAN",
+        description = "Tanpa harus membuka sesi login: Fokus komando TRC/Pusdalops, koordinat GPS kejadian, triase korban, kesiapan alat/EWS, & instruksi verifikasi laporan warga."
+    ),
+    DUAL_COMBINED(
+        code = "GABUNGAN",
+        shortLabel = "Porsi Gabungan (Warga + Operasional Petugas)",
+        badgeHeader = "PORSI LENGKAP • PANDUAN WARGA & OPERASIONAL TRC",
+        description = "Menampilkan panduan keselamatan masyarakat sekaligus instruksi teknis respon lapangan Petugas/TRC dalam satu notifikasi."
+    );
+
+    companion object {
+        fun fromCode(code: String?): NotificationRolePortion {
+            return entries.firstOrNull { it.code.equals(code?.trim(), ignoreCase = true) }
+                ?: AUTO_DETECT
+        }
+    }
+}
+
+/**
  * Pengaturan preferensi notifikasi berbasis Triase Pewarnaan Siaga Bencana.
  */
 data class TriageNotificationSettings(
@@ -150,7 +193,8 @@ data class TriageNotificationSettings(
     val enableMarineAndRob: Boolean = true,
     val enableKarhutlaAndAirQuality: Boolean = true,
     val enableDisasterReportEscalation: Boolean = true,
-    val enableOfficerPoskoAlerts: Boolean = true
+    val enableOfficerPoskoAlerts: Boolean = true,
+    val rolePortion: NotificationRolePortion = NotificationRolePortion.AUTO_DETECT
 ) {
     fun isSourceEnabled(source: TriageFeatureSource): Boolean {
         if (!isEnabled) return false
@@ -188,8 +232,9 @@ enum class TriageDispatchResult {
  *    hening otomatis pada kondisi Hijau/Aman.
  * 3. Deduplikasi & Cooldown pintar berbasis SharedPreferences agar tidak spam, tetapi langsung
  *    menembus cooldown saat terjadi eskalasi tingkat bahaya (mis. Kuning -> Oranye -> Merah).
- * 4. Isolasi Mode Warga ketat: sinyal internal petugas (`POSKO_LOGISTIK_KRITIS`) tidak akan pernah
- *    dipicu jika sesi login petugas tidak aktif.
+ * 4. Berjalan langsung di latar belakang (WorkManager + FCM) TANPA HARUS LOGIN baik untuk
+ *    Mode Warga maupun Mode Petugas dengan membedakan porsi kegunaan masing-masing, sementara
+ *    sinyal internal gudang (`POSKO_LOGISTIK_KRITIS`) tetap terisolasi khusus sesi petugas.
  */
 object DisasterTriageNotificationManager {
 
@@ -211,6 +256,8 @@ object DisasterTriageNotificationManager {
     private const val KEY_ENABLE_KARHUTLA = "triage_enable_karhutla"
     private const val KEY_ENABLE_SURGE = "triage_enable_surge"
     private const val KEY_ENABLE_POSKO = "triage_enable_posko"
+    private const val KEY_ROLE_PORTION = "triage_role_portion"
+    private const val KEY_SELECTED_DISTRICT_ID = "triage_selected_district_id"
     private const val KEY_PREFIX_EQ_LEDGER = "eq_ledger_"
     private const val EQ_LEDGER_RETENTION_MS = 7L * 24L * 60L * 60_000L
 
@@ -267,6 +314,7 @@ object DisasterTriageNotificationManager {
         val parsedLevel = DisasterTriageLevel.fromCode(minLevelCode).let {
             if (it == DisasterTriageLevel.HIJAU_AMAN) DisasterTriageLevel.KUNING_WASPADA else it
         }
+        val rolePortionCode = prefs.getString(KEY_ROLE_PORTION, NotificationRolePortion.AUTO_DETECT.code)
         return TriageNotificationSettings(
             isEnabled = prefs.getBoolean(KEY_ENABLED, true),
             minimumLevel = parsedLevel,
@@ -276,7 +324,8 @@ object DisasterTriageNotificationManager {
             enableMarineAndRob = prefs.getBoolean(KEY_ENABLE_MARINE, true),
             enableKarhutlaAndAirQuality = prefs.getBoolean(KEY_ENABLE_KARHUTLA, true),
             enableDisasterReportEscalation = prefs.getBoolean(KEY_ENABLE_SURGE, true),
-            enableOfficerPoskoAlerts = prefs.getBoolean(KEY_ENABLE_POSKO, true)
+            enableOfficerPoskoAlerts = prefs.getBoolean(KEY_ENABLE_POSKO, true),
+            rolePortion = NotificationRolePortion.fromCode(rolePortionCode)
         )
     }
 
@@ -297,7 +346,54 @@ object DisasterTriageNotificationManager {
             .putBoolean(KEY_ENABLE_KARHUTLA, settings.enableKarhutlaAndAirQuality)
             .putBoolean(KEY_ENABLE_SURGE, settings.enableDisasterReportEscalation)
             .putBoolean(KEY_ENABLE_POSKO, settings.enableOfficerPoskoAlerts)
+            .putString(KEY_ROLE_PORTION, settings.rolePortion.code)
             .apply()
+        try {
+            com.example.data.sync.OfficerPushNotificationHelper.syncOfficerTopicSubscription(context.applicationContext)
+        } catch (_: Throwable) {
+        }
+    }
+
+    fun saveSelectedDistrictForBackground(context: Context, districtId: String) {
+        if (districtId.isBlank()) return
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_SELECTED_DISTRICT_ID, districtId.trim())
+            .apply()
+    }
+
+    fun getSelectedDistrictIdForBackground(context: Context): String {
+        return context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_SELECTED_DISTRICT_ID, com.example.model.MukomukoDistricts.defaultDistrict.id)
+            ?: com.example.model.MukomukoDistricts.defaultDistrict.id
+    }
+
+    /**
+     * Menentukan porsi notifikasi efektif (Mode Warga vs Mode Petugas vs Gabungan) tanpa mewajibkan login.
+     */
+    fun resolveEffectiveRolePortion(
+        context: Context,
+        settings: TriageNotificationSettings = getSettings(context)
+    ): NotificationRolePortion {
+        return when (settings.rolePortion) {
+            NotificationRolePortion.CITIZEN_PUBLIC -> NotificationRolePortion.CITIZEN_PUBLIC
+            NotificationRolePortion.OFFICER_OPERATIONAL -> NotificationRolePortion.OFFICER_OPERATIONAL
+            NotificationRolePortion.DUAL_COMBINED -> NotificationRolePortion.DUAL_COMBINED
+            NotificationRolePortion.AUTO_DETECT -> {
+                val isOfficerDevice = try {
+                    com.example.data.sync.OfficerPushNotificationHelper.isDeviceLoggedInAsOfficer(context)
+                } catch (_: Throwable) {
+                    false
+                }
+                if (isOfficerDevice) {
+                    NotificationRolePortion.OFFICER_OPERATIONAL
+                } else {
+                    NotificationRolePortion.CITIZEN_PUBLIC
+                }
+            }
+        }
     }
 
     fun clearCooldownHistory(context: Context) {
@@ -626,25 +722,25 @@ object DisasterTriageNotificationManager {
                 DisasterTriageLevel.MERAH_AWAS,
                 "AWAS TSUNAMI BENGKULU! Gempa M ${earthquake.magnitude}",
                 "Segera evakuasi mandiri ke dataran tinggi (>= 20m dpl / >= 2 km dari pantai). Rumus 20-20-20!",
-                6
+                7
             )
             earthquake.magnitude >= 6.0 || (earthquake.isNearMukomuko && earthquake.magnitude >= 5.0) -> QuadTab(
                 DisasterTriageLevel.MERAH_AWAS,
                 "Gempa Kuat M ${earthquake.magnitude} Wilayah Bengkulu",
                 "Lakukan Drop-Cover-Hold On, keluar bangunan secara tertib setelah guncangan reda, waspada gempa susulan.",
-                4
+                5
             )
             earthquake.magnitude >= 5.0 || (earthquake.isNearMukomuko && earthquake.magnitude >= 4.5) -> QuadTab(
                 DisasterTriageLevel.ORANYE_SIAGA,
                 "Siaga Gempa Lokal Bengkulu M ${earthquake.magnitude} (${earthquake.depth})",
                 "Periksa kondisi bangunan sekitar dan pantau rilis resmi BMKG serta arahan Pusdalops BPBD Bengkulu/Mukomuko.",
-                4
+                5
             )
             earthquake.magnitude >= 3.0 || hasFeltInBengkulu -> QuadTab(
                 DisasterTriageLevel.KUNING_WASPADA,
                 "Waspada Gempa Lokal Terasa M ${earthquake.magnitude} (Bengkulu)",
                 "Tetap tenang, pantau informasi resmi BMKG dan hindari bangunan retak.",
-                4
+                5
             )
             else -> return safeSignal(
                 source = TriageFeatureSource.GEMPA_TSUNAMI,
@@ -825,10 +921,10 @@ object DisasterTriageNotificationManager {
                 "Waspada Peningkatan Laporan Bencana Warga",
                 "Tetap waspada terhadap potensi dampak lanjutan di wilayah terdampak."
             )
-            else -> return safeSignal(
-                source = TriageFeatureSource.LAPORAN_DARURAT_WARGA,
-                districtOrLocation = topDistrict,
-                summary = "${activeReports.size} laporan aktif dalam pemantauan standar."
+            else -> Triple(
+                DisasterTriageLevel.KUNING_WASPADA,
+                "Waspada Laporan Kejadian Bencana Warga Masuk",
+                "Terdapat laporan kejadian bencana aktif di Kec. $topDistrict. Hindari titik rawan dan pantau pembaruan BPBD."
             )
         }
 
@@ -987,7 +1083,7 @@ object DisasterTriageNotificationManager {
             return TriageDispatchResult.SKIPPED_NO_PERMISSION
         }
 
-        // 7. Bangun dan tampilkan notifikasi sesuai warna triase
+        // 7. Bangun dan tampilkan notifikasi sesuai warna triase & porsi pengguna (Warga vs Petugas)
         val posted = postTriageNotificationInternal(appContext, signal)
         if (!posted) {
             return TriageDispatchResult.SKIPPED_NO_PERMISSION
@@ -1067,18 +1163,83 @@ object DisasterTriageNotificationManager {
         ) == TriageDispatchResult.POSTED
     }
 
+    /**
+     * Menyusun panduan khusus PORSI MODE WARGA (perlindungan diri, evakuasi keluarga, hindari titik bahaya).
+     */
+    fun buildCitizenPublicInstruction(signal: DisasterTriageSignal): String {
+        val base = signal.safetyAdvice
+        val supplement = when (signal.source) {
+            TriageFeatureSource.PERINGATAN_CUACA,
+            TriageFeatureSource.CUACA_EKSTREM ->
+                "Amankan dokumen penting & Tas Siaga Bencana (TSB) keluarga, jauhi bantaran sungai/lereng curam di ${signal.districtOrLocation}."
+            TriageFeatureSource.GEMPA_TSUNAMI ->
+                "Ikuti jalur evakuasi mandiri menuju Titik Kumpul / TES terdekat di ${signal.districtOrLocation} sesuai KRB 2026–2030."
+            TriageFeatureSource.MARITIM_GELOMBANG,
+            TriageFeatureSource.PASANG_ROB ->
+                "Warga pesisir & nelayan diimbau menjauhi sempadan pantai 100 m (Perda RTRW Pasal 92) hingga kondisi gelombang/pasang surut aman."
+            TriageFeatureSource.KARHUTLA_HOTSPOT,
+            TriageFeatureSource.KUALITAS_UDARA ->
+                "Gunakan masker pelindung pernapasan, larangan keras membakar lahan/sampah, dan laporkan titik api ke 117."
+            TriageFeatureSource.LAPORAN_DARURAT_WARGA ->
+                "Hindari mendekati titik lokasi kejadian di ${signal.districtOrLocation} agar tidak menghambat jalur evakuasi & unit respon BPBD."
+            TriageFeatureSource.POSKO_LOGISTIK_KRITIS ->
+                "Informasi internal logistik Posko BPBD."
+        }
+        return "$base\n• Panduan Warga: $supplement"
+    }
+
+    /**
+     * Menyusun instruksi komando & tindakan teknis khusus PORSI MODE PETUGAS / TRC BPBD
+     * (dapat diterima di HP petugas meskipun tidak sedang login aktif).
+     */
+    fun buildOperationalOfficerInstruction(signal: DisasterTriageSignal): String {
+        return when (signal.source) {
+            TriageFeatureSource.PERINGATAN_CUACA,
+            TriageFeatureSource.CUACA_EKSTREM ->
+                "Siagakan regu piket TRC & Pusdalops wilayah ${signal.districtOrLocation}, pantau debit DAS utama (Manjunto/Selagan/Bantal), dan siapkan perahu karet & peralatan evakuasi."
+            TriageFeatureSource.GEMPA_TSUNAMI ->
+                "Aktifkan SOP Tanggap Cepat Gempa/Tsunami Pusdalops, periksa fungsi sirene EWS pesisir, dan kerahkan TRC kaji cepat kerusakan (JITUPASNA awal) & evakuasi kelompok rentan."
+            TriageFeatureSource.MARITIM_GELOMBANG,
+            TriageFeatureSource.PASANG_ROB ->
+                "Koordinasikan Pos Pantau Pantai & kelompok nelayan di ${signal.districtOrLocation}, awasi zona sempadan pantai Perda RTRW Pasal 92, dan siagakan tim SAR perairan."
+            TriageFeatureSource.KARHUTLA_HOTSPOT,
+            TriageFeatureSource.KUALITAS_UDARA ->
+                "Kerahkan tim patroli darat & pemadaman Karhutla ke koordinat hotspot ${signal.districtOrLocation}, koordinasi Manggala Agni/TNI-Polri, dan siapkan distribusi masker."
+            TriageFeatureSource.LAPORAN_DARURAT_WARGA ->
+                "Segera lakukan verifikasi lapangan & kaji cepat TRC atas laporan warga di ${signal.districtOrLocation}, validasi bukti foto GPS, dan perbarui status penanganan Pusdalops."
+            TriageFeatureSource.POSKO_LOGISTIK_KRITIS ->
+                "Lakukan rotasi stok FEFO, tarik komoditas kedaluwarsa, dan ajukan pemenuhan buffer stock gudang Posko BPBD."
+        }
+    }
+
     private fun postTriageNotificationInternal(
         context: Context,
         signal: DisasterTriageSignal
     ): Boolean {
         val channelId = channelIdForLevel(signal.level)
         val notifId = notificationIdForSource(signal.source)
+        val effectivePortion = if (signal.source.requiresOfficerSession) {
+            NotificationRolePortion.OFFICER_OPERATIONAL
+        } else {
+            resolveEffectiveRolePortion(context)
+        }
+
+        val rolePrefixTag = when (effectivePortion) {
+            NotificationRolePortion.OFFICER_OPERATIONAL -> "PETUGAS/TRC"
+            NotificationRolePortion.DUAL_COMBINED -> "WARGA & TRC"
+            else -> "INFO WARGA"
+        }
 
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_NAVIGATE_TAB, signal.resolvedTargetTab)
             putExtra(EXTRA_TRIAGE_LEVEL, signal.level.code)
             putExtra(EXTRA_TRIAGE_SOURCE, signal.source.key)
+            if (effectivePortion == NotificationRolePortion.OFFICER_OPERATIONAL &&
+                signal.source == TriageFeatureSource.LAPORAN_DARURAT_WARGA
+            ) {
+                putExtra("extra_open_officer_reports", true)
+            }
         }
         val openPendingIntent = PendingIntent.getActivity(
             context,
@@ -1087,7 +1248,7 @@ object DisasterTriageNotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val title = "${signal.level.emoji} [${signal.level.badgeLabel}] ${signal.headline}"
+        val title = "${signal.level.emoji} [$rolePrefixTag • ${signal.level.badgeLabel}] ${signal.headline}"
         val subtitle = buildString {
             append(signal.source.displayName)
             if (!signal.eventDateTimeLabel.isNullOrBlank()) {
@@ -1096,6 +1257,7 @@ object DisasterTriageNotificationManager {
             append(" • ${signal.districtOrLocation}")
         }
         val detailedText = buildString {
+            append("Porsi Notifikasi: ${effectivePortion.badgeHeader}\n")
             append("Status Triase: ${signal.level.badgeLabel}\n")
             append("Fitur Sumber: ${signal.source.displayName}\n")
             if (!signal.eventDateTimeLabel.isNullOrBlank()) {
@@ -1103,7 +1265,23 @@ object DisasterTriageNotificationManager {
             }
             append("Wilayah / Lokasi: ${signal.districtOrLocation}\n\n")
             append("Indikator Tercatat:\n${signal.metricSummary}\n\n")
-            append("Arahan Kesiapsiagaan BPBD Mukomuko:\n${signal.safetyAdvice}")
+            when (effectivePortion) {
+                NotificationRolePortion.CITIZEN_PUBLIC -> {
+                    append("Arahan Keselamatan & Evakuasi Warga (Tanpa Login):\n")
+                    append(buildCitizenPublicInstruction(signal))
+                }
+                NotificationRolePortion.OFFICER_OPERATIONAL -> {
+                    append("Instruksi Operasional Petugas / TRC BPBD (Siaga Tanpa Login):\n")
+                    append(buildOperationalOfficerInstruction(signal))
+                    append("\n\nImbauan Publik Terkait:\n${signal.safetyAdvice}")
+                }
+                else -> {
+                    append("1. Panduan Keselamatan Warga:\n")
+                    append(buildCitizenPublicInstruction(signal))
+                    append("\n\n2. Instruksi Operasional Petugas / TRC BPBD:\n")
+                    append(buildOperationalOfficerInstruction(signal))
+                }
+            }
             if (signal.level.priorityScore >= DisasterTriageLevel.ORANYE_SIAGA.priorityScore) {
                 append("\n\nCall Center Darurat BPBD Mukomuko (Bebas Pulsa): 117")
             }
@@ -1120,6 +1298,12 @@ object DisasterTriageNotificationManager {
             DisasterTriageLevel.MERAH_AWAS -> longArrayOf(0, 500, 150, 500, 150, 700)
             DisasterTriageLevel.ORANYE_SIAGA -> longArrayOf(0, 350, 150, 350, 150, 450)
             else -> longArrayOf(0, 220, 140, 220)
+        }
+
+        val primaryActionLabel = when (effectivePortion) {
+            NotificationRolePortion.OFFICER_OPERATIONAL -> "Respon & Tindak Lanjut"
+            NotificationRolePortion.CITIZEN_PUBLIC -> "Panduan & Peta Siaga"
+            else -> "Buka Modul"
         }
 
         val builder = NotificationCompat.Builder(context, channelId)
@@ -1140,7 +1324,7 @@ object DisasterTriageNotificationManager {
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openPendingIntent)
-            .addAction(android.R.drawable.ic_menu_view, "Buka Modul", openPendingIntent)
+            .addAction(android.R.drawable.ic_menu_view, primaryActionLabel, openPendingIntent)
             .setVibrate(vibration)
 
         signal.timeoutAfterMillis?.takeIf { it > 0L }?.let { timeoutMs ->

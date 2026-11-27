@@ -62,6 +62,7 @@ fun AllDistrictsView(
     selectedDistrict: District,
     favoriteDistricts: List<String>,
     onSelectDistrict: (District) -> Unit,
+    onOpenKrbRtrwDistrict: ((District) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val latestTimestamp = remember(districtsSummary) {
@@ -125,7 +126,7 @@ fun AllDistrictsView(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Prakiraan cuaca spesifik pesisir & hulu Taman Nasional Kerinci Seblat",
+                                text = "Cuaca aktual, Indeks Kapasitas (IKD) KRB 2026–2030 & Hierarki Perda RTRW No. 12/2025",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                 lineHeight = 16.sp,
@@ -207,7 +208,8 @@ fun AllDistrictsView(
                                 tempDisplay = tempDisplay,
                                 timestampText = timestampText,
                                 isFromCache = isFromCache,
-                                onSelectDistrict = onSelectDistrict
+                                onSelectDistrict = onSelectDistrict,
+                                onOpenKrbRtrwDistrict = onOpenKrbRtrwDistrict
                             )
                         }
                     }
@@ -232,8 +234,16 @@ private fun DistrictCardItem(
     tempDisplay: String,
     timestampText: String?,
     isFromCache: Boolean,
-    onSelectDistrict: (District) -> Unit
+    onSelectDistrict: (District) -> Unit,
+    onOpenKrbRtrwDistrict: ((District) -> Unit)? = null
 ) {
+    val krbProfile = remember(dist.id, dist.name) {
+        com.example.model.MukomukoKrb2026Catalog.getDistrictProfile(dist)
+    }
+    val rtrwProfile = remember(dist.id, dist.name) {
+        com.example.model.MukomukoRtrw2025Catalog.getDistrictSpatialProfile(dist)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -250,135 +260,193 @@ private fun DistrictCardItem(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = dist.name,
-                        fontSize = 14.sp,
-                        fontWeight = if (isCurrentSelected) FontWeight.ExtraBold else FontWeight.Bold,
-                        color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        softWrap = false,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (isFav) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "Favorit",
-                            tint = WeatherSunGold,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = OrangePrimary.copy(alpha = 0.12f)
-                    ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = dist.category,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = OrangePrimary,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            text = dist.name,
+                            fontSize = 14.sp,
+                            fontWeight = if (isCurrentSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                            color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            softWrap = false
+                            softWrap = false,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
+                        if (isFav) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = "Favorit",
+                                tint = WeatherSunGold,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
 
-                    if (isFromCache) {
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant
+                            color = OrangePrimary.copy(alpha = 0.12f)
                         ) {
                             Text(
-                                text = "Cache",
+                                text = dist.category,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = OrangePrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
+                            )
+                        }
+
+                        if (isFromCache) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    text = "Cache",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = dist.landmark,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
+                    )
+
+                    if (!timestampText.isNullOrBlank() && timestampText != "-") {
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Update: $timestampText",
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                maxLines = 1
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
-                Text(
-                    text = dist.landmark,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    softWrap = false
-                )
+                // Condition icon & text
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = weatherInfo.icon,
+                        contentDescription = weatherInfo.conditionText,
+                        tint = weatherInfo.color,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "$tempDisplay°C",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
 
-                if (!timestampText.isNullOrBlank() && timestampText != "-") {
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Schedule,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.size(11.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
+            // Sinkronisasi KRB 2026-2030 & Perda RTRW No. 12/2025 per Kecamatan
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Update: $timestampText",
+                            text = "KRB 2026–2030: Risiko ${krbProfile.multiHazardRiskClass} • IKD ${String.format(Locale.US, "%.3f", krbProfile.multiHazardCapacityIndex)}",
                             fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "RTRW (${rtrwProfile.settlementHierarchyCode}): ${rtrwProfile.urbanOrRuralCenterName}",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+
+                    if (onOpenKrbRtrwDistrict != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = OrangePrimary.copy(alpha = 0.14f),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { onOpenKrbRtrwDistrict(dist) }
+                                .testTag("district_open_krb_${dist.id}")
+                        ) {
+                            Text(
+                                text = "KRB & RTRW ↗",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = OrangePrimary,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Condition icon & text
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = weatherInfo.icon,
-                    contentDescription = weatherInfo.conditionText,
-                    tint = weatherInfo.color,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "$tempDisplay°C",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    softWrap = false
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                    modifier = Modifier.size(16.dp)
-                )
             }
         }
     }

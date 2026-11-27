@@ -100,7 +100,7 @@ class DisasterTriageNotificationManagerTest {
             districtName = district.name
         )
         assertEquals(DisasterTriageLevel.MERAH_AWAS, awasSignal.level)
-        assertEquals(4, awasSignal.resolvedTargetTab)
+        assertEquals(5, awasSignal.resolvedTargetTab)
 
         val emptyWarningSignal = DisasterTriageNotificationManager.evaluateEarlyWarnings(emptyList(), district.name)
         assertEquals(DisasterTriageLevel.HIJAU_AMAN, emptyWarningSignal.level)
@@ -210,7 +210,7 @@ class DisasterTriageNotificationManagerTest {
         )
         val tsunamiSignal = DisasterTriageNotificationManager.evaluateEarthquake(tsunamiEq, nowMillis = eqNow)
         assertEquals(DisasterTriageLevel.MERAH_AWAS, tsunamiSignal.level)
-        assertEquals(6, tsunamiSignal.resolvedTargetTab)
+        assertEquals(7, tsunamiSignal.resolvedTargetTab)
 
         // 6. Karhutla Hotspots: ignores simulation, detects HIGH/matched -> MERAH_AWAS on Tab 5
         val simHotspot = KarhutlaHotspotEntity(
@@ -234,7 +234,7 @@ class DisasterTriageNotificationManagerTest {
         val realHigh1 = simHotspot.copy(sourceId = "REAL|1", isSimulation = false, isMatchedWithCrossSource = true)
         val karhutlaSignal = DisasterTriageNotificationManager.evaluateKarhutlaHotspots(listOf(realHigh1))
         assertEquals(DisasterTriageLevel.MERAH_AWAS, karhutlaSignal.level)
-        assertEquals(5, karhutlaSignal.resolvedTargetTab)
+        assertEquals(6, karhutlaSignal.resolvedTargetTab)
 
         // 7. Weather Telemetry: severe wind/thunderstorm -> MERAH_AWAS
         val stormReport = WeatherFullReport(
@@ -932,6 +932,91 @@ class DisasterTriageNotificationManagerTest {
         assertTrue(
             com.example.ui.components.EmergencyWarningPopupPolicy.isPopupSignatureAlreadyDismissed(context, sig, nowMs)
         )
+    }
+
+    @Test
+    fun roleDifferentiatedNotifications_postWithoutLogin_forBothCitizenAndOfficerModes() {
+        com.example.data.sync.OfficerPushNotificationHelper.clearNotificationHistoryForTesting(context)
+        com.example.data.sync.OfficerPushNotificationHelper.overrideOfficerSessionForTesting = null
+        officerAuthManager.clearSavedOfficerIdentity()
+        org.junit.Assert.assertFalse("Tidak boleh ada sesi login aktif", officerAuthManager.isOfficerLoggedIn())
+
+        // 1. Mode Warga (Tanpa Login): Laporan warga masuk tetap muncul dengan Porsi Mode Warga (privasi pelapor terlindungi)
+        DisasterTriageNotificationManager.saveSettings(
+            context,
+            TriageNotificationSettings(
+                minimumLevel = DisasterTriageLevel.KUNING_WASPADA,
+                rolePortion = NotificationRolePortion.CITIZEN_PUBLIC
+            )
+        )
+        val citizenIncomingReport = CitizenDisasterReport(
+            id = "LAP-MMK-WARGA-NO-LOGIN-01",
+            disasterType = "Banjir & Luapan Sungai",
+            incidentTime = "27 Nov 2026 16:30 WIB",
+            incidentLocation = "Jembatan Sungai Manjunto",
+            district = "Lubuk Pinang",
+            village = "Desa Lubuk Pinang",
+            latitude = -2.45,
+            longitude = 101.18,
+            reporterName = "Budi Warga",
+            reporterPhone = "081234567890",
+            additionalNotes = "Air naik ke bahu jalan",
+            status = "Diproses"
+        )
+        assertTrue(
+            "Laporan warga baru wajib memicu notifikasi pada Mode Warga tanpa perlu login",
+            com.example.data.sync.OfficerPushNotificationHelper.dispatchRoleAwareNewReportNotification(
+                context = context,
+                report = citizenIncomingReport
+            )
+        )
+        val citizenNotif = Shadows.shadowOf(notificationManager).getNotification(citizenIncomingReport.id.hashCode())
+        assertNotNull(citizenNotif)
+        val citizenBigText = citizenNotif.extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
+        assertTrue(citizenBigText.contains("PORSI MODE WARGA"))
+        org.junit.Assert.assertFalse(
+            "Porsi Mode Warga wajib melindungi nomor telepon pribadi pelapor",
+            citizenBigText.contains("081234567890")
+        )
+
+        // 2. Mode Petugas / TRC (Tanpa Harus Login): Laporan warga masuk & potensi ancaman menampilkan Porsi Operasional Petugas
+        DisasterTriageNotificationManager.saveSettings(
+            context,
+            TriageNotificationSettings(
+                minimumLevel = DisasterTriageLevel.KUNING_WASPADA,
+                rolePortion = NotificationRolePortion.OFFICER_OPERATIONAL
+            )
+        )
+        val officerIncomingReport = citizenIncomingReport.copy(id = "LAP-MMK-TRC-NO-LOGIN-02")
+        assertTrue(
+            "Laporan warga baru wajib memicu notifikasi pada Mode Petugas/TRC meskipun belum membuka sesi login",
+            com.example.data.sync.OfficerPushNotificationHelper.dispatchRoleAwareNewReportNotification(
+                context = context,
+                report = officerIncomingReport
+            )
+        )
+        val officerNotif = Shadows.shadowOf(notificationManager).getNotification(officerIncomingReport.id.hashCode())
+        assertNotNull(officerNotif)
+        val officerBigText = officerNotif.extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
+        assertTrue(officerBigText.contains("PORSI MODE PETUGAS / TRC"))
+        assertTrue("Porsi Petugas wajib memuat nomor kontak pelapor & instruksi TRC", officerBigText.contains("081234567890"))
+
+        // 3. Evaluasi 1 laporan aktif menghasilkan sinyal KUNING_WASPADA (bukan HIJAU_AMAN) dan menampilkan instruksi TRC
+        val singleReportSignal = DisasterTriageNotificationManager.evaluateDisasterReportSurge(
+            reports = listOf(officerIncomingReport),
+            fallbackDistrict = "Lubuk Pinang"
+        )
+        assertEquals(DisasterTriageLevel.KUNING_WASPADA, singleReportSignal.level)
+        assertEquals(
+            TriageDispatchResult.POSTED,
+            DisasterTriageNotificationManager.evaluateAndNotify(context, singleReportSignal, forceBypassCooldown = true)
+        )
+        val triageNotif = Shadows.shadowOf(notificationManager).getNotification(
+            DisasterTriageNotificationManager.notificationIdForSource(TriageFeatureSource.LAPORAN_DARURAT_WARGA)
+        )
+        assertNotNull(triageNotif)
+        val triageBigText = triageNotif.extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
+        assertTrue(triageBigText.contains("PORSI PETUGAS BPBD"))
     }
 }
 

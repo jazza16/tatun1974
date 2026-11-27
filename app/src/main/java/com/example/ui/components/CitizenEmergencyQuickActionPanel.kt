@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.geminiGradientBorder
 
 private data class EmergencyQuickTileSpec(
     val testTag: String,
@@ -143,16 +144,15 @@ fun CitizenEmergencyQuickActionPanel(
         )
     )
 
+    val cardShape = RoundedCornerShape(20.dp)
+
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = cardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (isDark) Color(0xFF334155) else Color(0xFFFED7AA)
-        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
             .fillMaxWidth()
+            .geminiGradientBorder(borderWidth = 2.dp, shape = cardShape)
             .testTag("citizen_emergency_quick_action_panel")
     ) {
         Column(

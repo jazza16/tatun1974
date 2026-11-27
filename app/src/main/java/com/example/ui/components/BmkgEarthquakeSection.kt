@@ -462,7 +462,12 @@ private fun WrsMainEarthquakeView(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Map,
                             contentDescription = null,
@@ -481,7 +486,9 @@ private fun WrsMainEarthquakeView(
                     Text(
                         text = "Pinch Zoom & Pan Aktif",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
 
@@ -974,7 +981,10 @@ private fun WrsShakemapSection(earthquake: BmkgEarthquake) {
                     text = "Peta Guncangan (Shakemap BMKG)",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 )
                 Surface(
                     color = OrangePrimary.copy(alpha = 0.12f),
@@ -985,7 +995,9 @@ private fun WrsShakemapSection(earthquake: BmkgEarthquake) {
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = OrangePrimary,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
