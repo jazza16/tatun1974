@@ -337,6 +337,17 @@ object DisasterTriageNotificationManager {
     fun notificationIdForSource(source: TriageFeatureSource): Int =
         NOTIFICATION_ID_BASE + source.ordinal
 
+    const val DEFAULT_ALERT_DISPLAY_TIMEOUT_MS = 2L * 60L * 60_000L
+
+    fun formatCurrentEventDateTimeWindowLabel(nowMillis: Long = System.currentTimeMillis()): String {
+        val dateStr = com.example.ui.components.EmergencyWarningPopupPolicy.formatWibDateOnly(nowMillis)
+        val startHm = com.example.ui.components.EmergencyWarningPopupPolicy.formatWibHourMinute(nowMillis)
+        val endHm = com.example.ui.components.EmergencyWarningPopupPolicy.formatWibHourMinute(
+            nowMillis + DEFAULT_ALERT_DISPLAY_TIMEOUT_MS
+        )
+        return "$dateStr • $startHm WIB (Durasi Berlaku 1–2 Jam s/d $endHm WIB)"
+    }
+
     // =========================================================================
     // EVALUATOR TRIASE PEWARNAAN PER FITUR / MODUL APLIKASI
     // =========================================================================
@@ -383,14 +394,17 @@ object DisasterTriageNotificationManager {
         }
         val advice = prioritized.safetyInstructions.firstOrNull()
             ?: "Pantau pembaruan resmi Pusdalops BPBD Mukomuko & BMKG."
+        val eventWindowLabel = formatCurrentEventDateTimeWindowLabel()
         return DisasterTriageSignal(
             source = TriageFeatureSource.PERINGATAN_CUACA,
             level = level,
             districtOrLocation = scopeLocation,
             headline = prioritized.title,
-            metricSummary = "${prioritized.category} • Berlaku s/d ${prioritized.validUntil}",
+            metricSummary = "${prioritized.category} • Berlaku: ${prioritized.validUntil}",
             safetyAdvice = advice,
-            signatureKey = "${prioritized.id}|${level.code}|$scopeLocation|$onlySelectedDistrict"
+            signatureKey = "${prioritized.id}|${level.code}|$scopeLocation|$onlySelectedDistrict",
+            eventDateTimeLabel = eventWindowLabel,
+            timeoutAfterMillis = DEFAULT_ALERT_DISPLAY_TIMEOUT_MS
         )
     }
 
@@ -429,6 +443,7 @@ object DisasterTriageNotificationManager {
             )
         }
 
+        val eventWindowLabel = formatCurrentEventDateTimeWindowLabel()
         return DisasterTriageSignal(
             source = TriageFeatureSource.CUACA_EKSTREM,
             level = level,
@@ -436,7 +451,9 @@ object DisasterTriageNotificationManager {
             headline = headline,
             metricSummary = metric,
             safetyAdvice = advice,
-            signatureKey = "weather_${report.district.id}_${level.code}_$code"
+            signatureKey = "weather_${report.district.id}_${level.code}_$code",
+            eventDateTimeLabel = eventWindowLabel,
+            timeoutAfterMillis = DEFAULT_ALERT_DISPLAY_TIMEOUT_MS
         )
     }
 
@@ -471,6 +488,7 @@ object DisasterTriageNotificationManager {
             )
         }
 
+        val eventWindowLabel = formatCurrentEventDateTimeWindowLabel()
         return DisasterTriageSignal(
             source = TriageFeatureSource.MARITIM_GELOMBANG,
             level = level,
@@ -478,7 +496,9 @@ object DisasterTriageNotificationManager {
             headline = headline,
             metricSummary = "Gelombang ${String.format(Locale.US, "%.1f", h)} m • ${marine.seaCondition} • ${marine.fishermanSafety}",
             safetyAdvice = advice,
-            signatureKey = "marine_${districtName}_${level.code}_${String.format(Locale.US, "%.1f", h)}"
+            signatureKey = "marine_${districtName}_${level.code}_${String.format(Locale.US, "%.1f", h)}",
+            eventDateTimeLabel = eventWindowLabel,
+            timeoutAfterMillis = DEFAULT_ALERT_DISPLAY_TIMEOUT_MS
         )
     }
 
@@ -512,6 +532,7 @@ object DisasterTriageNotificationManager {
             )
         }
 
+        val eventWindowLabel = formatCurrentEventDateTimeWindowLabel()
         return DisasterTriageSignal(
             source = TriageFeatureSource.PASANG_ROB,
             level = level,
@@ -519,7 +540,9 @@ object DisasterTriageNotificationManager {
             headline = headline,
             metricSummary = "Muka Air ${String.format(Locale.US, "%.2f", wl)} m (${tidalData.tideMovementText}) • Risiko Rob: ${tidalData.robFloodRiskLevel}",
             safetyAdvice = advice,
-            signatureKey = "tidal_${districtName}_${level.code}_${tidalData.robFloodRiskLevel}"
+            signatureKey = "tidal_${districtName}_${level.code}_${tidalData.robFloodRiskLevel}",
+            eventDateTimeLabel = eventWindowLabel,
+            timeoutAfterMillis = DEFAULT_ALERT_DISPLAY_TIMEOUT_MS
         )
     }
 
@@ -554,6 +577,7 @@ object DisasterTriageNotificationManager {
             )
         }
 
+        val eventWindowLabel = formatCurrentEventDateTimeWindowLabel()
         return DisasterTriageSignal(
             source = TriageFeatureSource.KUALITAS_UDARA,
             level = level,
@@ -561,7 +585,9 @@ object DisasterTriageNotificationManager {
             headline = headline,
             metricSummary = "AQI $aqi (${airQuality.status}) • PM2.5 ${String.format(Locale.US, "%.1f", pm25)} µg/m³",
             safetyAdvice = advice,
-            signatureKey = "aqi_${districtName}_${level.code}"
+            signatureKey = "aqi_${districtName}_${level.code}",
+            eventDateTimeLabel = eventWindowLabel,
+            timeoutAfterMillis = DEFAULT_ALERT_DISPLAY_TIMEOUT_MS
         )
     }
 
@@ -627,7 +653,8 @@ object DisasterTriageNotificationManager {
             )
         }
 
-        val eventDateTimeText = listOf(earthquake.date.trim(), earthquake.timeWib.trim())
+        val cleanTimeWib = com.example.ui.components.EmergencyWarningPopupPolicy.normalizeTimeWib(earthquake.timeWib)
+        val eventDateTimeText = listOf(earthquake.date.trim(), cleanTimeWib)
             .filter { it.isNotBlank() }
             .joinToString(" • ")
 
@@ -645,11 +672,11 @@ object DisasterTriageNotificationManager {
             level = level,
             districtOrLocation = earthquake.region,
             headline = headline,
-            metricSummary = "Tanggal: $eventDateTimeText • M ${earthquake.magnitude} • Kedalaman ${earthquake.depth} • Jarak ~${earthquake.distanceKmToMukomuko} km$feltSuffix",
+            metricSummary = "Tanggal: $eventDateTimeText (Durasi Aktif 1–2 Jam) • M ${earthquake.magnitude} • Kedalaman ${earthquake.depth} • Jarak ~${earthquake.distanceKmToMukomuko} km$feltSuffix",
             safetyAdvice = advice,
             signatureKey = "${eventIdentity}_${level.code}",
             targetTabOverride = targetTab,
-            eventDateTimeLabel = eventDateTimeText,
+            eventDateTimeLabel = "$eventDateTimeText (Durasi Aktif 1–2 Jam)",
             eventUniqueKey = eventIdentity,
             timeoutAfterMillis = displayTimeoutMs
         )
@@ -725,6 +752,7 @@ object DisasterTriageNotificationManager {
             )
         }
 
+        val eventWindowLabel = formatCurrentEventDateTimeWindowLabel()
         return DisasterTriageSignal(
             source = TriageFeatureSource.KARHUTLA_HOTSPOT,
             level = level,
@@ -732,7 +760,9 @@ object DisasterTriageNotificationManager {
             headline = headline,
             metricSummary = "Total ${active.size} titik panas • High: $highCount • Terkonfirmasi Ganda: $matchedCount",
             safetyAdvice = advice,
-            signatureKey = "karhutla_${level.code}_${primaryDistrict}_${active.size}_$highCount"
+            signatureKey = "karhutla_${level.code}_${primaryDistrict}_${active.size}_$highCount",
+            eventDateTimeLabel = eventWindowLabel,
+            timeoutAfterMillis = DEFAULT_ALERT_DISPLAY_TIMEOUT_MS
         )
     }
 
@@ -802,6 +832,7 @@ object DisasterTriageNotificationManager {
             )
         }
 
+        val eventWindowLabel = formatCurrentEventDateTimeWindowLabel()
         return DisasterTriageSignal(
             source = TriageFeatureSource.LAPORAN_DARURAT_WARGA,
             level = level,
@@ -809,7 +840,9 @@ object DisasterTriageNotificationManager {
             headline = headline,
             metricSummary = "${activeReports.size} laporan aktif ($criticalCount prioritas darurat) • Fokus: $topDistrict",
             safetyAdvice = advice,
-            signatureKey = "surge_${level.code}_${activeReports.size}_$criticalCount"
+            signatureKey = "surge_${level.code}_${activeReports.size}_$criticalCount",
+            eventDateTimeLabel = eventWindowLabel,
+            timeoutAfterMillis = DEFAULT_ALERT_DISPLAY_TIMEOUT_MS
         )
     }
 
@@ -866,6 +899,7 @@ object DisasterTriageNotificationManager {
         }
 
         val poskoLoc = (criticalItems.firstOrNull() ?: expiringSoonItems.firstOrNull() ?: commodities.first()).poskoCode
+        val eventWindowLabel = formatCurrentEventDateTimeWindowLabel()
         return DisasterTriageSignal(
             source = TriageFeatureSource.POSKO_LOGISTIK_KRITIS,
             level = level,
@@ -873,7 +907,9 @@ object DisasterTriageNotificationManager {
             headline = headline,
             metricSummary = metric,
             safetyAdvice = advice,
-            signatureKey = "posko_${level.code}_${criticalItems.size}_${expiredItems.size}_${expiringSoonItems.size}"
+            signatureKey = "posko_${level.code}_${criticalItems.size}_${expiredItems.size}_${expiringSoonItems.size}",
+            eventDateTimeLabel = eventWindowLabel,
+            timeoutAfterMillis = DEFAULT_ALERT_DISPLAY_TIMEOUT_MS
         )
     }
 

@@ -929,7 +929,7 @@ fun WeatherAppScreen(
                         }
 
                         2 -> {
-                            // Tab 2: Statistik & Tren Bencana Bulanan (Grafik Batang & Pie Chart Interaktif)
+                            // Tab 2: Statistik & Tren Bencana Bulanan + Kajian Risiko Bencana (KRB) Resmi 2026-2030
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -937,6 +937,13 @@ fun WeatherAppScreen(
                                 contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
+                                item {
+                                    com.example.ui.components.KrbMukomuko2026Section(
+                                        currentDistrict = currentDistrict,
+                                        isDark = isActuallyDark
+                                    )
+                                }
+
                                 item {
                                     com.example.ui.components.MonthlyDisasterAnalyticsSection(
                                         reports = citizenDisasterReports,
@@ -993,7 +1000,7 @@ fun WeatherAppScreen(
                         }
 
                         4 -> {
-                            // Tab 4: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Push Notification
+                            // Tab 4: Peringatan Dini Cuaca & Bencana + BMKG Gempa Real-time + Push Notification + Profil KRB 2026-2030
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1020,6 +1027,13 @@ fun WeatherAppScreen(
                                         onCall117 = { EmergencyDialer.dial(context, "117") },
                                         onOpenCallCenterInfo = { isCallCenter117SheetOpen = true },
                                         onOpenEvacuationGuide = { viewModel.selectTab(6) }
+                                    )
+                                }
+
+                                item {
+                                    com.example.ui.components.KrbMukomuko2026Section(
+                                        currentDistrict = currentDistrict,
+                                        isDark = isActuallyDark
                                     )
                                 }
                             }
@@ -1488,12 +1502,19 @@ fun WeatherAppScreen(
         )
     }
 
-    // Emergency Warning Popup Notification Dialog (Active severe weather, high waves, or BMKG earthquake)
+    // Emergency Warning Popup Notification Dialog (Active severe weather, high waves, or live Bengkulu 1-2h earthquake)
     val currentReport = uiState.report
     val activeEq = uiState.latestEarthquake
-    val hasEmergencyConditions = (currentReport?.alert != null) ||
-            (currentReport?.marine != null && (currentReport.marine.waveHeight >= 2.0 || currentReport.marine.seaCondition.contains("Tinggi", ignoreCase = true))) ||
-            (activeEq != null && (activeEq.magnitude >= 5.0 || activeEq.isNearMukomuko || activeEq.potentialTsunami.contains("tsunami", ignoreCase = true)))
+    val activePopupSignature = com.example.ui.components.EmergencyWarningPopupPolicy.buildActivePopupSignature(
+        weatherAlert = currentReport?.alert,
+        marineWeather = currentReport?.marine,
+        latestEarthquake = activeEq
+    )
+    val hasEmergencyConditions = activePopupSignature.isNotBlank() &&
+        !com.example.ui.components.EmergencyWarningPopupPolicy.isPopupSignatureAlreadyDismissed(
+            context = context,
+            signature = activePopupSignature
+        )
 
     if (!uiState.isStartupWallpaperVisible && !isEmergencyPopupDismissed && hasEmergencyConditions && currentReport != null) {
         EmergencyWarningPopupDialog(
@@ -1502,7 +1523,13 @@ fun WeatherAppScreen(
             latestEarthquake = activeEq,
             earlyWarnings = uiState.earlyWarnings,
             isDark = isActuallyDark,
-            onDismiss = { isEmergencyPopupDismissed = true },
+            onDismiss = {
+                com.example.ui.components.EmergencyWarningPopupPolicy.markPopupSignatureDismissed(
+                    context = context,
+                    signature = activePopupSignature
+                )
+                isEmergencyPopupDismissed = true
+            },
             onCall117 = { EmergencyDialer.dial(context, "117") },
             onOpenEvacuationMap = {
                 viewModel.selectTab(6)

@@ -833,5 +833,105 @@ class DisasterTriageNotificationManagerTest {
             onlySelectedDistrict = false
         )
         assertEquals(DisasterTriageLevel.ORANYE_SIAGA, countyWide.level)
+        assertTrue(!countyWide.eventDateTimeLabel.isNullOrBlank())
+        assertEquals(
+            DisasterTriageNotificationManager.DEFAULT_ALERT_DISPLAY_TIMEOUT_MS,
+            countyWide.timeoutAfterMillis
+        )
+    }
+
+    @Test
+    fun emergencyWarningPopupPolicy_enforcesDateDurationBengkuluWindowAndNonRepetition() {
+        com.example.ui.components.EmergencyWarningPopupPolicy.clearDismissedPopupLedger(context)
+        val nowMs = System.currentTimeMillis()
+        val recentEventMs = nowMs - 25 * 60_000L
+
+        // 1. Normalisasi WIB tidak pernah menduplikasi "WIB WIB"
+        assertEquals(
+            "17:42:10 WIB",
+            com.example.ui.components.EmergencyWarningPopupPolicy.normalizeTimeWib("17:42:10 WIB")
+        )
+        assertEquals(
+            "17:42:10 WIB",
+            com.example.ui.components.EmergencyWarningPopupPolicy.normalizeTimeWib("17:42:10 WIB WIB")
+        )
+        assertEquals(
+            "17:42:10 WIB",
+            com.example.ui.components.EmergencyWarningPopupPolicy.normalizeTimeWib("17:42:10")
+        )
+
+        // 2. "Tidak berpotensi tsunami" tidak boleh dianggap berpotensi tsunami
+        org.junit.Assert.assertFalse(
+            com.example.ui.components.EmergencyWarningPopupPolicy.hasRealTsunamiPotential("Tidak berpotensi tsunami")
+        )
+        assertTrue(
+            com.example.ui.components.EmergencyWarningPopupPolicy.hasRealTsunamiPotential("BERPOTENSI TSUNAMI")
+        )
+
+        // 3. Gempa fallback statis ("16 Okt 2026" M 5.2) TIDAK BOLEH memicu popup darurat
+        val fallbackEq = BmkgEarthquake(
+            id = "eq_fallback_1",
+            date = "16 Okt 2026",
+            timeWib = "17:42:10 WIB",
+            dateTimeIso = "2026-10-16T10:42:10+00:00",
+            latitude = -2.71,
+            longitude = 101.02,
+            magnitude = 5.2,
+            depth = "18 km",
+            region = "42 km BaratDaya MUKOMUKO-BENGKULU",
+            potentialTsunami = "Tidak berpotensi tsunami",
+            feltDescription = "III-IV Mukomuko",
+            shakemapUrl = null,
+            distanceKmToMukomuko = 42,
+            isNearMukomuko = true,
+            urgencyLevel = com.example.model.EarthquakeUrgency.WARNING,
+            isFallbackData = true
+        )
+        org.junit.Assert.assertFalse(
+            com.example.ui.components.EmergencyWarningPopupPolicy.isEligibleLiveEarthquakeAlert(fallbackEq, nowMs)
+        )
+
+        // 4. Gempa nyata lokal Bengkulu dalam jendela 1-2 jam memenuhi syarat & menampilkan tanggal + durasi 1-2 jam
+        val liveBengkuluEq = fallbackEq.copy(
+            id = "eq_live_bkl",
+            date = formatFreshDate(recentEventMs),
+            timeWib = formatFreshTimeWib(recentEventMs),
+            dateTimeIso = formatFreshIso(recentEventMs),
+            isFallbackData = false
+        )
+        assertTrue(
+            com.example.ui.components.EmergencyWarningPopupPolicy.isEligibleLiveEarthquakeAlert(liveBengkuluEq, nowMs)
+        )
+        val (eqDateLabel, eqDurationLabel) = com.example.ui.components.EmergencyWarningPopupPolicy
+            .formatEarthquakeDateAndDuration(liveBengkuluEq, nowMs)
+        assertTrue(eqDateLabel.contains(liveBengkuluEq.date))
+        org.junit.Assert.assertFalse(eqDateLabel.contains("WIB WIB"))
+        assertTrue(eqDurationLabel.contains("1–2 Jam"))
+
+        // 5. Kartu gelombang tinggi / cuaca mencantumkan tanggal event hari ini dan durasi berlaku 1-2 jam
+        val (waveDateLabel, waveDurationLabel) = com.example.ui.components.EmergencyWarningPopupPolicy
+            .formatWeatherOrMarineDateAndDuration("Berlaku hingga 3 hari ke depan (Pukul 23:59 WIB)", nowMs)
+        val todayStr = com.example.ui.components.EmergencyWarningPopupPolicy.formatWibDateOnly(nowMs)
+        assertTrue(waveDateLabel.contains(todayStr))
+        assertTrue(waveDurationLabel.contains(todayStr))
+        assertTrue(waveDurationLabel.contains("1–2 Jam"))
+
+        // 6. Deduplikasi persisten: setelah ditutup pengguna, signature event yang sama tidak muncul berulang
+        val activeMarine = MarineWeather(2.8, "Tinggi", 18.0, "Pasang", "Tunda Melaut", "Tunda berlayar")
+        val sig = com.example.ui.components.EmergencyWarningPopupPolicy.buildActivePopupSignature(
+            weatherAlert = null,
+            marineWeather = activeMarine,
+            latestEarthquake = liveBengkuluEq,
+            nowMillis = nowMs
+        )
+        assertTrue(sig.isNotBlank())
+        org.junit.Assert.assertFalse(
+            com.example.ui.components.EmergencyWarningPopupPolicy.isPopupSignatureAlreadyDismissed(context, sig, nowMs)
+        )
+        com.example.ui.components.EmergencyWarningPopupPolicy.markPopupSignatureDismissed(context, sig, nowMs)
+        assertTrue(
+            com.example.ui.components.EmergencyWarningPopupPolicy.isPopupSignatureAlreadyDismissed(context, sig, nowMs)
+        )
     }
 }
+

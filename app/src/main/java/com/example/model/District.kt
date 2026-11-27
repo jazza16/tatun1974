@@ -89,12 +89,12 @@ object MukomukoDistricts {
         District(
             id = "xiv_koto",
             name = "XIV Koto",
-            category = "Danau & Wisata",
+            category = "Pesisir, Danau & Gambut",
             latitude = -2.5400,
             longitude = 101.1350,
-            description = "Kawasan danau alami Danau Nibung dengan udara sejuk berangin.",
-            landmark = "Danau Nibung",
-            isCoastalTsunamiZone = false
+            description = "Kawasan pesisir, danau alami Danau Nibung, dan lahan gambut Rawa Mulya.",
+            landmark = "Danau Nibung & Pesisir XIV Koto",
+            isCoastalTsunamiZone = true
         ),
         District(
             id = "v_koto",

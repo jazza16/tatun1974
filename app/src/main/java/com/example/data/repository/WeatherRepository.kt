@@ -1213,7 +1213,16 @@ class WeatherRepository(
     }
 
     // Detailed Early Warnings List
-    fun getDetailedEarlyWarnings(currentDistrict: District): List<DetailedEarlyWarning> {
+    fun getDetailedEarlyWarnings(
+        currentDistrict: District,
+        nowMillis: Long = System.currentTimeMillis()
+    ): List<DetailedEarlyWarning> {
+        val dateStr = com.example.ui.components.EmergencyWarningPopupPolicy.formatWibDateOnly(nowMillis)
+        val startHm = com.example.ui.components.EmergencyWarningPopupPolicy.formatWibHourMinute(nowMillis)
+        val endHm = com.example.ui.components.EmergencyWarningPopupPolicy.formatWibHourMinute(
+            nowMillis + com.example.ui.components.EmergencyWarningPopupPolicy.ACTIVE_WARNING_WINDOW_MS
+        )
+        val activeWindowLabel = "Tanggal $dateStr • Durasi Aktif 1–2 Jam ($startHm – $endHm WIB)"
         return listOf(
             DetailedEarlyWarning(
                 id = "warn_marine_1",
@@ -1221,7 +1230,7 @@ class WeatherRepository(
                 severity = "SIAGA",
                 category = "Gelombang Tinggi Pesisir",
                 affectedDistricts = listOf("Kota Mukomuko", "Ipuh", "Teramang Jaya", "Air Dikit", "Pondok Suguh", "Air Rami", "Sungai Rumbai"),
-                validUntil = "Berlaku hingga 3 hari ke depan (Pukul 23:59 WIB)",
+                validUntil = activeWindowLabel,
                 description = "Prakiraan BMKG Maritim: Tinggi gelombang laut mencapai 2.5 hingga 4.0 meter di perairan Samudra Hindia sebelah barat Bengkulu dan Mukomuko, dipicu pola sirkulasi angin siklonik.",
                 safetyInstructions = listOf(
                     "Perahu Nelayan tradisional (kecepatan angin >15 knot & tinggi gelombang >1.25 m) diimbau tidak melaut.",
@@ -1236,7 +1245,7 @@ class WeatherRepository(
                 severity = "WASPADA",
                 category = "Cuaca Ekstrem Tropis",
                 affectedDistricts = listOf("Kota Mukomuko", "V Koto", "XIV Koto", "Lubuk Pinang", "Selagan Raya", "Penarik"),
-                validUntil = "Siang hingga malam hari (Pukul 21:00 WIB)",
+                validUntil = activeWindowLabel,
                 description = "Terpantau pertumbuhan awan Cumulonimbus (CB) intensif di sepanjang kaki Bukit Barisan dan aliran Sungai Manjunto serta Sungai Selagan.",
                 safetyInstructions = listOf(
                     "Waspadai potensi pohon tumbang dan papan reklame roboh di sepanjang jalur lintas barat Sumatera.",
@@ -1251,7 +1260,7 @@ class WeatherRepository(
                 severity = "WASPADA",
                 category = "Potensi Genangan & Luapan DAS",
                 affectedDistricts = listOf("Lubuk Pinang", "V Koto", "Air Manjunto", "XIV Koto"),
-                validUntil = "Hingga debit air bendungan normal kembali",
+                validUntil = activeWindowLabel,
                 description = "Tingginya curah hujan di hulu perbatasan Kerinci dan V Koto berpotensi meningkatkan volume air pada pintu intake Bendungan Air Manjunto.",
                 safetyInstructions = listOf(
                     "Petani sawah irigasi teknis agar mengatur saluran pembuangan air tersier.",
@@ -1572,13 +1581,19 @@ class WeatherRepository(
             recommendation = aqiAdvice
         )
 
+        val nowAlertMs = System.currentTimeMillis()
+        val alertDateStr = com.example.ui.components.EmergencyWarningPopupPolicy.formatWibDateOnly(nowAlertMs)
+        val alertStartHm = com.example.ui.components.EmergencyWarningPopupPolicy.formatWibHourMinute(nowAlertMs)
+        val alertEndHm = com.example.ui.components.EmergencyWarningPopupPolicy.formatWibHourMinute(
+            nowAlertMs + com.example.ui.components.EmergencyWarningPopupPolicy.ACTIVE_WARNING_WINDOW_MS
+        )
         val alert = if (code in listOf(95, 96, 99) || windSpeed > 25.0 || waveHeight > 2.0) {
             WeatherAlert(
                 id = "alert_extreme_${district.id}",
                 title = "Peringatan Dini Cuaca & Gelombang Pesisir",
                 severity = "Waspada",
                 message = "Waspada potensi cuaca berawan tebal disertai kilat/petir dan peningkatan gelombang tinggi di pesisir Mukomuko dan sekitarnya.",
-                validUntil = "Hingga malam hari (22:00 WIB)"
+                validUntil = "Tanggal $alertDateStr • Durasi Aktif 1–2 Jam ($alertStartHm – $alertEndHm WIB)"
             )
         } else {
             null
