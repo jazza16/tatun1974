@@ -1098,7 +1098,7 @@ fun WeatherAppScreen(
                         }
 
                         7 -> {
-                            // Tab 7: inaRISK BNPB - Kajian Risiko Bencana Indonesia Kabupaten Mukomuko
+                            // Tab 7: inaRISK BNPB - Sinkronisasi KRB Kabupaten Mukomuko 2026-2030 & Perda RTRW No. 12 Tahun 2025
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1111,6 +1111,13 @@ fun WeatherAppScreen(
                                         currentDistrict = currentDistrict,
                                         onOpenEvacuationGuide = { viewModel.selectTab(6) },
                                         onCall117 = { EmergencyDialer.dial(context, "117") }
+                                    )
+                                }
+
+                                item {
+                                    com.example.ui.components.KrbMukomuko2026Section(
+                                        currentDistrict = currentDistrict,
+                                        isDark = isActuallyDark
                                     )
                                 }
                             }
