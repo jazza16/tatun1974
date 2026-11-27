@@ -6,6 +6,22 @@ Dokumen ini mencatat seluruh **penambahan fitur**, **fungsi baru**, **peningkata
 
 ---
 
+## [1.3.0] - 27 November 2026 (Build 14)
+
+### ✨ Penambahan Fitur & Fungsi Baru
+- **Tab Khusus KRB 2026–2030 & Perda RTRW No. 12 Tahun 2025**: Memisahkan dokumen Kajian Risiko Bencana (KRB) Kabupaten Mukomuko 2026–2030 (12 matriks bahaya, IRBI 164,32, IKD 0,29) dan Perda RTRW No. 12 Tahun 2025 (Pasal 42, 83, 92–94, KKPR Pasal 95–108, Indikasi Program Utama BPBD Lampiran XII) menjadi tab khusus tepat setelah Tab Laporan Warga yang tersinkronisasi lintas seluruh modul operasional.
+- **Notifikasi Latar Belakang 24 Jam Tanpa Login (Porsi Warga vs Petugas)**: Memastikan notifikasi laporan warga baru, potensi ancaman, dan kejadian bencana langsung muncul di perangkat pengguna tanpa harus login, dengan porsi kegunaan berbeda antara Mode Warga (evakuasi & keselamatan diri) dan Mode Petugas/TRC (koordinat GPS & komando respon).
+- **Materi Presentasi Eksekutif & Pimpinan (Khusus Administrator)**: Menyelaraskan naskah Paparan Eksekutif dan Naskah Ringkas Presentasi Pimpinan dengan KRB–RTRW, kemandirian proyek (*Zero APBD*), serta mengunci visibilitas menu presentasi di Info Aplikasi hanya untuk sesi login Administrator.
+
+### ⚡ Peningkatan & Optimalisasi
+- **Efek Gemini Spin & Tata Letak Beranda**: Memasang efek warna *Gemini Spin* pada kartu **Aksi Cepat Tanggap** dan menata ulang posisi kartu Info Cuaca agar langsung berada di bawahnya.
+- **Pembaruan Versi In-Place (v1.3.0 / versionCode 14)**: Memastikan seluruh perangkat pengguna v1.0.0–v1.2.0 dapat memperbarui aplikasi secara langsung tanpa menghapus data maupun PIN Cloud pribadi.
+
+### 🐛 Perbaikan Bug & Tata Letak
+- **Perapian Tampilan SOP Evakuasi Mandiri (Offline) & KRB–RTRW**: Memperbaiki tata letak *badge* prinsip utama (menjadi *full-width*) dan tombol *"Bacakan Semua"* (TTS Bahasa Indonesia) pada seluruh kartu SOP Evakuasi Offline, serta merapikan *badge* dan tombol pada Tab KRB & RTRW, Peta & SOP Evakuasi, dan Shakemap BMKG.
+
+---
+
 ## [1.2.0] - 26 November 2026 (Build 13)
 
 ### ✨ Penambahan Fitur & Fungsi Baru

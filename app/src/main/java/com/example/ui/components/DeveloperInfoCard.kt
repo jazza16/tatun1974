@@ -654,7 +654,7 @@ fun DeveloperInfoCard(
                                     // NASKAH 2: NASKAH RINGKAS PRESENTASI PIMPINAN: APLIKASI SIPAGAR KITA
                                     Text(
                                         text = "NASKAH RINGKAS PRESENTASI PIMPINAN: APLIKASI SIPAGAR KITA\n" +
-                                            "Unit Pengampu: Pusdalops-PB BPBD Kabupaten Mukomuko • Versi Rilis: v1.2.0 (Android Native • Real-Time Cloud & Offline-Ready)\n\n" +
+                                            "Unit Pengampu: Pusdalops-PB BPBD Kabupaten Mukomuko • Versi Rilis: v1.3.0 (Android Native • Real-Time Cloud & Offline-Ready)\n\n" +
                                             "• Ringkasan Eksekutif (Fokus Standar Pusdalops Nasional, InaTEWS, KRB 2026–2030 & Perda RTRW No. 12/2025):\n" +
                                             "\"SIPAGAR KITA dirancang secara mandiri (Zero APBD) untuk diserahkan pengelolaannya kepada Pusdalops-PB BPBD Kabupaten Mukomuko, selaras dengan pedoman Pusdalops BNPB, BMKG InaTEWS, Dokumen KRB 2026–2030, dan Perda RTRW No. 12 Tahun 2025. Kami menerapkan Triase 4 Warna 24 jam tanpa login, Otoritas Berlapis (Four-Eyes Principle) sirene peringatan dini, Tab Khusus KRB & RTRW, modul Kaji Cepat & DALA, serta Mode Sandbox Simulasi guna menjembatani keterbatasan sarpras dan meningkatkan Indeks Ketahanan Daerah (IKD) Kabupaten Mukomuko tanpa menggantikan peran dan kewenangan ASN.\"\n\n" +
                                             "1. Pembukaan, Kemandirian Proyek & Tujuan Strategis:\n" +

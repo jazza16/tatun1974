@@ -2,7 +2,7 @@
 
 Dokumen ini memuat daftar rencana pengembangan fitur (*product backlog*) beserta status realisasi implementasi aplikasi **SIPAGAR KITA (Sistem Informasi & Mitigasi Kebencanaan Terpadu)** Pusdalops-PB BPBD Kabupaten Mukomuko.
 
-> **Status Pembaruan Terakhir:** 26 November 2026 (`v1.2.0` / `Build 13`)  
+> **Status Pembaruan Terakhir:** 27 November 2026 (`v1.3.0` / `Build 14`)  
 > **Keterangan Status:** `[x]` = **Selesai Diterapkan & Terverifikasi** | `[ ]` = *Dalam Antrean Rilis Berikutnya*
 
 ---

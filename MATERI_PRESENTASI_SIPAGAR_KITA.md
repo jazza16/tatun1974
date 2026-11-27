@@ -1,5 +1,5 @@
 # DOKUMEN MATERI PRESENTASI TERPADU SIPAGAR KITA (KHUSUS SESI ADMINISTRATOR)
-*Selaras 100% dengan Menu Info Aplikasi SIPAGAR KITA v1.2.0, Dokumen KRB Kabupaten Mukomuko Tahun 2026–2030, dan Perda Kabupaten Mukomuko Nomor 12 Tahun 2025 tentang RTRW Tahun 2025–2045*
+*Selaras 100% dengan Menu Info Aplikasi SIPAGAR KITA v1.3.0, Dokumen KRB Kabupaten Mukomuko Tahun 2026–2030, dan Perda Kabupaten Mukomuko Nomor 12 Tahun 2025 tentang RTRW Tahun 2025–2045*
 
 ---
 
@@ -83,7 +83,7 @@
 
 # NASKAH 2 — NASKAH RINGKAS PRESENTASI PIMPINAN: APLIKASI SIPAGAR KITA
 * **Unit Pengampu:** Pusdalops-PB BPBD Kabupaten Mukomuko  
-* **Versi Rilis:** `v1.2.0` (Android Native • Real-Time Cloud & Offline-Ready)
+* **Versi Rilis:** `v1.3.0` (Android Native • Real-Time Cloud & Offline-Ready)
 
 ### Ringkasan Pembuka (*Fokus: Kepatuhan Standar Pusdalops Nasional, InaTEWS, KRB 2026–2030 & Perda RTRW No. 12/2025*)
 > *"SIPAGAR KITA dibangun secara mandiri (Zero dukungan APBD) untuk diserahterimakan pengelolaannya kepada Pusdalops-PB BPBD Kabupaten Mukomuko, dirancang selaras dengan pedoman Pusdalops-PB BNPB, integrasi BMKG InaTEWS, **Dokumen KRB Kabupaten Mukomuko 2026–2030**, dan **Perda RTRW Nomor 12 Tahun 2025**. Kami menerapkan **Triase 4 Warna 24 jam**, **Otoritas Berlapis (Four-Eyes Principle)** untuk sirene peringatan dini, **Tab Khusus KRB & RTRW**, modul **Kaji Cepat & DALA**, serta **Mode Sandbox Simulasi** untuk menjembatani keterbatasan sarpras BPBD dan mendukung peningkatan Indeks Ketahanan Daerah (IKD) Kabupaten Mukomuko tanpa menggantikan peran maupun kewenangan manusia (ASN)."*

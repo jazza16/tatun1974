@@ -1,35 +1,37 @@
-# Catatan Rilis Resmi SIPAGAR KITA (v1.2.0)
+# Catatan Rilis Resmi SIPAGAR KITA (v1.3.0)
 
 **Pusdalops-PB Badan Penanggulangan Bencana Daerah (BPBD) Kabupaten Mukomuko**  
-*Versi Rilis: **v1.2.0** (Build 13) | Tanggal Rilis: **26 November 2026***
+*Versi Rilis: **v1.3.0** (Build 14) | Tanggal Rilis: **27 November 2026***
 
 ---
 
 ## Ringkasan Rilis
-Rilis **SIPAGAR KITA v1.2.0 (Build 13)** berfokus pada **penguatan keamanan PIN petugas (anti-reset sepihak & anti-downgrade Cloud Firestore)**, **isolasi ketat modul internal di balik sesi petugas**, **notifikasi triase pewarnaan siaga bencana**, serta **peningkatan aksesibilitas aksi darurat warga**.
+Rilis **SIPAGAR KITA v1.3.0 (Build 14)** menghadirkan **Tab Khusus KRB 2026–2030 & Perda RTRW No. 12 Tahun 2025** yang tersinkronisasi lintas seluruh modul operasional, **Notifikasi Latar Belakang 24 Jam Tanpa Login** (membedakan porsi Mode Warga dan Mode Petugas/TRC), **Materi Presentasi Eksekutif & Pimpinan khusus sesi Administrator**, serta **penyempurnaan tata letak Beranda, KRB–RTRW, dan seluruh kartu SOP Evakuasi Mandiri Offline**.
 
 ---
 
 ## ✨ Penambahan Fitur & Fungsi Baru
-- **Notifikasi Triase Pewarnaan Siaga Bencana (Hijau / Kuning / Oranye / Merah)**:
-  - Menambahkan sistem peringatan otomatis berdasarkan tingkat siaga berwarna dengan kanal notifikasi terpisah antara masyarakat umum dan petugas BPBD.
-- **Fokus Aksi Darurat Cepat di Beranda Warga**:
-  - Menampilkan akses instan ke Panggilan Darurat 117/112, Lapor Bencana Cepat, Peringatan Dini/Gempa Terkini, dan Panduan Evakuasi Offline agar mudah dijangkau saat kondisi darurat.
+- **Tab Khusus KRB 2026–2030 & Perda RTRW No. 12 Tahun 2025**:
+  - Memisahkan kajian ilmiah KRB Mukomuko 2026–2030 (IRBI 164,32; IKD 0,29; 12 matriks bahaya; 205.602 jiwa terpapar) dan regulasi Perda RTRW No. 12 Tahun 2025 (Pasal 42, 83, 92–94, KKPR Pasal 95–108, Indikasi Program Utama BPBD) ke dalam tab khusus tepat setelah Tab Laporan Warga serta mensinkronkannya dengan seluruh modul terkait.
+- **Notifikasi Latar Belakang 24 Jam Tanpa Login (Mode Warga vs Mode Petugas)**:
+  - Laporan warga baru, potensi ancaman, dan kejadian bencana kini langsung muncul sebagai notifikasi di perangkat pengguna tanpa harus membuka aplikasi maupun login, dengan membedakan porsi informasi keselamatan warga dan komando tindak lanjut petugas/TRC.
+- **Materi Presentasi Terpadu (Khusus Administrator)**:
+  - Menyelaraskan naskah Paparan Eksekutif dan Naskah Ringkas Presentasi Pimpinan dengan dokumen KRB–RTRW, prinsip kemandirian *Zero APBD*, dan peran pendampingan ASN BPBD, yang hanya tampil saat sesi login Administrator aktif.
 
 ---
 
 ## ⚡ Peningkatan & Optimalisasi
-- **Desain Adaptif & Izin Minimalis**: Melepas kunci orientasi layar pada peta interaktif untuk mendukung perangkat tablet/lipat serta menghilangkan izin `SET_WALLPAPER`.
-- **Transparansi Statistik Bencana**: Memisahkan data *Baseline Historis* dari data laporan langsung agar informasi publik lebih akurat.
+- **Efek Warna Gemini Spin pada Aksi Cepat Tanggap**: Menambahkan animasi bingkai warna *Gemini Spin* pada kartu Aksi Cepat Tanggap dan menempatkan kartu Info Cuaca tepat di bawahnya.
+- **Pembaruan Langsung (*In-Place Upgrade* Build 14)**: Seluruh perangkat versi sebelumnya (v1.0.0–v1.2.0) dapat langsung memperbarui ke v1.3.0 tanpa menghapus data lokal maupun PIN Cloud petugas.
 
 ---
 
-## 🐛 Perbaikan Bug & Keamanan
-- **Penutupan Celah Reset PIN Sepihak**: Menghapus fitur/alur reset PIN sepihak, memastikan pembaruan profil dan pasca-login hanya memperbarui metadata parsial, serta menegakkan aturan anti-downgrade pada Cloud Firestore.
-- **Isolasi Mode Warga & Penyensoran Log Keamanan**: Menutup celah sinkronisasi sesi petugas saat berada di mode warga dan menyensor nilai PIN dari log diagnostik.
+## 🐛 Perbaikan Bug & Tata Letak
+- **Perapian Penuh SOP Evakuasi Mandiri (Offline)**: Memperbaiki tata letak *badge* prinsip/rumus utama (selebar kartu penuh) dan tombol **"Bacakan Semua"** (Audio TTS Bahasa Indonesia) pada seluruh kartu bencana agar tidak terhimpit atau terpotong vertikal.
+- **Sinkronisasi & Perapian Tata Letak KRB–RTRW & Peta**: Merapikan susunan *badge* sinkronisasi modul, Rencana Pola Ruang, Indikasi Program Utama BPBD, Pasal 92–93 RTRW, serta tombol-tombol pada modul Peta & SOP Evakuasi dan Shakemap BMKG.
 
 ---
 
-> 📄 **Riwayat lengkap seluruh versi (v1.0.0 – v1.2.0)** tersedia di berkas [`CHANGELOG.md`](./CHANGELOG.md) serta pada menu **Info Aplikasi → Riwayat Catatan Rilis Versi** di dalam aplikasi.
+> 📄 **Riwayat lengkap seluruh versi (v1.0.0 – v1.3.0)** tersedia di berkas [`CHANGELOG.md`](./CHANGELOG.md) serta pada menu **Info Aplikasi → Riwayat Catatan Rilis Versi** di dalam aplikasi.
 
 *Pusdalops-PB BPBD Kabupaten Mukomuko — Siaga, Tanggap, Tangguh Menghadapi Bencana.*

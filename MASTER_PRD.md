@@ -1,9 +1,9 @@
 # MASTER DOKUMEN PRD (Product Requirements Document) — SIPAGAR KITA
 
 **Instansi:** Pusdalops-PB Badan Penanggulangan Bencana Daerah (BPBD) Kabupaten Mukomuko  
-**Versi Rilis Aktif:** `v1.2.0` (`versionCode = 13`)  
+**Versi Rilis Aktif:** `v1.3.0` (`versionCode = 14`)  
 **Arsitektur:** Two-Tier Frontend (`sipagar-warga` & `sipagar-petugas`), Offline-First Local Storage, RBAC Ketat (8 Role), & Anti-Data Ganda (`NIK 16 Digit` sebagai Primary Key)  
-**Tanggal Pembaruan Status:** 26 November 2026
+**Tanggal Pembaruan Status:** 27 November 2026
 
 > **Keterangan Checklist:** `[x]` = **Selesai Diterapkan & Terverifikasi** | `[ ]` = *Ditunda Sementara / Antrean Berikutnya*
 

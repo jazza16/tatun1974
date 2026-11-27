@@ -26,20 +26,32 @@ val INITIAL_RELEASE_CHANGELOG = VersionChangelog(
 )
 
 val LATEST_RELEASE_CHANGELOG = VersionChangelog(
-    version = "1.2.0",
-    releaseDate = "26 November 2026",
+    version = "1.3.0",
+    releaseDate = "27 November 2026",
     isCurrent = true,
     isLatest = true,
     highlights = listOf(
-        "Perlindungan Anti-Reset PIN Petugas & Aturan Anti-Downgrade Cloud Firestore: Menutup seluruh jalur reset PIN sepihak serta pembaruan pasca-login parsial agar PIN pribadi petugas tetap aman dan tidak pernah kembali ke nilai bawaan.",
-        "Penguncian Ketat Modul Internal & Isolasi Mode Warga: Memastikan Ruang Kerja Petugas, DALA, Manajemen Posko/Logistik, dan sinkronisasi data sensitif hanya aktif saat sesi petugas terverifikasi.",
-        "Notifikasi Triase Pewarnaan Siaga Bencana (Hijau/Kuning/Oranye/Merah): Peringatan otomatis terstruktur dengan pemisahan kanal warga dan petugas serta pelindungan privasi log keamanan.",
-        "Aksesibilitas Darurat & Kebijakan Minimalis: Penonjolan aksi darurat cepat untuk warga, pelepasan kunci orientasi pada peta interaktif, dan pemisahan jujur Data Baseline Historis dari data langsung."
+        "Tab Khusus KRB 2026–2030 & Perda RTRW No. 12 Tahun 2025: Pemisahan dokumen KRB Mukomuko (12 matriks bahaya, IRBI 164,32, IKD 0,29) dan Perda RTRW 2025–2045 (Pasal 42, 83, 92–94, KKPR Pasal 95–108) pada tab khusus tepat setelah Laporan Warga serta sinkronisasi penuh ke seluruh modul operasional.",
+        "Notifikasi Latar Belakang 24 Jam Tanpa Login (Porsi Warga vs Petugas): Peringatan otomatis laporan warga baru, potensi ancaman, dan kejadian bencana kini langsung muncul di perangkat tanpa perlu login dengan porsi informasi terpisah untuk Mode Warga dan Mode Petugas/TRC.",
+        "Pembaruan UI/UX Beranda & SOP Evakuasi Mandiri Offline: Penambahan efek warna Gemini Spin pada kartu Aksi Cepat Tanggap, penataan ulang kartu Info Cuaca, perapian penuh kartu SOP Evakuasi Offline & tombol Audio TTS, serta perbaikan tata letak KRB & RTRW.",
+        "Materi Presentasi Eksekutif & Pimpinan (Khusus Administrator): Penyelarasan naskah Paparan Eksekutif & Presentasi Pimpinan dengan KRB–RTRW, kemandirian Zero APBD, serta penguncian visibilitas khusus pada sesi login Administrator."
     )
 )
 
 val RELEASE_HISTORY_ACCORDION_CHANGELOGS: List<VersionChangelog> = listOf(
     LATEST_RELEASE_CHANGELOG,
+    VersionChangelog(
+        version = "1.2.0",
+        releaseDate = "26 November 2026",
+        isCurrent = false,
+        isLatest = false,
+        highlights = listOf(
+            "Perlindungan Anti-Reset PIN Petugas & Aturan Anti-Downgrade Cloud Firestore: Menutup seluruh jalur reset PIN sepihak serta pembaruan pasca-login parsial agar PIN pribadi petugas tetap aman dan tidak pernah kembali ke nilai bawaan.",
+            "Penguncian Ketat Modul Internal & Isolasi Mode Warga: Memastikan Ruang Kerja Petugas, DALA, Manajemen Posko/Logistik, dan sinkronisasi data sensitif hanya aktif saat sesi petugas terverifikasi.",
+            "Notifikasi Triase Pewarnaan Siaga Bencana (Hijau/Kuning/Oranye/Merah): Peringatan otomatis terstruktur dengan pemisahan kanal warga dan petugas serta pelindungan privasi log keamanan.",
+            "Aksesibilitas Darurat & Kebijakan Minimalis: Penonjolan aksi darurat cepat untuk warga, pelepasan kunci orientasi pada peta interaktif, dan pemisahan jujur Data Baseline Historis dari data langsung."
+        )
+    ),
     VersionChangelog(
         version = "1.1.0",
         releaseDate = "24 November 2026",
@@ -166,8 +178,8 @@ val DEFAULT_RELEASE_CHANGELOGS: List<VersionChangelog> = RELEASE_HISTORY_ACCORDI
 
 @Keep
 data class AppUpdateState(
-    val currentVersion: String = "1.2.0",
-    val latestVersion: String = "1.2.0",
+    val currentVersion: String = "1.3.0",
+    val latestVersion: String = "1.3.0",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -179,9 +191,9 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "1.2.0",
+    val lastCheckedVersion: String = "1.3.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Production Release) v1.2.0 terbaru secara permanen.",
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Production Release) v1.3.0 terbaru secara permanen.",
     val packageSizeMb: Float = 20.4f,
     val downloadUrl: String = "https://github.com/jazza16/tatun1974/releases/latest",
     val isBannerDismissed: Boolean = false,
