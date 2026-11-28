@@ -333,6 +333,26 @@
         "isSyncedToCloud": { "type": "boolean" }
       },
       "required": ["id", "fullName", "nik", "phoneNumber", "organization", "skillsCsv", "status"]
+    },
+    "AppUsageGuide": {
+      "title": "AppUsageGuide",
+      "description": "Cloud-synced dynamic SIPAGAR KITA usage guide for Citizen and Officer modes without APK reinstall",
+      "type": "object",
+      "properties": {
+        "guideVersion": { "type": "string" },
+        "releaseTitle": { "type": "string" },
+        "updatedAtLabel": { "type": "string" },
+        "updatedBy": { "type": "string" },
+        "updatedAt": { "type": "integer" },
+        "citizenSummary": { "type": "string" },
+        "officerSummary": { "type": "string" },
+        "citizenSteps": { "type": "array", "items": { "type": "object" } },
+        "officerSteps": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": [
+        "guideVersion", "releaseTitle", "updatedAtLabel", "updatedBy", "updatedAt",
+        "citizenSummary", "officerSummary", "citizenSteps", "officerSteps"
+      ]
     }
   },
   "firestore": {
@@ -391,6 +411,10 @@
     "/bpbd_volunteers/{volunteerId}": {
       "schema": "BpbdVolunteer",
       "description": "Offline-first synced BPBD Mukomuko volunteer coordination records (NIK PK)"
+    },
+    "/app_settings/usage_guide": {
+      "schema": "AppUsageGuide",
+      "description": "Cloud-synced dynamic usage guide for Citizens and Officers"
     }
   }
 }

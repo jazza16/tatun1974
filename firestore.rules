@@ -257,6 +257,38 @@ service cloud.firestore {
           && (!('additionalDetails' in data) || (data.additionalDetails is string && data.additionalDetails.size() <= 1000));
     }
 
+    function isValidUsageGuideStep(step) {
+      return step is map
+          && step.keys().hasAll(['stepNumber', 'title', 'description', 'moduleTag'])
+          && step.keys().hasOnly(['stepNumber', 'title', 'description', 'moduleTag'])
+          && step.stepNumber is int && step.stepNumber >= 1 && step.stepNumber <= 20
+          && step.title is string && step.title.size() >= 1 && step.title.size() <= 120
+          && step.description is string && step.description.size() >= 1 && step.description.size() <= 600
+          && step.moduleTag is string && step.moduleTag.size() >= 1 && step.moduleTag.size() <= 60;
+    }
+
+    function isValidUsageGuide(data) {
+      return data.keys().hasAll([
+               'guideVersion', 'releaseTitle', 'updatedAtLabel', 'updatedBy', 'updatedAt',
+               'citizenSummary', 'officerSummary', 'citizenSteps', 'officerSteps'
+             ])
+          && data.keys().hasOnly([
+               'guideVersion', 'releaseTitle', 'updatedAtLabel', 'updatedBy', 'updatedAt',
+               'citizenSummary', 'officerSummary', 'citizenSteps', 'officerSteps'
+             ])
+          && data.guideVersion is string && data.guideVersion.size() >= 1 && data.guideVersion.size() <= 64
+          && data.releaseTitle is string && data.releaseTitle.size() >= 1 && data.releaseTitle.size() <= 140
+          && data.updatedAtLabel is string && data.updatedAtLabel.size() >= 1 && data.updatedAtLabel.size() <= 80
+          && data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 120
+          && data.updatedAt is int && data.updatedAt >= 0
+          && data.citizenSummary is string && data.citizenSummary.size() >= 1 && data.citizenSummary.size() <= 500
+          && data.officerSummary is string && data.officerSummary.size() >= 1 && data.officerSummary.size() <= 500
+          && data.citizenSteps is list && data.citizenSteps.size() >= 1 && data.citizenSteps.size() <= 12
+          && isValidUsageGuideStep(data.citizenSteps[0])
+          && data.officerSteps is list && data.officerSteps.size() >= 1 && data.officerSteps.size() <= 12
+          && isValidUsageGuideStep(data.officerSteps[0]);
+    }
+
     function isValidOfficerSession(data) {
       return data.nip is string && data.nip.size() >= 1 && data.nip.size() <= 64
           && data.device_name is string && data.device_name.size() >= 1 && data.device_name.size() <= 120
@@ -672,23 +704,31 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // 11. Cloud Master Admin Configuration & Public Storage Endpoint Discovery
+    // 11. Cloud Master Admin Configuration & Public Storage Endpoint / Dynamic Usage Guide Discovery
     match /app_settings/{docId} {
-      allow get: if docId in ['admin_config', 'supabase_storage_config', 'document_settings'];
+      allow get: if docId in ['admin_config', 'supabase_storage_config', 'document_settings', 'usage_guide'];
       allow create, update: if isSignedIn()
-                    && docId == 'supabase_storage_config'
-                    && incoming().keys().hasAll(['supabaseUrl', 'supabaseKey', 'bucketName', 'updatedAt'])
-                    && incoming().keys().hasOnly(['supabaseUrl', 'supabaseKey', 'bucketName', 'updatedAt'])
-                    && incoming().supabaseUrl is string
-                    && incoming().supabaseUrl.matches('^https://[a-zA-Z0-9.-]+\\.supabase\\.co/?$')
-                    && incoming().supabaseUrl.size() <= 256
-                    && incoming().supabaseKey is string
-                    && incoming().supabaseKey.size() >= 16
-                    && incoming().supabaseKey.size() <= 512
-                    && incoming().bucketName is string
-                    && incoming().bucketName.size() >= 1
-                    && incoming().bucketName.size() <= 64
-                    && incoming().updatedAt is int;
+                    && (
+                      (
+                        docId == 'supabase_storage_config'
+                        && incoming().keys().hasAll(['supabaseUrl', 'supabaseKey', 'bucketName', 'updatedAt'])
+                        && incoming().keys().hasOnly(['supabaseUrl', 'supabaseKey', 'bucketName', 'updatedAt'])
+                        && incoming().supabaseUrl is string
+                        && incoming().supabaseUrl.matches('^https://[a-zA-Z0-9.-]+\\.supabase\\.co/?$')
+                        && incoming().supabaseUrl.size() <= 256
+                        && incoming().supabaseKey is string
+                        && incoming().supabaseKey.size() >= 16
+                        && incoming().supabaseKey.size() <= 512
+                        && incoming().bucketName is string
+                        && incoming().bucketName.size() >= 1
+                        && incoming().bucketName.size() <= 64
+                        && incoming().updatedAt is int
+                      )
+                      || (
+                        docId == 'usage_guide'
+                        && isValidUsageGuide(incoming())
+                      )
+                    );
       allow list, delete: if false;
     }
 

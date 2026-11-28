@@ -206,7 +206,7 @@ fun AppUpdateBottomSheet(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Pelajari kembali fitur utama aplikasi atau gunakan kompas digital evakuasi darurat.",
+                        text = "Pelajari panduan ringkas untuk Warga & Petugas (tersinkron Cloud) atau gunakan kompas digital evakuasi darurat.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
@@ -226,16 +226,22 @@ fun AppUpdateBottomSheet(
                                 .weight(1f)
                                 .heightIn(min = 48.dp)
                                 .testTag("btn_reopen_onboarding"),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.AutoAwesome,
+                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
                                 tint = OrangePrimary
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Panduan Fitur", fontSize = 11.sp)
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Panduan Penggunaan",
+                                fontSize = 11.sp,
+                                lineHeight = 13.sp,
+                                maxLines = 2
+                            )
                         }
 
                         Button(
@@ -247,6 +253,7 @@ fun AppUpdateBottomSheet(
                                 .weight(1f)
                                 .heightIn(min = 48.dp)
                                 .testTag("btn_open_compass_from_sheet"),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
                             shape = RoundedCornerShape(10.dp)
                         ) {
@@ -256,8 +263,14 @@ fun AppUpdateBottomSheet(
                                 modifier = Modifier.size(16.dp),
                                 tint = Color.White
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Kompas Digital", fontSize = 11.sp, color = Color.White)
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Kompas Digital",
+                                fontSize = 11.sp,
+                                lineHeight = 13.sp,
+                                maxLines = 2,
+                                color = Color.White
+                            )
                         }
 
                         Button(
@@ -935,7 +948,7 @@ private fun NewFeaturesExplanationSection(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Panduan Fitur & Rilis Resmi v$currentVersion",
+                            text = "Panduan Penggunaan & Rilis Resmi v$currentVersion",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF78350F)

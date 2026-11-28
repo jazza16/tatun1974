@@ -53,6 +53,7 @@ object FirestoreHelper {
     private const val COLLECTION_OFFICER_CREDENTIALS = "officer_credentials"
     private const val COLLECTION_APP_SETTINGS = "app_settings"
     private const val DOC_DOCUMENT_SETTINGS = "document_settings"
+    private const val DOC_USAGE_GUIDE = "usage_guide"
 
     /**
      * Pesan standar Zero-Friction saat laporan warga disimpan ketika perangkat sedang offline.
@@ -2255,6 +2256,83 @@ object FirestoreHelper {
                 if (cont.isActive) cont.resume(Result.failure(e))
             }
         }
+
+    /**
+     * Mengambil konten dinamis Panduan Penggunaan Aplikasi (Warga & Petugas)
+     * dari Firestore `app_settings/usage_guide` agar pembaruan panduan langsung tampil
+     * di semua perangkat tanpa update/bongkar-pasang APK.
+     */
+    suspend fun fetchUsageGuideFromCloudSuspend(
+        context: Context? = null
+    ): Result<Map<String, Any>?> =
+        suspendCancellableCoroutine { cont ->
+            val dbResult = getFirestoreOrThrow(context)
+            val db = dbResult.getOrNull()
+            if (db == null) {
+                val err = dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia")
+                if (cont.isActive) cont.resume(Result.failure(err))
+                return@suspendCancellableCoroutine
+            }
+            ensureAppCheckTokenAttached()
+            try {
+                db.collection(COLLECTION_APP_SETTINGS)
+                    .document(DOC_USAGE_GUIDE)
+                    .get(Source.SERVER)
+                    .addOnSuccessListener { doc ->
+                        if (!cont.isActive) return@addOnSuccessListener
+                        val data = if (doc != null && doc.exists()) doc.data else null
+                        cont.resume(Result.success(data))
+                    }
+                    .addOnFailureListener { e ->
+                        logFirestoreError("fetchUsageGuideFromCloudSuspend", e)
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                logFirestoreError("fetchUsageGuideFromCloudSuspend(exception)", e)
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
+
+    /**
+     * Menerbitkan pembaruan Panduan Penggunaan Aplikasi ke Firestore `app_settings/usage_guide`
+     * (khusus Administrator yang telah terautentikasi sesi Google/Firebase).
+     */
+    suspend fun saveUsageGuideToCloudSuspend(
+        context: Context? = null,
+        payload: Map<String, Any>
+    ): Result<Unit> {
+        val uid = currentUid()
+        if (uid.isNullOrBlank()) {
+            return Result.failure(
+                IllegalStateException("Masuk dengan akun Google Admin terlebih dahulu untuk menerbitkan panduan ke Cloud.")
+            )
+        }
+        return suspendCancellableCoroutine { cont ->
+            val dbResult = getFirestoreOrThrow(context)
+            val db = dbResult.getOrNull()
+            if (db == null) {
+                val err = dbResult.exceptionOrNull() ?: IllegalStateException("Firestore tidak tersedia")
+                if (cont.isActive) cont.resume(Result.failure(err))
+                return@suspendCancellableCoroutine
+            }
+            ensureAppCheckTokenAttached()
+            try {
+                db.collection(COLLECTION_APP_SETTINGS)
+                    .document(DOC_USAGE_GUIDE)
+                    .set(payload)
+                    .addOnSuccessListener {
+                        if (cont.isActive) cont.resume(Result.success(Unit))
+                    }
+                    .addOnFailureListener { e ->
+                        logFirestoreError("saveUsageGuideToCloudSuspend", e)
+                        if (cont.isActive) cont.resume(Result.failure(e))
+                    }
+            } catch (e: Exception) {
+                logFirestoreError("saveUsageGuideToCloudSuspend(exception)", e)
+                if (cont.isActive) cont.resume(Result.failure(e))
+            }
+        }
+    }
 
     /**
      * Mengambil direktori personil (Nama, Gelar, NIP, Jabatan) terbaru dari koleksi Firestore `officers`.

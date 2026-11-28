@@ -709,6 +709,42 @@ test("Hardened rules block unauthenticated config tampering, anonymous deletes, 
     })
   );
 
+  // A2. app_settings/usage_guide: public get allowed, unauthenticated write blocked, ghost field blocked, signed-in valid write allowed
+  const validUsageGuidePayload = {
+    guideVersion: "v1.3.0-live.2",
+    releaseTitle: "Panduan Penggunaan SIPAGAR KITA",
+    updatedAtLabel: "27 November 2026",
+    updatedBy: "Admin Pusdalops BPBD",
+    updatedAt: Date.now(),
+    citizenSummary: "Panduan ringkas untuk warga Mukomuko tanpa login.",
+    officerSummary: "Panduan ringkas untuk petugas Pusdalops dan TRC.",
+    citizenSteps: [
+      {
+        stepNumber: 1,
+        title: "Pantau Cuaca",
+        description: "Pilih kecamatan di beranda untuk memantau cuaca.",
+        moduleTag: "Beranda"
+      }
+    ],
+    officerSteps: [
+      {
+        stepNumber: 1,
+        title: "Login Petugas",
+        description: "Masuk memakai NIP dan PIN Cloud.",
+        moduleTag: "Autentikasi"
+      }
+    ]
+  };
+  await assertSucceeds(unauth.collection("app_settings").doc("usage_guide").get());
+  await assertFails(unauth.collection("app_settings").doc("usage_guide").set(validUsageGuidePayload));
+  await assertFails(
+    alice.collection("app_settings").doc("usage_guide").set({
+      ...validUsageGuidePayload,
+      unexpectedAdminFlag: true
+    })
+  );
+  await assertSucceeds(alice.collection("app_settings").doc("usage_guide").set(validUsageGuidePayload));
+
   // B. bpbd_volunteers: 16-digit NIK PK enforced, ghost fields blocked, immutable registeredAt/nik, unsafe URI blocked
   const validVolunteer = {
     nik: "1706011408910099",
