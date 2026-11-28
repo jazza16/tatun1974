@@ -90,7 +90,7 @@ fun DeveloperInfoCard(
     }
     var isPlayProtectGuideExpanded by remember { mutableStateOf(false) }
     var isPresentationExpanded by remember { mutableStateOf(true) }
-    // 0 = Naskah 1: Paparan Eksekutif (7 Slide Inti & Q&A Audiens), 1 = Naskah 2: Naskah Ringkas Presentasi Pimpinan
+    // 0 = Naskah 1: Paparan Eksekutif & Q&A Audiens, 1 = Naskah 2: Naskah Ringkas Presentasi Pimpinan
     var selectedScriptTab by remember { mutableStateOf(0) }
 
     Card(
@@ -505,7 +505,7 @@ fun DeveloperInfoCard(
                                         color = if (isDark) Color(0xFF93C5FD) else Color(0xFF0D47A1)
                                     )
                                     Text(
-                                        text = "Selaras: Paparan Eksekutif (7 Slide & Q&A) + Naskah Ringkas Pimpinan",
+                                        text = "Selaras: Paparan Eksekutif & Q&A + Naskah Ringkas Pimpinan",
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = OrangePrimary
@@ -578,7 +578,7 @@ fun DeveloperInfoCard(
                                             .testTag("tab_script_paparan_eksekutif")
                                     ) {
                                         Text(
-                                            text = "1. Paparan Eksekutif (7 Slide)",
+                                            text = "1. Paparan Eksekutif",
                                             fontSize = 10.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = if (selectedScriptTab == 0) Color.White else MaterialTheme.colorScheme.onSurface,
@@ -612,29 +612,29 @@ fun DeveloperInfoCard(
                                 if (selectedScriptTab == 0) {
                                     // NASKAH 1: PAPARAN EKSEKUTIF: SIPAGAR KITA (7 SLIDE INTI + POIN KUNCI AUDIENS)
                                     Text(
-                                        text = "A. STRUKTUR SLIDE PRESENTASI (7 SLIDE INTI — TRILOGI KEBIJAKAN: KRB 2026–2030, RPB 2025–2029 & PERDA RTRW 12/2025)\n\n" +
-                                            "• Slide 1: Latar Belakang, Urgensi Daerah & Fakta Fiskal/SPM RPB 2025–2029\n" +
+                                        text = "A. STRUKTUR PAPARAN EKSEKUTIF (TRILOGI KEBIJAKAN: KRB 2026–2030, RPB 2025–2029 & PERDA RTRW 12/2025)\n\n" +
+                                            "1. Latar Belakang, Urgensi Daerah & Fakta Fiskal/SPM RPB 2025–2029\n" +
                                             "  - Profil Risiko Tinggi (KRB 2026–2030 & RPB 2025–2029): IRBI 2025 terkoreksi metodologi BNPB menjadi 228,28 (2023–2024: 164,32), IKD 0,29 (Rendah), IKM 0,348 (Sedang), 205.602 jiwa terpapar di 15 kecamatan, potensi kerugian multibahaya Rp 6,74 Triliun, serta 184 kejadian bencana historis (2014–2024).\n" +
                                             "  - Bukti Empiris Keterbatasan Fiskal & SPM (BPKAD 2026 & RPB Tabel 3.9): Belanja sub-urusan bencana hanya 0,59% dari APBD 2025 (Rp 5,13 M dari Rp 863,13 M; BTT Rp 100 Jt / 0,01%), menyebabkan kesenjangan SPM Peralatan Kesiapsiagaan anjlok ke 7,44%, SAR & Evakuasi 25,00%, dan Respons Cepat Darurat 36,14%.\n" +
                                             "  - Solusi Mandiri (Zero APBD): SIPAGAR KITA langsung menjawab mandat nomenklatur RPB 1.05.03.2.04.0004 (Sistem Informasi Kebencanaan) sebagai Single Window Command & EWS 15 Kecamatan tanpa membebani APBD dan diserahkan ke Pusdalops-PB BPBD.\n\n" +
-                                            "• Slide 2: Desain UI/UX Berorientasi Keselamatan Publik & Kecepatan Komando\n" +
+                                            "2. Desain UI/UX Berorientasi Keselamatan Publik & Kecepatan Komando\n" +
                                             "  - Dual-Mode Architecture & Notifikasi 24 Jam Tanpa Login: Mode Warga (Tanpa Login) menyajikan akses cuaca 15 kecamatan, peta evakuasi & 11 shelter resmi RPB, kompas titik kumpul, Call 117/112, & lapor bencana; Mode Komando Pusdalops (Login Petugas) untuk verifikasi laporan, posko/logistik, relawan, & laporan harian.\n" +
                                             "  - Tab Khusus \"KRB, RPB & RTRW\": Menyatukan Trilogi Kebijakan Kebencanaan Daerah (KRB 2026–2030, RPB 2025–2029 dengan 31 Strategi & 11 Shelter, dan Perda RTRW No. 12/2025) secara terstruktur serta banner buka-tutup (collapsible) di seluruh tab operasional.\n" +
                                             "  - Triase Peringatan Dini 4 Warna (Hijau, Kuning, Oranye, Merah), Filter Geografis Presisi (Khusus Provinsi Bengkulu & Mukomuko dengan Durasi Aktif 1–2 Jam), serta Tangguh Sinyal Lemah (Offline-First).\n\n" +
-                                            "• Slide 3: Arsitektur Keamanan Siber & Tata Kelola Komando (Zero-Trust Security)\n" +
+                                            "3. Arsitektur Keamanan Siber & Tata Kelola Komando (Zero-Trust Security)\n" +
                                             "  - 8-Role RBAC (3 Tier Otoritas: Manajer/Kalaksa Tier 1, Supervisor/Petugas Jaga/TRC/Logistik Tier 2, Relawan & Warga Tier 3).\n" +
                                             "  - Otorisasi Berlapis (Four-Eyes Principle) Sirene Darurat (wajib persetujuan 2 pejabat berwenang).\n" +
                                             "  - Isolasi Data, Kriptografi PIN (Salted SHA-256/PBKDF2 di Cloud) & Jejak Audit (Audit Trail) berbasis NIP petugas untuk memperkuat akuntabilitas kerja ASN (bukan menggantikan kewenangan ASN).\n\n" +
-                                            "• Slide 4: Integrasi Multi-Sensor, Standar BNPB–BMKG & Penyelarasan KRB + RPB + RTRW\n" +
+                                            "4. Integrasi Multi-Sensor, Standar BNPB–BMKG & Penyelarasan KRB + RPB + RTRW\n" +
                                             "  - Seismik & Tsunami: Real-time BMKG InaTEWS (WRS-NTWC) selaras KRB Tsunami & Gempa, Strategi 1.2 & 2.8 RPB (Sesar Sumatera & Megathrust Mentawai–Pagai; 11 Shelter Kode 1.06.06.2.01.0007), serta Perda RTRW Pasal 42 & Pasal 92.\n" +
                                             "  - Hidrometeorologi & Maritim: Cuaca 15 kecamatan, gelombang Samudra Hindia & banjir rob selaras KRB Banjir/GEA, Strategi 1.1 & 3.6 RPB (FFWS Kode 1.03.02.2.01.0090 & pengaman pantai), serta Sempadan Pantai 100 m Perda RTRW Pasal 93.\n" +
                                             "  - Karhutla & Kualitas Udara: Titik panas satelit NASA FIRMS & BMKG + AQI/PM2.5 selaras KRB Karhutla (404.993,70 Ha, AUC 0,932), Strategi 3.7/3.10 RPB (SKIKP & target IKLH 69,58 / GRK 41,29%), & larangan Zero Burning Perda RTRW Pasal 92 ayat (5).\n\n" +
-                                            "• Slide 5: Akuntabilitas Logistik (FEFO) & Kaji Cepat Pascabencana (DALA / JITUPASNA)\n" +
+                                            "5. Akuntabilitas Logistik (FEFO) & Kaji Cepat Pascabencana (DALA / JITUPASNA)\n" +
                                             "  - Transparansi Gudang Logistik BPBD (FEFO First-Expired First-Out, alarm stok kritis <10 unit, & distribusi berbasis NIK 16 digit anti-data ganda) selaras Strategi 2.10 RPB (Kode 1.05.03.2.03.0009).\n" +
                                             "  - Modul Pasca Bencana (DALA / JITUPASNA Kode 1.05.03.2.04.0015) & Laporan Resmi 1-Klik (PDF Kop 2 Logo & Excel) yang meringankan beban administrasi manual ASN.\n\n" +
-                                            "• Slide 6: Mode Latihan (Sandbox Simulasi) untuk Kesiapsiagaan Berkelanjutan\n" +
+                                            "6. Mode Latihan (Sandbox Simulasi) untuk Kesiapsiagaan Berkelanjutan\n" +
                                             "  - Simulasi penanganan bencana & uji sirene selaras Strategi 2.6 RPB (Gladi 300–700 peserta/thn & TRC PB 20→200 personel) tanpa mencemari data laporan nyata maupun memicu kepanikan warga.\n\n" +
-                                            "• Slide 7: Dampak Strategis & Target Kinerja RPB 2025–2029\n" +
+                                            "7. Dampak Strategis & Target Kinerja RPB 2025–2029\n" +
                                             "  - Mendongkrak Indeks Ketahanan Daerah (IKD) Mukomuko dari baseline 0,29 (Rendah) menuju target RPB 0,57 (2029) dan menekan IRB menuju 136,87 (2029) sesuai 5 Indikator Dampak Tabel 4.1 RPB & Indikasi Program BPBD Lampiran XII Perda RTRW.\n" +
                                             "  - Efisiensi anggaran daerah (dibangun dengan Zero APBD di tengah porsi anggaran bencana 0,59% APBD) melalui digitalisasi pelaporan, logistik FEFO, dan percepatan respons darurat ≤1×24 jam.\n\n" +
                                             "B. POIN KUNCI SAAT MENJAWAB PERTANYAAN (SESUAI AUDIENS)\n" +
@@ -680,6 +680,10 @@ fun DeveloperInfoCard(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                AdminMasterPrdSection(isDark = isDark)
 
                 Spacer(modifier = Modifier.height(10.dp))
             }

@@ -22,14 +22,14 @@
 # NASKAH 1 — PAPARAN EKSEKUTIF: SIPAGAR KITA
 *Sistem Informasi Peringatan Dini & Siaga Bencana Terpadu Kabupaten Mukomuko*
 
-## A. STRUKTUR SLIDE PRESENTASI (7 SLIDE INTI)
+## A. STRUKTUR PAPARAN EKSEKUTIF
 
-### Slide 1: Latar Belakang, Urgensi Daerah & Fakta Fiskal/SPM RPB 2025–2029 (Mengapa Mukomuko Butuh SIPAGAR KITA?)
+### 1. Latar Belakang, Urgensi Daerah & Fakta Fiskal/SPM RPB 2025–2029 (Mengapa Mukomuko Butuh SIPAGAR KITA?)
 * **Profil Risiko Tinggi (KRB 2026–2030 & RPB 2025–2029):** Kabupaten Mukomuko berada di lintasan Sesar Aktif Sumatera (*slip rate* 5 mm/thn) dan zona Megathrust Mentawai–Pagai. Dokumen KRB & RPB mencatat **IRBI 2025 terkoreksi metodologi BNPB menjadi `228,28`** (2023–2024: `164,32`), **IKD `0,29` (Rendah)**, **IKM `0,348` (Sedang)**, **205.602 jiwa terpapar** di 15 kecamatan (151 desa/kelurahan), potensi kerugian multibahaya **Rp 6,74 Triliun**, serta **184 kejadian bencana historis (2014–2024)** dengan 8.057 jiwa terdampak.
 * **Bukti Empiris Keterbatasan Fiskal & SPM (BPKAD 2026 & RPB Tabel 3.9):** Belanja sub-urusan bencana tahun 2025 hanya **0,59% dari total APBD** (`Rp 5,13 M` dari `Rp 863,13 M`; BTT `Rp 100 Jt` / `0,01%`), yang memicu kesenjangan **SPM Peralatan Kesiapsiagaan anjlok ke `7,44%`**, **SAR & Evakuasi `25,00%`**, dan **Respons Cepat Darurat `36,14%`**.
 * **Solusi Mandiri (Zero APBD):** **SIPAGAR KITA** menjawab langsung mandat nomenklatur RPB **`1.05.03.2.04.0004` (Sistem Informasi Kebencanaan)** sebagai *Single Window Command & Early Warning System* untuk 15 Kecamatan tanpa membebani APBD dan diserahkan pengelolaannya kepada Pusdalops-PB BPBD.
 
-### Slide 2: Desain UI/UX Berorientasi Keselamatan Publik & Kecepatan Komando
+### 2. Desain UI/UX Berorientasi Keselamatan Publik & Kecepatan Komando
 * **Dual-Mode Architecture & Notifikasi 24 Jam Tanpa Login:**
   * **Mode Warga (Tanpa Login):** Akses instan cuaca 15 kecamatan, peta jalur evakuasi & **11 lokasi resmi penampungan pengungsi RPB (`1.06.06.2.01.0007`)**, kompas titik kumpul, panggilan darurat **117 / 112**, dan pelaporan bencana warga.
   * **Mode Komando Pusdalops (Login Petugas):** Ruang Kerja taktis untuk verifikasi laporan, manajemen posko/logistik, koordinasi relawan, dan pelaporan harian.
@@ -39,27 +39,27 @@
 * **Filter Geografis Presisi (Khusus Provinsi Bengkulu & Mukomuko):** Notifikasi hanya berbunyi untuk kejadian nyata di wilayah lokal dengan **Tanggal Kejadian** dan **Durasi Aktif 1–2 Jam** yang jelas (mencegah kepanikan palsu dan kelelahan notifikasi).
 * **Tangguh Sinyal Lemah (*Offline-First*):** Data cuaca dasar, profil risiko KRB–RTRW, dan panduan SOP evakuasi tetap dapat diakses masyarakat pesisir/pedalaman meskipun jaringan seluler terganggu saat bencana.
 
-### Slide 3: Arsitektur Keamanan Siber & Tata Kelola Komando (*Zero-Trust Security*)
+### 3. Arsitektur Keamanan Siber & Tata Kelola Komando (*Zero-Trust Security*)
 * **8-Role RBAC (3 Tier Otoritas):** Pembagian kewenangan ketat sesuai struktur jabatan ASN/Petugas antara *Manajer/Kalaksa (Tier 1)*, *Supervisor, Petugas Jaga, TRC, & Logistik (Tier 2)*, serta *Relawan & Warga (Tier 3)*.
 * **Otorisasi Berlapis (*Four-Eyes Principle*) Sirene Darurat:** Aktivasi sirene bahaya publik wajib melalui persetujuan 2 pejabat berwenang untuk mencegah kesalahan manusia (*human error*) atau penyalahgunaan.
 * **Isolasi Data & Kriptografi:** PIN petugas diamankan dengan *Salted SHA-256 / PBKDF2 Hash* di Cloud; saat aplikasi berada di Mode Warga, seluruh data internal posko dan logistik terisolasi 100%.
 * **Jejak Audit (*Audit Trail*) & Anti-Hoaks:** Setiap perubahan status laporan dan mutasi logistik mencatat NIP petugas serta waktu nyata, dilengkapi prosedur verifikasi lapangan (*cross-check* Kades/Lurah/Camat) dan filter antispam pada laporan warga.
 
-### Slide 4: Integrasi Multi-Sensor, Standar Nasional BNPB–BMKG & Penyelarasan KRB 2026–2030 + Perda RTRW No. 12/2025
+### 4. Integrasi Multi-Sensor, Standar Nasional BNPB–BMKG & Penyelarasan KRB 2026–2030 + Perda RTRW No. 12/2025
 * **Hulu ke Hilir (*Multi-Hazard*) yang Tersinkronisasi dengan KRB & RTRW:**
   * **Seismik & Tsunami:** Integrasi real-time **BMKG InaTEWS (WRS-NTWC)** yang diselaraskan dengan **KRB Tsunami Prioritas 2** (`7.523,90 Ha`; potensi tinggi rendaman s/d `13 meter` di 6 kecamatan pesisir) dan **KRB Gempa Bumi Prioritas 3** (Bahaya PGA Tinggi di seluruh wilayah, Risiko Sedang karena struktur bangunan mayoritas 1 lantai), serta **Perda RTRW No. 12/2025 Pasal 42** (Jaringan Jalur Evakuasi Bencana, TES & TEA) dan **Pasal 92 ayat (4), (6), & (8)**.
   * **Hidrometeorologi & Maritim:** Cuaca 15 kecamatan, tinggi gelombang Samudra Hindia, serta pasang surut & risiko banjir rob pesisir yang diselaraskan dengan **KRB Prioritas 1 Banjir** (`63.820,62 Ha`), **Banjir Bandang** (`8.554,32 Ha`), **Cuaca Ekstrem** (`97.968,78 Ha`), dan **Gelombang Ekstrem & Abrasi** (`2.892,69 Ha` s/d `2,7 m`), serta ketentuan **Garis Sempadan Pantai minimal 100 meter (`KDB 0%`, `KDH min 80%`) pada Pasal 93 Perda RTRW No. 12/2025**.
   * **Karhutla, Tanah Longsor & Kualitas Udara:** Deteksi titik panas (*hotspot*) satelit **NASA FIRMS & BMKG** beserta indeks kualitas udara (AQI/PM2.5) yang diselaraskan dengan **KRB Prioritas 1 Karhutla** (`404.993,70 Ha`, validasi ROC/AUC `0,932`) dan **Tanah Longsor** (`211.034,88 Ha`), serta larangan pembukaan lahan dengan membakar (*Zero Burning*) pada **Pasal 92 ayat (5) & Pasal 83 ayat (4) Perda RTRW No. 12/2025**.
 
-### Slide 5: Akuntabilitas Logistik (FEFO) & Kaji Cepat Pascabencana (DALA)
+### 5. Akuntabilitas Logistik (FEFO) & Kaji Cepat Pascabencana (DALA)
 * **Transparansi Gudang Logistik BPBD:** Pemantauan stok komoditas darurat secara *real-time* dengan sistem **FEFO (*First-Expired, First-Out*)**, alarm otomatis bila stok kritis (`<10 unit`) atau mendekati kedaluwarsa, serta distribusi bantuan berbasis **NIK 16 digit (Anti-Data Ganda)**.
 * **Modul Pasca Bencana (DALA / *Damage and Loss Assessment*):** Mempercepat perhitungan estimasi kerusakan infrastruktur dan kerugian warga oleh petugas sebagai dasar pengajuan bantuan darurat ke Pemkab maupun BNPB.
 * **Laporan Resmi 1-Klik (PDF Kop 2 Logo & Excel):** Ekspor otomatis Laporan Harian Pusdalops, Rekapitulasi Kejadian, dan Direktori Relawan siap tanda tangan untuk meringankan beban administrasi manual ASN.
 
-### Slide 6: Mode Latihan (*Sandbox Simulasi*) untuk Kesiapsiagaan Berkelanjutan
+### 6. Mode Latihan (*Sandbox Simulasi*) untuk Kesiapsiagaan Berkelanjutan
 * Petugas Pusdalops dan TRC dapat melakukan simulasi penanganan bencana dan uji sirene di dalam aplikasi **tanpa mencemari data laporan nyata** maupun memicu kepanikan warga.
 
-### Slide 7: Dampak Strategis & Target Kinerja RPB 2025–2029
+### 7. Dampak Strategis & Target Kinerja RPB 2025–2029
 * **Target Kinerja RPB 2025–2029 (Tabel 4.1):** Mendongkrak **Indeks Ketahanan Daerah (IKD)** Kabupaten Mukomuko dari baseline `0,29` (Rendah) menjadi **`0,57` pada 2029**, menurunkan **IRB menuju `136,87`**, serta menaikkan **IKLH `66,20 → 69,58`** dan **penurunan GRK `28,10% → 41,29%`** selaras 7 Fokus IKD KRB & Lampiran XII Perda RTRW.
 * **Efisiensi anggaran daerah** (dibangun dengan *Zero APBD* di tengah porsi anggaran bencana `0,59%` APBD) melalui digitalisasi pelaporan, pengawasan logistik FEFO, DALA/JITUPASNA (`1.05.03.2.04.0015`), pengendalian KKPR Pasal 95–108 Perda RTRW, dan percepatan respons darurat `≤1×24 jam`.
 
