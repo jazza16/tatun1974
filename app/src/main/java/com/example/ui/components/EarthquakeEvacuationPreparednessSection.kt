@@ -19,9 +19,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -311,10 +313,9 @@ fun EarthquakeEvacuationPreparednessSection(
     ) {
         // --- 1. HERO OFFICIAL HEADER BANNER ---
         Card(
+            onClick = onOpenEvacuationGuide,
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .clickable(onClick = onOpenEvacuationGuide)
                 .testTag("card_evacuation_hero_header"),
             shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(
@@ -775,7 +776,9 @@ fun EarthquakeEvacuationPreparednessSection(
 
                 // 20-20-20 Triplet Cards
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Max),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TsunamiTripletCard(
@@ -783,7 +786,9 @@ fun EarthquakeEvacuationPreparednessSection(
                         unit = "DETIK",
                         desc = "Gempa bumi kuat berlangsung lebih dari 20 detik",
                         color = Color(0xFFF97316),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
 
                     TsunamiTripletCard(
@@ -791,7 +796,9 @@ fun EarthquakeEvacuationPreparednessSection(
                         unit = "MENIT",
                         desc = "Waktu maksimal Anda untuk evakuasi menjauhi pantai",
                         color = Color(0xFFEF4444),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
 
                     TsunamiTripletCard(
@@ -799,7 +806,9 @@ fun EarthquakeEvacuationPreparednessSection(
                         unit = "METER",
                         desc = "Ketinggian aman tempat evakuasi / menjauh 2 km",
                         color = Color(0xFF10B981),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
                 }
 

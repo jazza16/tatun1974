@@ -191,7 +191,7 @@ fun PlayIntegritySecuritySessionsCard(
                         Text(
                             text = "Sinkronisasi seluruh aktivitas login petugas, keaslian hardware & token",
                             fontSize = 11.sp,
-                            color = Color(0xFF64748B)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -598,8 +598,8 @@ fun PlayIntegritySecuritySessionsCard(
 private fun EmptySecurityStateBox(message: String) {
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = Color(0xFFF8FAFC),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 4.dp)
@@ -613,14 +613,14 @@ private fun EmptySecurityStateBox(message: String) {
             Icon(
                 imageVector = Icons.Default.LockOpen,
                 contentDescription = null,
-                tint = Color(0xFF94A3B8),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(28.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = message,
                 fontSize = 11.sp,
-                color = Color(0xFF64748B),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 lineHeight = 16.sp
             )
@@ -1086,7 +1086,7 @@ private fun DeviceSecurityInspectionDialog(
                             Text(
                                 text = "Play Integrity API Classic • Verifikasi Admin",
                                 fontSize = 11.sp,
-                                color = Color(0xFF64748B)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -1103,7 +1103,7 @@ private fun DeviceSecurityInspectionDialog(
                     }
                 }
 
-                HorizontalDivider(color = Color(0xFFE2E8F0))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 
                 // 1. Identitas & Status Sesi
                 InspectionSectionBlock(
@@ -1165,13 +1165,13 @@ private fun DeviceSecurityInspectionDialog(
                     InspectionSectionBlock(
                         title = "4. Riwayat Login Petugas (${officerActivities.size} Terakhir)",
                         icon = Icons.Default.History,
-                        accent = Color(0xFF475569)
+                        accent = MaterialTheme.colorScheme.primary
                     ) {
                         officerActivities.take(5).forEach { act ->
                             Text(
                                 text = "• [${act.loginStatus}] ${formatLoginMethodLabel(act.loginMethod)} — ${formatSecurityTimestamp(act.timestamp)} (${act.deviceModel})",
                                 fontSize = 10.sp,
-                                color = Color(0xFF334155),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 14.sp
                             )
                         }
@@ -1197,7 +1197,10 @@ private fun DeviceSecurityInspectionDialog(
                 ) {
                     Button(
                         onClick = { onApproveVerify(verificationNote.trim()) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF15803D),
+                            contentColor = Color.White
+                        ),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .weight(1f)
@@ -1211,7 +1214,10 @@ private fun DeviceSecurityInspectionDialog(
 
                     Button(
                         onClick = { onBlockSession(verificationNote.trim()) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFD97706),
+                            contentColor = Color.White
+                        ),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .weight(1f)
@@ -1288,14 +1294,15 @@ private fun LoginActivityDetailDialog(
             Icon(
                 imageVector = Icons.Default.Shield,
                 contentDescription = null,
-                tint = Color(0xFF1D4ED8)
+                tint = Color(0xFF3B82F6)
             )
         },
         title = {
             Text(
                 text = "Detail Aktivitas Login & Token",
                 fontWeight = FontWeight.Bold,
-                fontSize = 15.sp
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurface
             )
         },
         text = {
@@ -1328,7 +1335,10 @@ private fun LoginActivityDetailDialog(
                 if (linkedSession != null) {
                     Button(
                         onClick = { onOpenOfficerSession(linkedSession) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF15803D),
+                            contentColor = Color.White
+                        )
                     ) {
                         Text("Verifikasi Sesi", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
                     }
@@ -1355,8 +1365,8 @@ private fun InspectionSectionBlock(
 ) {
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = Color(0xFFF8FAFC),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1385,7 +1395,7 @@ private fun InspectionKeyValueRow(
         Text(
             text = label,
             fontSize = 11.sp,
-            color = Color(0xFF64748B),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(0.38f)
         )
         Text(
@@ -1393,7 +1403,7 @@ private fun InspectionKeyValueRow(
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
-            color = Color(0xFF0F172A),
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(0.62f)
         )

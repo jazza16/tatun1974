@@ -130,14 +130,14 @@ object MukomukoKrb2026Catalog {
             focusNumber = 3,
             focusTitle = "Pengembangan Sistem Informasi, Diklat dan Logistik",
             score = 0.46,
-            categoryLabel = "Tertinggi (Didukung SIPAGAR KITA)",
+            categoryLabel = "Tertinggi • Didukung SIPAGAR KITA",
             strategicNote = "Fokus IKD tertinggi Kabupaten Mukomuko — diperkuat melalui Pusdalops PB & aplikasi SIPAGAR KITA."
         ),
         KrbIkdPriorityItem(
             focusNumber = 4,
             focusTitle = "Penanganan Tematik Kawasan Rawan Bencana",
             score = 0.20,
-            categoryLabel = "Terendah (Prioritas Intervensi)",
+            categoryLabel = "Terendah • Prioritas Intervensi",
             strategicNote = "Percepatan pembentukan Desa Tangguh Bencana (Destana), Satuan Pendidikan Aman Bencana (SPAB), dan RSAB."
         ),
         KrbIkdPriorityItem(

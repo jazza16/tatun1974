@@ -8,7 +8,8 @@ data class VersionChangelog(
     val releaseDate: String,
     val isCurrent: Boolean = false,
     val isLatest: Boolean = false,
-    val highlights: List<String>
+    val highlights: List<String>,
+    val releaseName: String = ""
 )
 
 val INITIAL_RELEASE_CHANGELOG = VersionChangelog(
@@ -30,11 +31,12 @@ val LATEST_RELEASE_CHANGELOG = VersionChangelog(
     releaseDate = "27 November 2026",
     isCurrent = true,
     isLatest = true,
+    releaseName = "Trilogi Kebijakan Kebencanaan Daerah",
     highlights = listOf(
-        "Tab Khusus KRB 2026–2030 & Perda RTRW No. 12 Tahun 2025: Pemisahan dokumen KRB Mukomuko (12 matriks bahaya, IRBI 164,32, IKD 0,29) dan Perda RTRW 2025–2045 (Pasal 42, 83, 92–94, KKPR Pasal 95–108) pada tab khusus tepat setelah Laporan Warga serta sinkronisasi penuh ke seluruh modul operasional.",
-        "Notifikasi Latar Belakang 24 Jam Tanpa Login (Porsi Warga vs Petugas): Peringatan otomatis laporan warga baru, potensi ancaman, dan kejadian bencana kini langsung muncul di perangkat tanpa perlu login dengan porsi informasi terpisah untuk Mode Warga dan Mode Petugas/TRC.",
-        "Pembaruan UI/UX Beranda & SOP Evakuasi Mandiri Offline: Penambahan efek warna Gemini Spin pada kartu Aksi Cepat Tanggap, penataan ulang kartu Info Cuaca, perapian penuh kartu SOP Evakuasi Offline & tombol Audio TTS, serta perbaikan tata letak KRB & RTRW.",
-        "Materi Presentasi Eksekutif & Pimpinan (Khusus Administrator): Penyelarasan naskah Paparan Eksekutif & Presentasi Pimpinan dengan KRB–RTRW, kemandirian Zero APBD, serta penguncian visibilitas khusus pada sesi login Administrator."
+        "Trilogi Kebijakan Kebencanaan Daerah (Tab Khusus KRB, RPB & RTRW): Integrasi penuh Dokumen KRB 2026–2030 (12 matriks bahaya, 205.602 jiwa terpapar), Dokumen RPB 2025–2029 (3 isu strategis, 5 target dampak 2029: IRB 228,28→136,87 & IKD 0,29→0,57, 31 strategi, nomenklatur Kepmendagri 900.1-861/2026, 11 lokasi resmi shelter pengungsi, kinerja SPM & analisis fiskal BPKAD 0,59% APBD, sejarah 184 bencana, kelembagaan & Monev), serta Perda RTRW No. 12 Tahun 2025 (Pasal 42, 83, 92–94 & KKPR Pasal 95–108).",
+        "Banner Kebijakan Buka-Tutup (Collapsible) Lintas Seluruh Tab Operasional: Seluruh modul (Beranda, Laporan Warga, Statistik, Prakiraan, Peringatan WRS, Karhutla, Peta & SOP, inaRISK, Historis, Maritim, Kualitas Udara, dan 15 Kecamatan) kini menampilkan ringkasan sinkronisasi KRB, RPB & RTRW yang ringkas dan dapat dibuka/ditutup sesuai selera pengguna.",
+        "Notifikasi Latar Belakang 24 Jam Tanpa Login (Porsi Warga vs Petugas): Peringatan otomatis laporan warga baru, potensi ancaman, dan kejadian bencana langsung muncul di perangkat tanpa perlu login dengan porsi informasi terpisah untuk Mode Warga dan Mode Petugas/TRC.",
+        "Pembaruan UI/UX Beranda, SOP Evakuasi Offline & Perapian Visual Lintas Modul: Efek warna Gemini Spin pada kartu Aksi Cepat Tanggap, penataan kartu Info Cuaca, perapian penuh kartu SOP Evakuasi Offline & tombol Audio TTS, badge tampil utuh tanpa terpotong, serta penghilangan bingkai bayangan ganda pada kartu berbingkai oranye."
     )
 )
 
@@ -193,7 +195,7 @@ data class AppUpdateState(
     val isPermanentlyInstalled: Boolean = true,
     val lastCheckedVersion: String = "1.3.0",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi (Production Release) v1.3.0 terbaru secara permanen.",
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi v1.3.0 \"Trilogi Kebijakan Kebencanaan Daerah\" terbaru secara permanen.",
     val packageSizeMb: Float = 20.4f,
     val downloadUrl: String = "https://github.com/jazza16/tatun1974/releases/latest",
     val isBannerDismissed: Boolean = false,

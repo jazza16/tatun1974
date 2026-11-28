@@ -91,21 +91,24 @@ fun InternalModuleLockedScreen(
                         text = "$moduleTitle Terkunci",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
+                        color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Modul internal BPBD ini hanya dapat dibuka dan dirender ketika sesi login Petugas Pusdalops aktif.",
                         fontSize = 13.sp,
-                        color = Color(0xFF475569),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                         lineHeight = 19.sp
                     )
                     Spacer(modifier = Modifier.height(20.dp))
                     Button(
                         onClick = onClose,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF4F46E5),
+                            contentColor = Color.White
+                        ),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()

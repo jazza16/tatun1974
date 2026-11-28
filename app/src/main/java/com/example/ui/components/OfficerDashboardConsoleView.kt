@@ -2353,13 +2353,13 @@ fun OfficerDashboardConsoleView(
                         text = "Petugas: $officerName (ID/NIP: $officerBadgeId)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "PIN pribadi tersimpan terenkripsi di server Cloud Firestore dan tidak pernah dikembalikan ke PIN default.",
                         fontSize = 11.sp,
-                        color = Color(0xFF475569),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 14.sp
                     )
 
@@ -4276,7 +4276,7 @@ fun OfficerDashboardConsoleView(
                 Text(
                     text = "Akses Tier 1 (Manajer): Laporan #${targetDelete.id.takeLast(7)} (${targetDelete.disasterType} - Desa ${targetDelete.village}) akan dihapus permanen dari database lokal dan Cloud Firestore.",
                     fontSize = 12.sp,
-                    color = Color(0xFF334155)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
             confirmButton = {
@@ -4427,7 +4427,7 @@ fun OfficerDashboardConsoleView(
                     text = "Unduh Daftar Data Seluruh Relawan",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF0F172A),
+                    color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center
                 )
             },
@@ -4439,7 +4439,7 @@ fun OfficerDashboardConsoleView(
                     Text(
                         text = "Dokumen ini memuat daftar lengkap seluruh relawan kebencanaan terdaftar (NIK KTP 16 digit, Organisasi, Keahlian, Lokasi Posko, Waktu Check-in/Check-out, & Nomor Surat Tugas) untuk keperluan arsip resmi, pelaporan berjenjang kepada pihak berkompeten, serta dokumentasi pengakhiran waktu penanggulangan bencana.",
                         fontSize = 11.5.sp,
-                        color = Color(0xFF334155),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 16.sp
                     )
 
@@ -4447,7 +4447,7 @@ fun OfficerDashboardConsoleView(
                         text = "Pilih Peruntukan Dokumen:",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF0F172A)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     archivePurposeOptions.forEachIndexed { idx, purpose ->
@@ -4625,7 +4625,7 @@ fun OfficerDashboardConsoleView(
                     Text(
                         text = "Lokasi: ${activeRep.village}, Kec. ${activeRep.district}",
                         fontSize = 11.sp,
-                        color = Color(0xFF475569)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(10.dp))
 
@@ -4633,7 +4633,7 @@ fun OfficerDashboardConsoleView(
                         text = "Ubah Status Operasional:",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     val allowedStatuses = if (canValidateReports) {
@@ -4676,7 +4676,7 @@ fun OfficerDashboardConsoleView(
                         text = "Catatan Tindak Lanjut Personel TRC:",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
@@ -4694,13 +4694,6 @@ fun OfficerDashboardConsoleView(
                                 fontSize = 11.sp
                             )
                         },
-                        colors = TextFieldDefaults.colors(
-                            focusedTextColor = Color(0xFF0F172A),
-                            unfocusedTextColor = Color(0xFF0F172A),
-                            cursorColor = Color(0xFF15803D),
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
-                        ),
                         shape = RoundedCornerShape(8.dp)
                     )
                 }

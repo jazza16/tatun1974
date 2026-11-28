@@ -677,63 +677,67 @@ private fun OnlineUpdateCard(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(
+                            if (isUpToDate) Color(0xFF16A34A).copy(alpha = 0.15f)
+                            else OrangePrimary.copy(alpha = 0.15f),
+                            RoundedCornerShape(10.dp)
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(
-                                if (isUpToDate) Color(0xFF16A34A).copy(alpha = 0.15f)
-                                else OrangePrimary.copy(alpha = 0.15f),
-                                RoundedCornerShape(10.dp)
-                            ),
-                        contentAlignment = Alignment.Center
+                    Icon(
+                        imageVector = if (isUpToDate) Icons.Default.VerifiedUser else Icons.Default.NewReleases,
+                        contentDescription = "Pembaruan",
+                        tint = if (isUpToDate) Color(0xFF16A34A) else OrangePrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(
-                            imageVector = if (isUpToDate) Icons.Default.VerifiedUser else Icons.Default.NewReleases,
-                            contentDescription = "Pembaruan",
-                            tint = if (isUpToDate) Color(0xFF16A34A) else OrangePrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Status Versi & Rilis",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = "Terakhir dicek: ${updateState.lastCheckedTime}",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-                        )
+                        Surface(
+                            color = if (isUpToDate) Color(0xFF16A34A).copy(alpha = 0.15f)
+                            else OrangePrimary.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = if (isUpToDate) "Versi Terbaru"
+                                else "Update Tersedia",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isUpToDate) Color(0xFF16A34A) else OrangePrimary,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                            )
+                        }
                     }
-                }
-
-                Surface(
-                    color = if (isUpToDate) Color(0xFF16A34A).copy(alpha = 0.15f)
-                    else OrangePrimary.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
                     Text(
-                        text = if (isUpToDate) "Tersedia Versi Terbaru"
-                        else "Update Tersedia",
+                        text = "Terakhir dicek: ${updateState.lastCheckedTime}",
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isUpToDate) Color(0xFF16A34A) else OrangePrimary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
                 }
             }
@@ -909,7 +913,9 @@ private fun NewFeaturesExplanationSection(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -935,7 +941,7 @@ private fun NewFeaturesExplanationSection(
                             color = if (isDark) Color(0xFFFFEDD5) else Color(0xFF78350F)
                         )
                         Text(
-                            text = "Biometric Auth, Play Integrity Server & Laporan Harian PDF",
+                            text = "Trilogi Kebijakan Kebencanaan Daerah (KRB, RPB & RTRW) • Keamanan Petugas",
                             fontSize = 11.sp,
                             color = if (isDark) Color(0xFFFDC5A2) else Color(0xFF92400E)
                         )
@@ -951,7 +957,9 @@ private fun NewFeaturesExplanationSection(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = OrangePrimary,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                     )
                 }
             }
@@ -1118,6 +1126,7 @@ private fun VersionChangelogSection(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CollapsibleVersionCard(
     log: com.example.model.VersionChangelog,
@@ -1126,26 +1135,22 @@ private fun CollapsibleVersionCard(
     isDark: Boolean
 ) {
     Card(
+        onClick = onToggleExpand,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .clickable { onToggleExpand() }
             .testTag("accordion_version_${log.version}"),
         shape = RoundedCornerShape(14.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isExpanded) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         border = androidx.compose.foundation.BorderStroke(
-            width = if (log.isLatest || isExpanded) 1.2.dp else 1.dp,
+            width = if (log.isLatest || isExpanded) 1.5.dp else 1.dp,
             color = if (log.isLatest || isExpanded) {
-                OrangePrimary.copy(alpha = 0.55f)
+                OrangePrimary
             } else {
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
             }
         )
     ) {
@@ -1155,9 +1160,12 @@ private fun CollapsibleVersionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 6.dp)
                 ) {
                     Text(
                         text = "Versi ${log.version}",
@@ -1166,7 +1174,6 @@ private fun CollapsibleVersionCard(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     if (log.isLatest) {
-                        Spacer(modifier = Modifier.width(6.dp))
                         Surface(
                             color = OrangePrimary,
                             shape = RoundedCornerShape(4.dp)
@@ -1176,11 +1183,12 @@ private fun CollapsibleVersionCard(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     } else if (log.isCurrent) {
-                        Spacer(modifier = Modifier.width(6.dp))
                         Surface(
                             color = Color(0xFF16A34A),
                             shape = RoundedCornerShape(4.dp)
@@ -1190,6 +1198,8 @@ private fun CollapsibleVersionCard(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -1200,7 +1210,9 @@ private fun CollapsibleVersionCard(
                     Text(
                         text = log.releaseDate,
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
@@ -1208,6 +1220,22 @@ private fun CollapsibleVersionCard(
                         contentDescription = if (isExpanded) "Tutup rincian" else "Buka rincian",
                         tint = OrangePrimary,
                         modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            if (log.releaseName.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    color = OrangePrimary.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = "Edisi Rilis: \"${log.releaseName}\"",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = OrangePrimary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
             }

@@ -224,7 +224,10 @@ internal fun SyncDiagnosticsSection(
 
                     Button(
                         onClick = onTestPing,
-                        colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OrangePrimary,
+                            contentColor = Color.White
+                        ),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                         modifier = Modifier
@@ -250,7 +253,7 @@ internal fun SyncDiagnosticsSection(
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("card_active_devices_heartbeat")
@@ -280,7 +283,7 @@ internal fun SyncDiagnosticsSection(
                         text = "5 HP Pengujian",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF64748B),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.align(Alignment.CenterVertically)
@@ -293,7 +296,7 @@ internal fun SyncDiagnosticsSection(
                     Text(
                         text = "Belum ada heartbeat perangkat lain terdeteksi dalam 5 menit terakhir.",
                         fontSize = 11.sp,
-                        color = Color(0xFF94A3B8)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -387,7 +390,7 @@ internal fun SyncDiagnosticsSection(
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("card_checksum_integrity")
@@ -399,7 +402,7 @@ internal fun SyncDiagnosticsSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Shield, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Shield, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Pemeriksaan Integritas Data (Checksum)",
@@ -414,7 +417,7 @@ internal fun SyncDiagnosticsSection(
                 Text(
                     text = "Bandingkan hashing SHA-256 antara Room Database SQLite lokal dan Cloud Firestore untuk mendeteksi rekaman yang terlewat atau tidak konsisten.",
                     fontSize = 11.sp,
-                    color = Color(0xFF64748B)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -475,7 +478,10 @@ internal fun SyncDiagnosticsSection(
                 Button(
                     onClick = onRunIntegrityCheck,
                     enabled = !isCheckingIntegrity,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF2563EB),
+                        contentColor = Color.White
+                    ),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -485,11 +491,11 @@ internal fun SyncDiagnosticsSection(
                     if (isCheckingIntegrity) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Memeriksa Checksum...", fontSize = 11.sp)
+                        Text("Memeriksa Checksum...", fontSize = 11.sp, color = Color.White)
                     } else {
-                        Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Shield, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Jalankan Pengecekan Integritas (Checksum)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Jalankan Pengecekan Integritas (Checksum)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -499,7 +505,7 @@ internal fun SyncDiagnosticsSection(
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("card_conflict_logs_section")
@@ -526,7 +532,7 @@ internal fun SyncDiagnosticsSection(
                 Text(
                     text = "Riwayat resolusi otomatis saat dua perangkat petugas mengubah laporan yang sama secara bersamaan.",
                     fontSize = 11.sp,
-                    color = Color(0xFF64748B)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -538,30 +544,38 @@ internal fun SyncDiagnosticsSection(
                 ) {
                     Button(
                         onClick = onExportConflictLogsCsv,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF0F766E),
+                            contentColor = Color.White
+                        ),
                         shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                         modifier = Modifier
                             .weight(1f)
                             .heightIn(min = 48.dp)
                             .testTag("btn_export_conflict_csv")
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Ekspor CSV Log", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Icon(Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Ekspor CSV Log", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
 
                     Button(
                         onClick = onOpenDatabaseExplorer,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF4F46E5),
+                            contentColor = Color.White
+                        ),
                         shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                         modifier = Modifier
                             .weight(1f)
                             .heightIn(min = 48.dp)
                             .testTag("btn_open_database_explorer")
                     ) {
-                        Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Database Explorer", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Icon(Icons.Default.Storage, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Database Explorer", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
                 }
 
@@ -697,6 +711,7 @@ fun AdminAuthDialog(
                 text = "Otorisasi Master Admin",
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
         },
@@ -711,7 +726,7 @@ fun AdminAuthDialog(
                     text = "Akses ke \"$actionTitle\" diverifikasi langsung ke server Cloud Firestore (app_settings/admin_config). " +
                         "Jika PIN valid, Token Akses Sementara (10 menit) diterbitkan dan setiap percobaan dicatat di Audit Log.",
                     fontSize = 11.5.sp,
-                    color = Color(0xFF475569),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 16.sp
                 )
                 if (officerNip.isNotBlank()) {
@@ -720,7 +735,7 @@ fun AdminAuthDialog(
                         text = "Petugas: ${officerName.ifBlank { "-" }} (NIP: $officerNip)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -741,7 +756,7 @@ fun AdminAuthDialog(
                             Icon(
                                 imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                 contentDescription = if (isPasswordVisible) "Sembunyikan PIN" else "Tampilkan PIN",
-                                tint = Color.Gray,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -814,7 +829,8 @@ fun AdminAuthDialog(
                 onClick = executeVerification,
                 enabled = !isVerifying,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRetryableError) Color(0xFFEA580C) else Color(0xFF15803D)
+                    containerColor = if (isRetryableError) Color(0xFFEA580C) else Color(0xFF15803D),
+                    contentColor = Color.White
                 ),
                 modifier = Modifier.testTag("btn_verify_master_admin_pin")
             ) {
@@ -825,9 +841,13 @@ fun AdminAuthDialog(
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Memverifikasi...")
+                    Text("Memverifikasi...", color = Color.White, fontWeight = FontWeight.Bold)
                 } else {
-                    Text(if (isRetryableError) "Coba Lagi" else "Verifikasi Server")
+                    Text(
+                        text = if (isRetryableError) "Coba Lagi" else "Verifikasi Server",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         },

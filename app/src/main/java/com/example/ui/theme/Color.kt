@@ -31,12 +31,12 @@ val OrangeOutlineLight = Color(0xFFFDBA74)
 
 // Background & Surface - Dark (Deep charcoal with warm glow)
 val OrangePrimaryDark = Color(0xFFFB923C)
-val OrangeOnPrimaryDark = Color(0xFF431407)
+val OrangeOnPrimaryDark = Color(0xFFFFFFFF)
 val OrangePrimaryContainerDark = Color(0xFF7C2D12)
 val OrangeOnPrimaryContainerDark = Color(0xFFFFEDD5)
 
 val OrangeSecondaryDark = Color(0xFFFBBF24)
-val OrangeOnSecondaryDark = Color(0xFF451A03)
+val OrangeOnSecondaryDark = Color(0xFFFFFFFF)
 val OrangeSecondaryContainerDark = Color(0xFF78350F)
 val OrangeOnSecondaryContainerDark = Color(0xFFFEF3C7)
 

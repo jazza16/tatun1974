@@ -300,6 +300,7 @@ fun CitizenReportScreen(
     openRuangKerjaRequestId: Int = 0,
     onOfficerLoginDismissed: (() -> Unit)? = null,
     onOfficerLogoutToLanding: (() -> Unit)? = null,
+    onOpenKrbRtrwTab: (() -> Unit)? = null,
     hasSpecialAssignment: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -1082,6 +1083,19 @@ fun CitizenReportScreen(
                         contentPadding = PaddingValues(top = 12.dp, bottom = 96.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
+                        item {
+                            KrbRtrwModuleContextBanner(
+                                currentDistrict = currentDistrict,
+                                moduleTag = "laporan_warga",
+                                moduleTitle = "Layanan Laporan Warga & Verifikasi TRC",
+                                krbAlignmentNote = "Verifikasi laporan kejadian warga mengacu pada 12 ancaman KRB 2026–2030 (8 bahaya Prioritas 1 risiko tinggi, 2 Prioritas 2, dan 2 Prioritas 3) di 15 Kecamatan & 151 Desa/Kelurahan.",
+                                rpbAlignmentNote = "Strategi 2.6, 2.8 & 2.11 RPB 2025–2029: Mempercepat SPM Respons Cepat Darurat ≤1×24 jam (dari 36,14%), pengerahan TRC PB (20→200 personel), serta prioritas kelompok rentan GEDSI.",
+                                rtrwRegulationNote = "Validasi titik koordinat kejadian diselaraskan dengan ketentuan Kawasan Rawan Bencana (Pasal 92) dan Sempadan Pantai/Sungai (Pasal 93) Perda RTRW No. 12 Tahun 2025.",
+                                isDark = false,
+                                onOpenKrbRtrwTab = { onOpenKrbRtrwTab?.invoke() }
+                            )
+                        }
+
                         if (isOfficerLoggedIn) {
                             // Mode Petugas Aktif: Sembunyikan form laporan warga, tampilkan Kartu Pengarah Besar ke Form Laporan Harian Pusdalops
                             item {
@@ -2750,7 +2764,7 @@ fun CitizenReportScreen(
                 Text(
                     text = "Laporan #${reportToDelete.id} (${reportToDelete.disasterType} - ${reportToDelete.village}) akan dihapus permanen dari perangkat dan server Cloud Firestore. Aksi eksklusif Tier 1 Manajer.",
                     fontSize = 12.sp,
-                    color = Color(0xFF374151),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 17.sp
                 )
             },
@@ -2762,10 +2776,13 @@ fun CitizenReportScreen(
                         onDeleteReport?.invoke(id)
                         Toast.makeText(context, "Laporan #$id dihapus oleh Manajer $officerName", Toast.LENGTH_SHORT).show()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFDC2626),
+                        contentColor = Color.White
+                    ),
                     modifier = Modifier.testTag("btn_confirm_history_delete_report")
                 ) {
-                    Text("Ya, Hapus Permanen")
+                    Text("Ya, Hapus Permanen", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -2800,7 +2817,7 @@ fun CitizenReportScreen(
                 Text(
                     text = permissionDeniedDialogMessage.orEmpty(),
                     fontSize = 12.sp,
-                    color = Color(0xFF374151),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 16.sp
                 )
             },
@@ -2820,9 +2837,12 @@ fun CitizenReportScreen(
                             )
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF15803D),
+                        contentColor = Color.White
+                    )
                 ) {
-                    Text("Beri Izin Sekarang")
+                    Text("Beri Izin Sekarang", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -2866,18 +2886,31 @@ fun CitizenReportScreen(
                         },
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
-                        color = Color(0xFF374151)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFFF3F4F6),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
-                            Text(text = "Nomor Aduan: $submittedReportId", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "Jenis: $selectedDisasterType", fontSize = 11.sp)
-                            Text(text = "Kecamatan: $selectedDistrict", fontSize = 11.sp)
+                            Text(
+                                text = "Nomor Aduan: $submittedReportId",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Jenis: $selectedDisasterType",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "Kecamatan: $selectedDistrict",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Text(
                                 text = when {
                                     isDeferredOffline -> "Status: 🟢 Tersimpan di Perangkat (Dikirim Otomatis Saat Sinyal Tersedia)"
@@ -2885,7 +2918,7 @@ fun CitizenReportScreen(
                                     else -> "Status: 🟡 Diproses (Menunggu Verifikasi Lapangan)"
                                 },
                                 fontSize = 11.sp,
-                                color = Color(0xFF15803D),
+                                color = Color(0xFF16A34A),
                                 fontWeight = FontWeight.Bold
                             )
                         }

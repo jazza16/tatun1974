@@ -1,22 +1,24 @@
-# Catatan Rilis Resmi SIPAGAR KITA (v1.3.0)
+# Catatan Rilis Resmi SIPAGAR KITA v1.3.0 — "Trilogi Kebijakan Kebencanaan Daerah"
 
 **Pusdalops-PB Badan Penanggulangan Bencana Daerah (BPBD) Kabupaten Mukomuko**  
-*Versi Rilis: **v1.3.0** (Build 14) | Tanggal Rilis: **27 November 2026***
+*Versi Rilis: **v1.3.0** (versionCode 14) | Nama Rilis: **"Trilogi Kebijakan Kebencanaan Daerah"** | Tanggal Rilis: **27 November 2026***
 
 ---
 
 ## Ringkasan Rilis
-Rilis **SIPAGAR KITA v1.3.0 (Build 14)** menghadirkan **Tab Khusus KRB 2026–2030 & Perda RTRW No. 12 Tahun 2025** yang tersinkronisasi lintas seluruh modul operasional, **Notifikasi Latar Belakang 24 Jam Tanpa Login** (membedakan porsi Mode Warga dan Mode Petugas/TRC), **Materi Presentasi Eksekutif & Pimpinan khusus sesi Administrator**, serta **penyempurnaan tata letak Beranda, KRB–RTRW, dan seluruh kartu SOP Evakuasi Mandiri Offline**.
+Rilis **SIPAGAR KITA v1.3.0 (Build 14) — "Trilogi Kebijakan Kebencanaan Daerah"** menuntaskan penyelarasan tiga pilar utama tata kelola kebencanaan Kabupaten Mukomuko dalam satu sistem terpadu: **Dokumen KRB 2026–2030**, **Dokumen RPB 2025–2029**, dan **Perda RTRW Nomor 12 Tahun 2025**. Rilis ini juga menghadirkan **Banner Kebijakan Buka-Tutup (*Collapsible*)** lintas seluruh tab operasional, **Notifikasi Latar Belakang 24 Jam Tanpa Login** (membedakan porsi Mode Warga dan Mode Petugas/TRC), serta **penyempurnaan tata letak Beranda, inaRISK, 15 Kecamatan, dan seluruh kartu SOP Evakuasi Mandiri Offline**.
 
 ---
 
 ## ✨ Penambahan Fitur & Fungsi Baru
-- **Tab Khusus KRB 2026–2030 & Perda RTRW No. 12 Tahun 2025**:
-  - Memisahkan kajian ilmiah KRB Mukomuko 2026–2030 (IRBI 164,32; IKD 0,29; 12 matriks bahaya; 205.602 jiwa terpapar) dan regulasi Perda RTRW No. 12 Tahun 2025 (Pasal 42, 83, 92–94, KKPR Pasal 95–108, Indikasi Program Utama BPBD) ke dalam tab khusus tepat setelah Tab Laporan Warga serta mensinkronkannya dengan seluruh modul terkait.
+- **Trilogi Kebijakan Kebencanaan Daerah (Tab Khusus `KRB, RPB & RTRW`)**:
+  - **KRB 2026–2030**: 12 matriks ancaman prioritas, kerentanan 4 dimensi, 7 fokus IKD, 205.602 jiwa terpapar, dan potensi kerugian multibahaya Rp 6,74 Triliun.
+  - **RPB 2025–2029 (Potongan Akhir Puzzle)**: Sub-tab khusus memuat 3 isu strategis (skor 176, 169, 166), 5 indikator dampak 2025–2029 (pembaruan metodologi IRBI 228,28 menuju target 136,87 & lonjakan IKD 0,29 menuju 0,57), seluruh **31 strategi**, matriks nomenklatur sub-kegiatan lintas OPD (*Kepmendagri 900.1-861/2026* termasuk `1.05.03.2.04.0004`), **11 lokasi resmi penampungan pengungsi** (`1.06.06.2.01.0007`), kinerja SPM (gap peralatan 7,44%, SAR 25%, respons cepat 36,14%), analisis fiskal BPKAD 2020–2025 (0,59% APBD), rekap **184 bencana historis (2014–2024)**, serta kelembagaan Hexahelix/GEDSI & Monev RPBD.
+  - **Perda RTRW No. 12 Tahun 2025 (2025–2045)**: Pasal 42 (jalur evakuasi TES/TEA), Pasal 83 ayat (4) (*Zero Burning*), Pasal 92–94 (KRB & sempadan pantai 100 m), KKPR & 9 Sanksi Administratif Pasal 95–108, serta Indikasi Program Utama BPBD Lampiran XII.
+- **Banner Sinkronisasi Buka-Tutup (*Collapsible*) di Seluruh Tab Operasional**:
+  - Seluruh tab operasional dan kartu 15 Kecamatan dilengkapi panel ringkas *Buka/Tutup* (seperti Catatan Rilis Aplikasi) agar selaras dengan Trilogi Kebijakan tanpa mendominasi tampilan utama.
 - **Notifikasi Latar Belakang 24 Jam Tanpa Login (Mode Warga vs Mode Petugas)**:
-  - Laporan warga baru, potensi ancaman, dan kejadian bencana kini langsung muncul sebagai notifikasi di perangkat pengguna tanpa harus membuka aplikasi maupun login, dengan membedakan porsi informasi keselamatan warga dan komando tindak lanjut petugas/TRC.
-- **Materi Presentasi Terpadu (Khusus Administrator)**:
-  - Menyelaraskan naskah Paparan Eksekutif dan Naskah Ringkas Presentasi Pimpinan dengan dokumen KRB–RTRW, prinsip kemandirian *Zero APBD*, dan peran pendampingan ASN BPBD, yang hanya tampil saat sesi login Administrator aktif.
+  - Laporan warga baru, potensi ancaman, dan kejadian bencana langsung muncul sebagai notifikasi di perangkat pengguna tanpa harus login, dengan porsi informasi terpisah untuk keselamatan warga dan komando tindak lanjut petugas/TRC.
 
 ---
 
@@ -27,8 +29,8 @@ Rilis **SIPAGAR KITA v1.3.0 (Build 14)** menghadirkan **Tab Khusus KRB 2026–20
 ---
 
 ## 🐛 Perbaikan Bug & Tata Letak
+- **Perapian Penuh Badge & Kartu Berbingkai Oranye Lintas Modul**: Memastikan seluruh *badge* tampil utuh 100% tanpa terpotong (`FlowRow`), serta menghilangkan efek bingkai/bayangan abu-abu ganda di sekeliling kartu berbingkai oranye pada inaRISK, KRB–RPB–RTRW, 15 Kecamatan, Catatan Rilis, Kompas, dan SOP Evakuasi.
 - **Perapian Penuh SOP Evakuasi Mandiri (Offline)**: Memperbaiki tata letak *badge* prinsip/rumus utama (selebar kartu penuh) dan tombol **"Bacakan Semua"** (Audio TTS Bahasa Indonesia) pada seluruh kartu bencana agar tidak terhimpit atau terpotong vertikal.
-- **Sinkronisasi & Perapian Tata Letak KRB–RTRW & Peta**: Merapikan susunan *badge* sinkronisasi modul, Rencana Pola Ruang, Indikasi Program Utama BPBD, Pasal 92–93 RTRW, serta tombol-tombol pada modul Peta & SOP Evakuasi dan Shakemap BMKG.
 
 ---
 

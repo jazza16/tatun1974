@@ -10,6 +10,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -235,6 +237,7 @@ object InaRiskMukomukoDataProvider {
  * - Dokumen Kajian Risiko Bencana (KRB) Kabupaten Mukomuko Tahun 2026–2030
  * - Peraturan Daerah Kabupaten Mukomuko Nomor 12 Tahun 2025 tentang RTRW Tahun 2025–2045
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InaRiskBnpbSection(
     currentDistrict: District,
@@ -268,6 +271,8 @@ fun InaRiskBnpbSection(
     var selectedHazardId by remember(selectedDistrict.id) {
         mutableStateOf<String?>(allHazards.firstOrNull()?.id ?: "banjir")
     }
+    var isHeroKrbRtrwExpanded by remember { mutableStateOf(false) }
+    var isDistrictVulnerabilityExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -283,7 +288,7 @@ fun InaRiskBnpbSection(
                 .fillMaxWidth()
                 .testTag("inarisk_hero_card"),
             shape = RoundedCornerShape(22.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         ) {
@@ -315,18 +320,16 @@ fun InaRiskBnpbSection(
 
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
                                 text = "inaRISK BNPB & KRB 2026–2030",
-                                fontSize = 16.sp,
+                                fontSize = 15.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -339,12 +342,14 @@ fun InaRiskBnpbSection(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false,
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }
                         }
                         Text(
-                            text = "Sinkronisasi Resmi Dokumen KRB Kabupaten Mukomuko Tahun 2026–2030 (BPBD & PS2DL UGM, Jan 2026) & Perda RTRW No. 12 Tahun 2025",
+                            text = "Sinkronisasi Resmi Trilogi Kebijakan: KRB 2026–2030, RPB 2025–2029 (Target IRB 136,87 & IKD 0,57) & Perda RTRW No. 12 Tahun 2025",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
                             lineHeight = 15.sp
@@ -352,127 +357,24 @@ fun InaRiskBnpbSection(
                     }
                 }
 
-                // IRBI 2025 & IKD 2025 Official Score Banner (Tidak lagi memakai angka lama 168.40)
+                // Collapsible Toggle Bar: Ringkasan Kebijakan KRB 2026–2030, RPB 2025–2029 & Perda RTRW No. 12/2025 (Buka/Tutup seperti Catatan Rilis)
                 Surface(
-                    color = Color(0xFFFEF2F2),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
-                    modifier = Modifier.fillMaxWidth()
+                    onClick = { isHeroKrbRtrwExpanded = !isHeroKrbRtrwExpanded },
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(
+                        width = if (isHeroKrbRtrwExpanded) 1.5.dp else 1.dp,
+                        color = if (isHeroKrbRtrwExpanded) OrangePrimary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("inarisk_toggle_hero_krb_rtrw")
                 ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Indeks Risiko Bencana Indonesia (IRBI 2025)",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF991B1B),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 8.dp)
-                            )
-                            Surface(
-                                color = Color(0xFF16A34A).copy(alpha = 0.14f),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    text = "Turun 26,88 Poin dari 2015",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF15803D),
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = "Skor IRBI 2025: 164,32 (Kelas Risiko TINGGI)",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFFDC2626)
-                        )
-
-                        Text(
-                            text = "• Indeks Ketahanan Daerah (IKD 2025): 0,29 (IKD_T = 0,242 • Kelas RENDAH)\n" +
-                                "• Indeks Kesiapsiagaan Masyarakat (IKM): 0,348 • Indeks Kapasitas Multibahaya: 0,295 (RENDAH)\n" +
-                                "• Cakupan Paparan: Seluruh 15 Kecamatan (148 Desa & 3 Kelurahan • 205.602 jiwa • Luas 414.320,37 Ha) berada pada Kelas Risiko Multibahaya TINGGI dengan total potensi kerugian Rp 6,74 Triliun.",
-                            fontSize = 11.sp,
-                            color = Color(0xFF7F1D1D),
-                            lineHeight = 15.sp
-                        )
-                    }
-                }
-
-                // District Filter Selector
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "Pilih Kecamatan untuk Analisis Risiko KRB 2026–2030 & RTRW 2025–2045:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        MukomukoDistricts.list.forEach { dist ->
-                            val isSelected = dist.id == selectedDistrict.id
-                            Surface(
-                                color = if (isSelected) OrangePrimary else MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(20.dp),
-                                modifier = Modifier
-                                    .clickable { selectedDistrict = dist }
-                                    .testTag("inarisk_district_${dist.id}")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocationOn,
-                                        contentDescription = null,
-                                        tint = if (isSelected) OrangeOnPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = dist.name,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) OrangeOnPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Ringkasan Cepat Profil Kecamatan Terpilih (KRB 2026-2030 + Perda RTRW No. 12/2025)
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Top
                         ) {
                             Column(
                                 modifier = Modifier
@@ -481,43 +383,176 @@ fun InaRiskBnpbSection(
                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 Text(
-                                    text = "Profil Resmi Kec. ${districtKrbProfile.districtName}",
-                                    fontSize = 13.sp,
+                                    text = "Profil KRB, RPB & RTRW Kec. ${districtKrbProfile.districtName}",
+                                    fontSize = 12.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
-                                val desaKel = if (districtKrbProfile.wardsCount > 0) {
-                                    "${districtKrbProfile.villagesCount} Desa & ${districtKrbProfile.wardsCount} Kelurahan"
-                                } else {
-                                    "${districtKrbProfile.villagesCount} Desa"
-                                }
                                 Text(
-                                    text = "Ibu Kota: ${districtKrbProfile.capitalName} • $desaKel • Luas KRB: ${formatIdNumber(districtKrbProfile.areaHa)} Ha",
+                                    text = if (isHeroKrbRtrwExpanded) {
+                                        "IRBI 2025 (RPB): 228,28 (2023–24: 164,32) • Target IKD 2029: 0,57 • ${districtRtrwProfile.settlementHierarchyCode}"
+                                    } else {
+                                        "IRBI 228,28 (Target 136,87) • IKD 0,29→0,57 • Ketuk untuk buka"
+                                    },
                                     fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            Surface(
-                                color = Color(0xFF00695C),
-                                shape = RoundedCornerShape(7.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Text(
-                                    text = "RTRW: ${districtRtrwProfile.settlementHierarchyCode}",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                Surface(
+                                    color = OrangePrimary.copy(alpha = 0.14f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = if (isHeroKrbRtrwExpanded) "Tutup" else "Buka",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = OrangePrimary,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                    )
+                                }
+                                Icon(
+                                    imageVector = if (isHeroKrbRtrwExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (isHeroKrbRtrwExpanded) "Tutup rincian" else "Buka rincian",
+                                    tint = OrangePrimary,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
 
-                        Text(
-                            text = "• Pusat Permukiman (Pasal 10 RTRW): ${districtRtrwProfile.urbanOrRuralCenterName} (${districtRtrwProfile.settlementHierarchyTitle})\n" +
-                                "• Distribusi Luas Risiko Multibahaya (Tabel 3.111 KRB): Risiko Tinggi ${formatIdNumber(districtKrbProfile.riskHighAreaHa)} Ha | Risiko Sedang ${formatIdNumber(districtKrbProfile.riskMediumAreaHa)} Ha | Risiko Rendah ${formatIdNumber(districtKrbProfile.riskLowAreaHa)} Ha",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = 15.sp
-                        )
+                        AnimatedVisibility(visible = isHeroKrbRtrwExpanded) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                                // IRBI 2025 & IKD 2025 Official Score Banner
+                                Surface(
+                                    color = Color(0xFFFEF2F2),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        FlowRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "Indeks Risiko Bencana Indonesia (IRBI 2025)",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF991B1B)
+                                            )
+                                            Surface(
+                                                color = Color(0xFF16A34A).copy(alpha = 0.14f),
+                                                shape = RoundedCornerShape(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Turun 26,88 Poin dari 2015",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = Color(0xFF15803D),
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Text(
+                                            text = "Skor IRBI 2025: 164,32 (Kelas Risiko TINGGI)",
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFFDC2626)
+                                        )
+
+                                        Text(
+                                            text = "• Indeks Ketahanan Daerah (IKD 2025): 0,29 (IKD_T = 0,242 • Kelas RENDAH)\n" +
+                                                "• Indeks Kesiapsiagaan Masyarakat (IKM): 0,348 • Indeks Kapasitas Multibahaya: 0,295 (RENDAH)\n" +
+                                                "• Cakupan Paparan: Seluruh 15 Kecamatan (148 Desa & 3 Kelurahan • 205.602 jiwa • Luas 414.320,37 Ha) berada pada Kelas Risiko Multibahaya TINGGI dengan total potensi kerugian Rp 6,74 Triliun.",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF7F1D1D),
+                                            lineHeight = 15.sp
+                                        )
+                                    }
+                                }
+
+                                // Ringkasan Cepat Profil Kecamatan Terpilih (KRB 2026-2030 + Perda RTRW No. 12/2025)
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        FlowRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "Profil Resmi Kec. ${districtKrbProfile.districtName}",
+                                                fontSize = 12.5.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Surface(
+                                                color = Color(0xFF00695C),
+                                                shape = RoundedCornerShape(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "RTRW: ${districtRtrwProfile.settlementHierarchyCode}",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = Color.White,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                        }
+                                        val desaKel = if (districtKrbProfile.wardsCount > 0) {
+                                            "${districtKrbProfile.villagesCount} Desa & ${districtKrbProfile.wardsCount} Kelurahan"
+                                        } else {
+                                            "${districtKrbProfile.villagesCount} Desa"
+                                        }
+                                        Text(
+                                            text = "Ibu Kota: ${districtKrbProfile.capitalName} • $desaKel • Luas KRB: ${formatIdNumber(districtKrbProfile.areaHa)} Ha",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            lineHeight = 15.sp,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        Text(
+                                            text = "• Pusat Permukiman (Pasal 10 RTRW): ${districtRtrwProfile.urbanOrRuralCenterName} (${districtRtrwProfile.settlementHierarchyTitle})\n" +
+                                                "• Distribusi Luas Risiko Multibahaya (Tabel 3.111 KRB): Risiko Tinggi ${formatIdNumber(districtKrbProfile.riskHighAreaHa)} Ha | Risiko Sedang ${formatIdNumber(districtKrbProfile.riskMediumAreaHa)} Ha | Risiko Rendah ${formatIdNumber(districtKrbProfile.riskLowAreaHa)} Ha",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            lineHeight = 15.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -577,39 +612,36 @@ fun InaRiskBnpbSection(
                 }
 
                 Card(
+                    onClick = {
+                        selectedHazardId = if (isExpanded) null else hazard.id
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            selectedHazardId = if (isExpanded) null else hazard.id
-                        }
                         .testTag("inarisk_hazard_${hazard.id}"),
                     shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     ),
                     border = BorderStroke(
                         width = if (isExpanded) 1.5.dp else 1.dp,
-                        color = if (isExpanded) hazard.color else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        color = if (isExpanded) hazard.color else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
                     )
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Top Row: Badge Prioritas KRB + Badge Dominan Kecamatan + Badge Kelas Risiko + Expand Icon
+                        // Top Row: Badge Prioritas KRB + Badge Dominan Kecamatan + Badge Kelas Risiko (FlowRow agar semua badge muncul penuh) + Expand Icon
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.Top
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .horizontalScroll(rememberScrollState()),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            FlowRow(
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Surface(
                                     color = prioBadgeColor,
@@ -620,6 +652,8 @@ fun InaRiskBnpbSection(
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color.White,
+                                        maxLines = 1,
+                                        softWrap = false,
                                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                     )
                                 }
@@ -633,6 +667,8 @@ fun InaRiskBnpbSection(
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color.White,
+                                        maxLines = 1,
+                                        softWrap = false,
                                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                     )
                                 }
@@ -648,6 +684,8 @@ fun InaRiskBnpbSection(
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = Color(0xFFE65100),
+                                            maxLines = 1,
+                                            softWrap = false,
                                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                         )
                                     }
@@ -799,121 +837,181 @@ fun InaRiskBnpbSection(
             }
         }
 
-        // 3. DIMENSI KERENTANAN & KAPASITAS RESMI KECAMATAN TERPILIH (TABEL 3.107, 3.108, 3.110 KRB 2026–2030)
+        // 3. DIMENSI KERENTANAN & KAPASITAS RESMI KECAMATAN TERPILIH (TABEL 3.107, 3.108, 3.110 KRB 2026–2030) — COLLAPSIBLE SEPERTI CATATAN RILIS
         Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            onClick = { isDistrictVulnerabilityExpanded = !isDistrictVulnerabilityExpanded },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("inarisk_card_district_vulnerability"),
+            shape = RoundedCornerShape(18.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            border = BorderStroke(
+                width = if (isDistrictVulnerabilityExpanded) 1.5.dp else 1.dp,
+                color = if (isDistrictVulnerabilityExpanded) {
+                    OrangePrimary
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                }
+            )
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "Dimensi Kerentanan & Kapasitas Kec. ${districtKrbProfile.districtName} (KRB 2026–2030)",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Data resmi Tabel 3.107 (Sosial), Tabel 3.108 (Fisik, Ekonomi, Lingkungan), & Tabel 3.110 (Indeks Kapasitas Multibahaya)",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                        lineHeight = 15.sp
-                    )
-                }
-
-                // Grid 2x2 agar tidak terpotong di layar sempit
+            Column(modifier = Modifier.padding(16.dp)) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    VulnerabilityMetric(
-                        label = "Kerentanan Sosial",
-                        value = "${formatIdInt(districtKrbProfile.exposedPopulation)} Jiwa",
-                        desc = "Umur Rentan: ${formatIdInt(districtKrbProfile.vulnerableAgePopulation)} • Miskin P3KE: ${formatIdInt(districtKrbProfile.poorPopulationP3KE)} • Disabilitas: ${districtKrbProfile.disabilityPopulation}",
-                        color = Color(0xFFEF4444),
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    )
-                    VulnerabilityMetric(
-                        label = "Kerentanan Fisik",
-                        value = formatRupiahMillions(districtKrbProfile.physicalLossMillionRp),
-                        desc = "Potensi kerusakan rumah, fasilitas umum & kritis (${districtKrbProfile.healthFacilitiesCount} Faskes)",
-                        color = Color(0xFFEA580C),
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    VulnerabilityMetric(
-                        label = "Kerentanan Ekonomi",
-                        value = formatRupiahMillions(districtKrbProfile.economicLossMillionRp),
-                        desc = "Total Rugi Fisik + Ekonomi: ${formatRupiahMillions(districtKrbProfile.totalLossMillionRp)}",
-                        color = Color(0xFFD97706),
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    )
-                    VulnerabilityMetric(
-                        label = "Lingkungan & Kapasitas",
-                        value = "${formatIdNumber(districtKrbProfile.envDamageHa)} Ha",
-                        desc = "Indeks Kapasitas: ${String.format(Locale.US, "%.3f", districtKrbProfile.multiHazardCapacityIndex)} (${districtKrbProfile.multiHazardCapacityClass}) • IKM: ${String.format(Locale.US, "%.3f", districtKrbProfile.ikmScore)}",
-                        color = Color(0xFF10B981),
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    )
-                }
-
-                // Rekomendasi Fokus Penanganan KRB & Arahan Tata Ruang RTRW Kecamatan Terpilih
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(
-                        modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Verified,
-                                contentDescription = null,
-                                tint = OrangePrimary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Text(
-                                text = "Rekomendasi KRB 2026–2030 & Arahan RTRW 2025–2045 (${districtKrbProfile.districtName}):",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
                         Text(
-                            text = "• Fokus KRB 2026–2030: ${districtKrbProfile.recommendationSummary}\n" +
-                                "• Arahan Perda RTRW No. 12/2025: ${districtRtrwProfile.spatialControlDirective}",
+                            text = "Dimensi Kerentanan & Kapasitas Kec. ${districtKrbProfile.districtName} (KRB, RPB & RTRW)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isDistrictVulnerabilityExpanded) {
+                                "Tabel 3.107–3.110 KRB, Target IKD RPB 2029 (0,57) & Arahan Perda RTRW 12/2025"
+                            } else {
+                                "4 dimensi kerentanan, target RPB 2025–2029 & arahan RTRW • Ketuk untuk membuka"
+                            },
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 15.sp
                         )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Surface(
+                            color = OrangePrimary.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = if (isDistrictVulnerabilityExpanded) "Tutup" else "Buka",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = OrangePrimary,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                            )
+                        }
+                        Icon(
+                            imageVector = if (isDistrictVulnerabilityExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (isDistrictVulnerabilityExpanded) "Tutup rincian" else "Buka rincian",
+                            tint = OrangePrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                AnimatedVisibility(visible = isDistrictVulnerabilityExpanded) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        // Grid 2x2 agar tidak terpotong di layar sempit
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Min),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            VulnerabilityMetric(
+                                label = "Kerentanan Sosial",
+                                value = "${formatIdInt(districtKrbProfile.exposedPopulation)} Jiwa",
+                                desc = "Umur Rentan: ${formatIdInt(districtKrbProfile.vulnerableAgePopulation)} • Miskin P3KE: ${formatIdInt(districtKrbProfile.poorPopulationP3KE)} • Disabilitas: ${districtKrbProfile.disabilityPopulation}",
+                                color = Color(0xFFEF4444),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
+                            VulnerabilityMetric(
+                                label = "Kerentanan Fisik",
+                                value = formatRupiahMillions(districtKrbProfile.physicalLossMillionRp),
+                                desc = "Potensi kerusakan rumah, fasilitas umum & kritis (${districtKrbProfile.healthFacilitiesCount} Faskes)",
+                                color = Color(0xFFEA580C),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Min),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            VulnerabilityMetric(
+                                label = "Kerentanan Ekonomi",
+                                value = formatRupiahMillions(districtKrbProfile.economicLossMillionRp),
+                                desc = "Total Rugi Fisik + Ekonomi: ${formatRupiahMillions(districtKrbProfile.totalLossMillionRp)}",
+                                color = Color(0xFFD97706),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
+                            VulnerabilityMetric(
+                                label = "Lingkungan & Kapasitas",
+                                value = "${formatIdNumber(districtKrbProfile.envDamageHa)} Ha",
+                                desc = "Indeks Kapasitas: ${String.format(Locale.US, "%.3f", districtKrbProfile.multiHazardCapacityIndex)} (${districtKrbProfile.multiHazardCapacityClass}) • IKM: ${String.format(Locale.US, "%.3f", districtKrbProfile.ikmScore)}",
+                                color = Color(0xFF10B981),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
+                        }
+
+                        // Rekomendasi Fokus Penanganan KRB & Arahan Tata Ruang RTRW Kecamatan Terpilih
+                        Surface(
+                            color = OrangePrimary.copy(alpha = 0.06f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.35f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Verified,
+                                        contentDescription = null,
+                                        tint = OrangePrimary,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = "Rekomendasi KRB 2026–2030 & Arahan RTRW 2025–2045 (${districtKrbProfile.districtName}):",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Text(
+                                    text = "• Fokus KRB 2026–2030: ${districtKrbProfile.recommendationSummary}\n" +
+                                        "• Arahan Perda RTRW No. 12/2025: ${districtRtrwProfile.spatialControlDirective}",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -795,6 +795,7 @@ fun WeatherAppScreen(
                                                     moduleTag = "hari_ini",
                                                     moduleTitle = "Beranda Hari Ini",
                                                     krbAlignmentNote = "Pemantauan cuaca harian diselaraskan dengan 6 bahaya Prioritas 1 KRB 2026–2030 (Banjir, Banjir Bandang, Cuaca Ekstrem, Gelombang Ekstrem & Abrasi, Karhutla, Tanah Longsor).",
+                                                    rpbAlignmentNote = "Mendukung Strategi 1.2 & 1.4 RPB 2025–2029 (Modernisasi EWS, Pusdalops-PB & Sistem Informasi Kebencanaan Kode 1.05.03.2.04.0004) serta target penurunan IRB menuju 136,87 di 2029.",
                                                     rtrwRegulationNote = "Mengacu pada ketentuan khusus Kawasan Rawan Bencana (Pasal 92) & Sempadan Pantai/Sungai (Pasal 93) Perda RTRW No. 12 Tahun 2025.",
                                                     isDark = isActuallyDark,
                                                     onOpenKrbRtrwTab = { viewModel.selectTab(2) }
@@ -938,6 +939,9 @@ fun WeatherAppScreen(
                                     openRuangKerjaRequestId = 0
                                     viewModel.showStartupWallpaper()
                                 },
+                                onOpenKrbRtrwTab = {
+                                    viewModel.selectTab(2)
+                                },
                                 onBackClick = {
                                     viewModel.selectTab(0)
                                 }
@@ -978,6 +982,7 @@ fun WeatherAppScreen(
                                         moduleTag = "statistik_bencana",
                                         moduleTitle = "Statistik & Tren Bencana Bulanan",
                                         krbAlignmentNote = "Distribusi kejadian bulanan dievaluasi terhadap baseline 12 ancaman KRB 2026–2030 (Total potensi kerugian multibahaya Rp 6,74 Triliun; 205.602 jiwa terpapar).",
+                                        rpbAlignmentNote = "Disandingkan dengan rekap sejarah 184 kejadian bencana 2014–2024 (82 Gempa, 49 Banjir, 20 Karhutla, 17 Longsor; 8.057 jiwa terdampak) & evaluasi Monev Tahunan RPB 2025–2029 (Tabel 6.1).",
                                         rtrwRegulationNote = "Menjadi dasar evaluasi pengendalian pemanfaatan ruang & prioritas program mitigasi BPBD (Lampiran XII Program A.2.5.5).",
                                         isDark = isActuallyDark,
                                         onOpenKrbRtrwTab = { viewModel.selectTab(2) }
@@ -1006,6 +1011,19 @@ fun WeatherAppScreen(
                                     contentPadding = PaddingValues(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
+                                    item {
+                                        com.example.ui.components.KrbRtrwModuleContextBanner(
+                                            currentDistrict = currentDistrict,
+                                            moduleTag = "prakiraan_cuaca",
+                                            moduleTitle = "Prakiraan Cuaca & Curah Hujan 15 Kecamatan",
+                                            krbAlignmentNote = "Pemantauan curah hujan & cuaca ekstrem mendukung kesiapsiagaan 3 ancaman hidrometeorologi Prioritas 1 KRB 2026–2030: Banjir (72.244,44 Ha), Banjir Bandang (11.279,30 Ha), dan Cuaca Ekstrem (143.621,15 Ha).",
+                                            rpbAlignmentNote = "Selaras Strategi 1.1 & 1.2 RPB 2025–2029: Penguatan Flood Forecasting & Warning System (FFWS Kode 1.03.02.2.01.0090), polder/kolam retensi & adaptasi perubahan iklim sektor pertanian (42,44% PDRB).",
+                                            rtrwRegulationNote = "Pasal 92 ayat (1)–(2) & Pasal 93 ayat (3) Perda RTRW No. 12/2025: Pengendalian sempadan sungai, drainase primer-sekunder, dan perlindungan kawasan resapan air DAS.",
+                                            isDark = isActuallyDark,
+                                            onOpenKrbRtrwTab = { viewModel.selectTab(2) }
+                                        )
+                                    }
+
                                     // Tabel Prakiraan Cuaca 15 Kecamatan Bergaya BMKG + Unduh PDF
                                     item {
                                         com.example.ui.components.BmkgStyleForecastTable(
@@ -1054,6 +1072,7 @@ fun WeatherAppScreen(
                                         moduleTag = "peringatan_wrs",
                                         moduleTitle = "Peringatan Dini & Gempa WRS-BMKG",
                                         krbAlignmentNote = "Selaras KRB 2026–2030: Tsunami Prioritas 2 (7.523,90 Ha; tinggi rendaman s/d 13 m di 6 kecamatan pesisir) & Gempa Bumi Prioritas 3 (bahaya PGA tinggi di 100% wilayah, risiko sedang karena struktur bangunan mayoritas 1 lantai).",
+                                        rpbAlignmentNote = "Strategi 1.2 & 2.8 RPB 2025–2029: Antisipasi Sesar Aktif Sumatera (slip rate 5 mm/thn) & Megathrust Mentawai–Pagai (31.122 jiwa zona tsunami; 82 gempa tercatat 2014–2024) serta aktivasi SKPDB & respon cepat ≤1×24 jam.",
                                         rtrwRegulationNote = "Pasal 92 ayat (4) & (6) Perda RTRW No. 12/2025: Wajib EWS, struktur bangunan tahan gempa SNI, dan larangan fasilitas kritis baru di zona bahaya tinggi tsunami.",
                                         isDark = isActuallyDark,
                                         onOpenKrbRtrwTab = { viewModel.selectTab(2) }
@@ -1099,6 +1118,7 @@ fun WeatherAppScreen(
                                         moduleTag = "monitoring_karhutla",
                                         moduleTitle = "Monitoring Titik Panas & Karhutla",
                                         krbAlignmentNote = "Prioritas 1 KRB 2026–2030: Luas risiko Karhutla tertinggi mencapai 404.993,70 Ha (validasi ROC/AUC = 0,932) dengan potensi kerugian ekonomi Rp 699,61 Miliar di lahan gambut & perkebunan.",
+                                        rpbAlignmentNote = "Strategi 3.7 RPB 2025–2029: Sinergi sistem informasi kebakaran real-time SKIKP (Kode 1.05.04.2.01.0008), RISPKP & Relawan Damkar SKKL Disdamkarmat untuk menekan 20 kejadian historis Karhutla & potensi rugi Rp 834,44 M.",
                                         rtrwRegulationNote = "Pasal 92 ayat (5) & Pasal 83 ayat (4) Perda RTRW No. 12/2025: Larangan pembukaan lahan dengan cara membakar (Zero Burning) & wajib sekat bakar/menara pantau api.",
                                         isDark = isActuallyDark,
                                         onOpenKrbRtrwTab = { viewModel.selectTab(2) }
@@ -1137,6 +1157,7 @@ fun WeatherAppScreen(
                                         moduleTag = "peta_sop_evakuasi",
                                         moduleTitle = "Peta Risiko & Sistem Jaringan Evakuasi",
                                         krbAlignmentNote = "Peta zonasi bahaya dan titik kumpul mengacu pada peta risiko multibahaya KRB 2026–2030 (Skala 1:50.000) di 15 Kecamatan dan 151 Desa/Kelurahan.",
+                                        rpbAlignmentNote = "Strategi 1.3 & 2.9 RPB 2025–2029: Terhubung ke 11 Lokasi Resmi Penampungan Pengungsi BPBD (Kode 1.06.06.2.01.0007), jaringan jalan evakuasi 681,37 Km & rambu Dishub (20–25 unit/thn) guna menutup gap SPM SAR 25%.",
                                         rtrwRegulationNote = "Pasal 42 & Lampiran XII Perda RTRW No. 12/2025: Penetapan Jaringan Jalur Evakuasi Bencana, Tempat Evakuasi Sementara (TES), dan Tempat Evakuasi Akhir (TEA) di seluruh kecamatan.",
                                         isDark = isActuallyDark,
                                         onOpenKrbRtrwTab = { viewModel.selectTab(2) }
@@ -1180,8 +1201,9 @@ fun WeatherAppScreen(
                                         currentDistrict = currentDistrict,
                                         moduleTag = "inarisk_bnpb",
                                         moduleTitle = "Portal Risiko inaRISK BNPB",
-                                        krbAlignmentNote = "Indikator inaRISK telah disinkronkan 100% dengan KRB 2026–2030: Skor IRBI 2025 = 164,32 (Tinggi), IKD 2025 = 0,29 (Rendah), IKM = 0,348 (Sedang), dan 12 matriks bahaya.",
-                                        rtrwRegulationNote = "Rincian lengkap pasal demi pasal Perda RTRW No. 12 Tahun 2025 (Pasal 42, 83, 92, 93, 94 & Sanksi KKPR Pasal 95–108) tersedia di Tab Khusus KRB & RTRW.",
+                                        krbAlignmentNote = "Indikator inaRISK telah disinkronkan 100% dengan KRB 2026–2030: Skor IRBI 2023–2024 = 164,32 (Tinggi), IKD 2025 = 0,29 (Rendah), IKM = 0,348 (Sedang), dan 12 matriks bahaya.",
+                                        rpbAlignmentNote = "Dokumen RPB 2025–2029 (Gambar 3.15 & Tabel 4.1) mencatat pembaruan metodologi IRBI 2025 sebesar 228,28 dengan target penurunan IRB menjadi 136,87 & lonjakan IKD dari 0,29 menjadi 0,57 pada 2029.",
+                                        rtrwRegulationNote = "Rincian lengkap pasal demi pasal Perda RTRW No. 12 Tahun 2025 (Pasal 42, 83, 92, 93, 94 & Sanksi KKPR Pasal 95–108) tersedia di Tab Khusus KRB, RPB & RTRW.",
                                         isDark = isActuallyDark,
                                         onOpenKrbRtrwTab = { viewModel.selectTab(2) }
                                     )
@@ -1206,6 +1228,19 @@ fun WeatherAppScreen(
                                 contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
+                                item {
+                                    com.example.ui.components.KrbRtrwModuleContextBanner(
+                                        currentDistrict = currentDistrict,
+                                        moduleTag = "cuaca_historis",
+                                        moduleTitle = "Rekam Jejak & Tren Cuaca Historis",
+                                        krbAlignmentNote = "Arsip cuaca historis digunakan untuk kalibrasi kerentanan Kekeringan (Prioritas 1: 410.422,60 Ha; Rp 887,93 Miliar) dan anomali hidrometeorologi dalam Dokumen KRB 2026–2030.",
+                                        rpbAlignmentNote = "Strategi 3.8 & 3.11 RPB 2025–2029: Mendukung perlindungan LP2B/KP2B & Pengendalian Dampak Perubahan Iklim (DPI Distan Kode 3.27.05.2.01.0002) terhadap 414.320,37 Ha potensi kekeringan.",
+                                        rtrwRegulationNote = "Mendukung evaluasi berkala daya dukung & daya tampung lingkungan hidup pada Kawasan Pertanian Pangan Berkelanjutan (KP2B) Perda RTRW No. 12/2025.",
+                                        isDark = isActuallyDark,
+                                        onOpenKrbRtrwTab = { viewModel.selectTab(2) }
+                                    )
+                                }
+
                                 item {
                                     HistoricalWeatherSection(
                                         district = currentDistrict,
@@ -1237,6 +1272,7 @@ fun WeatherAppScreen(
                                             moduleTag = "maritim_pesisir",
                                             moduleTitle = "Maritim, Gelombang & Pesisir Samudra Hindia",
                                             krbAlignmentNote = "Prioritas 1 KRB 2026–2030: Gelombang Ekstrem dan Abrasi mengancam 2.892,69 Ha (tinggi gelombang signifikan s/d 2,7 m; 25.008 jiwa terpapar) di 7 kecamatan pesisir.",
+                                            rpbAlignmentNote = "Strategi 1.1 & 3.6 RPB 2025–2029: Pengaman pantai/abrasi & rehabilitasi vegetasi pesisir/mangrove untuk melindungi 7 kecamatan pesisir dari ancaman GEA (tren meningkat; potensi rugi Rp 131,69 M).",
                                             rtrwRegulationNote = "Pasal 92 ayat (9) & Pasal 93 ayat (2) Perda RTRW No. 12/2025: Garis Sempadan Pantai minimal 100 meter dari titik pasang tertinggi (KDB 0%, KDH min 80%) & sabuk hijau mangrove/cemara laut.",
                                             isDark = isActuallyDark,
                                             onOpenKrbRtrwTab = { viewModel.selectTab(2) }
@@ -1275,6 +1311,19 @@ fun WeatherAppScreen(
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     item {
+                                        com.example.ui.components.KrbRtrwModuleContextBanner(
+                                            currentDistrict = currentDistrict,
+                                            moduleTag = "kualitas_udara",
+                                            moduleTitle = "Kualitas Udara, Polutan PM2.5 & Indeks UV",
+                                            krbAlignmentNote = "Pemantauan PM2.5/PM10 berkaitan langsung dengan dampak asap Karhutla (Prioritas 1: 404.993,70 Ha) serta risiko Epidemi dan Wabah Penyakit ISPA (Prioritas 3: 6.135 jiwa terpapar).",
+                                            rpbAlignmentNote = "Strategi 3.10 & 3.11 RPB 2025–2029 (DLH Kode 2.11.03.2.01.0009): Pemantauan kualitas lingkungan & perluasan RTH untuk mendongkrak IKLH 66,20 → 69,58 & penurunan GRK 28,10% → 41,29% pada 2029.",
+                                            rtrwRegulationNote = "Pasal 92 ayat (5) & ketentuan Ruang Terbuka Hijau (RTH) Perda RTRW No. 12/2025: Pengendalian emisi pembakaran lahan & penyediaan sabuk hijau penyangga.",
+                                            isDark = isActuallyDark,
+                                            onOpenKrbRtrwTab = { viewModel.selectTab(2) }
+                                        )
+                                    }
+
+                                    item {
                                         com.example.ui.components.BmkgAirQualityDetailedSection(
                                             airQuality = report.airQuality,
                                             uvIndex = maxUv,
@@ -1294,6 +1343,19 @@ fun WeatherAppScreen(
                                 contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
+                                item {
+                                    com.example.ui.components.KrbRtrwModuleContextBanner(
+                                        currentDistrict = currentDistrict,
+                                        moduleTag = "lima_belas_kecamatan",
+                                        moduleTitle = "Direktori Cuaca & Risiko 15 Kecamatan",
+                                        krbAlignmentNote = "Memuat profil risiko multibahaya KRB 2026–2030 dan Indeks Kapasitas Daerah (IKD) di seluruh 15 Kecamatan (148 Desa & 3 Kelurahan, luas 414.320,37 Ha).",
+                                        rpbAlignmentNote = "Memetakan 11 Lokasi Resmi Tempat Penampungan Pengungsi RPB 2025–2029 (Kode 1.06.06.2.01.0007) & perlindungan kelompok rentan GEDSI (1.460 miskin P3KE & 269 disabilitas) di tiap kecamatan.",
+                                        rtrwRegulationNote = "Setiap kartu kecamatan dilengkapi rincian Sistem Perkotaan Perda RTRW No. 12/2025 (1 PKL Kota Mukomuko, 4 PPK, dan 10 PPL) yang dapat dibuka/ditutup sesuai kebutuhan.",
+                                        isDark = isActuallyDark,
+                                        onOpenKrbRtrwTab = { viewModel.selectTab(2) }
+                                    )
+                                }
+
                                 item {
                                     AllDistrictsView(
                                         districtsSummary = uiState.allDistrictsSummary,

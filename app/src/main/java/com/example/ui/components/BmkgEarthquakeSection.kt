@@ -21,8 +21,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -622,9 +625,9 @@ private fun WrsParameterMatrixCard(
     val context = LocalContext.current
     val depthVal = earthquake.depth.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 15
     val depthCategory = when {
-        depthVal < 60 -> "Dangkal (< 60 km)"
-        depthVal <= 300 -> "Menengah (60 - 300 km)"
-        else -> "Dalam (> 300 km)"
+        depthVal < 60 -> "Dangkal (<60 km)"
+        depthVal <= 300 -> "Menengah"
+        else -> "Dalam (>300 km)"
     }
     val depthColor = when {
         depthVal < 60 -> Color(0xFFDC2626)
@@ -676,115 +679,160 @@ private fun WrsParameterMatrixCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Main Metrics Grid (Magnitude, Depth, Distance to Mukomuko)
+            // Main Metrics Grid (Magnitude, Depth, Distance to Mukomuko) — Ukuran Ketiga Kotak Identik
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Magnitude Metric Box
+                // 1. Magnitude Metric Box
                 Surface(
-                    modifier = Modifier.weight(1f),
-                    color = Color(0xFFFEF2F2),
-                    shape = RoundedCornerShape(16.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCA5A5))
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    color = Color(0xFFDC2626).copy(alpha = 0.10f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626).copy(alpha = 0.35f))
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 6.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
                             text = "MAGNITUDO",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF991B1B)
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFDC2626),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = String.format(Locale.US, "%.1f", earthquake.magnitude),
-                            fontSize = 32.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Black,
-                            color = Color(0xFFDC2626)
+                            color = Color(0xFFDC2626),
+                            maxLines = 1,
+                            softWrap = false
                         )
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Skala Richter",
-                            fontSize = 11.sp,
-                            color = Color(0xFF7F1D1D)
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFDC2626).copy(alpha = 0.85f),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                // Depth Metric Box
+                // 2. Depth Metric Box
                 Surface(
-                    modifier = Modifier.weight(1f),
-                    color = depthColor.copy(alpha = 0.08f),
-                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    color = depthColor.copy(alpha = 0.10f),
+                    shape = RoundedCornerShape(14.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, depthColor.copy(alpha = 0.35f))
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 6.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
                             text = "KEDALAMAN",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = depthColor
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = depthColor,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = earthquake.depth,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Black,
-                            color = depthColor
+                            color = depthColor,
+                            maxLines = 1,
+                            softWrap = false
                         )
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = depthCategory,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = depthColor.copy(alpha = 0.85f),
-                            maxLines = 1
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                // Proximity to Mukomuko Metric Box
+                // 3. Proximity to Mukomuko Metric Box
+                val distAccent = if (earthquake.isNearMukomuko) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurface
                 Surface(
-                    modifier = Modifier.weight(1.1f),
-                    color = if (earthquake.isNearMukomuko) Color(0xFFFEF3C7) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    color = if (earthquake.isNearMukomuko) {
+                        Color(0xFFD97706).copy(alpha = 0.12f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                    },
+                    shape = RoundedCornerShape(14.dp),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        if (earthquake.isNearMukomuko) Color(0xFFFCD34D) else Color.Transparent
+                        if (earthquake.isNearMukomuko) {
+                            Color(0xFFD97706).copy(alpha = 0.45f)
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                        }
                     )
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 6.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "JARAK KE MUKOMUKO",
+                            text = "JARAK MUKOMUKO",
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (earthquake.isNearMukomuko) Color(0xFF92400E) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (earthquake.isNearMukomuko) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "~${earthquake.distanceKmToMukomuko} km",
-                            fontSize = 16.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Black,
-                            color = if (earthquake.isNearMukomuko) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurface,
+                            color = distAccent,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (earthquake.isNearMukomuko) "Radius Dekat" else "Radius Aman",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (earthquake.isNearMukomuko) Color(0xFFB45309) else Color.Gray,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (earthquake.isNearMukomuko) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis

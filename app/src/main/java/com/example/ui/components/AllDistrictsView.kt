@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,7 +28,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,7 +99,7 @@ fun AllDistrictsView(
                 ),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                 shape = RoundedCornerShape(20.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -126,7 +131,7 @@ fun AllDistrictsView(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Cuaca aktual, Indeks Kapasitas (IKD) KRB 2026–2030 & Hierarki Perda RTRW No. 12/2025",
+                                text = "Cuaca aktual, KRB 2026–2030, Shelter RPB 2025–2029 & Hierarki Perda RTRW No. 12/2025",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                 lineHeight = 16.sp,
@@ -225,6 +230,7 @@ fun AllDistrictsView(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DistrictCardItem(
     dist: District,
@@ -245,20 +251,19 @@ private fun DistrictCardItem(
     }
 
     Card(
+        onClick = { onSelectDistrict(dist) },
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .clickable { onSelectDistrict(dist) }
             .testTag("district_item_${dist.id}"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         border = androidx.compose.foundation.BorderStroke(
-            width = if (isCurrentSelected) 2.dp else 1.dp,
-            color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            width = if (isCurrentSelected) 1.5.dp else 1.dp,
+            color = if (isCurrentSelected) OrangePrimary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
@@ -295,9 +300,9 @@ private fun DistrictCardItem(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
@@ -310,7 +315,6 @@ private fun DistrictCardItem(
                                 color = OrangePrimary,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                                 softWrap = false
                             )
                         }
@@ -326,7 +330,8 @@ private fun DistrictCardItem(
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -396,54 +401,113 @@ private fun DistrictCardItem(
                 }
             }
 
-            // Sinkronisasi KRB 2026-2030 & Perda RTRW No. 12/2025 per Kecamatan
+            // Sinkronisasi KRB 2026-2030, RPB 2025-2029 & Perda RTRW No. 12/2025 per Kecamatan (Bisa Buka-Tutup seperti Catatan Rilis)
+            val rpbShelters = androidx.compose.runtime.remember(dist.id) {
+                com.example.model.MukomukoRpb2025Catalog.getSheltersForDistrict(dist)
+            }
+            var isKrbRtrwExpanded by androidx.compose.runtime.remember(dist.id) {
+                androidx.compose.runtime.mutableStateOf(false)
+            }
             Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                modifier = Modifier.fillMaxWidth()
+                onClick = { isKrbRtrwExpanded = !isKrbRtrwExpanded },
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = androidx.compose.foundation.BorderStroke(
+                    width = if (isKrbRtrwExpanded) 1.2.dp else 1.dp,
+                    color = if (isKrbRtrwExpanded) OrangePrimary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("district_toggle_krb_rtrw_${dist.id}")
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(horizontal = 9.dp, vertical = 6.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
                         Text(
-                            text = "KRB 2026–2030: Risiko ${krbProfile.multiHazardRiskClass} • IKD ${String.format(Locale.US, "%.3f", krbProfile.multiHazardCapacityIndex)}",
+                            text = "Kebijakan KRB, RPB & RTRW (${rtrwProfile.settlementHierarchyCode} • Risiko ${krbProfile.multiHazardRiskClass})",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 6.dp)
                         )
                         Text(
-                            text = "RTRW (${rtrwProfile.settlementHierarchyCode}): ${rtrwProfile.urbanOrRuralCenterName}",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = if (isKrbRtrwExpanded) "Tutup ▲" else "Buka ▼",
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = OrangePrimary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            softWrap = false
                         )
                     }
 
-                    if (onOpenKrbRtrwDistrict != null) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = OrangePrimary.copy(alpha = 0.14f),
+                    androidx.compose.animation.AnimatedVisibility(visible = isKrbRtrwExpanded) {
+                        Column(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable { onOpenKrbRtrwDistrict(dist) }
-                                .testTag("district_open_krb_${dist.id}")
+                                .fillMaxWidth()
+                                .padding(top = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Text(
-                                text = "KRB & RTRW ↗",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = OrangePrimary,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                            androidx.compose.material3.HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
                             )
+                            Text(
+                                text = "• KRB 2026–2030: Risiko Multibahaya ${krbProfile.multiHazardRiskClass} (${String.format(Locale.GERMANY, "%,.2f", krbProfile.areaHa)} Ha) • IKD ${String.format(Locale.US, "%.3f", krbProfile.multiHazardCapacityIndex)} (${krbProfile.multiHazardCapacityClass})",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                lineHeight = 14.sp
+                            )
+                            Text(
+                                text = if (rpbShelters.isNotEmpty()) {
+                                    "• RPB 2025–2029 (Shelter Resmi): ${rpbShelters.joinToString("; ") { it.siteName }} [Kode 1.06.06.2.01.0007]"
+                                } else {
+                                    "• RPB 2025–2029: Terhubung ke 11 titik pengungsi resmi & jaringan 681,37 Km jalan evakuasi"
+                                },
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                lineHeight = 14.sp
+                            )
+                            Text(
+                                text = "• Perda RTRW No. 12/2025: ${rtrwProfile.settlementHierarchyCode} – ${rtrwProfile.urbanOrRuralCenterName} (${rtrwProfile.article10Reference})",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 14.sp
+                            )
+                            if (onOpenKrbRtrwDistrict != null) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = OrangePrimary,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .clickable { onOpenKrbRtrwDistrict(dist) }
+                                            .testTag("district_open_krb_${dist.id}")
+                                    ) {
+                                        Text(
+                                            text = "Buka Tab KRB, RPB & RTRW ↗",
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = androidx.compose.ui.graphics.Color.White,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

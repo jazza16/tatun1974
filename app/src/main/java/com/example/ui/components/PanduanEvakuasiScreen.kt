@@ -622,10 +622,9 @@ private fun ExpandablePanduanBencanaCard(
     val isReadingAll = activeSpeakingKey == fullSpeechKey
 
     Card(
+        onClick = onToggle,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onToggle)
             .testTag("accordion_bencana_${bencana.id}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -633,9 +632,9 @@ private fun ExpandablePanduanBencanaCard(
         ),
         border = BorderStroke(
             width = if (isExpanded) 1.5.dp else 1.dp,
-            color = if (isExpanded) OrangePrimary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            color = if (isExpanded) OrangePrimary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isExpanded) 4.dp else 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Header Kartu (Selalu Tampil)
