@@ -105,6 +105,7 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.OrangeOnPrimary
 import com.example.ui.theme.OrangePrimary
 import com.example.util.GoogleMapsHelper
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -159,6 +160,232 @@ data class MukomukoMapMarker(
     val phoneContact: String = "117"
 )
 
+object MukomukoMapMarkersCatalog {
+    // 15 Sub-Districts (Kecamatan) of Mukomuko with Verified Road-Accessible Coordinates
+    val allMarkers: List<MukomukoMapMarker> = listOf(
+        MukomukoMapMarker(
+            id = "MK_01",
+            name = "Posko Induk TRC Pusdalops-PB Mukomuko",
+            subDistrict = "Kota Mukomuko",
+            type = MapMarkerType.POSKO_TRC,
+            latitude = -2.5565,
+            longitude = 101.1145,
+            normX = 0.28f,
+            normY = 0.22f,
+            description = "Markas Komando Utama Pusdalops-PB BPBD (Jl. Imam Bonjol, Bandar Ratu) & Call Center 117 Bebas Pulsa. Kesiapsiagaan 24 Jam Tim Reaksi Cepat.",
+            readinessStatus = "SIAGA 24 JAM",
+            phoneContact = "117"
+        ),
+        MukomukoMapMarker(
+            id = "MK_02",
+            name = "Stasiun Meteorologi AWS BMKG Mukomuko",
+            subDistrict = "Kota Mukomuko",
+            type = MapMarkerType.STASIUN_CUACA,
+            latitude = -2.5411,
+            longitude = 101.0887,
+            normX = 0.31f,
+            normY = 0.20f,
+            description = "Stasiun Pengamatan Cuaca Otomatis & Radar Cuaca BMKG (Kawasan Bandara Mukomuko, Bandar Ratu). Pemantauan curah hujan, arah angin, dan tekanan atmosfer.",
+            readinessStatus = "ONLINE TELEMETRI",
+            phoneContact = "117"
+        ),
+        MukomukoMapMarker(
+            id = "MK_03",
+            name = "Posko Siaga TRC Sektor Utara Lubuk Pinang",
+            subDistrict = "Lubuk Pinang",
+            type = MapMarkerType.POSKO_TRC,
+            latitude = -2.4820,
+            longitude = 101.1090,
+            normX = 0.45f,
+            normY = 0.08f,
+            description = "Pos Komando Sektor Perbatasan Sumbar-Bengkulu (Jl. Lintas Barat Lubuk Pinang) & Pengendalian Daerah Aliran Sungai (DAS) Manjunto.",
+            readinessStatus = "SIAGA 24 JAM",
+            phoneContact = "08117301117"
+        ),
+        MukomukoMapMarker(
+            id = "MK_04",
+            name = "Titik Pantau Rawan Banjir DAS Manjunto",
+            subDistrict = "Lubuk Pinang",
+            type = MapMarkerType.RAWAN_BENCANA,
+            latitude = -2.4910,
+            longitude = 101.1240,
+            normX = 0.42f,
+            normY = 0.10f,
+            description = "Daerah rawan genangan luapan air sungai saat hujan lebat di hulu Bukit Barisan.",
+            readinessStatus = "WASPADA BANJIR"
+        ),
+        MukomukoMapMarker(
+            id = "MK_05",
+            name = "Posko Siaga TRC XIV Koto",
+            subDistrict = "XIV Koto",
+            type = MapMarkerType.POSKO_TRC,
+            latitude = -2.5400,
+            longitude = 101.1350,
+            normX = 0.35f,
+            normY = 0.14f,
+            description = "Posko TRC & Jalur Evakuasi Dataran Tinggi XIV Koto / Danau Nibung.",
+            readinessStatus = "SIAGA PENYELAMATAN"
+        ),
+        MukomukoMapMarker(
+            id = "MK_06",
+            name = "Stasiun Pemantau AWS Pesisir Air Dikit",
+            subDistrict = "Air Dikit",
+            type = MapMarkerType.STASIUN_CUACA,
+            latitude = -2.6350,
+            longitude = 101.1780,
+            normX = 0.32f,
+            normY = 0.34f,
+            description = "Sensor pengukur pasang surut maritim Samudra Hindia dan peringatan abrasi pantai (Jl. Lintas Barat Air Dikit).",
+            readinessStatus = "ONLINE TELEMETRI"
+        ),
+        MukomukoMapMarker(
+            id = "MK_07",
+            name = "Posko Penanggulangan Bencana Penarik",
+            subDistrict = "Penarik",
+            type = MapMarkerType.POSKO_TRC,
+            latitude = -2.6480,
+            longitude = 101.2980,
+            normX = 0.50f,
+            normY = 0.45f,
+            description = "Pusat logistik darurat pangan dan armada perahu karet penyelamat wilayah tengah (Jl. Poros SP3 Penarik).",
+            readinessStatus = "SIAGA LOGISTIK"
+        ),
+        MukomukoMapMarker(
+            id = "MK_08",
+            name = "Pos Pantau Pohon Tumbang & Cuaca Teras Terunjam",
+            subDistrict = "Teras Terunjam",
+            type = MapMarkerType.RAWAN_BENCANA,
+            latitude = -2.6450,
+            longitude = 101.2400,
+            normX = 0.46f,
+            normY = 0.28f,
+            description = "Zona rawan angin kencang puting beliung dan pohon tumbang lintas perkebunan Teras Terunjam.",
+            readinessStatus = "WASPADA BADAI"
+        ),
+        MukomukoMapMarker(
+            id = "MK_09",
+            name = "Posko Siaga TRC Sektor Pondok Suguh",
+            subDistrict = "Pondok Suguh",
+            type = MapMarkerType.POSKO_TRC,
+            latitude = -2.8580,
+            longitude = 101.4010,
+            normX = 0.52f,
+            normY = 0.58f,
+            description = "Posko Kesiapsiagaan Bencana wilayah pesisir muara sungai dan jalur perbukitan Pondok Suguh.",
+            readinessStatus = "SIAGA 24 JAM"
+        ),
+        MukomukoMapMarker(
+            id = "MK_10",
+            name = "Posko Terpadu Kedaruratan TRC Ipuh",
+            subDistrict = "Ipuh",
+            type = MapMarkerType.POSKO_TRC,
+            latitude = -2.9980,
+            longitude = 101.5180,
+            normX = 0.42f,
+            normY = 0.72f,
+            description = "Pusat Evakuasi Tsunami (TES) Sektor Selatan di Medan Jaya Ipuh, terhubung langsung Puskesmas Perawatan Ipuh & Polsek Mukomuko Selatan.",
+            readinessStatus = "SIAGA 24 JAM",
+            phoneContact = "08127400117"
+        ),
+        MukomukoMapMarker(
+            id = "MK_11",
+            name = "Stasiun Cuaca Maritim & Dermaga Nelayan Ipuh",
+            subDistrict = "Ipuh",
+            type = MapMarkerType.STASIUN_CUACA,
+            latitude = -3.0033,
+            longitude = 101.4988,
+            normX = 0.38f,
+            normY = 0.74f,
+            description = "Pemantauan tinggi gelombang laut Samudra Hindia dan keselamatan melaut nelayan tradisional (Koridor Pasar Ipuh).",
+            readinessStatus = "ONLINE BMKG"
+        ),
+        MukomukoMapMarker(
+            id = "MK_12",
+            name = "Titik Rawan Longsor Tebing Malin Deman",
+            subDistrict = "Malin Deman",
+            type = MapMarkerType.RAWAN_BENCANA,
+            latitude = -2.9850,
+            longitude = 101.5850,
+            normX = 0.64f,
+            normY = 0.80f,
+            description = "Tebing curam rawan longsor saat curah hujan tinggi ekstrem di lintasan perbukitan Malin Deman.",
+            readinessStatus = "WASPADA LONGSOR"
+        ),
+        MukomukoMapMarker(
+            id = "MK_13",
+            name = "Posko Pantau Kesiapsiagaan Air Rami",
+            subDistrict = "Air Rami",
+            type = MapMarkerType.POSKO_TRC,
+            latitude = -3.0742,
+            longitude = 101.5447,
+            normX = 0.48f,
+            normY = 0.92f,
+            description = "Posko Siaga ujung selatan perbatasan Bengkulu Utara (Jl. Lintas Barat Air Rami). Mitigasi abrasi pantai dan gelombang pasang.",
+            readinessStatus = "SIAGA PERBATASAN"
+        ),
+        MukomukoMapMarker(
+            id = "MK_14",
+            name = "Posko Siaga TRC Teramang Jaya",
+            subDistrict = "Teramang Jaya",
+            type = MapMarkerType.POSKO_TRC,
+            latitude = -2.7680,
+            longitude = 101.3520,
+            normX = 0.38f,
+            normY = 0.52f,
+            description = "Pos Siaga muara Teramang Jaya (Pasar Bantal) & pemantauan banjir pasang rob air laut.",
+            readinessStatus = "SIAGA 24 JAM"
+        ),
+        MukomukoMapMarker(
+            id = "MK_15",
+            name = "Titik Pantau DAS Selagan Raya",
+            subDistrict = "Selagan Raya",
+            type = MapMarkerType.RAWAN_BENCANA,
+            latitude = -2.6010,
+            longitude = 101.2750,
+            normX = 0.55f,
+            normY = 0.38f,
+            description = "Hulu sungai Selagan, titik telemetri ketinggian permukaan air sungai dan jembatan gantung.",
+            readinessStatus = "WASPADA DEBIT AIR"
+        ),
+        MukomukoMapMarker(
+            id = "MK_16",
+            name = "Posko TRC V Koto",
+            subDistrict = "V Koto",
+            type = MapMarkerType.POSKO_TRC,
+            latitude = -2.4950,
+            longitude = 101.1890,
+            normX = 0.52f,
+            normY = 0.18f,
+            description = "Posko Siaga TRC V Koto untuk wilayah pemukiman lereng dan perkebunan rakyat.",
+            readinessStatus = "SIAGA 24 JAM"
+        ),
+        MukomukoMapMarker(
+            id = "MK_17",
+            name = "Pos Pantau Abrasi Pantai Sungai Rumbai",
+            subDistrict = "Sungai Rumbai",
+            type = MapMarkerType.RAWAN_BENCANA,
+            latitude = -2.9061,
+            longitude = 101.4378,
+            normX = 0.56f,
+            normY = 0.85f,
+            description = "Garis pantai kritis abrasi di koridor Jl. Lintas Barat Sungai Rumbai dan pemantauan perahu nelayan saat cuaca buruk.",
+            readinessStatus = "WASPADA ABRASI"
+        ),
+        MukomukoMapMarker(
+            id = "MK_18",
+            name = "Stasiun AWS Agroklimat Air Manjunto",
+            subDistrict = "Air Manjunto",
+            type = MapMarkerType.STASIUN_CUACA,
+            latitude = -2.5200,
+            longitude = 101.1550,
+            normX = 0.40f,
+            normY = 0.21f,
+            description = "Stasiun pengamatan agroklimatologi, kelembapan tanah, dan kecepatan angin pertanian (Jl. Poros Air Manjuto).",
+            readinessStatus = "ONLINE BMKG"
+        )
+    )
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MukomukoInteractiveMapScreen(
@@ -172,231 +399,7 @@ fun MukomukoInteractiveMapScreen(
     var panOffsetX by remember { mutableFloatStateOf(0f) }
     var panOffsetY by remember { mutableFloatStateOf(0f) }
 
-    // 15 Sub-Districts (Kecamatan) of Mukomuko with Monitoring Stations and Posko Siaga TRC
-    val allMarkers = remember {
-        listOf(
-            MukomukoMapMarker(
-                id = "MK_01",
-                name = "Posko Induk TRC Pusdalops-PB Mukomuko",
-                subDistrict = "Kota Mukomuko",
-                type = MapMarkerType.POSKO_TRC,
-                latitude = -2.5833,
-                longitude = 101.1167,
-                normX = 0.28f,
-                normY = 0.22f,
-                description = "Markas Komando Utama Pusdalops-PB BPBD & Call Center 117 Bebas Pulsa. Kesiapsiagaan 24 Jam Tim Reaksi Cepat.",
-                readinessStatus = "SIAGA 24 JAM",
-                phoneContact = "117"
-            ),
-            MukomukoMapMarker(
-                id = "MK_02",
-                name = "Stasiun Meteorologi AWS BMKG Mukomuko",
-                subDistrict = "Kota Mukomuko",
-                type = MapMarkerType.STASIUN_CUACA,
-                latitude = -2.5620,
-                longitude = 101.1210,
-                normX = 0.31f,
-                normY = 0.20f,
-                description = "Stasiun Pengamatan Cuaca Otomatis & Radar Cuaca BMKG. Pemantauan curah hujan, arah angin, dan tekanan atmosfer.",
-                readinessStatus = "ONLINE TELEMETRI",
-                phoneContact = "117"
-            ),
-            MukomukoMapMarker(
-                id = "MK_03",
-                name = "Posko Siaga TRC Sektor Utara Lubuk Pinang",
-                subDistrict = "Lubuk Pinang",
-                type = MapMarkerType.POSKO_TRC,
-                latitude = -2.4833,
-                longitude = 101.1833,
-                normX = 0.45f,
-                normY = 0.08f,
-                description = "Pos Komando Sektor Perbatasan Sumbar-Bengkulu & Pengendalian Daerah Aliran Sungai (DAS) Manjunto.",
-                readinessStatus = "SIAGA 24 JAM",
-                phoneContact = "08117301117"
-            ),
-            MukomukoMapMarker(
-                id = "MK_04",
-                name = "Titik Pantau Rawan Banjir DAS Manjunto",
-                subDistrict = "Lubuk Pinang",
-                type = MapMarkerType.RAWAN_BENCANA,
-                latitude = -2.4910,
-                longitude = 101.1750,
-                normX = 0.42f,
-                normY = 0.10f,
-                description = "Daerah rawan genangan luapan air sungai saat hujan lebat di hulu Bukit Barisan.",
-                readinessStatus = "WASPADA BANJIR"
-            ),
-            MukomukoMapMarker(
-                id = "MK_05",
-                name = "Posko Siaga TRC XIV Koto",
-                subDistrict = "XIV Koto",
-                type = MapMarkerType.POSKO_TRC,
-                latitude = -2.5167,
-                longitude = 101.1333,
-                normX = 0.35f,
-                normY = 0.14f,
-                description = "Posko TRC & Jalur Evakuasi Dataran Tinggi Air Bakung.",
-                readinessStatus = "SIAGA PENYELAMATAN"
-            ),
-            MukomukoMapMarker(
-                id = "MK_06",
-                name = "Stasiun Pemantau AWS Pesisir Air Dikit",
-                subDistrict = "Air Dikit",
-                type = MapMarkerType.STASIUN_CUACA,
-                latitude = -2.6500,
-                longitude = 101.2000,
-                normX = 0.32f,
-                normY = 0.34f,
-                description = "Sensor pengukur pasang surut maritim Samudra Hindia dan peringatan abrasi pantai.",
-                readinessStatus = "ONLINE TELEMETRI"
-            ),
-            MukomukoMapMarker(
-                id = "MK_07",
-                name = "Posko Penanggulangan Bencana Penarik",
-                subDistrict = "Penarik",
-                type = MapMarkerType.POSKO_TRC,
-                latitude = -2.7333,
-                longitude = 101.3000,
-                normX = 0.50f,
-                normY = 0.45f,
-                description = "Pusat logistik darurat pangan dan armada perahu karet penyelamat wilayah tengah.",
-                readinessStatus = "SIAGA LOGISTIK"
-            ),
-            MukomukoMapMarker(
-                id = "MK_08",
-                name = "Pos Pantau Pohon Tumbang & Cuaca Teras Terunjam",
-                subDistrict = "Teras Terunjam",
-                type = MapMarkerType.RAWAN_BENCANA,
-                latitude = -2.6167,
-                longitude = 101.2500,
-                normX = 0.46f,
-                normY = 0.28f,
-                description = "Zona rawan angin kencang puting beliung dan pohon tumbang lintas perkebunan.",
-                readinessStatus = "WASPADA BADAI"
-            ),
-            MukomukoMapMarker(
-                id = "MK_09",
-                name = "Posko Siaga TRC Sektor Pondok Suguh",
-                subDistrict = "Pondok Suguh",
-                type = MapMarkerType.POSKO_TRC,
-                latitude = -2.8500,
-                longitude = 101.4667,
-                normX = 0.52f,
-                normY = 0.58f,
-                description = "Posko Kesiapsiagaan Bencana wilayah pesisir muara sungai dan jalur perbukitan.",
-                readinessStatus = "SIAGA 24 JAM"
-            ),
-            MukomukoMapMarker(
-                id = "MK_10",
-                name = "Posko Terpadu Kedaruratan TRC Ipuh",
-                subDistrict = "Ipuh",
-                type = MapMarkerType.POSKO_TRC,
-                latitude = -2.9833,
-                longitude = 101.6000,
-                normX = 0.42f,
-                normY = 0.72f,
-                description = "Pusat Evakuasi Tsunami (TES) Sektor Selatan, terhubung langsung Puskesmas Perawatan Ipuh & Polsek Mukomuko Selatan.",
-                readinessStatus = "SIAGA 24 JAM",
-                phoneContact = "08127400117"
-            ),
-            MukomukoMapMarker(
-                id = "MK_11",
-                name = "Stasiun Cuaca Maritim & Dermaga Nelayan Ipuh",
-                subDistrict = "Ipuh",
-                type = MapMarkerType.STASIUN_CUACA,
-                latitude = -2.9920,
-                longitude = 101.5910,
-                normX = 0.38f,
-                normY = 0.74f,
-                description = "Pemantauan tinggi gelombang laut Samudra Hindia dan keselamatan melaut nelayan tradisional.",
-                readinessStatus = "ONLINE BMKG"
-            ),
-            MukomukoMapMarker(
-                id = "MK_12",
-                name = "Titik Rawan Longsor Tebing Malin Deman",
-                subDistrict = "Malin Deman",
-                type = MapMarkerType.RAWAN_BENCANA,
-                latitude = -3.0500,
-                longitude = 101.6833,
-                normX = 0.64f,
-                normY = 0.80f,
-                description = "Tebing curam rawan longsor saat curah hujan tinggi ekstrem di lintasan perbukitan.",
-                readinessStatus = "WASPADA LONGSOR"
-            ),
-            MukomukoMapMarker(
-                id = "MK_13",
-                name = "Posko Pantau Kesiapsiagaan Air Rami",
-                subDistrict = "Air Rami",
-                type = MapMarkerType.POSKO_TRC,
-                latitude = -3.1500,
-                longitude = 101.7667,
-                normX = 0.48f,
-                normY = 0.92f,
-                description = "Posko Siaga ujung selatan perbatasan Bengkulu Utara. Mitigasi abrasi pantai dan gelombang pasang.",
-                readinessStatus = "SIAGA PERBATASAN"
-            ),
-            MukomukoMapMarker(
-                id = "MK_14",
-                name = "Posko Siaga TRC Teramang Jaya",
-                subDistrict = "Teramang Jaya",
-                type = MapMarkerType.POSKO_TRC,
-                latitude = -2.8000,
-                longitude = 101.3833,
-                normX = 0.38f,
-                normY = 0.52f,
-                description = "Pos Siaga muara Teramang Jaya & pemantauan banjir pasang rob air laut.",
-                readinessStatus = "SIAGA 24 JAM"
-            ),
-            MukomukoMapMarker(
-                id = "MK_15",
-                name = "Titik Pantau DAS Selagan Raya",
-                subDistrict = "Selagan Raya",
-                type = MapMarkerType.RAWAN_BENCANA,
-                latitude = -2.6833,
-                longitude = 101.2667,
-                normX = 0.55f,
-                normY = 0.38f,
-                description = "Hulu sungai Selagan, titik telemetri ketinggian permukaan air sungai dan jembatan gantung.",
-                readinessStatus = "WASPADA DEBIT AIR"
-            ),
-            MukomukoMapMarker(
-                id = "MK_16",
-                name = "Posko TRC V Koto",
-                subDistrict = "V Koto",
-                type = MapMarkerType.POSKO_TRC,
-                latitude = -2.5500,
-                longitude = 101.2167,
-                normX = 0.52f,
-                normY = 0.18f,
-                description = "Posko Siaga TRC V Koto untuk wilayah pemukiman lereng dan perkebunan rakyat.",
-                readinessStatus = "SIAGA 24 JAM"
-            ),
-            MukomukoMapMarker(
-                id = "MK_17",
-                name = "Pos Pantau Abrasi Pantai Sungai Rumbai",
-                subDistrict = "Sungai Rumbai",
-                type = MapMarkerType.RAWAN_BENCANA,
-                latitude = -3.0833,
-                longitude = 101.7167,
-                normX = 0.56f,
-                normY = 0.85f,
-                description = "Garis pantai kritis abrasi dan pemantauan perahu nelayan saat cuaca buruk badai.",
-                readinessStatus = "WASPADA ABRASI"
-            ),
-            MukomukoMapMarker(
-                id = "MK_18",
-                name = "Stasiun AWS Agroklimat Air Manjunto",
-                subDistrict = "Air Manjunto",
-                type = MapMarkerType.STASIUN_CUACA,
-                latitude = -2.5667,
-                longitude = 101.1667,
-                normX = 0.40f,
-                normY = 0.21f,
-                description = "Stasiun pengamatan agroklimatologi, kelembapan tanah, dan kecepatan angin pertanian.",
-                readinessStatus = "ONLINE BMKG"
-            )
-        )
-    }
+    val allMarkers = remember { MukomukoMapMarkersCatalog.allMarkers }
 
     val filteredMarkers = remember(selectedFilter, allMarkers) {
         if (selectedFilter == MapMarkerType.ALL) allMarkers
@@ -831,7 +834,7 @@ fun MukomukoInteractiveMapScreen(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         Text(
-                            text = "Koordinat GPS: %.4f, %.4f".format(marker.latitude, marker.longitude),
+                            text = String.format(Locale.US, "Koordinat GPS: %.4f, %.4f", marker.latitude, marker.longitude),
                             fontSize = 11.sp,
                             color = Color(0xFF94A3B8)
                         )
@@ -846,11 +849,11 @@ fun MukomukoInteractiveMapScreen(
                         ) {
                             Button(
                                 onClick = {
-                                    GoogleMapsHelper.openLocation(
+                                    GoogleMapsHelper.openNavigationRoute(
                                         context = context,
-                                        latitude = marker.latitude,
-                                        longitude = marker.longitude,
-                                        label = marker.name
+                                        destLat = marker.latitude,
+                                        destLon = marker.longitude,
+                                        destName = marker.name
                                     )
                                 },
                                 shape = RoundedCornerShape(10.dp),

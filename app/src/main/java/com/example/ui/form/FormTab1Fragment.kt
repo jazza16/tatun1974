@@ -710,7 +710,12 @@ class FormTab1Fragment : Fragment() {
             setCuacaReadOnly("Data cuaca tidak tersedia")
         }
 
-        etCakupanDampak.setText("$fullLokasi — ${selectedItem.description}")
+        etCakupanDampak.setText(
+            com.example.util.CakupanDampakFormatter.formatStructured(
+                lokasiKejadian = fullLokasi,
+                deskripsiKejadian = selectedItem.description
+            )
+        )
         etKondisiMutakhir.setText(selectedItem.description)
         etSumberInformasi.setText("Laporan Warga (${selectedItem.reporterName} - ${selectedItem.reporterPhone})")
         if (etUpayaDilakukan.text.isNullOrBlank()) {

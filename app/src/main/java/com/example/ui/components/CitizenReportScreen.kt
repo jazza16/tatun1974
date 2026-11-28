@@ -582,6 +582,8 @@ fun CitizenReportScreen(
     var longitude by rememberSaveable { mutableDoubleStateOf(currentDistrict.longitude) }
     var gpsAccuracy by rememberSaveable { mutableStateOf<Float?>(null) }
     var isGpsLocked by rememberSaveable { mutableStateOf(false) }
+    var isInsideMukomukoCoverage by rememberSaveable { mutableStateOf(true) }
+    var geofenceRejectionMessage by rememberSaveable { mutableStateOf("") }
     var isFetchingGps by remember { mutableStateOf(false) }
     var gpsStatusMessage by rememberSaveable { mutableStateOf("Sentuh pin GPS untuk mengunci koordinat ponsel") }
 
@@ -733,13 +735,36 @@ fun CitizenReportScreen(
                 gpsAccuracy = accuracy
                 isGpsLocked = true
                 isFetchingGps = false
-                selectedDistrict = nearestDistrict.name
-                val villageList = VILLAGES_MAP[nearestDistrict.name]
-                if (villageList != null && villageList.isNotEmpty()) {
-                    selectedVillage = villageList.first()
+                val geofence = com.example.util.MukomukoGeofenceValidator.evaluate(lat, lon)
+                isInsideMukomukoCoverage = geofence.isInsideMukomuko
+                geofenceRejectionMessage = geofence.rejectionMessage
+                if (geofence.isInsideMukomuko) {
+                    selectedDistrict = nearestDistrict.name
+                    val villageList = VILLAGES_MAP[nearestDistrict.name]
+                    if (villageList != null && villageList.isNotEmpty()) {
+                        selectedVillage = villageList.first()
+                    }
+                    gpsStatusMessage = String.format(
+                        Locale.US,
+                        "Koordinat GPS Terkunci: %.5f, %.5f (Akurasi: ±%.0fm • Kab. Mukomuko)",
+                        lat,
+                        lon,
+                        accuracy ?: 5f
+                    )
+                    Toast.makeText(
+                        context,
+                        "Titik GPS terkunci di wilayah Kab. Mukomuko (${nearestDistrict.name})!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    gpsStatusMessage = String.format(
+                        Locale.US,
+                        "Di luar Wilayah Administrasi Kab. Mukomuko (~%.1f km dari Kec. %s)",
+                        geofence.distanceToNearestDistrictKm,
+                        geofence.nearestDistrictName
+                    )
+                    Toast.makeText(context, geofence.rejectionMessage, Toast.LENGTH_LONG).show()
                 }
-                gpsStatusMessage = "Koordinat GPS Terkunci: %.5f, %.5f (Akurasi: ±%.0fm)".format(lat, lon, accuracy ?: 5f)
-                Toast.makeText(context, "Titik GPS ponsel berhasil dikunci!", Toast.LENGTH_SHORT).show()
             },
             onError = { err ->
                 isFetchingGps = false
@@ -1456,12 +1481,16 @@ fun CitizenReportScreen(
                                         color = Color(0xFF6B7280)
                                     )
                                     Text(
-                                        text = if (isGpsLocked) "%.5f, %.5f".format(latitude, longitude) else "Belum terkunci (Sentuh tombol biru)",
+                                        text = if (isGpsLocked) String.format(Locale.US, "%.5f, %.5f", latitude, longitude) else "Belum terkunci (Sentuh tombol biru)",
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = if (isGpsLocked) Color(0xFF15803D) else Color(0xFF374151)
+                                        color = when {
+                                            !isGpsLocked -> Color(0xFF374151)
+                                            isInsideMukomukoCoverage -> Color(0xFF15803D)
+                                            else -> Color(0xFFDC2626)
+                                        }
                                     )
-                                    if (isGpsLocked) {
+                                    if (isGpsLocked && isInsideMukomukoCoverage) {
                                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                                             Icon(
                                                 imageVector = Icons.Default.CheckCircle,
@@ -1471,10 +1500,26 @@ fun CitizenReportScreen(
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(
-                                                text = "Akurasi: ±%.0fm • Anti-Hoax Aktif".format(gpsAccuracy ?: 5f),
+                                                text = String.format(Locale.US, "Akurasi: ±%.0fm • Wilayah Kab. Mukomuko", gpsAccuracy ?: 5f),
                                                 fontSize = 11.sp,
                                                 color = Color(0xFF16A34A),
                                                 fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    } else if (isGpsLocked && !isInsideMukomukoCoverage) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                                            Icon(
+                                                imageVector = Icons.Default.Warning,
+                                                contentDescription = null,
+                                                tint = Color(0xFFDC2626),
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = gpsStatusMessage.ifBlank { "Di luar Wilayah Administrasi Kab. Mukomuko (Laporan ditolak)" },
+                                                fontSize = 11.sp,
+                                                color = Color(0xFFDC2626),
+                                                fontWeight = FontWeight.SemiBold
                                             )
                                         }
                                     } else {
@@ -1966,6 +2011,24 @@ fun CitizenReportScreen(
                                         return@Button
                                     }
 
+                                    // Anti-Spam Geofence: Laporan warga hanya boleh dikirim jika perangkat berada di dalam Wilayah Administrasi Kab. Mukomuko
+                                    val isSandboxActive = com.example.training.SandboxTrainingManager.isSandboxModeActive()
+                                    if (!isSandboxActive) {
+                                        val geofenceCheck = com.example.util.MukomukoGeofenceValidator.evaluate(latitude, longitude)
+                                        isInsideMukomukoCoverage = geofenceCheck.isInsideMukomuko
+                                        geofenceRejectionMessage = geofenceCheck.rejectionMessage
+                                        if (!geofenceCheck.isInsideMukomuko) {
+                                            val rejectMsg = geofenceCheck.rejectionMessage.ifBlank {
+                                                com.example.util.MukomukoGeofenceValidator.DEFAULT_REJECTION_TOAST
+                                            }
+                                            Toast.makeText(context, rejectMsg, Toast.LENGTH_LONG).show()
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar(message = rejectMsg)
+                                            }
+                                            return@Button
+                                        }
+                                    }
+
                                     if (isSubmittingReport) return@Button
                                     val nowMs = System.currentTimeMillis()
                                     val reportId = "LAP-MMK-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(nowMs)) + "-R" + (100..999).random()
@@ -2033,6 +2096,16 @@ fun CitizenReportScreen(
                                                  isSubmittingReport = false
                                                  submitStatusLabel = ""
                                                  lastSubmitResult = result
+                                                 if (result.rejectedOutsideCoverage) {
+                                                     val rejectMsg = result.message.ifBlank {
+                                                         com.example.util.MukomukoGeofenceValidator.DEFAULT_REJECTION_TOAST
+                                                     }
+                                                     Toast.makeText(context, rejectMsg, Toast.LENGTH_LONG).show()
+                                                     coroutineScope.launch {
+                                                         snackbarHostState.showSnackbar(message = rejectMsg)
+                                                     }
+                                                     return@onSubmitReportWithResult
+                                                 }
                                                  submittedReportId = reportId
                                                  trackingReportIdQuery = reportId
                                                  if (result.deferredOffline || !result.syncedToCloud || !isOnlineNow) {

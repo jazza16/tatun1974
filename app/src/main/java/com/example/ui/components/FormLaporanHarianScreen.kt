@@ -840,7 +840,10 @@ fun FormLaporanHarianScreen(
                 if (selectedItem.coordinates.isNotBlank()) {
                     koordinat = selectedItem.coordinates
                 }
-                cakupanDampak = "${selectedItem.fullFormattedLocation()} — ${selectedItem.description}"
+                cakupanDampak = com.example.util.CakupanDampakFormatter.formatStructured(
+                    lokasiKejadian = selectedItem.fullFormattedLocation(),
+                    deskripsiKejadian = selectedItem.description
+                )
                 kondisiMutakhir = selectedItem.description
                 sumberInformasi = "Laporan Warga (${selectedItem.reporterName} - ${selectedItem.reporterPhone})"
                 korbanMeninggal = selectedItem.casualtiesDead
@@ -1151,13 +1154,13 @@ private fun Step1DataKejadian(
                 OutlinedTextField(
                     value = cakupanDampak,
                     onValueChange = onCakupanDampakChange,
-                    label = { Text("Cakupan Dampak (Wilayah / Desa / KK Terdampak)") },
+                    label = { Text("Cakupan Dampak (1. Lokasi Kejadian & 2. Deskripsi Bencana)") },
                     keyboardOptions = formNextKeyboardOptions(),
                     keyboardActions = keyboardActions,
                     modifier = Modifier
                         .fillMaxWidth()
                         .formScrollPadding(),
-                    minLines = 2
+                    minLines = 3
                 )
 
                 OutlinedTextField(
@@ -1311,16 +1314,54 @@ private fun Step2DampakDanKorban(
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(text = "Cakupan Dampak & Korban Jiwa", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
 
+                val parsedImpact = remember(cakupanDampak) {
+                    com.example.util.CakupanDampakFormatter.parse(cakupanDampak)
+                }
+
+                Text(
+                    text = "Dipisahkan ke 2 baris terstruktur pada formulir & hasil cetak PDF:",
+                    fontSize = 11.sp,
+                    color = Color(0xFF475569)
+                )
+
                 OutlinedTextField(
-                    value = cakupanDampak,
-                    onValueChange = onCakupanDampakChange,
-                    label = { Text("Cakupan Wilayah Terdampak & KK") },
+                    value = parsedImpact.lokasiKejadian,
+                    onValueChange = { newLokasi ->
+                        onCakupanDampakChange(
+                            com.example.util.CakupanDampakFormatter.formatStructured(
+                                lokasiKejadian = newLokasi,
+                                deskripsiKejadian = parsedImpact.deskripsiKejadian
+                            )
+                        )
+                    },
+                    label = { Text("1. Lokasi Kejadian (Wilayah / Desa Terdampak)") },
                     keyboardOptions = formNextKeyboardOptions(),
                     keyboardActions = keyboardActions,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .formScrollPadding(),
+                        .formScrollPadding()
+                        .testTag("input_step2_cakupan_lokasi"),
                     minLines = 2
+                )
+
+                OutlinedTextField(
+                    value = parsedImpact.deskripsiKejadian,
+                    onValueChange = { newDeskripsi ->
+                        onCakupanDampakChange(
+                            com.example.util.CakupanDampakFormatter.formatStructured(
+                                lokasiKejadian = parsedImpact.lokasiKejadian,
+                                deskripsiKejadian = newDeskripsi
+                            )
+                        )
+                    },
+                    label = { Text("2. Deskripsi Kejadian / Bencana Lainnya") },
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding()
+                        .testTag("input_step2_cakupan_deskripsi"),
+                    minLines = 3
                 )
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

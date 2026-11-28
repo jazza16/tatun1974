@@ -613,6 +613,13 @@ class WeatherViewModel(
     ) {
         viewModelScope.launch {
             val result = repository.submitCitizenDisasterReportWithResult(report, context)
+            if (result.rejectedOutsideCoverage && onComplete == null && context != null) {
+                android.widget.Toast.makeText(
+                    context,
+                    result.message.ifBlank { com.example.util.MukomukoGeofenceValidator.DEFAULT_REJECTION_TOAST },
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
             onComplete?.invoke(result)
         }
     }

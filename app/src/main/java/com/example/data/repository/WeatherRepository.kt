@@ -408,6 +408,7 @@ class WeatherRepository(
         val hasPhoto: Boolean,
         val cloudPhotoUrl: String? = null,
         val deferredOffline: Boolean = false,
+        val rejectedOutsideCoverage: Boolean = false,
         val message: String = ""
     )
 
@@ -429,6 +430,22 @@ class WeatherRepository(
                 cloudPhotoUrl = savedSandbox.photoUri,
                 deferredOffline = false,
                 message = "[MODE LATIHAN SANDBOX] Laporan simulasi (${savedSandbox.id}) berhasil diterima di lingkungan latihan tanpa menyentuh database produksi."
+            )
+        }
+
+        // Anti-Spam Geofence (Defense-in-Depth): Tolak laporan warga jika koordinat perangkat di luar Wilayah Administrasi Kab. Mukomuko
+        val geofenceCheck = com.example.util.MukomukoGeofenceValidator.evaluate(report.latitude, report.longitude)
+        if (!geofenceCheck.isInsideMukomuko) {
+            return@withContext CitizenReportSubmitResult(
+                reportId = report.id,
+                savedLocally = false,
+                syncedToCloud = false,
+                hasPhoto = false,
+                deferredOffline = false,
+                rejectedOutsideCoverage = true,
+                message = geofenceCheck.rejectionMessage.ifBlank {
+                    com.example.util.MukomukoGeofenceValidator.DEFAULT_REJECTION_TOAST
+                }
             )
         }
 

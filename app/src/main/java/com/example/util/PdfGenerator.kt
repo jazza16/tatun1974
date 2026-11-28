@@ -846,27 +846,74 @@ object PdfGenerator {
 
         val labelColWidth = contentWidth * 0.28f
         val valueColWidth = contentWidth - labelColWidth
+        val valueInnerWidth = (valueColWidth - 10f).toInt().coerceAtLeast(40)
 
         for ((label, rawValue) in infoRows) {
-            val cleanValue = settings.truncateIfNeeded(rawValue)
-            val valLayout = StaticLayout.Builder
-                .obtain(cleanValue, 0, cleanValue.length, valuePaint, (valueColWidth - 10f).toInt().coerceAtLeast(40))
-                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                .setMaxLines(2)
-                .setIncludePad(false)
-                .build()
-            val rowHeight = max(14.5f, valLayout.height + 6f)
+            if (label == "Cakupan Dampak") {
+                val structuredLines = CakupanDampakFormatter.toPdfLines(
+                    rawCakupanDampak = rawValue,
+                    fallbackLokasi = lokasiTampil
+                )
+                val blockLayouts = structuredLines.map { lineText ->
+                    val safeLine = settings.truncateIfNeeded(lineText, overrideMaxLength = 220)
+                    StaticLayout.Builder
+                        .obtain(safeLine, 0, safeLine.length, valuePaint, valueInnerWidth)
+                        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                        .setLineSpacing(0.8f, 1.04f)
+                        .setMaxLines(3)
+                        .setEllipsize(TextUtils.TruncateAt.END)
+                        .setIncludePad(false)
+                        .build()
+                }
+                val itemGap = 3.5f
+                val totalTextHeight = blockLayouts.sumOf { it.height }.toFloat() +
+                    (if (blockLayouts.size > 1) itemGap * (blockLayouts.size - 1) else 0f)
+                val rowHeight = max(16.5f, totalTextHeight + 7f)
 
-            canvas.drawRect(margin, y, margin + labelColWidth, y + rowHeight, borderPaint)
-            canvas.drawRect(margin + labelColWidth, y, margin + contentWidth, y + rowHeight, borderPaint)
+                canvas.drawRect(margin, y, margin + labelColWidth, y + rowHeight, borderPaint)
+                canvas.drawRect(margin + labelColWidth, y, margin + contentWidth, y + rowHeight, borderPaint)
 
-            canvas.drawText(label, margin + 5f, y + 10f, labelPaint)
-            canvas.save()
-            canvas.translate(margin + labelColWidth + 5f, y + 3f)
-            valLayout.draw(canvas)
-            canvas.restore()
+                canvas.drawText(label, margin + 5f, y + 10.5f, labelPaint)
+                var blockY = y + 3.5f
+                blockLayouts.forEachIndexed { idx, layout ->
+                    canvas.save()
+                    canvas.translate(margin + labelColWidth + 5f, blockY)
+                    layout.draw(canvas)
+                    canvas.restore()
+                    blockY += layout.height + if (idx < blockLayouts.lastIndex) itemGap else 0f
+                }
 
-            y += rowHeight
+                y += rowHeight
+            } else {
+                val allowExtendedLines = label == "Lokasi Kejadian" ||
+                    label == "Upaya Dilakukan" ||
+                    label == "Kondisi Mutakhir" ||
+                    label == "Kerusakan"
+                val cleanValue = settings.truncateIfNeeded(
+                    rawText = rawValue,
+                    overrideMaxLength = if (allowExtendedLines) 240 else null
+                )
+                val valLayout = StaticLayout.Builder
+                    .obtain(cleanValue, 0, cleanValue.length, valuePaint, valueInnerWidth)
+                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .setLineSpacing(0.5f, 1.03f)
+                    .setMaxLines(if (allowExtendedLines) 3 else 2)
+                    .setEllipsize(TextUtils.TruncateAt.END)
+                    .setIncludePad(false)
+                    .build()
+                val rowHeight = max(14.5f, valLayout.height + 6f)
+
+                canvas.drawRect(margin, y, margin + labelColWidth, y + rowHeight, borderPaint)
+                canvas.drawRect(margin + labelColWidth, y, margin + contentWidth, y + rowHeight, borderPaint)
+
+                canvas.drawText(label, margin + 5f, y + 10f, labelPaint)
+                canvas.save()
+                canvas.translate(margin + labelColWidth + 5f, y + 3f)
+                valLayout.draw(canvas)
+                canvas.restore()
+
+                y += rowHeight
+            }
         }
 
         // 4. Bagian II: Peta Lokasi Kejadian & Foto Bukti GPS Laporan Warga (Selalu 2 Kolom Bersebelahan)
@@ -881,7 +928,10 @@ object PdfGenerator {
         )
         y += 11f
 
-        val mapContainerHeight = 140f
+        // Jaga keseimbangan vertikal Halaman 1 agar Bagian III & Tanda Tangan Operator selalu muat rapi di A4
+        val reservedForSection3AndFooter = 166f
+        val availableForMapContainer = (PAGE_HEIGHT - reservedForSection3AndFooter - y)
+        val mapContainerHeight = availableForMapContainer.coerceIn(106f, 140f)
         val mapContainerRect = RectF(margin, y, margin + contentWidth, y + mapContainerHeight)
         val mapContainerBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(248, 250, 252)
@@ -927,7 +977,7 @@ object PdfGenerator {
         val colGap = 12f
         val innerPadH = 8f
         val pairColWidth = (contentWidth - (innerPadH * 2f) - colGap) / 2f
-        val frameHeight = 114f
+        val frameHeight = (mapContainerHeight - 26f).coerceAtLeast(80f)
         val frameTop = y + 6f
 
         val leftMapRect = RectF(

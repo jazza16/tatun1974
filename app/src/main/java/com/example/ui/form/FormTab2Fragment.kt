@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +42,7 @@ import com.example.ui.components.formDoneKeyboardOptions
 import com.example.ui.components.formNextKeyboardOptions
 import com.example.ui.components.formScrollPadding
 import com.example.ui.components.rememberFormKeyboardActions
+import com.example.util.CakupanDampakFormatter
 
 /**
  * Fragment untuk Tab 2: Dampak & Korban Bencana.
@@ -67,13 +69,35 @@ class FormTab2Fragment : Fragment() {
 @Composable
 fun FormTab2Content(sharedViewModel: LaporanViewModel? = null) {
     val keyboardActions = rememberFormKeyboardActions()
-    var cakupanDampak by remember {
-        mutableStateOf(
-            sharedViewModel?.laporanSementara?.cakupanDampak?.ifBlank {
-                "3 Desa pesisir terdampak getaran dan genangan pasang air laut"
-            } ?: "3 Desa pesisir terdampak getaran dan genangan pasang air laut"
-        )
+
+    val vmCakupanRaw = sharedViewModel?.laporanSementara?.cakupanDampak.orEmpty()
+    val vmLokasiFallback = sharedViewModel?.laporanSementara?.lokasiBencana.orEmpty()
+    val initialParsed = remember(vmCakupanRaw, vmLokasiFallback) {
+        if (vmCakupanRaw.isBlank()) {
+            CakupanDampakFormatter.StructuredImpact(
+                lokasiKejadian = vmLokasiFallback.ifBlank { "Wilayah Kabupaten Mukomuko" },
+                deskripsiKejadian = "3 Desa pesisir terdampak getaran dan genangan pasang air laut"
+            )
+        } else {
+            CakupanDampakFormatter.parse(vmCakupanRaw, vmLokasiFallback)
+        }
     }
+
+    var cakupanLokasi by remember { mutableStateOf(initialParsed.lokasiKejadian) }
+    var cakupanDeskripsi by remember { mutableStateOf(initialParsed.deskripsiKejadian) }
+
+    // Sinkronkan kembali apabila petugas baru saja mengisi Tab 1 ("Dari Warga" atau ubah lokasi)
+    LaunchedEffect(vmCakupanRaw, vmLokasiFallback) {
+        if (vmCakupanRaw.isNotBlank()) {
+            val reparsed = CakupanDampakFormatter.parse(vmCakupanRaw, vmLokasiFallback)
+            val currentFormatted = CakupanDampakFormatter.formatStructured(cakupanLokasi, cakupanDeskripsi)
+            if (currentFormatted != vmCakupanRaw) {
+                cakupanLokasi = reparsed.lokasiKejadian
+                cakupanDeskripsi = reparsed.deskripsiKejadian
+            }
+        }
+    }
+
     var korbanLuka by remember { mutableIntStateOf(sharedViewModel?.laporanSementara?.korbanLuka ?: 0) }
     var korbanMeninggal by remember { mutableIntStateOf(sharedViewModel?.laporanSementara?.korbanMeninggal ?: 0) }
     var kerusakan by remember {
@@ -91,10 +115,11 @@ fun FormTab2Content(sharedViewModel: LaporanViewModel? = null) {
         )
     }
 
-    androidx.compose.runtime.LaunchedEffect(cakupanDampak, korbanLuka, korbanMeninggal, kerusakan, penyebab) {
+    LaunchedEffect(cakupanLokasi, cakupanDeskripsi, korbanLuka, korbanMeninggal, kerusakan, penyebab) {
+        val structuredCakupan = CakupanDampakFormatter.formatStructured(cakupanLokasi, cakupanDeskripsi)
         sharedViewModel?.let { vm ->
             vm.laporanSementara = vm.laporanSementara.copy(
-                cakupanDampak = cakupanDampak,
+                cakupanDampak = structuredCakupan,
                 korbanLuka = korbanLuka,
                 korbanMeninggal = korbanMeninggal,
                 kerusakan = kerusakan,
@@ -124,21 +149,48 @@ fun FormTab2Content(sharedViewModel: LaporanViewModel? = null) {
                     color = Color(0xFFDC2626)
                 )
 
+                Text(
+                    text = "Cakupan Dampak dipisahkan ke 2 baris terstruktur pada formulir & hasil cetak PDF:",
+                    fontSize = 11.sp,
+                    color = Color(0xFF475569)
+                )
+
                 OutlinedTextField(
-                    value = cakupanDampak,
+                    value = cakupanLokasi,
                     onValueChange = {
-                        cakupanDampak = it
+                        cakupanLokasi = it
+                        val structured = CakupanDampakFormatter.formatStructured(it, cakupanDeskripsi)
                         sharedViewModel?.let { vm ->
-                            vm.laporanSementara = vm.laporanSementara.copy(cakupanDampak = it)
+                            vm.laporanSementara = vm.laporanSementara.copy(cakupanDampak = structured)
                         }
                     },
-                    label = { Text("Cakupan Wilayah Terdampak & KK") },
+                    label = { Text("1. Lokasi Kejadian (Wilayah / Desa Terdampak)") },
                     keyboardOptions = formNextKeyboardOptions(),
                     keyboardActions = keyboardActions,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .formScrollPadding(),
+                        .formScrollPadding()
+                        .testTag("input_tab2_cakupan_lokasi"),
                     minLines = 2
+                )
+
+                OutlinedTextField(
+                    value = cakupanDeskripsi,
+                    onValueChange = {
+                        cakupanDeskripsi = it
+                        val structured = CakupanDampakFormatter.formatStructured(cakupanLokasi, it)
+                        sharedViewModel?.let { vm ->
+                            vm.laporanSementara = vm.laporanSementara.copy(cakupanDampak = structured)
+                        }
+                    },
+                    label = { Text("2. Deskripsi Kejadian / Bencana Lainnya") },
+                    keyboardOptions = formNextKeyboardOptions(),
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .formScrollPadding()
+                        .testTag("input_tab2_cakupan_deskripsi"),
+                    minLines = 3
                 )
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
