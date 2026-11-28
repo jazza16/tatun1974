@@ -49,7 +49,7 @@ class AppUpdatePreferences(private val context: Context) {
         private const val PREF_DISMISSED_DIALOG_VERSION = "dismissed_dialog_version"
         private const val PREF_IS_ONBOARDING_COMPLETED = "is_onboarding_completed"
 
-        const val DEFAULT_LATEST_VERSION = "1.3.0"
+        const val DEFAULT_LATEST_VERSION = "1.3.1"
         const val PREVIOUS_VERSION_MOCK = "0.9.0"
     }
 

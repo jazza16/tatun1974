@@ -27,21 +27,35 @@ val INITIAL_RELEASE_CHANGELOG = VersionChangelog(
 )
 
 val LATEST_RELEASE_CHANGELOG = VersionChangelog(
-    version = "1.3.0",
-    releaseDate = "27 November 2026",
+    version = "1.3.1",
+    releaseDate = "28 November 2026",
     isCurrent = true,
     isLatest = true,
-    releaseName = "Trilogi Kebijakan Kebencanaan Daerah",
+    releaseName = "Akurasi Rute Evakuasi, Pemisahan PDF & Geofence Anti-Spam",
     highlights = listOf(
-        "Trilogi Kebijakan Kebencanaan Daerah (Tab Khusus KRB, RPB & RTRW): Integrasi penuh Dokumen KRB 2026–2030 (12 matriks bahaya, 205.602 jiwa terpapar), Dokumen RPB 2025–2029 (3 isu strategis, 5 target dampak 2029: IRB 228,28→136,87 & IKD 0,29→0,57, 31 strategi, nomenklatur Kepmendagri 900.1-861/2026, 11 lokasi resmi shelter pengungsi, kinerja SPM & analisis fiskal BPKAD 0,59% APBD, sejarah 184 bencana, kelembagaan & Monev), serta Perda RTRW No. 12 Tahun 2025 (Pasal 42, 83, 92–94 & KKPR Pasal 95–108).",
-        "Banner Kebijakan Buka-Tutup (Collapsible) Lintas Seluruh Tab Operasional: Seluruh modul (Beranda, Laporan Warga, Statistik, Prakiraan, Peringatan WRS, Karhutla, Peta & SOP, inaRISK, Historis, Maritim, Kualitas Udara, dan 15 Kecamatan) kini menampilkan ringkasan sinkronisasi KRB, RPB & RTRW yang ringkas dan dapat dibuka/ditutup sesuai selera pengguna.",
-        "Notifikasi Latar Belakang 24 Jam Tanpa Login (Porsi Warga vs Petugas): Peringatan otomatis laporan warga baru, potensi ancaman, dan kejadian bencana langsung muncul di perangkat tanpa perlu login dengan porsi informasi terpisah untuk Mode Warga dan Mode Petugas/TRC.",
-        "Pembaruan UI/UX Beranda, SOP Evakuasi Offline & Perapian Visual Lintas Modul: Efek warna Gemini Spin pada kartu Aksi Cepat Tanggap, penataan kartu Info Cuaca, perapian penuh kartu SOP Evakuasi Offline & tombol Audio TTS, badge tampil utuh tanpa terpotong, serta penghilangan bingkai bayangan ganda pada kartu berbingkai oranye."
+        "Optimalisasi Rute Google Maps & Seluruh Lokasi Rekomendasi Peta Evakuasi: Perbaikan presisi koordinat jalan resmi pada seluruh titik rawan, shelter evakuasi, dan 15 kecamatan Kabupaten Mukomuko, format tautan navigasi anti-gagal lintas perangkat, serta tombol cepat \"Rute Evakuasi Aman\" ke titik kumpul (TES/TEA) terdekat.",
+        "Proteksi Geofence Anti-Spam Wilayah Administrasi Kabupaten Mukomuko: Pengiriman Laporan Warga ke Pusdalops BPBD kini memverifikasi posisi GPS perangkat dan lokasi kejadian berada di dalam cakupan wilayah administratif Kabupaten Mukomuko, dilengkapi pesan penolakan (Toast) otomatis untuk mencegah spam dari luar wilayah.",
+        "Pemisahan Kolom Cakupan Dampak (Form Laporan Harian & Output PDF): Isian Cakupan Dampak pada Tab 2 Form Laporan Harian kini dipisah menjadi dua kolom terpisah (1. Lokasi Kejadian & 2. Deskripsi Kejadian/Bencana) dan tercetak terpisah secara rapi pada dokumen Print Out PDF Laporan Harian.",
+        "Penyempurnaan Laporan PDF DALA Standar BNPB (Tanpa Teks Terpotong): Kolom Keterangan Kebutuhan Mendesak diperlebar (51%) dengan pembungkusan baris dinamis, seluruh kalimat catatan kerusakan, titik pengungsian, kelompok rentan, dan kebutuhan mendesak tercetak utuh tanpa elipsis (...), serta otomatis melanjutkan ke halaman berikutnya untuk acuan kebijakan Pemerintah Daerah.",
+        "Panduan Penggunaan Aplikasi Live Cloud (Warga & Petugas): Penyediaan panduan langkah demi langkah yang mudah dipahami untuk Warga dan Petugas dengan pembaruan konten langsung dari Pusdalops BPBD."
     )
 )
 
 val RELEASE_HISTORY_ACCORDION_CHANGELOGS: List<VersionChangelog> = listOf(
     LATEST_RELEASE_CHANGELOG,
+    VersionChangelog(
+        version = "1.3.0",
+        releaseDate = "27 November 2026",
+        isCurrent = false,
+        isLatest = false,
+        releaseName = "Trilogi Kebijakan Kebencanaan Daerah",
+        highlights = listOf(
+            "Trilogi Kebijakan Kebencanaan Daerah (Tab Khusus KRB, RPB & RTRW): Integrasi penuh Dokumen KRB 2026–2030 (12 matriks bahaya, 205.602 jiwa terpapar), Dokumen RPB 2025–2029 (3 isu strategis, 5 target dampak 2029: IRB 228,28→136,87 & IKD 0,29→0,57, 31 strategi, nomenklatur Kepmendagri 900.1-861/2026, 11 lokasi resmi shelter pengungsi, kinerja SPM & analisis fiskal BPKAD 0,59% APBD, sejarah 184 bencana, kelembagaan & Monev), serta Perda RTRW No. 12 Tahun 2025 (Pasal 42, 83, 92–94 & KKPR Pasal 95–108).",
+            "Banner Kebijakan Buka-Tutup (Collapsible) Lintas Seluruh Tab Operasional: Seluruh modul (Beranda, Laporan Warga, Statistik, Prakiraan, Peringatan WRS, Karhutla, Peta & SOP, inaRISK, Historis, Maritim, Kualitas Udara, dan 15 Kecamatan) kini menampilkan ringkasan sinkronisasi KRB, RPB & RTRW yang ringkas dan dapat dibuka/ditutup sesuai selera pengguna.",
+            "Notifikasi Latar Belakang 24 Jam Tanpa Login (Porsi Warga vs Petugas): Peringatan otomatis laporan warga baru, potensi ancaman, dan kejadian bencana langsung muncul di perangkat tanpa perlu login dengan porsi informasi terpisah untuk Mode Warga dan Mode Petugas/TRC.",
+            "Pembaruan UI/UX Beranda, SOP Evakuasi Offline & Perapian Visual Lintas Modul: Efek warna Gemini Spin pada kartu Aksi Cepat Tanggap, penataan kartu Info Cuaca, perapian penuh kartu SOP Evakuasi Offline & tombol Audio TTS, badge tampil utuh tanpa terpotong, serta penghilangan bingkai bayangan ganda pada kartu berbingkai oranye."
+        )
+    ),
     VersionChangelog(
         version = "1.2.0",
         releaseDate = "26 November 2026",
@@ -180,8 +194,8 @@ val DEFAULT_RELEASE_CHANGELOGS: List<VersionChangelog> = RELEASE_HISTORY_ACCORDI
 
 @Keep
 data class AppUpdateState(
-    val currentVersion: String = "1.3.0",
-    val latestVersion: String = "1.3.0",
+    val currentVersion: String = "1.3.1",
+    val latestVersion: String = "1.3.1",
     val developerName: String = "tathoenz_arazak",
     val developerRole: String = "Lead Software Engineer & System Architect",
     val organization: String = "Pusdalops BPBD Kabupaten Mukomuko",
@@ -193,9 +207,9 @@ data class AppUpdateState(
     val downloadProgress: Float = 0f,
     val isUpdated: Boolean = true,
     val isPermanentlyInstalled: Boolean = true,
-    val lastCheckedVersion: String = "1.3.0",
+    val lastCheckedVersion: String = "1.3.1",
     val lastCheckedTime: String = "Baru saja dicek daring",
-    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi v1.3.0 \"Trilogi Kebijakan Kebencanaan Daerah\" terbaru secara permanen.",
+    val updateStatusMessage: String = "Aplikasi SIPAGAR KITA menggunakan Rilis Resmi v1.3.1 \"Akurasi Rute Evakuasi, Pemisahan PDF & Geofence Anti-Spam\" terbaru secara permanen.",
     val packageSizeMb: Float = 20.4f,
     val downloadUrl: String = "https://github.com/jazza16/tatun1974/releases/latest",
     val isBannerDismissed: Boolean = false,

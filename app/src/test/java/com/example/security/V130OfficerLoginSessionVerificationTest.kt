@@ -12,6 +12,7 @@ import com.example.data.local.OfficerCredentialEntity
 import com.example.data.local.OfficerRoles
 import com.example.data.repository.SmartOfficerAuthRepository
 import com.example.model.LATEST_RELEASE_CHANGELOG
+import com.example.model.RELEASE_HISTORY_ACCORDION_CHANGELOGS
 import com.example.model.MukomukoDistricts
 import com.example.model.MukomukoKrb2026Catalog
 import com.example.model.MukomukoRpb2025Catalog
@@ -74,11 +75,16 @@ class V130OfficerLoginSessionVerificationTest {
 
     @Test
     fun `v130 build metadata and Trilogi Kebijakan Kebencanaan Daerah release catalog are synced`() {
-        assertEquals("1.3.0", BuildConfig.VERSION_NAME)
+        assertEquals("1.3.1", BuildConfig.VERSION_NAME)
         assertEquals(14, BuildConfig.VERSION_CODE)
-        assertEquals("1.3.0", LATEST_RELEASE_CHANGELOG.version)
-        assertEquals("Trilogi Kebijakan Kebencanaan Daerah", LATEST_RELEASE_CHANGELOG.releaseName)
+        assertEquals("1.3.1", LATEST_RELEASE_CHANGELOG.version)
+        assertEquals("Akurasi Rute Evakuasi, Pemisahan PDF & Geofence Anti-Spam", LATEST_RELEASE_CHANGELOG.releaseName)
         assertTrue(LATEST_RELEASE_CHANGELOG.isLatest)
+        assertTrue(
+            RELEASE_HISTORY_ACCORDION_CHANGELOGS.any {
+                it.version == "1.3.0" && it.releaseName == "Trilogi Kebijakan Kebencanaan Daerah"
+            }
+        )
 
         // Ensure all 15 Mukomuko districts resolve cleanly across KRB, RPB, and RTRW catalogs
         assertEquals(15, MukomukoDistricts.list.size)
@@ -125,12 +131,12 @@ class V130OfficerLoginSessionVerificationTest {
         val authManager = OfficerAuthManager(context)
         val sessionManager = SessionManager(context)
 
-        // 3. Assert v1.3.0 upgrade succeeded cleanly
-        assertEquals("1.3.0", updatePreferences.getInstalledVersion())
+        // 3. Assert v1.3.1 upgrade succeeded cleanly
+        assertEquals("1.3.1", updatePreferences.getInstalledVersion())
         assertTrue(updatePreferences.isUpdatePermanentlyInstalled())
 
         // 4. Assert officer session survived upgrade 100% intact (ZERO forced logout / ZERO lost NIP)
-        assertTrue("Active officer session MUST survive v1.2.0 -> v1.3.0 APK upgrade", authManager.isOfficerLoggedIn())
+        assertTrue("Active officer session MUST survive v1.2.0 -> v1.3.1 APK upgrade", authManager.isOfficerLoggedIn())
         assertEquals(superAdminNip, authManager.getSavedNip())
         assertEquals(superAdminNip, authManager.getOfficerBadgeId())
         assertTrue(authManager.getOfficerName().contains("HITATUN", ignoreCase = true))

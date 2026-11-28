@@ -855,12 +855,12 @@ object PdfGenerator {
                     fallbackLokasi = lokasiTampil
                 )
                 val blockLayouts = structuredLines.map { lineText ->
-                    val safeLine = settings.truncateIfNeeded(lineText, overrideMaxLength = 220)
+                    val safeLine = settings.truncateIfNeeded(lineText, overrideMaxLength = 420)
                     StaticLayout.Builder
                         .obtain(safeLine, 0, safeLine.length, valuePaint, valueInnerWidth)
                         .setAlignment(Layout.Alignment.ALIGN_NORMAL)
                         .setLineSpacing(0.8f, 1.04f)
-                        .setMaxLines(3)
+                        .setMaxLines(5)
                         .setEllipsize(TextUtils.TruncateAt.END)
                         .setIncludePad(false)
                         .build()
@@ -891,13 +891,13 @@ object PdfGenerator {
                     label == "Kerusakan"
                 val cleanValue = settings.truncateIfNeeded(
                     rawText = rawValue,
-                    overrideMaxLength = if (allowExtendedLines) 240 else null
+                    overrideMaxLength = if (allowExtendedLines) 360 else null
                 )
                 val valLayout = StaticLayout.Builder
                     .obtain(cleanValue, 0, cleanValue.length, valuePaint, valueInnerWidth)
                     .setAlignment(Layout.Alignment.ALIGN_NORMAL)
                     .setLineSpacing(0.5f, 1.03f)
-                    .setMaxLines(if (allowExtendedLines) 3 else 2)
+                    .setMaxLines(if (allowExtendedLines) 4 else 2)
                     .setEllipsize(TextUtils.TruncateAt.END)
                     .setIncludePad(false)
                     .build()

@@ -620,10 +620,10 @@ class ExampleRobolectricTest {
   @Test
   fun `verify v1_0_0 production release defaults and apk upgrade sync`() {
     val state = com.example.model.AppUpdateState()
-    assertEquals("1.3.0", state.currentVersion)
-    assertEquals("1.3.0", state.latestVersion)
+    assertEquals("1.3.1", state.currentVersion)
+    assertEquals("1.3.1", state.latestVersion)
     assertTrue(state.changelogs.isNotEmpty())
-    assertEquals("1.3.0", state.changelogs.first().version)
+    assertEquals("1.3.1", state.changelogs.first().version)
     assertTrue(state.changelogs.first().isCurrent)
     assertTrue(state.changelogs.first().isLatest)
 
@@ -632,16 +632,16 @@ class ExampleRobolectricTest {
     rawPrefs.edit()
       .putString("recorded_build_version", "0.9.0")
       .putString("installed_version", "0.9.0")
-      .putString("latest_server_version", "1.3.0")
+      .putString("latest_server_version", "1.3.1")
       .putBoolean("is_permanently_installed", false)
-      .putString("dismissed_dialog_version", "1.3.0")
+      .putString("dismissed_dialog_version", "1.3.1")
       .commit()
 
     val prefs = com.example.data.local.AppUpdatePreferences(context)
-    assertEquals("1.3.0", com.example.data.local.AppUpdatePreferences.DEFAULT_LATEST_VERSION)
+    assertEquals("1.3.1", com.example.data.local.AppUpdatePreferences.DEFAULT_LATEST_VERSION)
     assertEquals(BuildConfig.VERSION_NAME, prefs.getInstalledVersion())
     assertTrue(prefs.isUpdatePermanentlyInstalled())
-    org.junit.Assert.assertFalse(prefs.isDialogDismissedForVersion("1.3.0"))
+    org.junit.Assert.assertFalse(prefs.isDialogDismissedForVersion("1.3.1"))
   }
 
   @Test

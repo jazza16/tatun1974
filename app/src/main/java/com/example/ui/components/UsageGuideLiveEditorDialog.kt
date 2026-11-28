@@ -398,7 +398,7 @@ fun UsageGuideLiveEditorDialog(
                             officerSteps = defaults.officerSteps
                             selectedStepIndex = 0
                             isError = false
-                            feedbackMessage = "Isi dikembalikan ke standar v1.3.0 (belum diterbitkan)."
+                            feedbackMessage = "Isi dikembalikan ke standar v1.3.1 (belum diterbitkan)."
                         },
                         modifier = Modifier
                             .weight(1f)

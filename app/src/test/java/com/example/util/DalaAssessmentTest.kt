@@ -116,4 +116,67 @@ class DalaAssessmentTest {
         assertEquals(595, bitmap.width)
         assertEquals(842, bitmap.height)
     }
+
+    @Test
+    fun dalaPdfExportWrapper_preservesFullTextWithoutEllipsisTruncationAndWidensKeteranganColumn() {
+        val sample = DalaDummyDataFactory.createSampleAssessment(
+            officerName = "HITATUN ARAZAK",
+            officerNip = "197401282006041006",
+            district = "Kec. Kota Mukomuko"
+        )
+        val formatted = DalaPdfExportWrapper.buildCompleteReportText(sample)
+
+        // Kolom KETERANGAN harus menjadi kolom terlebar (>= 50%) dan total proporsi = 1.0f
+        assertEquals(1.0f, DalaPdfExportWrapper.NEED_COLUMN_WEIGHTS.sum(), 0.001f)
+        assertTrue(DalaPdfExportWrapper.NEED_COLUMN_WEIGHTS.last() >= 0.50f)
+
+        // Seluruh keterangan kebutuhan mendesak harus 100% utuh tanpa "..."
+        assertEquals(sample.urgentNeeds.size, formatted.urgentNeedRows.size)
+        sample.urgentNeeds.forEachIndexed { idx, need ->
+            val renderedNote = formatted.urgentNeedRows[idx][4]
+            assertEquals(need.notes.trim(), renderedNote)
+            assertTrue("Keterangan tidak boleh terpotong '...': $renderedNote", !renderedNote.endsWith("..."))
+        }
+
+        // Catatan kerusakan panjang (>90 karakter) harus utuh 100%
+        assertEquals(sample.damages.damageDescription.trim(), formatted.damageNotes)
+        assertTrue(formatted.damageNotes.contains("menimbun saluran irigasi primer"))
+        assertTrue(!formatted.damageNotes.endsWith("..."))
+
+        // Titik pengungsian & kelompok rentan harus memuat seluruh entri secara utuh
+        assertTrue(formatted.sitesSummary.contains("Balai Desa Tanah Rekah"))
+        assertTrue(formatted.sitesSummary.contains("Masjid Agung Baitul Huda Mukomuko"))
+        assertTrue(formatted.vulnerableSummary.contains("Prioritas tenda aksesibilitas"))
+    }
+
+    @Test
+    fun dalaPdfExportWrapper_paginatesCleanlyWhenUrgentNeedsAndNotesAreLong() {
+        val base = DalaDummyDataFactory.createSampleAssessment(
+            officerName = "HITATUN ARAZAK",
+            officerNip = "197401282006041006",
+            district = "Kec. Kota Mukomuko"
+        )
+        val expandedNeeds = (1..14).map { idx ->
+            com.example.model.UrgentNeedItem(
+                id = "need-long-$idx",
+                category = UrgentNeedCategory.entries[idx % UrgentNeedCategory.entries.size],
+                quantity = idx * 25,
+                unit = "Paket",
+                status = if (idx % 2 == 0) UrgentNeedStatus.TERSEDIA else UrgentNeedStatus.MENDESAK,
+                notes = "Kebutuhan tindak lanjut resmi nomor $idx untuk pemulihan darurat masyarakat terdampak banjir dan longsor pada seluruh dusun prioritas Kabupaten Mukomuko beserta rincian distribusi lapangan."
+            )
+        }
+        val longAssessment = base.copy(urgentNeeds = expandedNeeds)
+        val renderedPages = mutableListOf<Int>()
+        val pages = DalaPdfExportWrapper.renderDalaBnpbPages(
+            context = context,
+            assessment = longAssessment,
+            pageFactory = { pageNumber ->
+                renderedPages.add(pageNumber)
+                Canvas(Bitmap.createBitmap(595, 842, Bitmap.Config.ARGB_8888))
+            }
+        )
+        assertTrue("Dokumen DALA dengan 14 kebutuhan panjang harus otomatis menjadi multi-halaman", pages >= 2)
+        assertEquals((1..pages).toList(), renderedPages)
+    }
 }
